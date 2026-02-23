@@ -1,0 +1,325 @@
+{
+  "_schema_version": "1.0",
+  "_source": "Breakthrough Basketball - Sample drills for import",
+  "drills": [
+    {
+      "name": "Mikan Drill",
+      "category": "shooting",
+      "difficulty": "beginner",
+      "durationMinutes": 5,
+      "description": "Classic drill to develop touch around the rim using alternating layups. Named after George Mikan, one of basketball's first dominant big men.",
+      "instructions": [
+        "Stand under the basket on the right side",
+        "Shoot a right-handed layup off the backboard",
+        "Grab the ball out of the net without letting it hit the ground",
+        "Take one step to the left side and shoot a left-handed layup",
+        "Continue alternating sides without letting the ball touch the ground",
+        "Complete 20-30 makes or set a time limit"
+      ],
+      "keyPoints": [
+        "Use the backboard on every shot",
+        "Keep the ball high - don't bring it below your chin",
+        "Use proper footwork (right foot plants for left-hand layup)",
+        "Soft touch off the glass",
+        "Maintain rhythm and flow"
+      ],
+      "equipmentNeeded": ["Basketball", "Hoop"],
+      "minPlayers": 1,
+      "maxPlayers": 1,
+      "variations": [
+        "Reverse Mikan: Use reverse layups instead",
+        "Power Mikan: Add a power dribble before each layup",
+        "Extended Mikan: Start from further out, adding a dribble"
+      ],
+      "tags": ["finishing", "layups", "fundamentals", "big man", "touch"]
+    },
+    {
+      "name": "3-Man Weave",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "Classic basketball drill that develops passing, cutting, communication, and conditioning. Players weave down the court passing and going behind.",
+      "instructions": [
+        "Three players line up across the baseline",
+        "Middle player starts with the ball",
+        "Pass to either wing player, then run behind that player",
+        "Wing catches and passes to the opposite player, runs behind",
+        "Continue weaving down the court",
+        "Finish with a layup at the opposite basket",
+        "Jog back and repeat"
+      ],
+      "keyPoints": [
+        "Crisp chest passes - no lobs",
+        "Call out teammate's name before passing",
+        "Sprint after passing - don't jog",
+        "Stay wide to stretch the defense",
+        "Finish with a proper layup, not a throw"
+      ],
+      "equipmentNeeded": ["Basketball"],
+      "minPlayers": 3,
+      "maxPlayers": 15,
+      "variations": [
+        "2-Ball Weave: Add a second basketball",
+        "Behind-the-back passes only",
+        "No dribble allowed - pure passing",
+        "2-on-1 finish: Defense added at the end"
+      ],
+      "tags": ["passing", "teamwork", "conditioning", "transition", "warmup"]
+    },
+    {
+      "name": "Full Court Dribbling Series",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Progressive ball handling drill that develops both hands and multiple dribble moves while moving up and down the court.",
+      "instructions": [
+        "Right hand only down the court, left hand back",
+        "Crossover at each free throw line and half court",
+        "Between the legs at each line",
+        "Behind the back at each line",
+        "Combination moves (your choice) full speed",
+        "Repeat each move 2 times"
+      ],
+      "keyPoints": [
+        "Keep your eyes up - don't watch the ball",
+        "Stay low in an athletic stance",
+        "Push the ball out in front, don't slap at it",
+        "Use your fingertips, not your palm",
+        "Protect the ball with your off hand"
+      ],
+      "equipmentNeeded": ["Basketball"],
+      "minPlayers": 1,
+      "maxPlayers": 20,
+      "variations": [
+        "Add cones as defenders to go around",
+        "Tennis ball in off hand - bounce and catch while dribbling",
+        "Two balls simultaneously",
+        "Against live defense"
+      ],
+      "tags": ["ball handling", "dribbling", "fundamentals", "individual"]
+    },
+    {
+      "name": "Closeout Drill",
+      "category": "defense",
+      "difficulty": "intermediate",
+      "durationMinutes": 10,
+      "description": "Teaches proper defensive closeout technique - how to approach a shooter and contest without fouling or getting beat off the dribble.",
+      "instructions": [
+        "Defender starts under the basket",
+        "Coach/player passes to offensive player on the wing",
+        "Defender sprints out with high hands",
+        "Chop steps to slow down the last 2-3 feet",
+        "Contest the shot or play live 1-on-1",
+        "Rotate positions after each rep"
+      ],
+      "keyPoints": [
+        "Sprint 2/3 of the distance, chop the last 1/3",
+        "Hands high to contest the shot",
+        "Low stance as you arrive",
+        "Don't fly by - stay balanced",
+        "Force to your help side"
+      ],
+      "equipmentNeeded": ["Basketball"],
+      "minPlayers": 2,
+      "maxPlayers": 12,
+      "variations": [
+        "Add shot fake - defender must stay down",
+        "Closeout from help position (paint)",
+        "Multiple closeouts in sequence",
+        "Game situation: play to a stop or score"
+      ],
+      "tags": ["defense", "closeout", "footwork", "1-on-1"]
+    },
+    {
+      "name": "Form Shooting Progression",
+      "category": "shooting",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "Systematic approach to building proper shooting mechanics using the BEEF principles (Balance, Eyes, Elbow, Follow-through).",
+      "instructions": [
+        "Start 3 feet from basket, one hand only",
+        "Focus on wrist snap and follow through",
+        "Make 5, then add guide hand (no push)",
+        "Make 5, move to free throw line",
+        "Make 5, move to elbow",
+        "Make 5, move to 3-point line"
+      ],
+      "keyPoints": [
+        "Balance: Feet shoulder-width, slight knee bend",
+        "Eyes: Focus on the rim (front or back)",
+        "Elbow: Directly under the ball, forms an L",
+        "Follow-through: Snap wrist, hold finish"
+      ],
+      "equipmentNeeded": ["Basketball", "Hoop"],
+      "minPlayers": 1,
+      "maxPlayers": 6,
+      "variations": [
+        "Seated shooting: Isolate upper body",
+        "One knee shooting: Focus on alignment",
+        "Partner rebounding for more reps"
+      ],
+      "tags": ["shooting", "form", "fundamentals", "youth", "beginner"]
+    },
+    {
+      "name": "Shell Drill",
+      "category": "defense",
+      "difficulty": "intermediate",
+      "durationMinutes": 15,
+      "description": "The foundation of team defense. Teaches help-side positioning, rotations, and communication in a controlled 4-on-4 setting.",
+      "instructions": [
+        "4 offensive players around the perimeter",
+        "4 defenders in proper position",
+        "Offense passes the ball - no dribbling initially",
+        "Defense moves on each pass: on-ball, deny, help",
+        "Coach calls 'Live' for 4-on-4 play",
+        "Defense must get a stop to rotate out"
+      ],
+      "keyPoints": [
+        "Ball-You-Man triangle on help side",
+        "Jump to the ball on every pass",
+        "Communicate: Ball! Deny! Help! Screen!",
+        "See man and ball at all times",
+        "Active hands in passing lanes"
+      ],
+      "equipmentNeeded": ["Basketball"],
+      "minPlayers": 8,
+      "maxPlayers": 12,
+      "variations": [
+        "3-on-3 shell for smaller groups",
+        "Add dribble penetration reads",
+        "Add screens and switching",
+        "5-on-5 with post player"
+      ],
+      "tags": ["team defense", "help defense", "rotations", "communication"]
+    },
+    {
+      "name": "Suicide Sprints",
+      "category": "conditioning",
+      "difficulty": "intermediate",
+      "durationMinutes": 8,
+      "description": "Classic basketball conditioning drill that builds speed, endurance, and mental toughness. Sprint to each line and back.",
+      "instructions": [
+        "Start on the baseline",
+        "Sprint to free throw line and back",
+        "Sprint to half court and back",
+        "Sprint to far free throw line and back",
+        "Sprint to far baseline and back",
+        "Touch each line with your hand"
+      ],
+      "keyPoints": [
+        "Touch every line - no cutting corners",
+        "Full speed - don't pace yourself",
+        "Low turns - stay athletic",
+        "Push through fatigue",
+        "Recover quickly for the next rep"
+      ],
+      "equipmentNeeded": [],
+      "minPlayers": 1,
+      "maxPlayers": 30,
+      "variations": [
+        "17s: Sideline to sideline, 17 times in 1 minute",
+        "Timed: Complete in under 30 seconds",
+        "Defensive slides instead of sprints",
+        "Ball in hand while running"
+      ],
+      "tags": ["conditioning", "speed", "endurance", "mental toughness"]
+    },
+    {
+      "name": "Pick and Roll Reads",
+      "category": "offense",
+      "difficulty": "advanced",
+      "durationMinutes": 15,
+      "description": "Teaches the ball handler and screener to read the defense and make the correct play in pick and roll situations.",
+      "instructions": [
+        "Ball handler at top, screener at elbow",
+        "Two defenders play different coverages",
+        "Screener sets screen, ball handler attacks",
+        "Read #1: Defender goes under - pull up jumper",
+        "Read #2: Defender goes over - turn corner",
+        "Read #3: Big hedges - pocket pass to roller",
+        "Read #4: Switch - attack mismatch"
+      ],
+      "keyPoints": [
+        "Set up your defender before using screen",
+        "Wait for the screen - don't rush",
+        "Read the defense, don't predetermine",
+        "Screener: Sprint to the rim or pop",
+        "Make the simple play"
+      ],
+      "equipmentNeeded": ["Basketball"],
+      "minPlayers": 4,
+      "maxPlayers": 8,
+      "variations": [
+        "Add a third defender for rotation reads",
+        "Side pick and roll",
+        "Spain pick and roll (back screen on roller's defender)",
+        "Empty corner vs help defender present"
+      ],
+      "tags": ["pick and roll", "reads", "decision making", "2-man game", "advanced"]
+    },
+    {
+      "name": "Dynamic Warm-Up",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Full-body dynamic stretching routine to prepare players for practice or games. Activates muscles and increases heart rate.",
+      "instructions": [
+        "High knees across the court",
+        "Butt kicks back",
+        "Karaoke/Carioca both directions",
+        "Walking lunges with twist",
+        "Frankensteins (straight leg kicks)",
+        "Defensive slides",
+        "Backpedal and sprint"
+      ],
+      "keyPoints": [
+        "Gradual increase in intensity",
+        "Full range of motion",
+        "Stay controlled - no bouncing",
+        "Keep core engaged",
+        "Breathe naturally"
+      ],
+      "equipmentNeeded": [],
+      "minPlayers": 1,
+      "maxPlayers": 30,
+      "variations": [
+        "Add basketball: Dribble during movements",
+        "Partner mirror: One leads, one follows",
+        "Add jump rope between exercises"
+      ],
+      "tags": ["warmup", "stretching", "injury prevention", "mobility"]
+    },
+    {
+      "name": "5 Spot Shooting",
+      "category": "shooting",
+      "difficulty": "intermediate",
+      "durationMinutes": 12,
+      "description": "Game-like shooting drill from 5 spots around the arc. Develops range, consistency, and the ability to shoot from different angles.",
+      "instructions": [
+        "5 spots: Both corners, both wings, top of key",
+        "Shoot 2 shots from each spot",
+        "Rotate clockwise after each set",
+        "Complete 3 full rotations (30 shots)",
+        "Track makes and percentage",
+        "Partner rebounds and passes"
+      ],
+      "keyPoints": [
+        "Same footwork at every spot",
+        "Catch ready to shoot - feet set",
+        "Hold your follow-through",
+        "No wasted motion",
+        "Aim for 60%+ from each spot"
+      ],
+      "equipmentNeeded": ["Basketball", "Hoop"],
+      "minPlayers": 1,
+      "maxPlayers": 4,
+      "variations": [
+        "Off the dribble: 1-2 dribbles before shot",
+        "Catch and shoot vs shot fake drive",
+        "Add defender closing out",
+        "Competition: First to 15 makes"
+      ],
+      "tags": ["shooting", "spot up", "game shots", "consistency"]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "_schema_version": "1.0",
+  "_description": "Hoopwise Drill Import Template - Use this format to import drills into the app",
+  "_instructions": {
+    "category_options": ["shooting", "offense", "defense", "skills", "conditioning", "warmup", "cooldown"],
+    "difficulty_options": ["beginner", "intermediate", "advanced"],
+    "required_fields": ["name", "category", "difficulty", "durationMinutes", "description"],
+    "optional_fields": ["instructions", "keyPoints", "equipmentNeeded", "minPlayers", "maxPlayers", "variations", "videoUrl", "tags"]
+  },
+  "drills": [
+    {
+      "name": "Example Drill Name",
+      "category": "shooting",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "Brief description of what the drill accomplishes and its purpose.",
+      "instructions": [
+        "Step 1: First instruction",
+        "Step 2: Second instruction",
+        "Step 3: Third instruction"
+      ],
+      "keyPoints": [
+        "Key coaching point 1",
+        "Key coaching point 2",
+        "Key coaching point 3"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 1,
+      "maxPlayers": 4,
+      "variations": [
+        "Variation 1: Add a defender",
+        "Variation 2: Increase speed"
+      ],
+      "videoUrl": "https://youtube.com/watch?v=example",
+      "tags": ["fundamentals", "youth", "individual"]
+    }
+  ]
+}

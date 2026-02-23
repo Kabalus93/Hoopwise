@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Hoopwise</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Hoopwise needs camera access to take profile photos of students.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Hoopwise needs photo library access to select profile photos for students.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Hoopwise needs permission to save photos to your library.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Hoopwise uses speech recognition to transcribe voice notes during sessions.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hoopwise needs microphone access for voice-to-text note taking during sessions.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+</dict>
+</plist>
