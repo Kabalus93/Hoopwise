@@ -773,14 +773,9 @@ struct FlightyActionableDashboard: View {
                 endPoint: .bottom
             )
         )
-        .overlay {
-            Color.clear
-                .glassEffect(in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                .opacity(0.12)
-        }
         .cornerRadius(AppTheme.cornerRadius)
     }
-    
+
     private func getMostUrgentItem() -> (icon: String, title: String)? {
         // Overdue reminders are highest priority
         if let first = dataManager.overdueReminders.first {
@@ -903,10 +898,7 @@ struct FlightyActionableDashboard: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
-                .background {
-                    Color.white.opacity(0.15)
-                        .glassEffect(in: Rectangle())
-                }
+                .background(Color.white.opacity(0.15))
             }
         }
         .background(
@@ -916,11 +908,6 @@ struct FlightyActionableDashboard: View {
                 endPoint: .bottom
             )
         )
-        .overlay {
-            Color.clear
-                .glassEffect(in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-                .opacity(0.12)
-        }
         .cornerRadius(AppTheme.cornerRadius)
     }
     
