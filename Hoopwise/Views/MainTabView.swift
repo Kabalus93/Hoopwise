@@ -174,15 +174,9 @@ struct FloatingPillTabs: View {
             }
         }
         .padding(4)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-        )
-        .overlay(
-            Capsule()
-                .stroke(AppTheme.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05), lineWidth: 0.5)
-        )
+        .background {
+            Color.clear.glassEffect(in: Capsule())
+        }
         .sheet(isPresented: $showingSearch) {
             GlobalSearchSheet()
                 .environmentObject(dataManager)
@@ -202,10 +196,14 @@ struct FloatingPillTabs: View {
                 .foregroundColor(isSelected ? (AppTheme.isDark ? .white : Color(hex: "#1A1A1A")) : AppTheme.textTertiary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? AppTheme.accentColor : Color.clear)
-                )
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(AppTheme.accentColor.opacity(0.25))
+                            .background { Capsule().fill(.ultraThinMaterial) }
+                            .glassEffect()
+                    }
+                }
         }
         .buttonStyle(.plain)
     }
@@ -350,32 +348,9 @@ struct ActionableTabBar: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
-        .background(
-            ZStack {
-                // Base glass - allows chromatic contamination from background
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                
-                // Inner luminosity gradient - center reads lighter
-                Capsule()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color.white.opacity(0.06),
-                                Color.clear
-                            ],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 120
-                        )
-                    )
-                
-                // Dark tint - preserves chromatic bleed while darkening
-                Capsule()
-                    .fill(Color.black.opacity(0.35))
-            }
-        )
-        .clipShape(Capsule())
+        .background {
+            Color.clear.glassEffect(in: Capsule())
+        }
         .padding(.horizontal, 24)
         .padding(.bottom, 8)
     }
@@ -402,17 +377,15 @@ struct ActionableTabBar: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .padding(.horizontal, 4)
-            .background(
-                ZStack {
-                    if isSelected {
-                        // Flat dark charcoal pill - NOT glassy
-                        // Creates contrast hierarchy within the glass container
-                        Capsule()
-                            .fill(Color(white: 0.18))
-                            .matchedGeometryEffect(id: "tabSelection", in: tabAnimation)
-                    }
+            .background {
+                if isSelected {
+                    Capsule()
+                        .fill(AppTheme.accentColor.opacity(0.2))
+                        .background { Capsule().fill(.ultraThinMaterial) }
+                        .glassEffect()
+                        .matchedGeometryEffect(id: "tabSelection", in: tabAnimation)
                 }
-            )
+            }
         }
         .buttonStyle(.plain)
     }
