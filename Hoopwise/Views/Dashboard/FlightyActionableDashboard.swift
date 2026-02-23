@@ -762,17 +762,23 @@ struct FlightyActionableDashboard: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
-                    .background(Color.white.opacity(0.15))
+                    .background {
+                        Color.white.opacity(0.12)
+                            .background(.ultraThinMaterial)
+                            .glassEffect(in: Rectangle())
+                    }
                 }
             }
         }
-        .background(
-            LinearGradient(
-                colors: [Color(hex: "#1e3a8a"), Color(hex: "#1e40af")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                .fill(Color(hex: "#1e3a8a").opacity(0.35))
+                .background {
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                        .fill(.ultraThinMaterial)
+                }
+                .glassEffect()
+        }
         .cornerRadius(AppTheme.cornerRadius)
     }
     
@@ -898,16 +904,22 @@ struct FlightyActionableDashboard: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
-                .background(Color.white.opacity(0.15))
+                .background {
+                    Color.white.opacity(0.12)
+                        .background(.ultraThinMaterial)
+                        .glassEffect(in: Rectangle())
+                }
             }
         }
-        .background(
-            LinearGradient(
-                colors: [Color(hex: "#991b1b"), Color(hex: "#b91c1c")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                .fill(Color(hex: "#991b1b").opacity(0.35))
+                .background {
+                    RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
+                        .fill(.ultraThinMaterial)
+                }
+                .glassEffect()
+        }
         .cornerRadius(AppTheme.cornerRadius)
     }
     
