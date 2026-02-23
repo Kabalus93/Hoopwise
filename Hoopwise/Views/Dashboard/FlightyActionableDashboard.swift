@@ -763,21 +763,15 @@ struct FlightyActionableDashboard: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 14)
                     .background {
-                        Color.white.opacity(0.12)
-                            .background(.ultraThinMaterial)
+                        Color.white.opacity(0.15)
                             .glassEffect(in: Rectangle())
                     }
                 }
             }
         }
         .background {
-            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                .fill(Color(hex: "#1e3a8a").opacity(0.35))
-                .background {
-                    RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                        .fill(.ultraThinMaterial)
-                }
-                .glassEffect()
+            Color(hex: "#1e3a8a").opacity(0.25)
+                .glassEffect(in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
         }
         .cornerRadius(AppTheme.cornerRadius)
     }
@@ -905,20 +899,14 @@ struct FlightyActionableDashboard: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
                 .background {
-                    Color.white.opacity(0.12)
-                        .background(.ultraThinMaterial)
+                    Color.white.opacity(0.15)
                         .glassEffect(in: Rectangle())
                 }
             }
         }
         .background {
-            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                .fill(Color(hex: "#991b1b").opacity(0.35))
-                .background {
-                    RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                        .fill(.ultraThinMaterial)
-                }
-                .glassEffect()
+            Color(hex: "#991b1b").opacity(0.25)
+                .glassEffect(in: RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
         }
         .cornerRadius(AppTheme.cornerRadius)
     }
