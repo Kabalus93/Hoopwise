@@ -1998,11 +1998,11 @@ struct FlightySessionsCalendarView: View {
         .padding(.vertical, 8)
         .background {
             if isCalendarExpanded {
-                RoundedRectangle(cornerRadius: 16)
-                    .glassEffect()
+                Color.clear
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 16))
             } else {
-                Capsule()
-                    .glassEffect()
+                Color.clear
+                    .glassEffect(in: Capsule())
             }
         }
     }
