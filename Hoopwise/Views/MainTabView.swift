@@ -368,11 +368,11 @@ struct ActionableTabBar: View {
             VStack(spacing: 4) {
                 Image(systemName: isSelected ? tab.selectedIcon : tab.icon)
                     .font(.system(size: 18, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? AppTheme.accentColor : .white.opacity(0.55))
+                    .foregroundColor(isSelected ? AppTheme.accentColor : AppTheme.textSecondary)
                 
                 Text(tab.label)
                     .font(.system(size: 10, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? AppTheme.accentColor : .white.opacity(0.55))
+                    .foregroundColor(isSelected ? AppTheme.accentColor : AppTheme.textSecondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
