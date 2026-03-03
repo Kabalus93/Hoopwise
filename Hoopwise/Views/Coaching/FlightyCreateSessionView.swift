@@ -17,6 +17,7 @@ struct FlightyCreateSessionView: View {
     @State private var endTime: Date
     @State private var selectedLocationId: UUID? = nil
     @State private var customLocation = ""
+    @State private var selectedCoachId: UUID? = nil
     @State private var notes = ""
     
     // Drill selection
@@ -63,6 +64,8 @@ struct FlightyCreateSessionView: View {
         let endComponents = DateComponents(hour: 20, minute: 0)
         _startTime = State(initialValue: calendar.date(from: startComponents) ?? Date())
         _endTime = State(initialValue: calendar.date(from: endComponents) ?? Date())
+        // Default coach to the logged-in coach
+        _selectedCoachId = State(initialValue: DataManager.shared.loggedInCoachId)
     }
     
     var isValid: Bool {
@@ -103,7 +106,10 @@ struct FlightyCreateSessionView: View {
                         
                         // Location
                         locationSection
-                        
+
+                        // Coach
+                        coachSection
+
                         // Drills
                         drillsSection
                         
@@ -343,22 +349,80 @@ struct FlightyCreateSessionView: View {
     private var locationSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             sectionHeader(title: "LOCATION", icon: "mappin")
-            
+
             if dataManager.locations.isEmpty {
-                TextField("", text: $customLocation, prompt: Text("Enter location...").foregroundColor(.white.opacity(0.3)))
-                    .font(.system(size: 15))
-                    .foregroundColor(.white)
-                    .padding(14)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(10)
+                HStack(spacing: 10) {
+                    Image(systemName: "mappin.slash")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.3))
+                    Text("No locations added yet")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(10)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        locationButton(id: nil, name: "None")
-                        ForEach(dataManager.locations) { location in
-                            locationButton(id: location.id, name: location.name)
+                Menu {
+                    Button(action: { selectedLocationId = nil }) {
+                        Label("None", systemImage: selectedLocationId == nil ? "checkmark" : "")
+                    }
+                    Divider()
+                    ForEach(dataManager.locations) { location in
+                        Button(action: { selectedLocationId = location.id }) {
+                            Label {
+                                VStack(alignment: .leading) {
+                                    Text(location.name)
+                                    if let address = location.fullAddress {
+                                        Text(address)
+                                    }
+                                }
+                            } icon: {
+                                if selectedLocationId == location.id {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
                         }
                     }
+                } label: {
+                    HStack {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(selectedLocationId != nil ? accentColor : .white.opacity(0.3))
+
+                        if let id = selectedLocationId,
+                           let loc = dataManager.locations.first(where: { $0.id == id }) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(loc.name)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.white)
+                                if let address = loc.fullAddress {
+                                    Text(address)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.4))
+                                }
+                            }
+                        } else {
+                            Text("Select location...")
+                                .font(.system(size: 15))
+                                .foregroundColor(.white.opacity(0.3))
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.3))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(selectedLocationId != nil ? accentColor.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                    )
                 }
             }
         }
@@ -367,29 +431,129 @@ struct FlightyCreateSessionView: View {
         .cornerRadius(16)
     }
     
-    private func locationButton(id: UUID?, name: String) -> some View {
-        let isSelected = selectedLocationId == id
-        return Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedLocationId = id
+    // MARK: - Coach Section
+    private var coachSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader(title: "COACH", icon: "person.fill")
+
+            let coaches = dataManager.activeStaffCoaches
+
+            if coaches.isEmpty {
+                coachEmptyState
+            } else {
+                coachPicker(coaches: coaches)
             }
-        }) {
-            HStack(spacing: 6) {
-                if id != nil {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 12))
+        }
+        .padding(16)
+        .background(Color(hex: "#1a1a2e"))
+        .cornerRadius(16)
+    }
+
+    private var coachEmptyState: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "person.slash")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.3))
+            Text("No coaches added yet")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.4))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(10)
+    }
+
+    private func coachPicker(coaches: [StaffCoach]) -> some View {
+        Menu {
+            ForEach(coaches) { coach in
+                Button(action: { selectedCoachId = coach.id }) {
+                    if selectedCoachId == coach.id {
+                        Label(coachMenuLabel(coach), systemImage: "checkmark")
+                    } else {
+                        Text(coachMenuLabel(coach))
+                    }
                 }
-                Text(name)
-                    .font(.system(size: 13, weight: .medium))
             }
-            .foregroundColor(isSelected ? .black : .white.opacity(0.6))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(isSelected ? accentColor : Color.white.opacity(0.05))
-            .cornerRadius(20)
+        } label: {
+            coachPickerLabel(coaches: coaches)
         }
     }
-    
+
+    private func coachMenuLabel(_ coach: StaffCoach) -> String {
+        if coach.id == dataManager.loggedInCoachId {
+            return "\(coach.displayName) (You)"
+        }
+        return coach.displayName
+    }
+
+    private func coachPickerLabel(coaches: [StaffCoach]) -> some View {
+        let selectedCoach = coaches.first(where: { $0.id == selectedCoachId })
+        let borderColor: Color = selectedCoachId != nil ? accentColor.opacity(0.5) : Color.white.opacity(0.1)
+
+        return HStack {
+            if let coach = selectedCoach {
+                coachAvatar(coach)
+                coachInfo(coach)
+            } else {
+                Image(systemName: "person.circle")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.3))
+                Text("Select coach...")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.3))
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.3))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(borderColor, lineWidth: 1)
+        )
+    }
+
+    private func coachAvatar(_ coach: StaffCoach) -> some View {
+        let avatarSwiftUIColor = Color(coach.avatarColor.color)
+        return ZStack {
+            Circle()
+                .fill(avatarSwiftUIColor.opacity(0.2))
+                .frame(width: 32, height: 32)
+            Text(coach.initials)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(avatarSwiftUIColor)
+        }
+    }
+
+    private func coachInfo(_ coach: StaffCoach) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Text(coach.displayName)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white)
+                if coach.id == dataManager.loggedInCoachId {
+                    Text("YOU")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(accentColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(accentColor.opacity(0.15))
+                        .cornerRadius(4)
+                }
+            }
+            Text(coach.role.rawValue)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.4))
+        }
+    }
+
     // MARK: - Drills Section
     private var drillsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -582,7 +746,7 @@ struct FlightyCreateSessionView: View {
             curriculum: curriculum,
             attendeeIds: attendeeIds,
             notes: notes.isEmpty ? nil : notes,
-            createdByCoachId: dataManager.loggedInCoachId
+            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId
         )
         
         dataManager.addSessionEvent(session)
