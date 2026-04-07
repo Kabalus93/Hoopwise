@@ -1545,7 +1545,9 @@ struct StudentIntelligenceProfileView: View {
     @State private var reportImage: IntelPlatformImage?
     @State private var showingImagePicker = false
     @State private var showingVideoPicker = false
+    #if os(iOS)
     @State private var imagePickerSourceType: UIImagePickerController.SourceType = .camera
+    #endif
     @State private var showingMediaGallery = false
     @State private var selectedMediaUrl: String?
     @State private var showingContactHistory = false
@@ -2473,6 +2475,7 @@ struct StudentIntelligenceProfileView: View {
                 coachName: dataManager.coach.name
             )
         }
+        #if os(iOS)
         .sheet(isPresented: $showingImagePicker) {
             MediaImagePicker(sourceType: imagePickerSourceType) { image in
                 handleCapturedImage(image)
@@ -2483,6 +2486,7 @@ struct StudentIntelligenceProfileView: View {
                 handleCapturedVideo(videoURL)
             }
         }
+        #endif
         .sheet(isPresented: $showingContactHistory) {
             ContactHistorySheet(student: student)
         }
@@ -2497,7 +2501,7 @@ struct StudentIntelligenceProfileView: View {
         }
     }
     
-    private func handleCapturedImage(_ image: UIImage) {
+    private func handleCapturedImage(_ image: IntelPlatformImage) {
         // Save image locally
         let filename = "\(student.id.uuidString)_\(Date().timeIntervalSince1970).jpg"
         if let savedPath = saveImageLocally(image, filename: filename) {
@@ -2523,8 +2527,14 @@ struct StudentIntelligenceProfileView: View {
         }
     }
     
-    private func saveImageLocally(_ image: UIImage, filename: String) -> String? {
+    private func saveImageLocally(_ image: IntelPlatformImage, filename: String) -> String? {
+        #if canImport(UIKit)
         guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
+        #elseif canImport(AppKit)
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else { return nil }
+        #endif
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let mediaFolder = documentsPath.appendingPathComponent("StudentMedia", isDirectory: true)
         try? FileManager.default.createDirectory(at: mediaFolder, withIntermediateDirectories: true)
@@ -3263,6 +3273,7 @@ struct StudentIntelligenceProfileView: View {
             
             // Action buttons
             HStack(spacing: 12) {
+                #if os(iOS)
                 // Take Photo button
                 Button {
                     showingImagePicker = true
@@ -3283,7 +3294,7 @@ struct StudentIntelligenceProfileView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                
+
                 // Upload Photo button
                 Button {
                     showingImagePicker = true
@@ -3304,7 +3315,7 @@ struct StudentIntelligenceProfileView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                
+
                 // Record Video button
                 Button {
                     showingVideoPicker = true
@@ -3324,6 +3335,7 @@ struct StudentIntelligenceProfileView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                #endif
                 
                 Spacer()
                 
@@ -3378,6 +3390,7 @@ struct StudentIntelligenceProfileView: View {
         ZStack {
             if urlString.hasPrefix("file://") || urlString.hasPrefix("/") {
                 let path = urlString.hasPrefix("file://") ? String(urlString.dropFirst(7)) : urlString
+                #if canImport(UIKit)
                 if let uiImage = UIImage(contentsOfFile: path) {
                     Image(uiImage: uiImage)
                         .resizable()
@@ -3387,6 +3400,17 @@ struct StudentIntelligenceProfileView: View {
                 } else {
                     placeholderThumbnail(isVideo: isVideo)
                 }
+                #elseif canImport(AppKit)
+                if let nsImage = NSImage(contentsOfFile: path) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 60, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    placeholderThumbnail(isVideo: isVideo)
+                }
+                #endif
             } else {
                 AsyncImage(url: URL(string: urlString)) { phase in
                     if case .success(let image) = phase {
@@ -5083,6 +5107,7 @@ struct MediaGallerySheet: View {
         ZStack {
             if urlString.hasPrefix("file://") || urlString.hasPrefix("/") {
                 let path = urlString.hasPrefix("file://") ? String(urlString.dropFirst(7)) : urlString
+                #if canImport(UIKit)
                 if let uiImage = UIImage(contentsOfFile: path) {
                     Image(uiImage: uiImage)
                         .resizable()
@@ -5092,6 +5117,17 @@ struct MediaGallerySheet: View {
                 } else {
                     placeholderItem(isVideo: isVideo)
                 }
+                #elseif canImport(AppKit)
+                if let nsImage = NSImage(contentsOfFile: path) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    placeholderItem(isVideo: isVideo)
+                }
+                #endif
             } else {
                 AsyncImage(url: URL(string: urlString)) { phase in
                     if case .success(let image) = phase {
@@ -5183,6 +5219,7 @@ struct MediaFullScreenView: View {
     private var imageContent: some View {
         if urlString.hasPrefix("file://") || urlString.hasPrefix("/") {
             let path = urlString.hasPrefix("file://") ? String(urlString.dropFirst(7)) : urlString
+            #if canImport(UIKit)
             if let uiImage = UIImage(contentsOfFile: path) {
                 Image(uiImage: uiImage)
                     .resizable()
@@ -5190,6 +5227,15 @@ struct MediaFullScreenView: View {
             } else {
                 placeholderView
             }
+            #elseif canImport(AppKit)
+            if let nsImage = NSImage(contentsOfFile: path) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                placeholderView
+            }
+            #endif
         } else {
             AsyncImage(url: URL(string: urlString)) { phase in
                 if case .success(let image) = phase {
@@ -5219,7 +5265,11 @@ struct MediaFullScreenView: View {
         }()
         
         if let url = videoURL {
+            #if os(iOS)
             VideoPlayerView(url: url)
+            #else
+            VideoPlayer(player: AVPlayer(url: url))
+            #endif
         } else {
             placeholderView
         }
@@ -5236,19 +5286,21 @@ struct MediaFullScreenView: View {
     }
 }
 
+#if os(iOS)
 // Simple video player wrapper
 struct VideoPlayerView: UIViewControllerRepresentable {
     let url: URL
-    
+
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let controller = AVPlayerViewController()
         controller.player = AVPlayer(url: url)
         controller.player?.play()
         return controller
     }
-    
+
     func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
 }
+#endif
 
 // MARK: - Contact History Sheet
 struct ContactHistorySheet: View {

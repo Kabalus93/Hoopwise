@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Admin view for creating and managing coach accounts within an organization
 /// Admins can create accounts with username/password (no email required)
@@ -76,7 +79,9 @@ struct AdminAccountManagementView: View {
                 }
             }
             .navigationTitle(isChinese ? "账号管理" : "Account Management")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }
@@ -237,7 +242,9 @@ struct CreateCoachAccountSheet: View {
                         
                         TextField(isChinese ? "用户名" : "Username", text: $username)
                             .textContentType(.username)
+                            #if os(iOS)
                             .autocapitalization(.none)
+                            #endif
                             .disableAutocorrection(true)
                             .onChange(of: username) { _, newValue in
                                 // Only allow alphanumeric and underscore
@@ -284,7 +291,9 @@ struct CreateCoachAccountSheet: View {
                     }
                 }
                 .navigationTitle(isChinese ? "创建账号" : "Create Account")
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -458,7 +467,12 @@ struct CredentialsShareView: View {
         \(isChinese ? "用户名" : "Username"): \(account.username)
         \(isChinese ? "密码" : "Password"): \(password)
         """
+        #if os(iOS)
         UIPasteboard.general.string = text
+        #elseif os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
         
         withAnimation {
             copied = true
@@ -508,7 +522,9 @@ struct AccountDetailSheet: View {
                 }
             }
             .navigationTitle(account.name)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }

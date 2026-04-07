@@ -1,5 +1,10 @@
 import SwiftUI
 import Combine
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct UnsplashImage: Codable {
     let id: String
@@ -22,7 +27,11 @@ class UnsplashImageService: ObservableObject {
     // MARK: - Properties
     private var accessKey: String { Self.apiKey }
     private let baseURL = "https://api.unsplash.com"
+    #if canImport(UIKit)
     private let cache = NSCache<NSString, UIImage>()
+    #elseif canImport(AppKit)
+    private let cache = NSCache<NSString, NSImage>()
+    #endif
     
     @Published var basketballImages: [UnsplashImage] = []
     @Published var isLoading = false
@@ -61,25 +70,29 @@ class UnsplashImageService: ObservableObject {
         }.resume()
     }
     
-    func loadImage(from urlString: String) async -> UIImage? {
-        // Check cache first
+    #if canImport(UIKit)
+    typealias PlatformImage = UIImage
+    #elseif canImport(AppKit)
+    typealias PlatformImage = NSImage
+    #endif
+
+    func loadImage(from urlString: String) async -> PlatformImage? {
         if let cachedImage = cache.object(forKey: urlString as NSString) {
             return cachedImage
         }
-        
-        // Load from network
+
         guard let url = URL(string: urlString) else { return nil }
-        
+
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            if let image = UIImage(data: data) {
+            if let image = PlatformImage(data: data) {
                 cache.setObject(image, forKey: urlString as NSString)
                 return image
             }
         } catch {
             debugLog("Error loading image: \(error)")
         }
-        
+
         return nil
     }
 }
@@ -94,14 +107,20 @@ private struct SearchResponse: Codable {
 
 struct UnsplashBackgroundImage: View {
     let urlString: String
-    @State private var image: UIImage?
-    
+    @State private var image: UnsplashImageService.PlatformImage?
+
     var body: some View {
         Group {
             if let image = image {
+                #if canImport(UIKit)
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                #elseif canImport(AppKit)
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                #endif
             } else {
                 Color.gray.opacity(0.3)
             }

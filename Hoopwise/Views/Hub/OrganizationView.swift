@@ -2716,7 +2716,7 @@ struct AddEditCategoryView: View {
     @State private var mascotNameOverride: String
     @State private var customIconData: Data?
     @State private var showingImagePicker = false
-    @State private var selectedImage: UIImage?
+    @State private var selectedImage: OrgPlatformImage?
     
     let colorOptions: [String] = [
         "#F8A5C2", "#FFB347", "#FFE066", "#6BCB77", "#5B8DEF",
@@ -2739,7 +2739,7 @@ struct AddEditCategoryView: View {
         _mascotNameOverride = State(initialValue: category?.mascotNameOverride ?? "")
         _customIconData = State(initialValue: category?.customIconData)
         if let data = category?.customIconData {
-            _selectedImage = State(initialValue: UIImage(data: data))
+            _selectedImage = State(initialValue: OrgPlatformImage(data: data))
         } else {
             _selectedImage = State(initialValue: nil)
         }
@@ -2757,7 +2757,11 @@ struct AddEditCategoryView: View {
                                 .frame(width: 56, height: 56)
                             
                             if let image = selectedImage {
+                                #if canImport(UIKit)
                                 Image(uiImage: image)
+                                #else
+                                Image(nsImage: image)
+                                #endif
                                     .resizable()
                                     .renderingMode(.original)
                                     .aspectRatio(contentMode: .fit)
@@ -2901,7 +2905,11 @@ struct AddEditCategoryView: View {
                                             RoundedRectangle(cornerRadius: 8)
                                                 .fill(Color(hex: colorHex).opacity(0.15))
                                                 .frame(width: 36, height: 36)
+                                            #if canImport(UIKit)
                                             Image(uiImage: image)
+                                            #else
+                                            Image(nsImage: image)
+                                            #endif
                                                 .resizable()
                                                 .renderingMode(.original)
                                                 .aspectRatio(contentMode: .fit)
@@ -3006,9 +3014,11 @@ struct AddEditCategoryView: View {
                         .disabled(name.isEmpty || shortName.isEmpty)
                 }
             }
+            #if os(iOS)
             .sheet(isPresented: $showingImagePicker) {
                 CategoryIconImagePicker(selectedImage: $selectedImage, customIconData: $customIconData)
             }
+            #endif
         }
     }
     
@@ -3089,6 +3099,7 @@ struct AddEditCategoryView: View {
 }
 
 // MARK: - Category Icon Image Picker
+#if os(iOS)
 struct CategoryIconImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
     @Binding var customIconData: Data?
@@ -3146,6 +3157,7 @@ struct CategoryIconImagePicker: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 // MARK: - Address Autocomplete Field
 #if os(iOS)
