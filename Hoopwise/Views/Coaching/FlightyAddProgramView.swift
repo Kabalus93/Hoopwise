@@ -976,6 +976,7 @@ struct FlightyAddProgramView: View {
             objectives: objectives,
             enrolledStudentIds: Array(selectedStudentIds),
             coachId: selectedCoachId,
+            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId ?? AuthManager.shared.currentUser?.id,
             status: .active,
             mascot: selectedMascot,
             startDate: startDate,

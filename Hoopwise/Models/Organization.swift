@@ -100,6 +100,7 @@ struct StaffCoach: Identifiable, Codable, Hashable {
     var hireDate: Date?
     var notes: String?
     var profileImageData: Data?  // Profile picture stored as Data
+    var profileImageUrl: String?  // Cloud URL for cross-device sync
     var createdAt: Date
     var updatedAt: Date
     
@@ -119,6 +120,7 @@ struct StaffCoach: Identifiable, Codable, Hashable {
         hireDate: Date? = nil,
         notes: String? = nil,
         profileImageData: Data? = nil,
+        profileImageUrl: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -137,6 +139,7 @@ struct StaffCoach: Identifiable, Codable, Hashable {
         self.hireDate = hireDate
         self.notes = notes
         self.profileImageData = profileImageData
+        self.profileImageUrl = profileImageUrl
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

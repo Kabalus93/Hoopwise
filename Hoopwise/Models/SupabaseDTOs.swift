@@ -26,6 +26,7 @@ struct SupabaseStudent: Codable {
     var mediaAssetsJson: String?
     var personalBestsJson: String?
     var performanceGrade: String?
+    var gradeHistoryJson: String?
     var createdAt: Date
     var updatedAt: Date
     
@@ -33,13 +34,14 @@ struct SupabaseStudent: Codable {
         case id, organizationId, name, chineseName, avatarColor, attendanceStatus
         case categoryId, coachId, programId, birthdate, birthMonth, birthYear, schoolGrade
         case profileImageUrl, createdByCoachId, parentalTouchpointsJson, lastParentContact
-        case mediaAssetsJson, personalBestsJson, performanceGrade, createdAt, updatedAt
+        case mediaAssetsJson, personalBestsJson, performanceGrade, gradeHistoryJson, createdAt, updatedAt
     }
     
-    init(from student: Student) {
+    init(from student: Student, organizationId: UUID? = nil) {
         self.id = student.id
-        // IMPORTANT: Set organization_id from current auth context
-        self.organizationId = AuthManager.shared.currentOrganization?.id
+        // Use explicitly provided organizationId first (from persisted SDStudent),
+        // then fall back to current auth context
+        self.organizationId = organizationId ?? AuthManager.shared.currentOrganization?.id
         self.name = student.name
         self.chineseName = student.chineseName
         self.avatarColor = student.avatarColor.rawValue
@@ -77,6 +79,14 @@ struct SupabaseStudent: Codable {
             self.personalBestsJson = nil
         }
         self.performanceGrade = student.performanceGrade?.rawValue
+        // Encode gradeHistory to JSON
+        if !student.gradeHistory.isEmpty,
+           let data = try? JSONEncoder().encode(student.gradeHistory),
+           let jsonString = String(data: data, encoding: .utf8) {
+            self.gradeHistoryJson = jsonString
+        } else {
+            self.gradeHistoryJson = nil
+        }
         self.createdAt = student.createdAt
         self.updatedAt = student.updatedAt
     }
@@ -104,6 +114,7 @@ struct SupabaseStudent: Codable {
         try container.encode(mediaAssetsJson, forKey: .mediaAssetsJson)
         try container.encode(personalBestsJson, forKey: .personalBestsJson)
         try container.encode(performanceGrade, forKey: .performanceGrade)
+        try container.encode(gradeHistoryJson, forKey: .gradeHistoryJson)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
     }
@@ -127,6 +138,12 @@ struct SupabaseStudent: Codable {
             personalBests = (try? JSONDecoder().decode([String: Double].self, from: data)) ?? [:]
         }
         
+        var gradeHistory: [GradeHistoryEntry] = []
+        if let jsonString = gradeHistoryJson,
+           let data = jsonString.data(using: .utf8) {
+            gradeHistory = (try? JSONDecoder().decode([GradeHistoryEntry].self, from: data)) ?? []
+        }
+        
         return Student(
             id: id,
             name: name,
@@ -148,7 +165,8 @@ struct SupabaseStudent: Codable {
             lastParentContact: lastParentContact,
             mediaAssets: mediaAssets,
             personalBests: personalBests,
-            performanceGrade: performanceGrade.flatMap { PerformanceGrade(rawValue: $0) }
+            performanceGrade: performanceGrade.flatMap { PerformanceGrade(rawValue: $0) },
+            gradeHistory: gradeHistory
         )
     }
 }
@@ -478,6 +496,7 @@ struct SupabaseProgram: Codable {
     var objectives: [String]
     var enrolledStudentIds: [UUID]
     var coachId: UUID?
+    var createdByCoachId: UUID?  // Coach who created this program (for access control)
     var status: String
     var colorHex: String
     var mascot: String
@@ -493,12 +512,12 @@ struct SupabaseProgram: Codable {
     var usesPhases: Bool
     var createdAt: Date
     var updatedAt: Date
-    
+
     // Custom coding keys for description field
     enum CodingKeys: String, CodingKey {
         case id, organizationId, name, ageGroup, durationWeeks
         case programDescription = "description"
-        case objectives, enrolledStudentIds, coachId, status, colorHex, mascot
+        case objectives, enrolledStudentIds, coachId, createdByCoachId, status, colorHex, mascot
         case startDate, endDate, stars, skillTargetsJson, recurringDaysJson
         case defaultSessionTime, defaultSessionDurationMinutes, locationId, locationName
         case usesPhases, createdAt, updatedAt
@@ -516,6 +535,7 @@ struct SupabaseProgram: Codable {
         objectives = try container.decodeIfPresent([String].self, forKey: .objectives) ?? []
         enrolledStudentIds = try container.decodeIfPresent([UUID].self, forKey: .enrolledStudentIds) ?? []
         coachId = try container.decodeIfPresent(UUID.self, forKey: .coachId)
+        createdByCoachId = try container.decodeIfPresent(UUID.self, forKey: .createdByCoachId)
         status = try container.decode(String.self, forKey: .status)
         colorHex = try container.decode(String.self, forKey: .colorHex)
         mascot = try container.decode(String.self, forKey: .mascot)
@@ -543,6 +563,7 @@ struct SupabaseProgram: Codable {
         self.objectives = program.objectives
         self.enrolledStudentIds = program.enrolledStudentIds
         self.coachId = program.coachId
+        self.createdByCoachId = program.createdByCoachId
         self.status = program.status.rawValue
         self.colorHex = program.colorHex
         self.mascot = program.mascot.rawValue
@@ -586,6 +607,7 @@ struct SupabaseProgram: Codable {
         try container.encode(objectives, forKey: .objectives)
         try container.encode(enrolledStudentIds, forKey: .enrolledStudentIds)
         try container.encode(coachId, forKey: .coachId)
+        try container.encode(createdByCoachId, forKey: .createdByCoachId)
         try container.encode(status, forKey: .status)
         try container.encode(colorHex, forKey: .colorHex)
         try container.encode(mascot, forKey: .mascot)
@@ -628,6 +650,7 @@ struct SupabaseProgram: Codable {
             objectives: objectives,
             enrolledStudentIds: enrolledStudentIds,
             coachId: coachId,
+            createdByCoachId: createdByCoachId,
             status: ProgramStatus(rawValue: status) ?? .active,
             colorHex: colorHex,
             mascot: ProgramMascot(rawValue: mascot) ?? .tiger,
@@ -673,8 +696,10 @@ struct SupabaseSessionEvent: Codable {
     var drillsCompleted: [UUID]  // Required field in Supabase schema
     var rating: Int?  // Required field in Supabase schema
     var createdByCoachId: UUID?  // Coach who created this session
+    var assignedCoachIds: [UUID]  // Coaches assigned to co-coach this session
     var games: [SessionGame]
     var headerImageURL: String?
+    var boardNotesJson: String?   // [BoardNote] serialized as JSON for cross-device sync
     var createdAt: Date
     var updatedAt: Date
     
@@ -682,8 +707,8 @@ struct SupabaseSessionEvent: Codable {
         case id, organizationId, programId, microCycleId, title, sessionType, date
         case startTime, endTime, location, status, curriculum
         case attendeeIds, actualAttendeeIds, excusedAbsences, attendancePhotoPath, notes, coachNotes
-        case developmentFocus, manOfTheMatchId, drillsCompleted, rating, createdByCoachId, games, headerImageURL
-        case createdAt, updatedAt
+        case developmentFocus, manOfTheMatchId, drillsCompleted, rating, createdByCoachId, assignedCoachIds, games, headerImageURL
+        case boardNotesJson, createdAt, updatedAt
     }
     
     // Custom decode to handle null games array from Supabase
@@ -712,15 +737,17 @@ struct SupabaseSessionEvent: Codable {
         drillsCompleted = try container.decodeIfPresent([UUID].self, forKey: .drillsCompleted) ?? []
         rating = try container.decodeIfPresent(Int.self, forKey: .rating)
         createdByCoachId = try container.decodeIfPresent(UUID.self, forKey: .createdByCoachId)
+        assignedCoachIds = try container.decodeIfPresent([UUID].self, forKey: .assignedCoachIds) ?? []
         games = try container.decodeIfPresent([SessionGame].self, forKey: .games) ?? []
         headerImageURL = try container.decodeIfPresent(String.self, forKey: .headerImageURL)
+        boardNotesJson = try container.decodeIfPresent(String.self, forKey: .boardNotesJson)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
     
-    init(from session: SessionEvent) {
+    init(from session: SessionEvent, organizationId: UUID? = nil) {
         self.id = session.id
-        self.organizationId = AuthManager.shared.currentOrganization?.id
+        self.organizationId = organizationId ?? AuthManager.shared.currentOrganization?.id
         self.programId = session.programId
         self.microCycleId = session.microCycleId
         self.title = session.title
@@ -742,8 +769,11 @@ struct SupabaseSessionEvent: Codable {
         self.drillsCompleted = session.drillsCompleted
         self.rating = session.rating
         self.createdByCoachId = session.createdByCoachId
+        self.assignedCoachIds = session.assignedCoachIds
         self.games = session.games
         self.headerImageURL = session.headerImageURL
+        // boardNotesJson is managed separately by BoardNotesStore — not sourced from SessionEvent
+        self.boardNotesJson = nil
         self.createdAt = session.createdAt
         self.updatedAt = session.updatedAt
     }
@@ -774,8 +804,10 @@ struct SupabaseSessionEvent: Codable {
         try container.encode(drillsCompleted, forKey: .drillsCompleted)
         try container.encode(rating, forKey: .rating)
         try container.encode(createdByCoachId, forKey: .createdByCoachId)
+        try container.encode(assignedCoachIds, forKey: .assignedCoachIds)
         try container.encode(games, forKey: .games)
         // headerImageURL not in Supabase schema - skip encoding
+        // boardNotesJson is managed separately by BoardNotesStore — skip encoding here to avoid overwriting
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
     }
@@ -804,6 +836,7 @@ struct SupabaseSessionEvent: Codable {
             drillsCompleted: drillsCompleted,
             rating: rating,
             createdByCoachId: createdByCoachId,
+            assignedCoachIds: assignedCoachIds,
             games: games,
             headerImageURL: headerImageURL,
             createdAt: createdAt,
@@ -962,33 +995,43 @@ struct SupabaseDrill: Codable {
 // MARK: - Staff Coach DTO
 struct SupabaseStaffCoach: Codable {
     let id: UUID
+    var organizationId: UUID?  // Required for multi-org filtering
     var name: String
     var chineseName: String?
     var email: String?
     var phone: String?
     var role: String
+    var accessLevel: String
     var specializations: [String]
     var ageGroups: [String]
     var avatarColor: String
     var isActive: Bool
+    var hireDate: Date?
+    var notes: String?
+    var profileImageUrl: String?
     var createdAt: Date
     var updatedAt: Date
     
     enum CodingKeys: String, CodingKey {
-        case id, name, chineseName, email, phone, role, specializations, ageGroups, avatarColor, isActive, createdAt, updatedAt
+        case id, organizationId, name, chineseName, email, phone, role, accessLevel, specializations, ageGroups, avatarColor, isActive, hireDate, notes, profileImageUrl, createdAt, updatedAt
     }
     
     init(from coach: StaffCoach) {
         self.id = coach.id
+        self.organizationId = AuthManager.shared.currentOrganization?.id
         self.name = coach.name
         self.chineseName = coach.chineseName
         self.email = coach.email
         self.phone = coach.phone
         self.role = coach.role.rawValue
+        self.accessLevel = coach.accessLevel.rawValue
         self.specializations = coach.specializations
         self.ageGroups = coach.ageGroups.map { $0.rawValue }
         self.avatarColor = coach.avatarColor.rawValue
         self.isActive = coach.isActive
+        self.hireDate = coach.hireDate
+        self.notes = coach.notes
+        self.profileImageUrl = coach.profileImageUrl
         self.createdAt = coach.createdAt
         self.updatedAt = coach.updatedAt
     }
@@ -997,15 +1040,20 @@ struct SupabaseStaffCoach: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
+        try container.encode(organizationId, forKey: .organizationId)
         try container.encode(name, forKey: .name)
         try container.encode(chineseName, forKey: .chineseName)
         try container.encode(email, forKey: .email)
         try container.encode(phone, forKey: .phone)
         try container.encode(role, forKey: .role)
+        try container.encode(accessLevel, forKey: .accessLevel)
         try container.encode(specializations, forKey: .specializations)
         try container.encode(ageGroups, forKey: .ageGroups)
         try container.encode(avatarColor, forKey: .avatarColor)
         try container.encode(isActive, forKey: .isActive)
+        try container.encode(hireDate, forKey: .hireDate)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(profileImageUrl, forKey: .profileImageUrl)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
     }
@@ -1013,15 +1061,20 @@ struct SupabaseStaffCoach: Codable {
     func toStaffCoach() -> StaffCoach {
         StaffCoach(
             id: id,
+            organizationId: organizationId,
             name: name,
             chineseName: chineseName,
             email: email,
             phone: phone,
             role: CoachRole(rawValue: role) ?? .assistant,
+            accessLevel: AccessLevel(rawValue: accessLevel) ?? .coachingStaff,
             specializations: specializations,
             ageGroups: ageGroups.compactMap { AgeGroup(rawValue: $0) },
             avatarColor: AvatarColor(rawValue: avatarColor) ?? .blue,
             isActive: isActive,
+            hireDate: hireDate,
+            notes: notes,
+            profileImageUrl: profileImageUrl,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

@@ -39,7 +39,7 @@ enum SessionAccessMode {
     case execution   // Read/Update only - accessed from Calendar view
     
     var canCreate: Bool { self == .architect }
-    var canDelete: Bool { self == .architect }
+    var canDelete: Bool { true }
     var canEdit: Bool { true }
     var canTakeAttendance: Bool { true }
     var canAddNotes: Bool { true }
@@ -618,6 +618,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
     var drillsCompleted: [UUID]
     var rating: Int?
     var createdByCoachId: UUID?   // Coach who created this session (for access control)
+    var assignedCoachIds: [UUID]  // Coaches assigned to co-coach this session
     
     // In-session games (scrimmages with team assignments and stats)
     var games: [SessionGame]
@@ -636,7 +637,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
          notes: String? = nil, coachNotes: String? = nil,
          developmentFocus: [TrainingFocus] = [],
          manOfTheMatchId: UUID? = nil, drillsCompleted: [UUID] = [], rating: Int? = nil,
-         createdByCoachId: UUID? = nil, games: [SessionGame] = [],
+         createdByCoachId: UUID? = nil, assignedCoachIds: [UUID] = [], games: [SessionGame] = [],
          headerImageURL: String? = nil,
          createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
@@ -661,6 +662,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
         self.drillsCompleted = drillsCompleted
         self.rating = rating
         self.createdByCoachId = createdByCoachId
+        self.assignedCoachIds = assignedCoachIds
         self.games = games
         self.headerImageURL = headerImageURL ?? SessionEvent.randomUnsplashURL()
         self.createdAt = createdAt

@@ -19,6 +19,8 @@ struct QuickSessionCreatorView: View {
     @State private var sessionStartTime: Date
     @State private var sessionDuration: Int = 90
     @State private var sessionLocation: String = ""
+    @State private var selectedLocationId: UUID? = nil
+    @State private var selectedCoachId: UUID? = nil
     @State private var linkedProgramId: UUID? = nil
     @State private var selectedStudentIds: Set<UUID> = []
     
@@ -52,6 +54,8 @@ struct QuickSessionCreatorView: View {
         _sessionStartTime = State(initialValue: Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: initialDate) ?? initialDate)
         _recurringTime = State(initialValue: Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: initialDate) ?? initialDate)
         _programStartDate = State(initialValue: initialDate)
+        // Default coach to the logged-in coach
+        _selectedCoachId = State(initialValue: DataManager.shared.loggedInCoachId)
     }
     
     enum CreatorStep: Int, CaseIterable {
@@ -321,13 +325,87 @@ struct QuickSessionCreatorView: View {
                 Text(isChinese ? "地点（可选）" : "Location (optional)")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(AppTheme.textSecondary)
-                TextField(isChinese ? "例：主场馆" : "e.g., Main Gym", text: $sessionLocation)
-                    .font(.system(size: 15))
+
+                if dataManager.locations.isEmpty {
+                    TextField(isChinese ? "例：主场馆" : "e.g., Main Gym", text: $sessionLocation)
+                        .font(.system(size: 15))
+                        .padding(12)
+                        .background(AppTheme.cardBackground)
+                        .cornerRadius(10)
+                } else {
+                    Menu {
+                        Button(action: {
+                            selectedLocationId = nil
+                            sessionLocation = ""
+                        }) {
+                            Label(isChinese ? "无" : "None", systemImage: selectedLocationId == nil ? "checkmark" : "")
+                        }
+                        Divider()
+                        ForEach(dataManager.locations) { location in
+                            Button(action: {
+                                selectedLocationId = location.id
+                                sessionLocation = location.name
+                            }) {
+                                Label {
+                                    Text(location.name)
+                                } icon: {
+                                    if selectedLocationId == location.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(selectedLocationId != nil ? AppTheme.accentColor : AppTheme.textTertiary)
+                            if let id = selectedLocationId,
+                               let loc = dataManager.locations.first(where: { $0.id == id }) {
+                                Text(loc.name)
+                                    .foregroundColor(AppTheme.textPrimary)
+                            } else {
+                                Text(isChinese ? "选择地点..." : "Select location...")
+                                    .foregroundColor(AppTheme.textTertiary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.textTertiary)
+                        }
+                        .font(.system(size: 15))
+                        .padding(12)
+                        .background(AppTheme.cardBackground)
+                        .cornerRadius(10)
+                    }
+                }
+            }
+
+            // Coach
+            VStack(alignment: .leading, spacing: 8) {
+                Text(isChinese ? "教练" : "Coach")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppTheme.textSecondary)
+
+                let coaches = dataManager.activeStaffCoaches
+                if coaches.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.slash")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.textTertiary)
+                        Text(isChinese ? "暂无教练" : "No coaches added yet")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.textTertiary)
+                    }
                     .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(10)
+                } else {
+                    sessionCoachPicker(coaches: coaches)
+                }
             }
-            
+
             // Link to Program (optional)
             VStack(alignment: .leading, spacing: 8) {
                 Text(isChinese ? "关联项目（可选）" : "Link to Program (optional)")
@@ -917,12 +995,17 @@ struct QuickSessionCreatorView: View {
             if !sessionLocation.isEmpty {
                 reviewRow(icon: "mappin", label: isChinese ? "地点" : "Location", value: sessionLocation)
             }
-            
+
+            if let coachId = selectedCoachId,
+               let coach = dataManager.activeStaffCoaches.first(where: { $0.id == coachId }) {
+                reviewRow(icon: "person.fill", label: isChinese ? "教练" : "Coach", value: coach.displayName)
+            }
+
             if let programId = linkedProgramId,
                let program = dataManager.programs.first(where: { $0.id == programId }) {
                 reviewRow(icon: program.mascot.icon, label: isChinese ? "关联项目" : "Program", value: program.displayName)
             }
-            
+
             reviewRow(icon: "person.2", label: isChinese ? "学员" : "Students", value: "\(selectedStudentIds.count) \(isChinese ? "人" : "selected")")
         }
         .padding(16)
@@ -989,6 +1072,61 @@ struct QuickSessionCreatorView: View {
         .cornerRadius(14)
     }
     
+    private func sessionCoachPicker(coaches: [StaffCoach]) -> some View {
+        Menu {
+            ForEach(coaches) { coach in
+                Button(action: { selectedCoachId = coach.id }) {
+                    let label = coach.id == dataManager.loggedInCoachId
+                        ? "\(coach.displayName) (\(isChinese ? "你" : "You"))"
+                        : coach.displayName
+                    if selectedCoachId == coach.id {
+                        Label(label, systemImage: "checkmark")
+                    } else {
+                        Text(label)
+                    }
+                }
+            }
+        } label: {
+            HStack {
+                if let coach = coaches.first(where: { $0.id == selectedCoachId }) {
+                    let avatarColor = Color(coach.avatarColor.color)
+                    ZStack {
+                        Circle()
+                            .fill(avatarColor.opacity(0.2))
+                            .frame(width: 28, height: 28)
+                        Text(coach.initials)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(avatarColor)
+                    }
+                    Text(coach.displayName)
+                        .foregroundColor(AppTheme.textPrimary)
+                    if coach.id == dataManager.loggedInCoachId {
+                        Text(isChinese ? "你" : "You")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(AppTheme.accentColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.accentColor.opacity(0.12))
+                            .cornerRadius(4)
+                    }
+                } else {
+                    Image(systemName: "person.circle")
+                        .foregroundColor(AppTheme.textTertiary)
+                    Text(isChinese ? "选择教练..." : "Select coach...")
+                        .foregroundColor(AppTheme.textTertiary)
+                }
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.textTertiary)
+            }
+            .font(.system(size: 15))
+            .padding(12)
+            .background(AppTheme.cardBackground)
+            .cornerRadius(10)
+        }
+    }
+
     private func reviewRow(icon: String, label: String, value: String) -> some View {
         HStack {
             Image(systemName: icon)
@@ -1153,25 +1291,28 @@ struct QuickSessionCreatorView: View {
             location: sessionLocation.isEmpty ? nil : sessionLocation,
             status: .scheduled,
             attendeeIds: Array(selectedStudentIds),
-            createdByCoachId: AuthManager.shared.currentUser?.id
+            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId ?? AuthManager.shared.currentUser?.id
         )
-        
+
         await MainActor.run {
             dataManager.addSessionEvent(session)
         }
     }
-    
+
     private func createRecurringProgram() async throws {
         let calendar = Calendar.current
         
         // Create the program
+        let coachId = selectedCoachId ?? dataManager.loggedInCoachId ?? AuthManager.shared.currentUser?.id
+
         let program = Program(
             name: programName,
             programType: .group,
             ageGroup: programAgeGroup,
             durationWeeks: programWeeks,
             enrolledStudentIds: Array(enrolledStudentIds),
-            createdByCoachId: AuthManager.shared.currentUser?.id,
+            coachId: coachId,
+            createdByCoachId: coachId,
             status: .active,
             mascot: programMascot,
             startDate: programStartDate,
@@ -1261,7 +1402,7 @@ struct QuickSessionCreatorView: View {
                 status: .scheduled,
                 attendeeIds: Array(enrolledStudentIds),
                 developmentFocus: developmentFocus,
-                createdByCoachId: AuthManager.shared.currentUser?.id
+                createdByCoachId: coachId
             )
             
             await MainActor.run {

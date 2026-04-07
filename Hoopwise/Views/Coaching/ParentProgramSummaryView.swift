@@ -41,7 +41,11 @@ struct ParentProgramSummaryView: View {
     let selectedPhase: MicroCycle?
     
     @State private var isGeneratingImage = false
+    #if canImport(UIKit)
     @State private var generatedImage: UIImage?
+    #else
+    @State private var generatedImage: NSImage?
+    #endif
     @State private var showingShareSheet = false
     
     private let loc = ProgramReportLocalization()
@@ -112,16 +116,19 @@ struct ParentProgramSummaryView: View {
                 }
             }
         }
+        #if os(iOS)
         .sheet(isPresented: $showingShareSheet) {
             if let image = generatedImage {
                 ProgramShareSheet(items: [image])
             }
         }
+        #endif
     }
-    
+
     private func generateAndShare() {
+        #if os(iOS)
         isGeneratingImage = true
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             let reportView = ProgramReportCard(
                 program: program,
@@ -130,21 +137,22 @@ struct ParentProgramSummaryView: View {
                 accent: accent,
                 loc: loc
             )
-            
+
             let controller = UIHostingController(rootView: reportView)
             let size = CGSize(width: 380, height: 750)
             controller.view.bounds = CGRect(origin: .zero, size: size)
             controller.view.backgroundColor = .clear
-            
+
             let renderer = UIGraphicsImageRenderer(size: size)
             let image = renderer.image { _ in
                 controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
             }
-            
+
             generatedImage = image
             isGeneratingImage = false
             showingShareSheet = true
         }
+        #endif
     }
 }
 
@@ -478,13 +486,15 @@ struct ProgramReportCard: View {
     }
 }
 
+#if os(iOS)
 // MARK: - Share Sheet
 struct ProgramShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
-    
+
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
+#endif

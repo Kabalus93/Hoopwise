@@ -603,12 +603,22 @@ struct FlightyProgramDetailView: View {
     }
     
     // Look up custom mascot icon from category
+    #if canImport(UIKit)
     private var customMascotIcon: UIImage? {
         let matchingCategory = dataManager.ageCategories.first {
             $0.shortName.uppercased() == program.ageGroup.rawValue.uppercased()
         }
         return matchingCategory?.customIconImage
     }
+    #elseif canImport(AppKit)
+    private var customMascotIcon: NSImage? {
+        let matchingCategory = dataManager.ageCategories.first {
+            $0.shortName.uppercased() == program.ageGroup.rawValue.uppercased()
+        }
+        guard let data = matchingCategory?.customIconData else { return nil }
+        return NSImage(data: data)
+    }
+    #endif
     
     private var heroHeader: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
@@ -636,11 +646,19 @@ struct FlightyProgramDetailView: View {
                     
                     // Mascot icon (custom or fallback)
                     if let customIcon = customMascotIcon {
+                        #if canImport(UIKit)
                         Image(uiImage: customIcon)
                             .resizable()
                             .renderingMode(.original)
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 48, height: 48)
+                        #elseif canImport(AppKit)
+                        Image(nsImage: customIcon)
+                            .resizable()
+                            .renderingMode(.original)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 48, height: 48)
+                        #endif
                     } else {
                         Image(systemName: program.mascotIcon)
                             .font(.system(size: 32, weight: .medium))

@@ -160,6 +160,7 @@ class DrillImporter {
     }
 }
 
+#if os(iOS)
 // MARK: - Document Picker for Drill Import
 struct DrillImportDocumentPicker: UIViewControllerRepresentable {
     let onImport: (Result<DrillImporter.ImportResult, DrillImporter.ImportError>) -> Void
@@ -208,6 +209,8 @@ struct DrillImportDocumentPicker: UIViewControllerRepresentable {
     }
 }
 
+#endif
+
 // MARK: - Import Drills View
 struct ImportDrillsView: View {
     @Environment(\.dismiss) var dismiss
@@ -247,7 +250,7 @@ struct ImportDrillsView: View {
                     instructionRow(number: 3, text: isChinese ? "确认导入训练到你的库中" : "Confirm to import drills into your library")
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color.gray.opacity(0.15))
                 .cornerRadius(12)
                 
                 Spacer()
@@ -275,17 +278,21 @@ struct ImportDrillsView: View {
             }
             .padding()
             .navigationTitle(isChinese ? "导入训练" : "Import Drills")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
                 }
             }
+            #if os(iOS)
             .sheet(isPresented: $showingFilePicker) {
                 DrillImportDocumentPicker { result in
                     handleImportResult(result)
                 }
             }
+            #endif
             .alert(isChinese ? "导入结果" : "Import Result", isPresented: $showingResult) {
                 Button("OK") {
                     if importResult != nil && importError == nil {

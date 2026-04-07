@@ -109,8 +109,10 @@ struct GuestLoginPromptSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)
             }
-            .background(Color(UIColor.systemBackground))
+            .background(Color(AppTheme.background))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(action: { dismiss() }) {
@@ -190,7 +192,9 @@ struct SignInSheet: View {
                         
                         TextField(isChinese ? "输入用户名或邮箱" : "Enter username or email", text: $username)
                             .textContentType(.username)
+                            #if os(iOS)
                             .autocapitalization(.none)
+                            #endif
                             .disableAutocorrection(true)
                             .padding()
                             .background(Color.gray.opacity(0.1))
@@ -241,8 +245,10 @@ struct SignInSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)
             }
-            .background(Color(UIColor.systemBackground))
+            .background(Color(AppTheme.background))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -318,7 +324,9 @@ struct JoinOrganizationSheet: View {
                     TextField("XXXXXXXX", text: $secretCode)
                         .font(.system(size: 24, weight: .bold, design: .monospaced))
                         .multilineTextAlignment(.center)
+                        #if os(iOS)
                         .autocapitalization(.allCharacters)
+                        #endif
                         .disableAutocorrection(true)
                         .padding()
                         .background(Color.gray.opacity(0.1))
@@ -360,8 +368,10 @@ struct JoinOrganizationSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)
             }
-            .background(Color(UIColor.systemBackground))
+            .background(Color(AppTheme.background))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
