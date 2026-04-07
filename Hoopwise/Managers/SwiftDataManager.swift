@@ -74,21 +74,30 @@ class SwiftDataManager: ObservableObject {
                 var waitCount = 0
                 while waitCount < 600 { // Max 60 seconds wait
                     let pendingCount = await pendingUploadsTracker.count()
-                    
+
                     if pendingCount == 0 {
                         debugLog("  ✅ All uploads complete - now safe to sync")
                         break
                     }
-                    
+
                     if waitCount % 10 == 0 { // Log every second
                         debugLog("  ⏳ Waiting for \(pendingCount) uploads to complete...")
                     }
-                    
+
                     try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second
                     waitCount += 1
                 }
-                
-                // Now sync from cloud (uploads are done, so items will be found)
+
+                // If we hit the timeout, uploads are still in-flight. Pulling from cloud
+                // now could treat those un-confirmed records as deleted. Skip and let
+                // the auto-sync loop handle it once uploads settle.
+                let timedOut = waitCount >= 600
+                if timedOut {
+                    debugLog("  ⚠️ Batch-mode upload wait timed out — skipping syncFromCloud to avoid race with pending uploads")
+                    return
+                }
+
+                // All uploads confirmed — safe to pull cloud changes
                 await syncFromCloud()
             }
         }
@@ -183,6 +192,8 @@ class SwiftDataManager: ObservableObject {
     // MARK: - Performance: Contract Lookup Cache
     /// Cached dictionary for O(1) contract lookups by student ID
     private var _contractsByStudentId: [UUID: Contract]?
+    /// Cached sessions remaining per contract ID — avoids O(n) session filtering per call
+    private var _sessionsRemainingCache: [UUID: Int]?
     
     /// Get contracts indexed by student ID for fast lookups
     var contractsByStudentId: [UUID: Contract] {
@@ -192,9 +203,24 @@ class SwiftDataManager: ObservableObject {
         return dict
     }
     
+    /// Get cached sessions remaining for a contract (O(1) after first build)
+    func cachedSessionsRemaining(for contract: Contract) -> Int {
+        if let cache = _sessionsRemainingCache, let val = cache[contract.id] {
+            return val
+        }
+        // Build the entire cache once
+        var cache: [UUID: Int] = [:]
+        for c in cachedContracts {
+            cache[c.id] = sessionsRemaining(for: c)
+        }
+        _sessionsRemainingCache = cache
+        return cache[contract.id] ?? sessionsRemaining(for: contract)
+    }
+    
     /// Invalidate contract cache (call when contracts change)
     func invalidateContractCache() {
         _contractsByStudentId = nil
+        _sessionsRemainingCache = nil
     }
     
     // MARK: - Performance: Active Contracts Count
@@ -206,17 +232,16 @@ class SwiftDataManager: ObservableObject {
     var studentsNeedingAttentionCount: Int {
         cachedStudents.filter { student in
             let contract = contractsByStudentId[student.id]
-            let remaining = contract.map { sessionsRemaining(for: $0) } ?? 0
+            let remaining = contract.map { cachedSessionsRemaining(for: $0) } ?? 0
             return remaining <= 3
         }.count
     }
     
     // MARK: - Performance: High Risk Students Count
     var highRiskStudentsCount: Int {
-        // Simplified check - students with very low sessions or no recent contact
         cachedStudents.filter { student in
             let contract = contractsByStudentId[student.id]
-            let remaining = contract.map { sessionsRemaining(for: $0) } ?? 0
+            let remaining = contract.map { cachedSessionsRemaining(for: $0) } ?? 0
             let noRecentContact = student.lastParentContact == nil ||
                 Calendar.current.dateComponents([.day], from: student.lastParentContact!, to: Date()).day ?? 0 > 30
             return remaining <= 2 || (remaining <= 5 && noRecentContact)
@@ -280,7 +305,7 @@ class SwiftDataManager: ObservableObject {
     // Court schemes for Basketball Lab
     @Published var courtSchemes: [CourtScheme] = []
     
-    // Reminders (local storage with UserDefaults for now)
+    // Reminders (persisted in SwiftData)
     @Published var reminders: [Reminder] = []
     
     private var isFullSyncInProgress = false
@@ -415,6 +440,10 @@ class SwiftDataManager: ObservableObject {
         
         // First load local data for immediate display (fast path)
         await refreshAllCaches()
+        
+        // Backfill organizationId on any SDStudent records saved before this field was stamped
+        // This fixes students added while AuthManager hadn't yet loaded the org
+        backfillStudentOrganizationIds()
         
         // Run one-time migrations
         migrateSessionDurationsTo30()
@@ -584,7 +613,7 @@ class SwiftDataManager: ObservableObject {
             
             let sdLocations = try modelContext.fetch(FetchDescriptor<SDLocation>())
             locations = sdLocations.map { $0.toLocation() }
-            
+
             // Load persisted season stats from UserDefaults
             loadLeagueData()
             
@@ -889,17 +918,42 @@ class SwiftDataManager: ObservableObject {
     }
     
     // MARK: - Organization Filtering
-    /// Get the current organization ID for filtering data
+    /// Get the current organization ID for filtering data.
+    /// Primary: AuthManager. Fallback: derive from any local record that already has an orgId.
+    /// This ensures sync works even if AuthManager session wasn't restored yet.
     private var currentOrganizationId: UUID? {
-        AuthManager.shared.currentOrganization?.id
+        if let authOrgId = AuthManager.shared.currentOrganization?.id {
+            return authOrgId
+        }
+        // Fallback: derive from local data (students or sessions that were stamped before)
+        if let orgId = _cachedFallbackOrgId {
+            return orgId
+        }
+        // Try to find an orgId from any local record
+        let derivedOrgId: UUID? = {
+            if let sd = (try? modelContext.fetch(FetchDescriptor<SDStudent>()))?.first(where: { $0.organizationId != nil }) {
+                return sd.organizationId
+            }
+            if let se = (try? modelContext.fetch(FetchDescriptor<SDSessionEvent>()))?.first(where: { $0.organizationId != nil }) {
+                return se.organizationId
+            }
+            return nil
+        }()
+        if let derivedOrgId {
+            _cachedFallbackOrgId = derivedOrgId
+            debugLog("🔧 [ORG-FALLBACK] Derived organizationId from local data: \(derivedOrgId)")
+        }
+        return derivedOrgId
     }
+    /// Cache the fallback org ID so we don't re-query every time
+    private var _cachedFallbackOrgId: UUID?
     
     /// Fetch data from Supabase filtered by organization
     /// Also includes legacy data where organization_id is null
     private func fetchForOrganization<T: Decodable>(from table: String) async throws -> [T] {
         if let orgId = currentOrganizationId {
-            // Fetch items matching organization OR with null organization_id (legacy data)
-            let url = "\(SupabaseConfig.url)/rest/v1/\(table)?or=(organization_id.eq.\(orgId.uuidString),organization_id.is.null)"
+            // Fetch items matching organization only (strict org isolation)
+            let url = "\(SupabaseConfig.url)/rest/v1/\(table)?organization_id=eq.\(orgId.uuidString)"
             
             var request = URLRequest(url: URL(string: url)!)
             request.httpMethod = "GET"
@@ -947,7 +1001,7 @@ class SwiftDataManager: ObservableObject {
     // Debug version to see raw response
     private func fetchForOrganizationWithDebug<T: Decodable>(from table: String) async throws -> [T] {
         if let orgId = currentOrganizationId {
-            let url = "\(SupabaseConfig.url)/rest/v1/\(table)?or=(organization_id.eq.\(orgId.uuidString),organization_id.is.null)"
+            let url = "\(SupabaseConfig.url)/rest/v1/\(table)?organization_id=eq.\(orgId.uuidString)"
             debugLog("🔍 DEBUG: Fetching from URL: \(url)")
             
             var request = URLRequest(url: URL(string: url)!)
@@ -1025,14 +1079,23 @@ class SwiftDataManager: ObservableObject {
         
         debugLog("☁️ Starting sync from cloud for organization: \(AuthManager.shared.currentOrganization?.displayName ?? "Unknown")...")
         var syncErrors: [String] = []
+        let syncLog = SyncLogStore.shared
+        var newStudents = 0, newPlayers = 0, newContracts = 0, newPrograms = 0
+        var newCycles = 0, newSessions = 0, newCoaches = 0, newLocations = 0
+        
+        // One-time: purge sample data rows (00000000- prefix UUIDs) from all tables
+        await purgeSampleDataFromCloud()
         
         // Sync Students
         do {
             let cloudStudents: [SupabaseStudent] = try await fetchForOrganization(from: "students")
+            let existingStudentIds = Set((try? modelContext.fetch(FetchDescriptor<SDStudent>()))?.map { $0.id } ?? [])
             for cloudStudent in cloudStudents {
+                let isNew = !existingStudentIds.contains(cloudStudent.id)
                 await mergeStudent(cloudStudent.toStudent())
+                if isNew { newStudents += 1 }
             }
-            debugLog("  ✓ Synced \(cloudStudents.count) students from cloud")
+            debugLog("  ✓ Synced \(cloudStudents.count) students from cloud (\(newStudents) new)")
         } catch {
             debugLog("  ✗ Failed to sync students: \(error)")
             syncErrors.append("students: \(error.localizedDescription)")
@@ -1041,10 +1104,13 @@ class SwiftDataManager: ObservableObject {
         // Sync Players
         do {
             let cloudPlayers: [SupabasePlayer] = try await fetchForOrganization(from: "players")
+            let existingPlayerIds = Set((try? modelContext.fetch(FetchDescriptor<SDPlayer>()))?.map { $0.id } ?? [])
             for cloudPlayer in cloudPlayers {
+                let isNew = !existingPlayerIds.contains(cloudPlayer.id)
                 await mergePlayer(cloudPlayer.toPlayer())
+                if isNew { newPlayers += 1 }
             }
-            debugLog("  ✓ Synced \(cloudPlayers.count) players from cloud")
+            debugLog("  ✓ Synced \(cloudPlayers.count) players from cloud (\(newPlayers) new)")
         } catch {
             debugLog("  ✗ Failed to sync players: \(error)")
             syncErrors.append("players: \(error.localizedDescription)")
@@ -1056,8 +1122,11 @@ class SwiftDataManager: ObservableObject {
             let cloudContractIds = Set(cloudContracts.map { $0.id })
             
             // Merge cloud contracts
+            let existingContractIds = Set((try? modelContext.fetch(FetchDescriptor<SDContract>()))?.map { $0.id } ?? [])
             for cloudContract in cloudContracts {
+                let isNew = !existingContractIds.contains(cloudContract.id)
                 await mergeContract(cloudContract.toContract())
+                if isNew { newContracts += 1 }
             }
             
             // Delete local contracts that no longer exist in cloud
@@ -1082,13 +1151,16 @@ class SwiftDataManager: ObservableObject {
             let cloudProgramIds = Set(cloudPrograms.map { $0.id })
             
             // Merge cloud programs
+            let existingProgramIds = Set((try? modelContext.fetch(FetchDescriptor<SDProgram>()))?.map { $0.id } ?? [])
             for cloudProgram in cloudPrograms {
+                let isNew = !existingProgramIds.contains(cloudProgram.id)
                 await mergeProgram(cloudProgram.toProgram())
+                if isNew { newPrograms += 1 }
             }
             
             // Delete local programs that no longer exist in cloud (protect recent)
             let localPrograms = try modelContext.fetch(FetchDescriptor<SDProgram>())
-            let oneMinuteAgo = Date().addingTimeInterval(-60) // 1 minute protection for cloud replication
+            let oneMinuteAgo = Date().addingTimeInterval(-300) // 5 minute protection for cloud replication
             var deletedCount = 0
             var protectedCount = 0
             
@@ -1126,13 +1198,16 @@ class SwiftDataManager: ObservableObject {
             let cloudMicroCycles: [SupabaseMicroCycle] = try await fetchForOrganization(from: "micro_cycles")
             let cloudMicroCycleIds = Set(cloudMicroCycles.map { $0.id })
             
+            let existingCycleIds = Set((try? modelContext.fetch(FetchDescriptor<SDMicroCycle>()))?.map { $0.id } ?? [])
             for cloudMicroCycle in cloudMicroCycles {
+                let isNew = !existingCycleIds.contains(cloudMicroCycle.id)
                 await mergeMicroCycle(cloudMicroCycle.toMicroCycle())
+                if isNew { newCycles += 1 }
             }
             
             // Delete local micro cycles that no longer exist in cloud (protect recent)
             let localMicroCycles = try modelContext.fetch(FetchDescriptor<SDMicroCycle>())
-            let oneMinuteAgo = Date().addingTimeInterval(-60) // 1 minute protection for cloud replication
+            let oneMinuteAgo = Date().addingTimeInterval(-300) // 5 minute protection for cloud replication
             var deletedCount = 0
             var protectedCount = 0
             
@@ -1172,14 +1247,16 @@ class SwiftDataManager: ObservableObject {
         do {
             let cloudSessions: [SupabaseSessionEvent] = try await fetchForOrganization(from: "session_events")
             let cloudSessionIds = Set(cloudSessions.map { $0.id })
-            
+            let existingSessionIds = Set((try? modelContext.fetch(FetchDescriptor<SDSessionEvent>()))?.map { $0.id } ?? [])
             for cloudSession in cloudSessions {
+                let isNew = !existingSessionIds.contains(cloudSession.id)
                 await mergeSessionEvent(cloudSession.toSessionEvent())
+                if isNew { newSessions += 1 }
             }
             
             // Delete local sessions that no longer exist in cloud (protect recent)
             let localSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
-            let oneMinuteAgo = Date().addingTimeInterval(-60) // 1 minute protection for cloud replication
+            let oneMinuteAgo = Date().addingTimeInterval(-300) // 5 minute protection for cloud replication
             var deletedCount = 0
             var protectedCount = 0
             
@@ -1210,6 +1287,29 @@ class SwiftDataManager: ObservableObject {
             }
             
             debugLog("  ✓ Synced \(cloudSessions.count) sessions from cloud, deleted \(deletedCount) orphans, protected \(protectedCount) recent")
+            
+            // Auto-pull board notes for today's sessions (multi-user: see notes from other coaches)
+            let todayStart = Calendar.current.startOfDay(for: Date())
+            let todayEnd = Calendar.current.date(byAdding: .day, value: 1, to: todayStart) ?? Date()
+            let todaySessions = cloudSessions.filter { $0.date >= todayStart && $0.date < todayEnd }
+            for session in todaySessions {
+                if let jsonString = session.boardNotesJson,
+                   let data = jsonString.data(using: .utf8),
+                   let cloudNotes = try? JSONDecoder().decode([BoardNote].self, from: data) {
+                    // Merge with local: cloud wins on conflict (by note ID)
+                    var merged: [UUID: BoardNote] = [:]
+                    for note in BoardNotesStore.shared.notes(for: session.id) { merged[note.id] = note }
+                    for note in cloudNotes { merged[note.id] = note }
+                    let mergedList = Array(merged.values).sorted { $0.timestamp < $1.timestamp }
+                    let localList = BoardNotesStore.shared.notes(for: session.id)
+                    if mergedList.count != localList.count || mergedList.map(\.id) != localList.map(\.id) {
+                        BoardNotesStore.shared.replaceNotes(for: session.id, with: mergedList)
+                    }
+                }
+            }
+            if !todaySessions.isEmpty {
+                debugLog("  ✓ Auto-pulled board notes for \(todaySessions.count) today's sessions")
+            }
         } catch {
             debugLog("  ✗ Failed to sync sessions: \(error)")
             syncErrors.append("sessions: \(error.localizedDescription)")
@@ -1218,10 +1318,15 @@ class SwiftDataManager: ObservableObject {
         // Sync Measurements
         do {
             let cloudMeasurements: [SupabaseMeasurement] = try await fetchForOrganization(from: "measurements")
+            let existingMeasurementIds = Set((try? modelContext.fetch(FetchDescriptor<SDMeasurement>()))?.map { $0.id } ?? [])
+            var newMeasurements = 0
             for cloudMeasurement in cloudMeasurements {
+                let isNew = !existingMeasurementIds.contains(cloudMeasurement.id)
                 await mergeMeasurement(cloudMeasurement.toMeasurement())
+                if isNew { newMeasurements += 1 }
             }
-            debugLog("  ✓ Synced \(cloudMeasurements.count) measurements from cloud")
+            if newMeasurements > 0 { syncLog.logDownload(table: "measurements", displayName: "Measurements", count: newMeasurements) }
+            debugLog("  ✓ Synced \(cloudMeasurements.count) measurements from cloud (\(newMeasurements) new)")
         } catch {
             debugLog("  ✗ Failed to sync measurements: \(error)")
             syncErrors.append("measurements: \(error.localizedDescription)")
@@ -1230,10 +1335,15 @@ class SwiftDataManager: ObservableObject {
         // Sync Drills
         do {
             let cloudDrills: [SupabaseDrill] = try await fetchForOrganization(from: "drills")
+            let existingDrillIds = Set((try? modelContext.fetch(FetchDescriptor<SDDrill>()))?.map { $0.id } ?? [])
+            var newDrills = 0
             for cloudDrill in cloudDrills {
+                let isNew = !existingDrillIds.contains(cloudDrill.id)
                 await mergeDrill(cloudDrill.toDrill())
+                if isNew { newDrills += 1 }
             }
-            debugLog("  ✓ Synced \(cloudDrills.count) drills from cloud")
+            if newDrills > 0 { syncLog.logDownload(table: "drills", displayName: "Drills", count: newDrills) }
+            debugLog("  ✓ Synced \(cloudDrills.count) drills from cloud (\(newDrills) new)")
         } catch {
             debugLog("  ✗ Failed to sync drills: \(error)")
             syncErrors.append("drills: \(error.localizedDescription)")
@@ -1242,10 +1352,13 @@ class SwiftDataManager: ObservableObject {
         // Sync Staff Coaches
         do {
             let cloudCoaches: [SupabaseStaffCoach] = try await fetchForOrganization(from: "staff_coaches")
+            let existingCoachIds = Set((try? modelContext.fetch(FetchDescriptor<SDStaffCoach>()))?.map { $0.id } ?? [])
             for cloudCoach in cloudCoaches {
+                let isNew = !existingCoachIds.contains(cloudCoach.id)
                 await mergeStaffCoach(cloudCoach.toStaffCoach())
+                if isNew { newCoaches += 1 }
             }
-            debugLog("  ✓ Synced \(cloudCoaches.count) staff coaches from cloud")
+            debugLog("  ✓ Synced \(cloudCoaches.count) staff coaches from cloud (\(newCoaches) new)")
         } catch {
             debugLog("  ✗ Failed to sync staff coaches: \(error)")
             syncErrors.append("staff_coaches: \(error.localizedDescription)")
@@ -1254,10 +1367,13 @@ class SwiftDataManager: ObservableObject {
         // Sync Locations
         do {
             let cloudLocations: [SupabaseLocation] = try await fetchForOrganization(from: "locations")
+            let existingLocationIds = Set((try? modelContext.fetch(FetchDescriptor<SDLocation>()))?.map { $0.id } ?? [])
             for cloudLocation in cloudLocations {
+                let isNew = !existingLocationIds.contains(cloudLocation.id)
                 await mergeLocation(cloudLocation.toLocation())
+                if isNew { newLocations += 1 }
             }
-            debugLog("  ✓ Synced \(cloudLocations.count) locations from cloud")
+            debugLog("  ✓ Synced \(cloudLocations.count) locations from cloud (\(newLocations) new)")
         } catch {
             debugLog("  ✗ Failed to sync locations: \(error)")
             syncErrors.append("locations: \(error.localizedDescription)")
@@ -1334,6 +1450,16 @@ class SwiftDataManager: ObservableObject {
             syncErrors.append("team_standings: \(error.localizedDescription)")
         }
         
+        // Flush download counts to log
+        syncLog.logDownload(table: "students", displayName: "Athletes", count: newStudents)
+        syncLog.logDownload(table: "players", displayName: "Player Profiles", count: newPlayers)
+        syncLog.logDownload(table: "contracts", displayName: "Contracts", count: newContracts)
+        syncLog.logDownload(table: "programs", displayName: "Programs", count: newPrograms)
+        syncLog.logDownload(table: "micro_cycles", displayName: "Training Phases", count: newCycles)
+        syncLog.logDownload(table: "session_events", displayName: "Sessions", count: newSessions)
+        syncLog.logDownload(table: "staff_coaches", displayName: "Coaches", count: newCoaches)
+        syncLog.logDownload(table: "locations", displayName: "Locations", count: newLocations)
+        
         // Save and refresh
         do {
             try modelContext.save()
@@ -1342,16 +1468,67 @@ class SwiftDataManager: ObservableObject {
             debugLog("  ✗ Failed to save context: \(error)")
             syncErrors.append("save: \(error.localizedDescription)")
         }
-        
-        lastSyncDate = Date()
-        
+
         if syncErrors.isEmpty {
+            lastSyncDate = Date()
             debugLog("✅ Cloud sync completed successfully")
             errorMessage = nil
         } else {
-            debugLog("⚠️ Cloud sync completed with \(syncErrors.count) errors")
+            debugLog("⚠️ Cloud sync completed with \(syncErrors.count) errors — lastSyncDate not advanced")
             errorMessage = "Sync errors: \(syncErrors.joined(separator: "; "))"
         }
+    }
+    
+    // MARK: - Purge Sample Data from Cloud
+    /// Deletes rows with 00000000- prefixed UUIDs (sample/demo data) from all Supabase tables.
+    /// Only runs once per installation to avoid repeated delete calls.
+    private func purgeSampleDataFromCloud() async {
+        let purgeKey = "sample_data_purged_from_cloud_v1"
+        guard !UserDefaults.standard.bool(forKey: purgeKey) else { return }
+        
+        debugLog("🧹 Purging sample data rows from Supabase...")
+        
+        let samplePrefix = "00000000-"
+        let tables = ["students", "players", "contracts", "programs", "micro_cycles",
+                      "session_events", "drills", "measurements", "staff_coaches"]
+        
+        for table in tables {
+            do {
+                let url = "\(SupabaseConfig.url)/rest/v1/\(table)?id=like.\(samplePrefix)%"
+                var request = URLRequest(url: URL(string: url)!)
+                request.httpMethod = "DELETE"
+                request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+                request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue("*", forHTTPHeaderField: "Prefer")
+                let (_, response) = try await URLSession.shared.data(for: request)
+                if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                    debugLog("  🗑️ Purged sample rows from \(table)")
+                }
+            } catch {
+                debugLog("  ⚠️ Could not purge sample rows from \(table): \(error.localizedDescription)")
+            }
+        }
+        
+        // Also purge from local SwiftData store
+        do {
+            let sampleUUIDPrefix = "00000000"
+            let sdStudents = try modelContext.fetch(FetchDescriptor<SDStudent>())
+            sdStudents.filter { $0.id.uuidString.hasPrefix(sampleUUIDPrefix) }.forEach { modelContext.delete($0) }
+            let sdPrograms = try modelContext.fetch(FetchDescriptor<SDProgram>())
+            sdPrograms.filter { $0.id.uuidString.hasPrefix(sampleUUIDPrefix) }.forEach { modelContext.delete($0) }
+            let sdSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
+            sdSessions.filter { $0.id.uuidString.hasPrefix(sampleUUIDPrefix) }.forEach { modelContext.delete($0) }
+            let sdCoaches = try modelContext.fetch(FetchDescriptor<SDStaffCoach>())
+            sdCoaches.filter { $0.id.uuidString.hasPrefix(sampleUUIDPrefix) }.forEach { modelContext.delete($0) }
+            try modelContext.save()
+            debugLog("  🗑️ Purged sample rows from local SwiftData store")
+        } catch {
+            debugLog("  ⚠️ Could not purge sample rows from local store: \(error)")
+        }
+        
+        UserDefaults.standard.set(true, forKey: purgeKey)
+        debugLog("✅ Sample data purge complete")
     }
     
     func syncToCloud() async {
@@ -1365,6 +1542,7 @@ class SwiftDataManager: ObservableObject {
         
         debugLog("☁️ Starting smart sync to cloud (only uploading newer local records)...")
         var uploadErrors: [String] = []
+        let syncLog = SyncLogStore.shared
         
         // Fetch cloud timestamps to compare
         let cloudStudentTimestamps = await fetchCloudTimestamps(table: "students")
@@ -1377,17 +1555,54 @@ class SwiftDataManager: ObservableObject {
         let cloudMeasurementTimestamps = await fetchCloudTimestamps(table: "measurements")
         
         // Upload Students (only if local is newer)
+        // Self-healing: stamp any nil-org SDStudents before building DTOs
         do {
+            let sdStudents = (try? modelContext.fetch(FetchDescriptor<SDStudent>())) ?? []
+            
+            // Self-heal: if org is now available, stamp any SDStudents that were saved without one
+            if let currentOrgId = currentOrganizationId {
+                let untagged = sdStudents.filter { $0.organizationId == nil }
+                if !untagged.isEmpty {
+                    for sd in untagged { sd.organizationId = currentOrgId }
+                    try? modelContext.save()
+                    debugLog("  🔧 [SELF-HEAL] Stamped organizationId on \(untagged.count) students at sync time")
+                }
+            } else {
+                debugLog("  ⚠️ [SYNC-DIAG] currentOrganizationId is NIL at syncToCloud time — students/sessions will be skipped")
+                debugLog("  ⚠️ [SYNC-DIAG] AuthManager.currentOrganization: \(String(describing: AuthManager.shared.currentOrganization))")
+                debugLog("  ⚠️ [SYNC-DIAG] AuthManager.authState: \(String(describing: AuthManager.shared.authState))")
+            }
+            
+            // Re-read org map after potential self-heal
+            let refreshedSDStudents = (try? modelContext.fetch(FetchDescriptor<SDStudent>())) ?? []
+            let sdOrgIdMap = Dictionary(uniqueKeysWithValues: refreshedSDStudents.map { ($0.id, $0.organizationId) })
             let newerStudents = cachedStudents.filter { local in
                 guard let cloudDate = cloudStudentTimestamps[local.id] else { return true } // New record
                 return local.updatedAt > cloudDate
             }
+            debugLog("  📊 [SYNC-DIAG] Students: \(cachedStudents.count) total, \(newerStudents.count) newer than cloud")
             if !newerStudents.isEmpty {
-                try await SupabaseManager.shared.batchUpsert(into: "students", data: newerStudents.map { SupabaseStudent(from: $0) })
-                debugLog("  ✓ Uploaded \(newerStudents.count) students to cloud (skipped \(cachedStudents.count - newerStudents.count) older)")
+                let dtos = newerStudents.map { student -> SupabaseStudent in
+                    let persistedOrgId = sdOrgIdMap[student.id] ?? nil
+                    return SupabaseStudent(from: student, organizationId: persistedOrgId)
+                }
+                let uploadable = dtos.filter { $0.organizationId != nil }
+                let skippedNoOrg = dtos.count - uploadable.count
+                if skippedNoOrg > 0 {
+                    debugLog("  ⚠️ Skipped \(skippedNoOrg) students with nil organizationId — will retry after org loads")
+                }
+                if !uploadable.isEmpty {
+                    try await SupabaseManager.shared.batchUpsert(into: "students", data: uploadable)
+                    syncLog.logUpload(table: "students", displayName: "Athletes", count: uploadable.count)
+                    debugLog("  ✓ Uploaded \(uploadable.count) students to cloud (skipped \(cachedStudents.count - newerStudents.count) older)")
+                }
             }
         } catch {
             debugLog("  ✗ Failed to upload students: \(error)")
+            if let supaErr = error as? SupabaseError, case .serverError(let code, let msg) = supaErr {
+                debugLog("  ⚠️ Supabase \(code): \(msg)")
+                debugLog("  💡 If 'column does not exist': run supabase_migration_DEFINITIVE.sql in Supabase SQL Editor")
+            }
             uploadErrors.append("students: \(error.localizedDescription)")
         }
         
@@ -1401,6 +1616,7 @@ class SwiftDataManager: ObservableObject {
             }
             if !newerPlayers.isEmpty {
                 try await SupabaseManager.shared.batchUpsert(into: "players", data: newerPlayers.map { SupabasePlayer(from: $0) })
+                syncLog.logUpload(table: "players", displayName: "Player Profiles", count: newerPlayers.count)
                 debugLog("  ✓ Uploaded \(newerPlayers.count) players to cloud")
             }
             if validPlayers.count < cachedPlayers.count {
@@ -1421,6 +1637,7 @@ class SwiftDataManager: ObservableObject {
             }
             if !newerContracts.isEmpty {
                 try await SupabaseManager.shared.batchUpsert(into: "contracts", data: newerContracts.map { SupabaseContract(from: $0) })
+                syncLog.logUpload(table: "contracts", displayName: "Contracts", count: newerContracts.count)
                 debugLog("  ✓ Uploaded \(newerContracts.count) contracts to cloud")
             }
             if validContracts.count < cachedContracts.count {
@@ -1439,6 +1656,7 @@ class SwiftDataManager: ObservableObject {
             }
             if !newerPrograms.isEmpty {
                 try await SupabaseManager.shared.batchUpsert(into: "programs", data: newerPrograms.map { SupabaseProgram(from: $0) })
+                syncLog.logUpload(table: "programs", displayName: "Programs", count: newerPrograms.count)
                 debugLog("  ✓ Uploaded \(newerPrograms.count) programs to cloud")
             }
         } catch {
@@ -1454,6 +1672,7 @@ class SwiftDataManager: ObservableObject {
             }
             if !newerMicroCycles.isEmpty {
                 try await SupabaseManager.shared.batchUpsert(into: "micro_cycles", data: newerMicroCycles.map { SupabaseMicroCycle(from: $0) })
+                syncLog.logUpload(table: "micro_cycles", displayName: "Training Phases", count: newerMicroCycles.count)
                 debugLog("  ✓ Uploaded \(newerMicroCycles.count) micro cycles to cloud")
             }
         } catch {
@@ -1462,7 +1681,23 @@ class SwiftDataManager: ObservableObject {
         }
         
         // Upload Session Events (only if local is newer and has valid micro_cycle or nil)
+        // Self-healing: stamp any nil-org SDSessionEvents before building DTOs
         do {
+            // Self-heal sessions the same way we do students
+            if let currentOrgId = currentOrganizationId {
+                let sdSessions = (try? modelContext.fetch(FetchDescriptor<SDSessionEvent>())) ?? []
+                let untaggedSessions = sdSessions.filter { $0.organizationId == nil }
+                if !untaggedSessions.isEmpty {
+                    for sd in untaggedSessions { sd.organizationId = currentOrgId }
+                    try? modelContext.save()
+                    debugLog("  🔧 [SELF-HEAL] Stamped organizationId on \(untaggedSessions.count) sessions at sync time")
+                }
+            }
+
+            // Build org map from persisted SDSessionEvent records
+            let sdSessionEvents = (try? modelContext.fetch(FetchDescriptor<SDSessionEvent>())) ?? []
+            let sdSessionOrgMap = Dictionary(uniqueKeysWithValues: sdSessionEvents.map { ($0.id, $0.organizationId) })
+
             let microCycleIds = Set(cachedMicroCycles.map { $0.id })
             let validSessions = cachedSessionEvents.filter { session in
                 guard let mcId = session.microCycleId else { return true }
@@ -1472,9 +1707,22 @@ class SwiftDataManager: ObservableObject {
                 guard let cloudDate = cloudSessionTimestamps[local.id] else { return true }
                 return local.updatedAt > cloudDate
             }
+            debugLog("  📊 [SYNC-DIAG] Sessions: \(cachedSessionEvents.count) total, \(newerSessions.count) newer than cloud")
             if !newerSessions.isEmpty {
-                try await SupabaseManager.shared.batchUpsert(into: "session_events", data: newerSessions.map { SupabaseSessionEvent(from: $0) })
-                debugLog("  ✓ Uploaded \(newerSessions.count) sessions to cloud")
+                let dtos = newerSessions.map { session -> SupabaseSessionEvent in
+                    let persistedOrgId = sdSessionOrgMap[session.id] ?? nil
+                    return SupabaseSessionEvent(from: session, organizationId: persistedOrgId)
+                }
+                let uploadable = dtos.filter { $0.organizationId != nil }
+                let skippedNoOrg = dtos.count - uploadable.count
+                if skippedNoOrg > 0 {
+                    debugLog("  ⚠️ Skipped \(skippedNoOrg) sessions with nil organizationId — will retry after org loads")
+                }
+                if !uploadable.isEmpty {
+                    try await SupabaseManager.shared.batchUpsert(into: "session_events", data: uploadable)
+                    syncLog.logUpload(table: "session_events", displayName: "Sessions", count: uploadable.count)
+                    debugLog("  ✓ Uploaded \(uploadable.count) sessions to cloud")
+                }
             }
             if validSessions.count < cachedSessionEvents.count {
                 debugLog("  ⚠️ Skipped \(cachedSessionEvents.count - validSessions.count) sessions (missing micro_cycle)")
@@ -1492,6 +1740,7 @@ class SwiftDataManager: ObservableObject {
             }
             if !newerMeasurements.isEmpty {
                 try await SupabaseManager.shared.batchUpsert(into: "measurements", data: newerMeasurements.map { SupabaseMeasurement(from: $0) })
+                syncLog.logUpload(table: "measurements", displayName: "Measurements", count: newerMeasurements.count)
                 debugLog("  ✓ Uploaded \(newerMeasurements.count) measurements to cloud")
             }
         } catch {
@@ -1507,6 +1756,7 @@ class SwiftDataManager: ObservableObject {
             }
             if !newerDrills.isEmpty {
                 try await SupabaseManager.shared.batchUpsert(into: "drills", data: newerDrills.map { SupabaseDrill(from: $0) })
+                syncLog.logUpload(table: "drills", displayName: "Drills", count: newerDrills.count)
                 debugLog("  ✓ Uploaded \(newerDrills.count) drills to cloud")
             }
         } catch {
@@ -1514,11 +1764,17 @@ class SwiftDataManager: ObservableObject {
             uploadErrors.append("drills: \(error.localizedDescription)")
         }
         
-        // Upload Staff Coaches (no timestamp comparison for now - these rarely change)
+        // Upload Staff Coaches (with timestamp comparison to avoid duplicate upserts)
         do {
-            if !staffCoaches.isEmpty {
-                try await SupabaseManager.shared.batchUpsert(into: "staff_coaches", data: staffCoaches.map { SupabaseStaffCoach(from: $0) })
-                debugLog("  ✓ Uploaded \(staffCoaches.count) staff coaches to cloud")
+            let cloudCoachTimestamps = await fetchCloudTimestamps(table: "staff_coaches")
+            let newerCoaches = staffCoaches.filter { local in
+                guard let cloudDate = cloudCoachTimestamps[local.id] else { return true }
+                return local.updatedAt > cloudDate
+            }
+            if !newerCoaches.isEmpty {
+                try await SupabaseManager.shared.batchUpsert(into: "staff_coaches", data: newerCoaches.map { SupabaseStaffCoach(from: $0) })
+                syncLog.logUpload(table: "staff_coaches", displayName: "Coaches", count: newerCoaches.count)
+                debugLog("  ✓ Uploaded \(newerCoaches.count) staff coaches to cloud (skipped \(staffCoaches.count - newerCoaches.count) unchanged)")
             }
         } catch {
             debugLog("  ✗ Failed to upload staff coaches: \(error)")
@@ -1569,6 +1825,23 @@ class SwiftDataManager: ObservableObject {
             uploadErrors.append("games: \(error.localizedDescription)")
         }
         
+        // Upload Reminders (batch sync for resilience — individual sync on CRUD may fail)
+        do {
+            let cloudReminderTimestamps = await fetchCloudTimestamps(table: "reminders")
+            let newerReminders = reminders.filter { local in
+                guard let cloudDate = cloudReminderTimestamps[local.id] else { return true }
+                return local.updatedAt > cloudDate
+            }
+            if !newerReminders.isEmpty {
+                try await SupabaseManager.shared.batchUpsert(into: "reminders", data: newerReminders.map { SupabaseReminder(from: $0) })
+                syncLog.logUpload(table: "reminders", displayName: "Reminders", count: newerReminders.count)
+                debugLog("  ✓ Uploaded \(newerReminders.count) reminders to cloud")
+            }
+        } catch {
+            debugLog("  ✗ Failed to upload reminders: \(error)")
+            uploadErrors.append("reminders: \(error.localizedDescription)")
+        }
+        
         // Upload Team Standings (no timestamp comparison for now)
         do {
             if !teamStandings.isEmpty {
@@ -1580,8 +1853,6 @@ class SwiftDataManager: ObservableObject {
             uploadErrors.append("team_standings: \(error.localizedDescription)")
         }
         
-        lastSyncDate = Date()
-        
         if uploadErrors.isEmpty {
             debugLog("✅ Cloud upload completed successfully")
             errorMessage = nil
@@ -1590,12 +1861,17 @@ class SwiftDataManager: ObservableObject {
             errorMessage = "Upload errors: \(uploadErrors.joined(separator: "; "))"
         }
     }
-    
-    /// Fetch updatedAt timestamps from cloud for comparison
+
+    /// Fetch updatedAt timestamps from cloud for comparison, scoped to current organization
     private func fetchCloudTimestamps(table: String) async -> [UUID: Date] {
         // Measurements table uses recorded_at instead of updated_at
         if table == "measurements" {
             return await fetchMeasurementTimestamps()
+        }
+        
+        guard let orgId = currentOrganizationId else {
+            debugLog("  ⚠️ No organization set - skipping timestamp fetch for \(table)")
+            return [:]
         }
         
         do {
@@ -1609,9 +1885,28 @@ class SwiftDataManager: ObservableObject {
                 }
             }
             
-            // Only fetch id and updated_at columns to avoid decoding errors (snake_case for Supabase)
-            let records: [TimestampRecord] = try await SupabaseManager.shared.fetch(from: table, selectColumns: "id,updated_at")
-            debugLog("  📊 Fetched \(records.count) timestamps from \(table)")
+            // Scope to current org so we don't see other orgs' records
+            let urlString = "\(SupabaseConfig.url)/rest/v1/\(table)?select=id,updated_at&organization_id=eq.\(orgId.uuidString)"
+            var request = URLRequest(url: URL(string: urlString)!)
+            request.httpMethod = "GET"
+            request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .custom { dec in
+                let container = try dec.singleValueContainer()
+                let s = try container.decode(String.self)
+                let f1 = ISO8601DateFormatter(); f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let f2 = ISO8601DateFormatter(); f2.formatOptions = [.withInternetDateTime]
+                if let d = f1.date(from: s) ?? f2.date(from: s) { return d }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(s)")
+            }
+            
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let records = try decoder.decode([TimestampRecord].self, from: data)
+            debugLog("  📊 Fetched \(records.count) org-scoped timestamps from \(table)")
             return Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.updatedAt) })
         } catch {
             debugLog("  ⚠️ Could not fetch timestamps from \(table): \(error.localizedDescription)")
@@ -1620,6 +1915,8 @@ class SwiftDataManager: ObservableObject {
     }
     
     private func fetchMeasurementTimestamps() async -> [UUID: Date] {
+        guard let orgId = currentOrganizationId else { return [:] }
+        
         do {
             struct MeasurementTimestampRecord: Decodable {
                 let id: UUID
@@ -1631,8 +1928,27 @@ class SwiftDataManager: ObservableObject {
                 }
             }
             
-            let records: [MeasurementTimestampRecord] = try await SupabaseManager.shared.fetch(from: "measurements", selectColumns: "id,recorded_at")
-            debugLog("  📊 Fetched \(records.count) timestamps from measurements")
+            let urlString = "\(SupabaseConfig.url)/rest/v1/measurements?select=id,recorded_at&organization_id=eq.\(orgId.uuidString)"
+            var request = URLRequest(url: URL(string: urlString)!)
+            request.httpMethod = "GET"
+            request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(SupabaseConfig.anonKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            decoder.dateDecodingStrategy = .custom { dec in
+                let container = try dec.singleValueContainer()
+                let s = try container.decode(String.self)
+                let f1 = ISO8601DateFormatter(); f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                let f2 = ISO8601DateFormatter(); f2.formatOptions = [.withInternetDateTime]
+                if let d = f1.date(from: s) ?? f2.date(from: s) { return d }
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(s)")
+            }
+            
+            let (data, _) = try await URLSession.shared.data(for: request)
+            let records = try decoder.decode([MeasurementTimestampRecord].self, from: data)
+            debugLog("  📊 Fetched \(records.count) org-scoped timestamps from measurements")
             return Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.recordedAt) })
         } catch {
             debugLog("  ⚠️ Could not fetch timestamps from measurements: \(error.localizedDescription)")
@@ -1650,12 +1966,86 @@ class SwiftDataManager: ObservableObject {
         isFullSyncInProgress = true
         defer { isFullSyncInProgress = false }
 
+        // Diagnostic: log org state so we can see why uploads/downloads may skip
+        debugLog("🔄 [FULL-SYNC] Starting — org: \(AuthManager.shared.currentOrganization?.displayName ?? "NIL"), orgId: \(currentOrganizationId?.uuidString ?? "NIL"), authState: \(String(describing: AuthManager.shared.authState))")
+        debugLog("🔄 [FULL-SYNC] Local counts — students: \(cachedStudents.count), sessions: \(cachedSessionEvents.count), measurements: \(cachedMeasurements.count), drills: \(cachedDrills.count)")
+
+        // Self-heal: stamp nil-org SDStudents before sync if org is now available
+        backfillStudentOrganizationIds()
+
+        await SyncLogStore.shared.beginSession()
         // Upload local changes first to preserve user edits
-        // syncToCloud uses timestamp comparison to only upload newer local data
         await syncToCloud()
-        try? await Task.sleep(nanoseconds: 250_000_000) // 0.25 seconds
-        // Then download cloud changes (merge functions check timestamps to avoid overwriting newer local data)
+        // Force-upload any students that syncToCloud may have missed (stuck local-only records)
+        await forceUploadAllStudents()
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        // Then download cloud changes
         await syncFromCloud()
+        // Sync reminders (separate pipeline — has its own merge logic)
+        await syncRemindersFromCloud()
+        await SyncLogStore.shared.endSession()
+    }
+    
+    // MARK: - Force Upload (Rescue Stuck Students)
+    
+    /// Force-upload ALL local students to Supabase, bypassing the "newer than cloud" check.
+    /// This rescues students that are stuck locally (e.g., created when orgId was nil).
+    /// Safe to call multiple times — uses upsert so existing records just get updated.
+    func forceUploadAllStudents() async {
+        guard SupabaseManager.shared.isConnected else { return }
+        guard let orgId = currentOrganizationId else {
+            debugLog("❌ [FORCE-UPLOAD] Cannot upload students — no organizationId available (auth: \(String(describing: AuthManager.shared.authState)))")
+            return
+        }
+        
+        // First, stamp orgId on any students that are missing it
+        let allSDStudents = (try? modelContext.fetch(FetchDescriptor<SDStudent>())) ?? []
+        var stamped = 0
+        for sd in allSDStudents where sd.organizationId == nil {
+            sd.organizationId = orgId
+            stamped += 1
+        }
+        if stamped > 0 {
+            try? modelContext.save()
+            refreshCachesSync()
+            debugLog("🔧 [FORCE-UPLOAD] Stamped organizationId on \(stamped) students")
+        }
+        
+        // Build DTOs for ALL students (not just "newer")
+        let dtos = cachedStudents.map { SupabaseStudent(from: $0, organizationId: orgId) }
+        let uploadable = dtos.filter { $0.organizationId != nil }
+        
+        guard !uploadable.isEmpty else {
+            debugLog("ℹ️ [FORCE-UPLOAD] No students to upload")
+            return
+        }
+        
+        do {
+            try await SupabaseManager.shared.batchUpsert(into: "students", data: uploadable)
+            debugLog("✅ [FORCE-UPLOAD] Force-uploaded \(uploadable.count) students to cloud")
+        } catch {
+            debugLog("❌ [FORCE-UPLOAD] Failed to upload students: \(error)")
+        }
+    }
+    
+    // MARK: - Lightweight Polling
+    
+    /// Lightweight poll: checks if any cloud table has changes since last sync.
+    /// If changes are detected, runs syncFromCloud() only (no upload — that happens on local saves).
+    /// Much cheaper than fullSync() — sends ~8 tiny queries (select=id&limit=1) in parallel.
+    func pollForChanges() async {
+        guard SupabaseManager.shared.isConnected else { return }
+        guard !isFullSyncInProgress else { return }
+        guard let orgId = currentOrganizationId else { return }
+        
+        // Use lastSyncDate; if never synced, skip polling (fullSync will run first)
+        guard let since = lastSyncDate else { return }
+        
+        if let changedTable = await SupabaseManager.shared.hasCloudChanges(since: since, organizationId: orgId) {
+            debugLog("🔔 [POLL] Change detected in '\(changedTable)' — pulling from cloud")
+            await syncFromCloud()
+            // lastSyncDate is updated inside syncFromCloud() only on full success
+        }
     }
     
     // MARK: - Merge Helpers (for cloud sync)
@@ -1820,7 +2210,11 @@ class SwiftDataManager: ObservableObject {
         do {
             let descriptor = FetchDescriptor<SDMicroCycle>(predicate: #Predicate { $0.id == cloudMicroCycle.id })
             if let existing = try modelContext.fetch(descriptor).first {
-                // Cloud is source of truth - always update local with cloud data
+                // Only update if cloud data is newer than local data
+                guard cloudMicroCycle.updatedAt > existing.updatedAt else {
+                    debugLog("   - Skipping micro cycle merge (local is newer)")
+                    return
+                }
                 existing.programId = cloudMicroCycle.programId
                 existing.phaseNumber = cloudMicroCycle.phaseNumber
                 existing.title = cloudMicroCycle.title
@@ -1954,21 +2348,61 @@ class SwiftDataManager: ObservableObject {
     
     private func mergeStaffCoach(_ cloudCoach: StaffCoach) async {
         do {
+            // Primary dedup: match by UUID
             let descriptor = FetchDescriptor<SDStaffCoach>(predicate: #Predicate { $0.id == cloudCoach.id })
             if let existing = try modelContext.fetch(descriptor).first {
                 // Cloud is source of truth - always update local with cloud data
+                existing.organizationId = cloudCoach.organizationId
                 existing.name = cloudCoach.name
                 existing.chineseName = cloudCoach.chineseName
                 existing.email = cloudCoach.email
                 existing.phone = cloudCoach.phone
                 existing.role = cloudCoach.role
+                existing.accessLevel = cloudCoach.accessLevel
                 existing.specializations = cloudCoach.specializations
                 existing.ageGroups = cloudCoach.ageGroups
                 existing.avatarColor = cloudCoach.avatarColor
                 existing.isActive = cloudCoach.isActive
+                existing.hireDate = cloudCoach.hireDate
+                existing.notes = cloudCoach.notes
+                existing.profileImageUrl = cloudCoach.profileImageUrl
                 existing.updatedAt = cloudCoach.updatedAt
+                
+                // Download profile image from cloud URL for local display on this device
+                if let imageUrl = cloudCoach.profileImageUrl, imageUrl.hasPrefix("http"),
+                   existing.profileImageData == nil,
+                   let url = URL(string: imageUrl) {
+                    Task {
+                        do {
+                            let (data, _) = try await URLSession.shared.data(from: url)
+                            await MainActor.run {
+                                existing.profileImageData = data
+                                debugLog("✅ Downloaded profile image for \(cloudCoach.name)")
+                            }
+                        } catch {
+                            debugLog("⚠️ Failed to download profile image for \(cloudCoach.name): \(error)")
+                        }
+                    }
+                }
             } else {
-                modelContext.insert(SDStaffCoach.from(cloudCoach))
+                let newCoach = SDStaffCoach.from(cloudCoach)
+                modelContext.insert(newCoach)
+                
+                // Download profile image for the newly inserted coach
+                if let imageUrl = cloudCoach.profileImageUrl, imageUrl.hasPrefix("http"),
+                   let url = URL(string: imageUrl) {
+                    Task {
+                        do {
+                            let (data, _) = try await URLSession.shared.data(from: url)
+                            await MainActor.run {
+                                newCoach.profileImageData = data
+                                debugLog("✅ Downloaded profile image for new coach \(cloudCoach.name)")
+                            }
+                        } catch {
+                            debugLog("⚠️ Failed to download profile image for \(cloudCoach.name): \(error)")
+                        }
+                    }
+                }
             }
         } catch {
             debugLog("❌ Failed to merge staff coach: \(error)")
@@ -2075,13 +2509,59 @@ class SwiftDataManager: ObservableObject {
             modelContext.insert(sdPlayer)
         }
         
+        // Stamp organizationId immediately — try AuthManager first, then fallback to local data
+        if sdStudent.organizationId == nil {
+            if let orgId = currentOrganizationId {
+                sdStudent.organizationId = orgId
+                debugLog("🔧 [STUDENT-CREATE] Stamped organizationId on new student at insert time")
+            }
+        }
+        
+        let authOrgStr = AuthManager.shared.currentOrganization.map { $0.id.uuidString } ?? "NIL"
+        debugLog("💾 [STUDENT-CREATE] Saving student: \(student.name) (ID: \(student.id), orgId: \(sdStudent.organizationId?.uuidString ?? "NIL"), authOrg: \(authOrgStr))")
+        
+        // Use saveAndRefresh — same pattern as every other CRUD method
+        // This triggers fullSync → backfill → syncToCloud
         saveAndRefresh()
+        
+        // Also attempt an immediate direct upload for speed (belt-and-suspenders)
+        if SupabaseManager.shared.isConnected {
+            let capturedOrgId = sdStudent.organizationId
+            Task {
+                do {
+                    let dto = SupabaseStudent(from: student, organizationId: capturedOrgId)
+                    guard dto.organizationId != nil else {
+                        debugLog("⚠️ [STUDENT-CREATE] Immediate upload skipped (orgId nil) — fullSync will handle it")
+                        return
+                    }
+                    try await SupabaseManager.shared.batchUpsert(into: "students", data: [dto])
+                    debugLog("✅ [STUDENT-CREATE] Student uploaded to cloud: \(student.name)")
+                    
+                    if let player = player {
+                        try await SupabaseManager.shared.batchUpsert(into: "players", data: [SupabasePlayer(from: player)])
+                        debugLog("✅ [STUDENT-CREATE] Player uploaded to cloud for: \(student.name)")
+                    }
+                } catch {
+                    debugLog("❌ [STUDENT-CREATE] Immediate upload FAILED — fullSync will retry")
+                    debugLog("   Error: \(error)")
+                    if let supaErr = error as? SupabaseError, case .serverError(let code, let msg) = supaErr {
+                        debugLog("   ⚠️ Supabase \(code): \(msg)")
+                        debugLog("   💡 If 'column does not exist': run supabase_migration_DEFINITIVE.sql in Supabase SQL Editor")
+                    }
+                }
+            }
+        }
     }
     
     func updateStudent(_ student: Student) {
         do {
             let descriptor = FetchDescriptor<SDStudent>(predicate: #Predicate { $0.id == student.id })
             if let sdStudent = try modelContext.fetch(descriptor).first {
+                // Self-heal: stamp organizationId if it was nil (student created before org loaded)
+                if sdStudent.organizationId == nil, let orgId = AuthManager.shared.currentOrganization?.id {
+                    sdStudent.organizationId = orgId
+                    debugLog("🔧 [STUDENT-UPDATE] Late-stamped organizationId on \(student.name)")
+                }
                 sdStudent.name = student.name
                 sdStudent.chineseName = student.chineseName
                 sdStudent.avatarColor = student.avatarColor
@@ -2109,11 +2589,13 @@ class SwiftDataManager: ObservableObject {
     }
     
     func deleteStudent(_ student: Student) {
+        debugLog("🗑️ [DELETE-STUDENT] Starting deletion of: \(student.name) (ID: \(student.id))")
         do {
             // First, delete all contracts associated with this student (locally)
             let contractDescriptor = FetchDescriptor<SDContract>(predicate: #Predicate { $0.studentId == student.id })
             let studentContracts = try modelContext.fetch(contractDescriptor)
             let studentContractIds = studentContracts.map(\.id)
+            debugLog("🗑️ [DELETE-STUDENT] Found \(studentContracts.count) contracts to delete")
             for contract in studentContracts {
                 modelContext.delete(contract)
             }
@@ -2122,6 +2604,7 @@ class SwiftDataManager: ObservableObject {
             let playerDescriptor = FetchDescriptor<SDPlayer>(predicate: #Predicate { $0.studentId == student.id })
             let studentPlayers = try modelContext.fetch(playerDescriptor)
             let studentPlayerIds = studentPlayers.map(\.id)
+            debugLog("🗑️ [DELETE-STUDENT] Found \(studentPlayers.count) players to delete")
             for player in studentPlayers {
                 modelContext.delete(player)
             }
@@ -2130,11 +2613,15 @@ class SwiftDataManager: ObservableObject {
             let descriptor = FetchDescriptor<SDStudent>(predicate: #Predicate { $0.id == student.id })
             if let sdStudent = try modelContext.fetch(descriptor).first {
                 modelContext.delete(sdStudent)
+                debugLog("🗑️ [DELETE-STUDENT] Deleted from local SwiftData: \(student.name)")
                 saveAndRefresh()
+                debugLog("✅ [DELETE-STUDENT] Local deletion completed, cache refreshed")
                 
                 // Also delete from cloud - contracts first, then player, then student
                 if SupabaseManager.shared.isConnected {
                     Task {
+                        debugLog("🌐 [DELETE-STUDENT] Starting cloud deletion for: \(student.name)")
+                        
                         // Delete contracts from cloud first (FK constraint)
                         for contractId in studentContractIds {
                             await deleteFromCloudWithRetry(table: "contracts", id: contractId, entityLabel: "contract")
@@ -2147,11 +2634,16 @@ class SwiftDataManager: ObservableObject {
 
                         // Finally delete student from cloud
                         await deleteFromCloudWithRetry(table: "students", id: student.id, entityLabel: "student")
+                        debugLog("✅ [DELETE-STUDENT] Cloud deletion completed for: \(student.name)")
                     }
+                } else {
+                    debugLog("⚠️ [DELETE-STUDENT] Not connected to Supabase - deletion only local")
                 }
+            } else {
+                debugLog("⚠️ [DELETE-STUDENT] Student not found in local database: \(student.name)")
             }
         } catch {
-            debugLog("❌ Failed to delete student: \(error)")
+            debugLog("❌ [DELETE-STUDENT] Failed to delete student: \(error)")
         }
     }
     
@@ -2207,7 +2699,19 @@ class SwiftDataManager: ObservableObject {
         // Refresh caches for UI
         refreshCachesSync()
         debugLog("   - Cache refreshed, total programs: \(cachedPrograms.count)")
-        
+
+        // Post activity event so the board notes feed shows this creation
+        let creatorId: UUID = program.createdByCoachId ?? program.coachId ?? cachedCoach.id
+        let creatorName = staffCoaches.first { $0.id == creatorId }?.name ?? cachedCoach.name
+        Task { @MainActor in
+            CoachMentionStore.shared.addProgramAddedEvent(
+                programId: program.id,
+                programName: program.name,
+                createdByCoachId: creatorId,
+                createdByCoachName: creatorName
+            )
+        }
+
         // CRITICAL: Upload program to cloud with retry and tracking
         // Phases and sessions depend on this program existing in cloud first
         if SupabaseManager.shared.isConnected {
@@ -2522,7 +3026,22 @@ class SwiftDataManager: ObservableObject {
         // Refresh caches for UI
         refreshCachesSync()
         debugLog("   - Cache refreshed, total sessions: \(cachedSessionEvents.count)")
-        
+
+        // Post activity event so the board notes feed shows this creation
+        let sessionCreatorId: UUID = event.createdByCoachId ?? cachedCoach.id
+        let sessionCreatorName = staffCoaches.first { $0.id == sessionCreatorId }?.name ?? cachedCoach.name
+        let sessionProgramName = event.programId.flatMap { pid in cachedPrograms.first { $0.id == pid }?.name }
+        Task { @MainActor in
+            CoachMentionStore.shared.addSessionCreatedEvent(
+                sessionId: event.id,
+                sessionName: event.title,
+                programId: event.programId,
+                programName: sessionProgramName,
+                createdByCoachId: sessionCreatorId,
+                createdByCoachName: sessionCreatorName
+            )
+        }
+
         // Immediately upload to Supabase (async, don't block)
         if SupabaseManager.shared.isConnected {
             let parentPhaseId = event.microCycleId
@@ -2602,6 +3121,12 @@ class SwiftDataManager: ObservableObject {
         do {
             let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == event.id })
             if let sdSession = try modelContext.fetch(descriptor).first {
+                // Self-heal: stamp organizationId if it was nil (session created before org loaded)
+                if sdSession.organizationId == nil, let orgId = AuthManager.shared.currentOrganization?.id {
+                    sdSession.organizationId = orgId
+                    debugLog("🔧 [SESSION-UPDATE] Late-stamped organizationId on \(event.title)")
+                }
+                
                 // Debug: Log games before save
                 debugLog("🎮 [DEBUG] updateSessionEvent: \(event.title)")
                 debugLog("   - Input games count: \(event.games.count)")
@@ -2630,6 +3155,7 @@ class SwiftDataManager: ObservableObject {
                 sdSession.manOfTheMatchId = event.manOfTheMatchId
                 sdSession.drillsCompleted = event.drillsCompleted
                 sdSession.rating = event.rating
+                sdSession.assignedCoachIds = event.assignedCoachIds
                 sdSession.games = event.games  // Persist in-session games
                 sdSession.updatedAt = Date()
                 
@@ -2641,11 +3167,12 @@ class SwiftDataManager: ObservableObject {
                 // Update contracts for all students who attended this session
                 updateContractsForAttendance(sessionEvent: event)
                 
-                // Immediately upload to Supabase
+                // Immediately upload to Supabase (use persisted orgId for reliability)
+                let persistedSessionOrgId = sdSession.organizationId
                 if SupabaseManager.shared.isConnected {
                     Task {
                         do {
-                            let dto = SupabaseSessionEvent(from: event)
+                            let dto = SupabaseSessionEvent(from: event, organizationId: persistedSessionOrgId)
                             debugLog("🎮 [DEBUG] Uploading session to Supabase: \(event.title)")
                             debugLog("   - Games in DTO: \(dto.games.count)")
                             try await SupabaseManager.shared.upsert(into: "session_events", data: dto)
@@ -2798,6 +3325,42 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    /// Backfill organizationId on any SDStudent and SDSessionEvent records that were saved before the field was stamped.
+    /// Runs at loadAllData and again at fullSync time; only updates records where organizationId is nil and org is known.
+    func backfillStudentOrganizationIds() {
+        guard let orgId = currentOrganizationId else {
+            debugLog("ℹ️ [BACKFILL] No org available (auth: \(String(describing: AuthManager.shared.authState))) — skipping organizationId backfill")
+            return
+        }
+        var totalStamped = 0
+        do {
+            let allSDStudents = try modelContext.fetch(FetchDescriptor<SDStudent>())
+            let untaggedStudents = allSDStudents.filter { $0.organizationId == nil }
+            if !untaggedStudents.isEmpty {
+                for sd in untaggedStudents { sd.organizationId = orgId }
+                totalStamped += untaggedStudents.count
+                debugLog("✅ [BACKFILL] Stamped organizationId on \(untaggedStudents.count) students")
+            }
+        } catch {
+            debugLog("❌ [BACKFILL] Failed to backfill student organizationIds: \(error)")
+        }
+        do {
+            let allSDSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
+            let untaggedSessions = allSDSessions.filter { $0.organizationId == nil }
+            if !untaggedSessions.isEmpty {
+                for sd in untaggedSessions { sd.organizationId = orgId }
+                totalStamped += untaggedSessions.count
+                debugLog("✅ [BACKFILL] Stamped organizationId on \(untaggedSessions.count) sessions")
+            }
+        } catch {
+            debugLog("❌ [BACKFILL] Failed to backfill session organizationIds: \(error)")
+        }
+        if totalStamped > 0 {
+            try? modelContext.save()
+            debugLog("✅ [BACKFILL] Total stamped: \(totalStamped) records — they will upload on next sync")
+        }
+    }
+
     // MARK: - Drill CRUD
     
     /// Syncs sample drills to the database, adding any that don't already exist by name
@@ -3583,7 +4146,10 @@ class SwiftDataManager: ObservableObject {
     /// Login using AuthManager's current user data
     func loginFromAuthManager() {
         guard let authUser = AuthManager.shared.currentUser else { return }
-        
+
+        // Reset fallback org cache so it re-derives from the authenticated org, not stale local data
+        _cachedFallbackOrgId = nil
+
         // IMPORTANT: Preserve existing profile data (especially profileImageData) to avoid losing profile picture
         let existingCoach = cachedCoach
         
@@ -3665,18 +4231,20 @@ class SwiftDataManager: ObservableObject {
     }
     
     func logout() {
-        // Reset to default empty coach profile
-        let defaultCoach = Coach.default
-        updateCoach(defaultCoach)
-        
         // Clear login state
         loggedInCoachId = nil
         isLoggedIn = false
+        _cachedFallbackOrgId = nil
         hasSkippedLogin = false
         UserDefaults.standard.removeObject(forKey: Self.loggedInCoachIdKey)
         UserDefaults.standard.removeObject(forKey: "hasSkippedLogin")
+        // Also clear the sample data loaded flag so demo data reloads if user goes to guest mode
+        UserDefaults.standard.removeObject(forKey: sampleDataLoadedKey)
         
-        // Clear cached data to prevent stale data showing
+        // Delete all SwiftData records so refreshAllCaches() cannot reload stale data
+        deleteAllSwiftDataRecords()
+        
+        // Clear in-memory caches
         cachedStudents = []
         cachedPlayers = []
         cachedContracts = []
@@ -3685,8 +4253,35 @@ class SwiftDataManager: ObservableObject {
         cachedSessionEvents = []
         cachedDrills = []
         cachedMeasurements = []
+        cachedCoach = Coach.default
+        staffCoaches = []
+        teams = []
+        games = []
+        locations = []
+        reminders = []
         
-        debugLog("👋 Logged out - all cached data cleared")
+        debugLog("👋 Logged out - all SwiftData records and caches cleared")
+    }
+    
+    private func deleteAllSwiftDataRecords() {
+        do {
+            try modelContext.delete(model: SDStudent.self)
+            try modelContext.delete(model: SDPlayer.self)
+            try modelContext.delete(model: SDContract.self)
+            try modelContext.delete(model: SDProgram.self)
+            try modelContext.delete(model: SDMicroCycle.self)
+            try modelContext.delete(model: SDSessionEvent.self)
+            try modelContext.delete(model: SDDrill.self)
+            try modelContext.delete(model: SDMeasurement.self)
+            try modelContext.delete(model: SDStaffCoach.self)
+            try modelContext.delete(model: SDTeam.self)
+            try modelContext.delete(model: SDGame.self)
+            try modelContext.delete(model: SDLocation.self)
+            try modelContext.delete(model: SDCoach.self)
+            debugLog("🗑️ All SwiftData records deleted on logout")
+        } catch {
+            debugLog("❌ Failed to delete SwiftData records on logout: \(error)")
+        }
     }
     
     func skipLogin() {
@@ -3707,50 +4302,12 @@ class SwiftDataManager: ObservableObject {
             return
         }
         
-        debugLog("📦 Setting up demo mode with Sample Academy data...")
-        let gen = SampleDataGenerator.shared
+        debugLog("📦 Setting up demo mode...")
         
-        // Coach profile
-        let sampleCoach = gen.generateSampleCoach()
-        updateCoach(sampleCoach)
-        
-        // Staff coaches
-        for staffCoach in gen.generateStaffCoaches() {
-            addStaffCoach(staffCoach)
-        }
-        
-        // Students
-        for student in gen.generateStudents() {
-            addStudent(student)
-        }
-        
-        // Programs
-        for program in gen.generatePrograms() {
-            addProgram(program)
-        }
-        
-        // Phases (MicroCycles)
-        for phase in gen.generatePhases() {
-            addMicroCycle(phase)
-        }
-        
-        // Sessions
-        for session in gen.generateSessions() {
-            addSessionEvent(session)
-        }
-        
-        // Contracts
-        for contract in gen.generateContracts() {
-            addContract(contract)
-        }
-        
-        // Players (physical profiles)
-        for player in gen.generatePlayers() {
-            addPlayer(player)
-        }
+        // Sample data generation removed
         
         UserDefaults.standard.set(true, forKey: sampleDataLoadedKey)
-        debugLog("✅ Demo mode ready — Sample Academy loaded (10 athletes, 3 programs, 8 sessions, 3 coaches)")
+        debugLog("✅ Demo mode ready")
     }
     
     /// Clear sample data when user authenticates with an organization
@@ -3857,6 +4414,37 @@ class SwiftDataManager: ObservableObject {
         return cachedStudents.filter { studentsInMyPrograms.contains($0.id) || $0.createdByCoachId == coachId }
     }
     
+    // MARK: - Dashboard-scoped (always filtered to the logged-in coach, even for admins)
+
+    /// Programs owned by / assigned to the currently logged-in coach — always scoped, used by the home screen
+    var myPrograms: [Program] {
+        guard isLoggedIn, let coachId = loggedInCoachId ?? Optional(coach.id) else {
+            return cachedPrograms
+        }
+        return cachedPrograms.filter { $0.coachId == coachId || $0.createdByCoachId == coachId }
+    }
+
+    /// Sessions belonging to the logged-in coach's programs or created by them — always scoped, used by the home screen
+    var mySessions: [SessionEvent] {
+        guard isLoggedIn, let coachId = loggedInCoachId ?? Optional(coach.id) else {
+            return cachedSessionEvents
+        }
+        let myProgramIds = Set(myPrograms.map { $0.id })
+        return cachedSessionEvents.filter {
+            ($0.programId != nil && myProgramIds.contains($0.programId!)) || $0.createdByCoachId == coachId || $0.assignedCoachIds.contains(coachId)
+        }
+    }
+
+    /// Students in the logged-in coach's programs or created by them — always scoped, used by the home screen
+    var myStudents: [Student] {
+        guard isLoggedIn, let coachId = loggedInCoachId ?? Optional(coach.id) else {
+            return cachedStudents
+        }
+        let myProgramIds = Set(myPrograms.map { $0.id })
+        let studentsInMyPrograms = Set(cachedPrograms.filter { myProgramIds.contains($0.id) }.flatMap { $0.enrolledStudentIds })
+        return cachedStudents.filter { studentsInMyPrograms.contains($0.id) || $0.createdByCoachId == coachId }
+    }
+
     /// Programs visible to the current coach
     var accessiblePrograms: [Program] {
         guard isLoggedIn, !isAdmin, let coachId = loggedInCoachId else {
@@ -3871,10 +4459,10 @@ class SwiftDataManager: ObservableObject {
         guard isLoggedIn, !isAdmin, let coachId = loggedInCoachId else {
             return cachedSessionEvents
         }
-        // Coaching staff can see sessions for their programs or created by them
+        // Coaching staff can see sessions for their programs, created by them, or assigned to them
         let myProgramIds = Set(accessiblePrograms.map { $0.id })
-        return cachedSessionEvents.filter { 
-            ($0.programId != nil && myProgramIds.contains($0.programId!)) || $0.createdByCoachId == coachId
+        return cachedSessionEvents.filter {
+            ($0.programId != nil && myProgramIds.contains($0.programId!)) || $0.createdByCoachId == coachId || $0.assignedCoachIds.contains(coachId)
         }
     }
     
@@ -4277,6 +4865,7 @@ class SwiftDataManager: ObservableObject {
                 sdCoach.email = coach.email
                 sdCoach.phone = coach.phone
                 sdCoach.role = coach.role
+                sdCoach.accessLevel = coach.accessLevel
                 sdCoach.specializations = coach.specializations
                 sdCoach.ageGroups = coach.ageGroups
                 sdCoach.avatarColor = coach.avatarColor
@@ -4284,6 +4873,7 @@ class SwiftDataManager: ObservableObject {
                 sdCoach.hireDate = coach.hireDate
                 sdCoach.notes = coach.notes
                 sdCoach.profileImageData = coach.profileImageData
+                sdCoach.profileImageUrl = coach.profileImageUrl
                 sdCoach.updatedAt = Date()
                 saveAndRefresh()
             }
@@ -4293,30 +4883,31 @@ class SwiftDataManager: ObservableObject {
     }
     
     func deleteStaffCoach(_ coach: StaffCoach) {
+        debugLog("🗑️ [DELETE-COACH] Starting deletion of: \(coach.name) (ID: \(coach.id))")
         do {
             let descriptor = FetchDescriptor<SDStaffCoach>(predicate: #Predicate { $0.id == coach.id })
             if let sdCoach = try modelContext.fetch(descriptor).first {
                 modelContext.delete(sdCoach)
-                debugLog("🗑️ Deleting staff coach: \(coach.name)")
+                debugLog("🗑️ [DELETE-COACH] Deleted from local SwiftData: \(coach.name)")
                 saveAndRefresh()
-                debugLog("✅ Staff coach deleted locally")
+                debugLog("✅ [DELETE-COACH] Local deletion completed, cache refreshed")
                 
                 // Also delete from Supabase for permanent deletion
                 Task {
                     do {
                         try await SupabaseManager.shared.delete(from: "staff_coaches", id: coach.id)
-                        debugLog("✅ Staff coach deleted from Supabase: \(coach.name)")
+                        debugLog("✅ [DELETE-COACH] Deleted from Supabase: \(coach.name)")
                     } catch {
-                        debugLog("⚠️ Failed to delete staff coach from Supabase: \(error)")
+                        debugLog("⚠️ [DELETE-COACH] Failed to delete from Supabase: \(error)")
                     }
                 }
             } else {
-                debugLog("⚠️ Staff coach not found in database: \(coach.name)")
+                debugLog("⚠️ [DELETE-COACH] Staff coach not found in local database: \(coach.name)")
                 // Still refresh cache in case of sync issues
                 refreshCachesSync()
             }
         } catch {
-            debugLog("❌ Failed to delete staff coach: \(error)")
+            debugLog("❌ [DELETE-COACH] Failed to delete staff coach: \(error)")
             // Still try to refresh cache
             refreshCachesSync()
         }
@@ -4701,27 +5292,13 @@ class SwiftDataManager: ObservableObject {
         guard let currentCoachId = loggedInCoachId ?? Optional(coach.id) else { return }
         
         do {
-            // Fetch reminders where I'm the owner
-            let ownedReminders: [SupabaseReminder] = try await SupabaseManager.shared.fetchWithFilter(
-                from: "reminders",
-                column: "coach_id",
-                op: .eq,
-                value: currentCoachId.uuidString
-            )
+            // Fetch all reminders for this organization (scoped, not global)
+            let orgReminders: [SupabaseReminder] = try await fetchForOrganization(from: "reminders")
             
-            // Fetch reminders where I'm tagged (shared with me)
-            // Note: This requires a custom query or RPC for array contains
-            // For now, we'll fetch all and filter client-side (can optimize later)
-            let allReminders: [SupabaseReminder] = try await SupabaseManager.shared.fetch(from: "reminders")
-            let sharedWithMe = allReminders.filter { $0.taggedCoachIds.contains(currentCoachId) }
-            
-            // Combine and dedupe
-            var allMyReminders = ownedReminders.map { $0.toReminder() }
-            for shared in sharedWithMe {
-                if !allMyReminders.contains(where: { $0.id == shared.id }) {
-                    allMyReminders.append(shared.toReminder())
-                }
-            }
+            // Filter to: my own reminders OR reminders shared with me
+            let allMyReminders = orgReminders
+                .map { $0.toReminder() }
+                .filter { $0.isVisibleTo(coachId: currentCoachId) }
             
             // Save to SwiftData
             for reminder in allMyReminders {

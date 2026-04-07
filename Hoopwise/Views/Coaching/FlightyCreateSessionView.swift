@@ -746,7 +746,7 @@ struct FlightyCreateSessionView: View {
             curriculum: curriculum,
             attendeeIds: attendeeIds,
             notes: notes.isEmpty ? nil : notes,
-            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId
+            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId ?? AuthManager.shared.currentUser?.id
         )
         
         dataManager.addSessionEvent(session)
