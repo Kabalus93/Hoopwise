@@ -66,10 +66,12 @@ struct AttendanceReminderSheet: View {
                     .foregroundColor(AppTheme.textSecondary)
                 }
             }
+            #if os(iOS)
             .fullScreenCover(isPresented: $showAttendanceImagePicker) {
                 AttendanceImagePicker(image: $capturedImage)
                     .ignoresSafeArea()
             }
+            #endif
         }
     }
     

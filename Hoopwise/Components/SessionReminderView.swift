@@ -273,7 +273,11 @@ struct AddReminderSheet: View {
                             .font(.system(size: 18, weight: .medium))
                             .lineLimit(3...5)
                             .padding(16)
-                            .background(Color(.systemGray6))
+                            #if canImport(UIKit)
+                            .background(Color(UIColor.systemGray6))
+                            #else
+                            .background(Color(NSColor.controlBackgroundColor))
+                            #endif
                             .cornerRadius(12)
                     }
                     
@@ -325,7 +329,11 @@ struct AddReminderSheet: View {
                             )
                             .datePickerStyle(.graphical)
                             .padding(12)
-                            .background(Color(.systemGray6))
+                            #if canImport(UIKit)
+                            .background(Color(UIColor.systemGray6))
+                            #else
+                            .background(Color(NSColor.controlBackgroundColor))
+                            #endif
                             .cornerRadius(12)
                         }
                     }
@@ -460,7 +468,11 @@ struct AddReminderSheet: View {
                             .font(.system(size: 14))
                             .lineLimit(2...4)
                             .padding(12)
-                            .background(Color(.systemGray6))
+                            #if canImport(UIKit)
+                            .background(Color(UIColor.systemGray6))
+                            #else
+                            .background(Color(NSColor.controlBackgroundColor))
+                            #endif
                             .cornerRadius(12)
                     }
                     
@@ -468,9 +480,15 @@ struct AddReminderSheet: View {
                 }
                 .padding(20)
             }
-            .background(Color(.systemBackground))
+            #if canImport(UIKit)
+            .background(Color(UIColor.systemBackground))
+            #else
+            .background(Color(NSColor.windowBackgroundColor))
+            #endif
             .navigationTitle(isEditing ? (isChinese ? "编辑提醒" : "Edit Reminder") : (isChinese ? "新提醒" : "New Reminder"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -655,7 +673,9 @@ struct ReminderStudentPicker: View {
             }
             .searchable(text: $searchText, prompt: isChinese ? "搜索学员..." : "Search students...")
             .navigationTitle(isChinese ? "标记学员" : "Tag Students")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }
@@ -729,7 +749,9 @@ struct ReminderCoachPicker: View {
                 }
             }
             .navigationTitle(isChinese ? "标记教练" : "Tag Coaches")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }
@@ -798,7 +820,11 @@ struct QuickPresetButton: View {
             .foregroundColor(isSelected ? .white : .primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.orange : Color(.systemGray6))
+            #if canImport(UIKit)
+            .background(isSelected ? Color.orange : Color(UIColor.systemGray6))
+            #else
+            .background(isSelected ? Color.orange : Color(NSColor.controlBackgroundColor))
+            #endif
             .cornerRadius(20)
         }
         .buttonStyle(.plain)
@@ -873,7 +899,11 @@ struct ReminderBadge: View {
                     .foregroundColor(.gray.opacity(0.5))
             }
             .padding(12)
-            .background(Color(.systemBackground))
+            #if canImport(UIKit)
+            .background(Color(UIColor.systemBackground))
+            #else
+            .background(Color(NSColor.windowBackgroundColor))
+            #endif
             .cornerRadius(10)
         }
         .buttonStyle(.plain)

@@ -411,11 +411,16 @@ struct CustomAgeCategory: Identifiable, Codable, Hashable {
         customIconData != nil
     }
     
-    /// Get UIImage from custom icon data
-    #if os(iOS)
+    /// Get platform image from custom icon data
+    #if canImport(UIKit)
     var customIconImage: UIImage? {
         guard let data = customIconData else { return nil }
         return UIImage(data: data)
+    }
+    #elseif canImport(AppKit)
+    var customIconImage: NSImage? {
+        guard let data = customIconData else { return nil }
+        return NSImage(data: data)
     }
     #endif
     

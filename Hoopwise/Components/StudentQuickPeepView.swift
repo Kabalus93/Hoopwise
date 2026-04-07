@@ -11,7 +11,11 @@ struct StudentQuickPeepView: View {
     let sessionId: UUID?
     
     private var isIPad: Bool {
+        #if os(iOS)
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+        #else
+        true  // macOS always uses regular layout
+        #endif
     }
     
     // State for editable skills
@@ -316,7 +320,9 @@ struct StudentQuickPeepView: View {
             }
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "学员速览" : "Quick Peep")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }

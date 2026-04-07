@@ -648,7 +648,11 @@ struct DrillCard: View {
                 }
                 .padding(16)
             }
+            #if os(iOS)
             .cornerRadius(16, corners: [.topLeft, .topRight])
+            #else
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 16, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 16))
+            #endif
             
             // Bottom info section
             VStack(alignment: .leading, spacing: 10) {
@@ -690,7 +694,11 @@ struct DrillCard: View {
             }
             .padding(16)
             .background(AppTheme.cardBackground)
+            #if os(iOS)
             .cornerRadius(16, corners: [.bottomLeft, .bottomRight])
+            #else
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 16, bottomTrailingRadius: 16, topTrailingRadius: 0))
+            #endif
         }
         .shadow(color: categoryColor.opacity(0.2), radius: 12, x: 0, y: 4)
     }

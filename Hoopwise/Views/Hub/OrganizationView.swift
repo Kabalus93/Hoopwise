@@ -281,7 +281,9 @@ struct EditOrganizationSheet: View {
                 }
             }
             .navigationTitle(isChinese ? "组织设置" : "Organization Settings")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -648,7 +650,9 @@ struct CoachProfileDetailView: View {
             }
             .background(AppTheme.background)
             .navigationTitle(isChinese ? "教练资料" : "Coach Profile")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "关闭" : "Close") { dismiss() }
@@ -1036,7 +1040,9 @@ struct CreateAccountForCoachSheet: View {
                     Section(header: Text(isChinese ? "登录凭证" : "Login Credentials")) {
                         TextField(isChinese ? "用户名" : "Username", text: $username)
                             .textContentType(.username)
+                            #if os(iOS)
                             .autocapitalization(.none)
+                            #endif
                             .disableAutocorrection(true)
                             .onChange(of: username) { _, newValue in
                                 username = newValue.lowercased().filter { $0.isLetter || $0.isNumber || $0 == "_" }
@@ -1086,7 +1092,9 @@ struct CreateAccountForCoachSheet: View {
                     }
                 }
                 .navigationTitle(isChinese ? "创建账号" : "Create Account")
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -1268,7 +1276,9 @@ struct ManageCoachAccountSheet: View {
                 }
             }
             .navigationTitle(isChinese ? "管理账号" : "Manage Account")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }
@@ -1714,11 +1724,19 @@ struct CategoryRow: View {
                     .frame(width: 44, height: 44)
                 
                 if let customImage = category.customIconImage {
+                    #if canImport(UIKit)
                     Image(uiImage: customImage)
                         .resizable()
                         .renderingMode(.original)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 28, height: 28)
+                    #elseif canImport(AppKit)
+                    Image(nsImage: customImage)
+                        .resizable()
+                        .renderingMode(.original)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 28, height: 28)
+                    #endif
                 } else {
                     Image(systemName: category.mascotIcon)
                         .font(.system(size: 18, weight: .semibold))
@@ -2759,13 +2777,17 @@ struct AddEditCategoryView: View {
                             if let image = selectedImage {
                                 #if canImport(UIKit)
                                 Image(uiImage: image)
-                                #else
-                                Image(nsImage: image)
-                                #endif
                                     .resizable()
                                     .renderingMode(.original)
                                     .aspectRatio(contentMode: .fit)
                                     .frame(width: 36, height: 36)
+                                #elseif canImport(AppKit)
+                                Image(nsImage: image)
+                                    .resizable()
+                                    .renderingMode(.original)
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 36, height: 36)
+                                #endif
                             } else {
                                 Image(systemName: previewMascotIcon)
                                     .font(.system(size: 22, weight: .semibold))
@@ -2907,13 +2929,17 @@ struct AddEditCategoryView: View {
                                                 .frame(width: 36, height: 36)
                                             #if canImport(UIKit)
                                             Image(uiImage: image)
-                                            #else
-                                            Image(nsImage: image)
-                                            #endif
                                                 .resizable()
                                                 .renderingMode(.original)
                                                 .aspectRatio(contentMode: .fit)
                                                 .frame(width: 24, height: 24)
+                                            #elseif canImport(AppKit)
+                                            Image(nsImage: image)
+                                                .resizable()
+                                                .renderingMode(.original)
+                                                .aspectRatio(contentMode: .fit)
+                                                .frame(width: 24, height: 24)
+                                            #endif
                                         }
                                         
                                         Button(action: { 

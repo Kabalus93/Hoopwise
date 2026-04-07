@@ -498,7 +498,11 @@ struct FlightyProgramsListView: View {
         let matchingCategory = dataManager.ageCategories.first { 
             $0.shortName.uppercased() == program.ageGroup.rawValue.uppercased() 
         }
+        #if canImport(UIKit)
         let customIconImage: UIImage? = matchingCategory?.customIconImage
+        #elseif canImport(AppKit)
+        let customIconImage: NSImage? = matchingCategory?.customIconImage
+        #endif
         
         return HStack(spacing: 10) {
             // Color indicator + mascot icon (from age group or custom category)
@@ -508,11 +512,19 @@ struct FlightyProgramsListView: View {
                     .frame(width: 36, height: 36)
                 
                 if let customImage = customIconImage {
+                    #if canImport(UIKit)
                     Image(uiImage: customImage)
                         .resizable()
                         .renderingMode(.original)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 24, height: 24)
+                    #elseif canImport(AppKit)
+                    Image(nsImage: customImage)
+                        .resizable()
+                        .renderingMode(.original)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                    #endif
                 } else {
                     Image(systemName: program.mascotIcon)
                         .font(.system(size: 14, weight: .medium))
@@ -1959,14 +1971,20 @@ struct FlightySessionsCalendarView: View {
                             let threshold: CGFloat = 50
                             let velocity = value.predictedEndTranslation.width - value.translation.width
                             
+                            #if os(iOS)
+                            let screenWidth = UIScreen.main.bounds.width
+                            #else
+                            let screenWidth = NSScreen.main?.frame.width ?? 1200
+                            #endif
+
                             if value.translation.width < -threshold || velocity < -100 {
                                 // Swipe left: next week
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                    weekDragOffset = -UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = -screenWidth * 0.3
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     navigateWeek(by: 1)
-                                    weekDragOffset = UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = screenWidth * 0.3
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         weekDragOffset = 0
                                     }
@@ -1975,11 +1993,11 @@ struct FlightySessionsCalendarView: View {
                             } else if value.translation.width > threshold || velocity > 100 {
                                 // Swipe right: previous week
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                    weekDragOffset = UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = screenWidth * 0.3
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     navigateWeek(by: -1)
-                                    weekDragOffset = -UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = -screenWidth * 0.3
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         weekDragOffset = 0
                                     }

@@ -18,6 +18,7 @@ final class SDStaffCoach {
     var hireDate: Date?
     var notes: String?
     var profileImageData: Data?
+    var profileImageUrl: String?  // Cloud URL for cross-device sync
     var createdAt: Date
     var updatedAt: Date
     
@@ -100,6 +101,7 @@ final class SDStaffCoach {
             createdAt: coach.createdAt,
             updatedAt: coach.updatedAt
         )
+        sdCoach.profileImageUrl = coach.profileImageUrl
         return sdCoach
     }
     
@@ -120,6 +122,7 @@ final class SDStaffCoach {
             hireDate: hireDate,
             notes: notes,
             profileImageData: profileImageData,
+            profileImageUrl: profileImageUrl,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

@@ -300,12 +300,16 @@ struct GlobalSearchSheet: View {
                                 .foregroundColor(AppTheme.textTertiary)
                         }
                     }
+                    #if os(iOS)
                     .listStyle(.insetGrouped)
+                    #endif
                 }
             }
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "搜索" : "Search")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }

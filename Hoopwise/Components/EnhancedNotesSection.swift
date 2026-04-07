@@ -71,7 +71,11 @@ struct EnhancedNotesSection: View {
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: isExpanded ? 250 : 120, maxHeight: isExpanded ? 400 : 200)
                     .padding(14)
-                    .background(Color(.systemBackground))
+                    #if canImport(UIKit)
+                    .background(Color(UIColor.systemBackground))
+                    #else
+                    .background(Color(NSColor.windowBackgroundColor))
+                    #endif
                     .cornerRadius(12)
                     .overlay(
                         Group {
@@ -120,7 +124,11 @@ struct EnhancedNotesSection: View {
                     .foregroundColor(text.isEmpty ? .gray : .primary)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.systemBackground))
+                    #if canImport(UIKit)
+                    .background(Color(UIColor.systemBackground))
+                    #else
+                    .background(Color(NSColor.windowBackgroundColor))
+                    #endif
                     .cornerRadius(12)
                     .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
             }
@@ -223,9 +231,11 @@ class SpeechRecognizer: ObservableObject {
         recognitionTask = nil
         
         // Configure audio session
+        #if os(iOS)
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
         try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        #endif
         
         // Initialize recognizer with specified locale
         speechRecognizer = SFSpeechRecognizer(locale: locale)
@@ -287,7 +297,9 @@ class SpeechRecognizer: ObservableObject {
         recognitionTask?.cancel()
         
         // Reset audio session
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false)
+        #endif
     }
 }
 
@@ -371,7 +383,11 @@ struct PreviousSessionNotesSummary: View {
                 }
             }
             .padding(14)
-            .background(Color(.systemBackground))
+            #if canImport(UIKit)
+            .background(Color(UIColor.systemBackground))
+            #else
+            .background(Color(NSColor.windowBackgroundColor))
+            #endif
             .cornerRadius(12)
             .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
         }

@@ -268,10 +268,14 @@ extension Color {
     // MARK: - Accessible Text Color
     /// Returns a darker version of light colors for better readability on light backgrounds
     var accessibleText: Color {
-        // Convert to UIColor to extract RGB
-        let uiColor = UIColor(self)
+        // Convert to platform color to extract RGB
+        #if canImport(UIKit)
+        let platformColor = UIColor(self)
+        #elseif canImport(AppKit)
+        let platformColor = NSColor(self)
+        #endif
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        platformColor.getRed(&r, green: &g, blue: &b, alpha: &a)
         
         // Calculate relative luminance (perceived brightness)
         let luminance = 0.299 * r + 0.587 * g + 0.114 * b

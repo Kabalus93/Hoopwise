@@ -5004,12 +5004,21 @@ struct MediaGallerySheet: View {
                     Button(isChinese ? "关闭" : "Close") { dismiss() }
                 }
             }
+            #if os(iOS)
             .fullScreenCover(item: Binding(
                 get: { selectedMediaUrl.map { MediaItem(url: $0, isVideo: selectedIsVideo) } },
                 set: { selectedMediaUrl = $0?.url }
             )) { item in
                 MediaFullScreenView(urlString: item.url, isVideo: item.isVideo)
             }
+            #else
+            .sheet(item: Binding(
+                get: { selectedMediaUrl.map { MediaItem(url: $0, isVideo: selectedIsVideo) } },
+                set: { selectedMediaUrl = $0?.url }
+            )) { item in
+                MediaFullScreenView(urlString: item.url, isVideo: item.isVideo)
+            }
+            #endif
             .alert(isChinese ? "删除媒体?" : "Delete Media?", isPresented: Binding(
                 get: { urlToDelete != nil },
                 set: { if !$0 { urlToDelete = nil } }
@@ -5324,7 +5333,9 @@ struct ContactHistorySheet: View {
                     }
                 }
             }
+            #if os(iOS)
             .listStyle(.insetGrouped)
+            #endif
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "联系记录" : "Contact History")
             #if os(iOS)

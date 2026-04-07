@@ -587,6 +587,48 @@ class SupabaseManager: ObservableObject {
         
         debugLog("✅ Image deleted successfully")
     }
+
+    // MARK: - Lightweight Change Detection
+
+    /// Check if any synced table has records updated after `since` for the given org.
+    /// Returns the first table name with changes, or nil if nothing changed.
+    func hasCloudChanges(since: Date, organizationId: UUID) async -> String? {
+        let tables = ["students", "players", "contracts", "programs", "micro_cycles",
+                      "session_events", "drills", "measurements", "staff_coaches", "locations"]
+
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let sinceStr = iso.string(from: since)
+
+        return await withTaskGroup(of: String?.self) { group in
+            for table in tables {
+                group.addTask { [weak self] in
+                    guard let self else { return nil }
+                    do {
+                        let urlString = "\(self.baseURL)/rest/v1/\(table)?select=id&organization_id=eq.\(organizationId.uuidString)&updated_at=gt.\(sinceStr)&limit=1"
+                        guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else { return nil }
+
+                        var request = URLRequest(url: url)
+                        request.httpMethod = "GET"
+                        request.addValue(self.apiKey, forHTTPHeaderField: "apikey")
+                        request.addValue("Bearer \(self.apiKey)", forHTTPHeaderField: "Authorization")
+                        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                        let (data, response) = try await self.healthSession.data(for: request)
+                        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+                        // If the response array is non-empty, there are changes
+                        return data.count > 2 ? table : nil  // "[]" = 2 bytes = no changes
+                    } catch {
+                        return nil
+                    }
+                }
+            }
+            for await result in group {
+                if let tableName = result { return tableName }
+            }
+            return nil
+        }
+    }
 }
 
 // MARK: - Claude API Manager
