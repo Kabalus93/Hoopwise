@@ -1266,34 +1266,33 @@ struct QuickSessionCreatorView: View {
     
     private func createOneTimeSession() async throws {
         let calendar = Calendar.current
+        
+        // Combine date and time
         let timeComponents = calendar.dateComponents([.hour, .minute], from: sessionStartTime)
         var dateComponents = calendar.dateComponents([.year, .month, .day], from: sessionDate)
         dateComponents.hour = timeComponents.hour
         dateComponents.minute = timeComponents.minute
-
+        
         guard let startTime = calendar.date(from: dateComponents) else {
             throw NSError(domain: "QuickSessionCreator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid date/time"])
         }
+        
         let endTime = calendar.date(byAdding: .minute, value: sessionDuration, to: startTime) ?? startTime
-
+        
         let title = sessionTitle.isEmpty ? (isChinese ? "训练" : "Training") : sessionTitle
-        let linkedProgram = linkedProgramId.flatMap { id in dataManager.programs.first(where: { $0.id == id }) }
-
-        let draft = SessionCreationService.Draft(
+        
+        let session = SessionEvent(
+            programId: linkedProgramId,
+            sessionType: .training,
             title: title,
             date: sessionDate,
             startTime: startTime,
             endTime: endTime,
-            sessionType: .training,
-            program: linkedProgram,
             location: sessionLocation.isEmpty ? nil : sessionLocation,
+            status: .scheduled,
             attendeeIds: Array(selectedStudentIds),
-            coachId: selectedCoachId
+            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId ?? AuthManager.shared.currentUser?.id
         )
-
-        guard let session = SessionCreationService.makeSession(draft, dataManager: dataManager) else {
-            throw NSError(domain: "QuickSessionCreator", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid session details"])
-        }
 
         await MainActor.run {
             dataManager.addSessionEvent(session)
