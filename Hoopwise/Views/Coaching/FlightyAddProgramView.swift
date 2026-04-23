@@ -36,7 +36,6 @@ struct FlightyAddProgramView: View {
     @State private var showingMascotPicker = false
     
     // Dates
-    @State private var hasStartDate = false
     @State private var startDate = Date()
     
     // Stars/Tier Rating

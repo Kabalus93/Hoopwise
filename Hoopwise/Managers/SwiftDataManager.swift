@@ -3009,6 +3009,12 @@ class SwiftDataManager: ObservableObject {
     // MARK: - Session CRUD
     func addSessionEvent(_ event: SessionEvent) {
         let sdSession = SDSessionEvent.from(event)
+        // Tag with current org so lightweight sync can filter by organization_id.
+        // Backfill logic exists elsewhere, but setting it at creation time avoids a
+        // follow-up write and ensures the row is sync-ready from the first save.
+        if sdSession.organizationId == nil {
+            sdSession.organizationId = AuthManager.shared.currentOrganization?.id
+        }
         modelContext.insert(sdSession)
         
         // Save to local storage immediately
@@ -3230,24 +3236,31 @@ class SwiftDataManager: ObservableObject {
     
     /// Mark a student as present in a session
     /// Note: Session consumption is now calculated from SessionEvent records - no manual contract deduction needed
+    ///
+    /// Re-reads the latest session from `cachedSessionEvents` before mutating so that
+    /// rapid-fire attendance toggles (or concurrent coaches marking different students)
+    /// don't clobber each other with a stale snapshot.
     func markStudentPresent(studentId: UUID, in sessionEvent: SessionEvent) {
-        var updatedSession = sessionEvent
-        
+        var updatedSession = cachedSessionEvents.first(where: { $0.id == sessionEvent.id }) ?? sessionEvent
+
         // Add to actualAttendeeIds if not already present
         if !updatedSession.actualAttendeeIds.contains(studentId) {
             updatedSession.actualAttendeeIds.append(studentId)
             updateSessionEvent(updatedSession)
-            
+
             // Session consumption is now derived from SessionEvent.actualAttendeeIds
             // No need to manually deduct from contract - it's calculated automatically
             debugLog("✅ Marked student \(studentId) as present")
         }
     }
-    
+
     /// Mark a student as absent in a session (remove from actualAttendeeIds, but do NOT restore contract session)
+    ///
+    /// Re-reads the latest session from `cachedSessionEvents` before mutating (see
+    /// `markStudentPresent`) to avoid overwriting concurrent attendance edits.
     func markStudentAbsent(studentId: UUID, in sessionEvent: SessionEvent) {
-        var updatedSession = sessionEvent
-        
+        var updatedSession = cachedSessionEvents.first(where: { $0.id == sessionEvent.id }) ?? sessionEvent
+
         // Remove from actualAttendeeIds
         if let index = updatedSession.actualAttendeeIds.firstIndex(of: studentId) {
             updatedSession.actualAttendeeIds.remove(at: index)
