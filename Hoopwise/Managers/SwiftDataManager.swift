@@ -2968,12 +2968,27 @@ class SwiftDataManager: ObservableObject {
     
     func deleteMicroCycle(_ microCycle: MicroCycle) {
         do {
+            // Orphan-safe cascade: unlink any sessions that referenced this phase before
+            // deleting. Sessions are preserved (they may have real attendance, notes, games);
+            // they become "unphased" sessions still attached to the parent program.
+            // FlightySessionPageView surfaces the missing phase via its parentPhase nil path.
+            let phaseId = microCycle.id
+            let orphans = cachedSessionEvents.filter { $0.microCycleId == phaseId }
+            if !orphans.isEmpty {
+                debugLog("⚠️ Phase delete: unlinking \(orphans.count) orphaned session(s) from phase \(phaseId)")
+                for orphan in orphans {
+                    var updated = orphan
+                    updated.microCycleId = nil
+                    updated.updatedAt = Date()
+                    updateSessionEvent(updated)
+                }
+            }
+
             let descriptor = FetchDescriptor<SDMicroCycle>(predicate: #Predicate { $0.id == microCycle.id })
             if let sdCycle = try modelContext.fetch(descriptor).first {
                 modelContext.delete(sdCycle)
                 saveAndRefresh()
-                
-                // Also delete from cloud
+
                 if SupabaseManager.shared.isConnected {
                     Task {
                         await deleteFromCloudWithRetry(table: "micro_cycles", id: microCycle.id, entityLabel: "phase")

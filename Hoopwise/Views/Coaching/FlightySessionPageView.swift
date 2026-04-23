@@ -42,6 +42,18 @@ struct FlightySessionPageView: View {
     @State private var showAddOptionsFor: CurriculumSection?
     @State private var draggingDrillId: UUID?
     @AppStorage("recentlyUsedDrillIds") private var recentlyUsedDrillIdsData: Data = Data()
+
+    // Session integrity warnings (drill ID validation, attendee reconciliation)
+    @State private var droppedDrillCount: Int = 0
+    @State private var pendingAttendeeDelta: AttendeeDelta? = nil
+    @State private var showingIntegrityAlert: Bool = false
+    @State private var didRunIntegrityCheck: Bool = false
+
+    struct AttendeeDelta {
+        let added: [UUID]      // students enrolled in program but not on session
+        let removed: [UUID]    // students on session but no longer enrolled
+        var hasChanges: Bool { !added.isEmpty || !removed.isEmpty }
+    }
     
     
     // Computed properties
@@ -202,6 +214,21 @@ struct FlightySessionPageView: View {
         #if os(iOS)
         .navigationBarHidden(true)
         #endif
+        .task { runSessionIntegrityCheck() }
+        .alert(integrityAlertTitle, isPresented: $showingIntegrityAlert) {
+            if pendingAttendeeDelta?.hasChanges == true {
+                Button(LocalizationManager.shared.currentLanguage == .chinese ? "刷新名册" : "Refresh Attendees") {
+                    refreshAttendeesFromProgram()
+                }
+                Button(LocalizationManager.shared.currentLanguage == .chinese ? "保留现有" : "Keep Current", role: .cancel) {
+                    pendingAttendeeDelta = nil
+                }
+            } else {
+                Button("OK", role: .cancel) { }
+            }
+        } message: {
+            Text(integrityAlertMessage)
+        }
         .sheet(isPresented: $showingEditSheet) {
             EditSessionDetailsView(session: $session, onSave: saveSession)
         }
@@ -2832,6 +2859,87 @@ struct FlightySessionPageView: View {
         #endif
     }
     
+    // MARK: - Session Integrity (#4 drill IDs, #5 attendee reconciliation)
+
+    private func runSessionIntegrityCheck() {
+        guard !didRunIntegrityCheck else { return }
+        didRunIntegrityCheck = true
+
+        var needsSave = false
+
+        // #4: Strip drill IDs whose drill no longer exists in the library.
+        let validDrillIds = Set(dataManager.drills.map { $0.id })
+        let originalWarmup = session.curriculum.warmupDrillIds
+        let originalSkill = session.curriculum.skillDrillIds
+        let originalGame = session.curriculum.gameDrillIds
+        let prunedWarmup = originalWarmup.filter { validDrillIds.contains($0) }
+        let prunedSkill = originalSkill.filter { validDrillIds.contains($0) }
+        let prunedGame = originalGame.filter { validDrillIds.contains($0) }
+        let droppedCount = (originalWarmup.count - prunedWarmup.count)
+            + (originalSkill.count - prunedSkill.count)
+            + (originalGame.count - prunedGame.count)
+        if droppedCount > 0 {
+            session.curriculum.warmupDrillIds = prunedWarmup
+            session.curriculum.skillDrillIds = prunedSkill
+            session.curriculum.gameDrillIds = prunedGame
+            droppedDrillCount = droppedCount
+            needsSave = true
+        }
+
+        // #5: Detect divergence between session.attendeeIds and program.enrolledStudentIds.
+        if let program = parentProgram {
+            let sessionSet = Set(session.attendeeIds)
+            let programSet = Set(program.enrolledStudentIds)
+            let added = programSet.subtracting(sessionSet)
+            let removed = sessionSet.subtracting(programSet)
+            if !added.isEmpty || !removed.isEmpty {
+                pendingAttendeeDelta = AttendeeDelta(added: Array(added), removed: Array(removed))
+            }
+        }
+
+        if needsSave {
+            saveSession()
+        }
+
+        if droppedDrillCount > 0 || pendingAttendeeDelta?.hasChanges == true {
+            showingIntegrityAlert = true
+        }
+    }
+
+    private func refreshAttendeesFromProgram() {
+        guard let program = parentProgram else { return }
+        // Preserve students who already have recorded attendance even if they were unenrolled.
+        let actualSet = Set(session.actualAttendeeIds)
+        let keepRemoved = Set(session.attendeeIds).subtracting(program.enrolledStudentIds).intersection(actualSet)
+        var refreshed = Set(program.enrolledStudentIds)
+        refreshed.formUnion(keepRemoved)
+        session.attendeeIds = Array(refreshed)
+        saveSession()
+        pendingAttendeeDelta = nil
+    }
+
+    private var integrityAlertTitle: String {
+        LocalizationManager.shared.currentLanguage == .chinese ? "课程已更新" : "Session Needs Review"
+    }
+
+    private var integrityAlertMessage: String {
+        let chinese = LocalizationManager.shared.currentLanguage == .chinese
+        var parts: [String] = []
+        if droppedDrillCount > 0 {
+            parts.append(chinese
+                ? "已从计划中移除 \(droppedDrillCount) 个训练(已从训练库中删除)。"
+                : "\(droppedDrillCount) drill(s) were removed from the library and have been cleared from this session's plan.")
+        }
+        if let delta = pendingAttendeeDelta, delta.hasChanges {
+            if chinese {
+                parts.append("项目名册已更改:新增 \(delta.added.count) 名学员,移除 \(delta.removed.count) 名。")
+            } else {
+                parts.append("Program roster changed: \(delta.added.count) student(s) added, \(delta.removed.count) removed.")
+            }
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
     private func saveSession() {
         debugLog("🎮 [DEBUG] saveSession called for: \(session.title)")
         debugLog("   - Games count: \(session.games.count)")

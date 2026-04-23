@@ -24,7 +24,6 @@ struct AddProgramView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        // Use FlightyAddProgramView for full program creation
                         dismiss()
                     }
                     .disabled(name.isEmpty)

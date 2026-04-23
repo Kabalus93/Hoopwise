@@ -730,44 +730,27 @@ struct FlightyCreateSessionView: View {
     }
     
     private func createSession() {
-        // Guard: never persist a session with inverted or zero-length time range.
-        guard endTime > startTime else { return }
-
-        let attendeeIds = program?.enrolledStudentIds ?? []
-        
         let curriculum = SessionCurriculum(
             warmupDrillIds: Array(selectedWarmupDrillIds),
             skillDrillIds: Array(selectedSkillDrillIds),
             gameDrillIds: Array(selectedGameDrillIds)
         )
-        
-        // Combine date with time components for correct startTime and endTime
-        let calendar = Calendar.current
-        let startComponents = calendar.dateComponents([.hour, .minute], from: startTime)
-        let endComponents = calendar.dateComponents([.hour, .minute], from: endTime)
-        
-        let combinedStartTime = calendar.date(bySettingHour: startComponents.hour ?? 18,
-                                               minute: startComponents.minute ?? 30,
-                                               second: 0, of: date) ?? date
-        let combinedEndTime = calendar.date(bySettingHour: endComponents.hour ?? 20,
-                                             minute: endComponents.minute ?? 0,
-                                             second: 0, of: date) ?? date
-        
-        let session = SessionEvent(
-            microCycleId: microCycle.id,
-            programId: program?.id,
-            sessionType: sessionType,
-            title: title.trimmingCharacters(in: .whitespaces),
+
+        let draft = SessionCreationService.Draft(
+            title: title,
             date: date,
-            startTime: combinedStartTime,
-            endTime: combinedEndTime,
+            startTime: startTime,
+            endTime: endTime,
+            sessionType: sessionType,
+            microCycleId: microCycle.id,
+            program: program,
             location: locationString,
             curriculum: curriculum,
-            attendeeIds: attendeeIds,
-            notes: notes.isEmpty ? nil : notes,
-            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId ?? AuthManager.shared.currentUser?.id
+            notes: notes,
+            coachId: selectedCoachId
         )
-        
+
+        guard let session = SessionCreationService.makeSession(draft, dataManager: dataManager) else { return }
         dataManager.addSessionEvent(session)
         dismiss()
     }
