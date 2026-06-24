@@ -16,6 +16,7 @@ final class SDStudent {
     var birthYear: Int?   // For month/year only input
     var schoolGradeRaw: String?  // School grade for age estimation
     var profileImageUrl: String?
+    var organizationId: UUID?  // For org-scoped sync
     var createdByCoachId: UUID?  // For access control
     var parentalTouchpointsData: Data?  // JSON encoded [ParentalTouchpoint]
     var lastParentContact: Date?

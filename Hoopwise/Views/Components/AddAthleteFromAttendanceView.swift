@@ -53,7 +53,9 @@ struct AddAthleteFromAttendanceView: View {
             }
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "添加学员" : "Add Athlete")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") {

@@ -339,7 +339,7 @@ struct StudentProfileHeaderView: View {
         return String(format: "%.1f", effort)
     }
     
-    private static let curatedImages = [
+    static let curatedImages = [
         "https://images.unsplash.com/photo-1505666287802-931dc83a38b1?w=800&h=400&fit=crop",
         "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=400&fit=crop",
         "https://images.unsplash.com/photo-1504450758481-7338bbe75c8e?w=800&h=400&fit=crop",

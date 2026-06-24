@@ -68,7 +68,9 @@ struct StudentMultiPickerView: View {
             }
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "选择学员" : "Select Athletes")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") {

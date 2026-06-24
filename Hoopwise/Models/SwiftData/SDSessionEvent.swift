@@ -38,6 +38,8 @@ final class SDSessionEvent {
     var drillsCompleted: [UUID]
     var rating: Int?
     var createdByCoachId: UUID?  // For access control
+    var assignedCoachIds: [UUID] = []  // Coaches assigned to co-coach this session
+    var organizationId: UUID?  // For org-scoped sync
     var createdAt: Date
     var updatedAt: Date
     
@@ -188,12 +190,13 @@ final class SDSessionEvent {
             drillsCompleted: drillsCompleted,
             rating: rating,
             createdByCoachId: createdByCoachId,
+            assignedCoachIds: assignedCoachIds,
             games: games,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
     }
-    
+
     /// Create from legacy SessionEvent struct
     static func from(_ event: SessionEvent) -> SDSessionEvent {
         let sdEvent = SDSessionEvent(
@@ -223,6 +226,7 @@ final class SDSessionEvent {
             updatedAt: event.updatedAt
         )
         sdEvent.games = event.games
+        sdEvent.assignedCoachIds = event.assignedCoachIds
         return sdEvent
     }
 }

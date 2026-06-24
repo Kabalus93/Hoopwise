@@ -69,7 +69,13 @@ struct FlightyCreateSessionView: View {
     }
     
     var isValid: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty
+        !title.trimmingCharacters(in: .whitespaces).isEmpty && endTime > startTime
+    }
+
+    /// True when the user has entered a title but the time range is invalid.
+    /// Used to surface a validation hint beside the time pickers.
+    var hasInvertedTimes: Bool {
+        endTime <= startTime
     }
     
     var accentColor: Color {
@@ -330,15 +336,25 @@ struct FlightyCreateSessionView: View {
                 .frame(maxWidth: .infinity)
             }
             
-            // Duration indicator
+            // Duration indicator / validation hint
             let duration = Calendar.current.dateComponents([.minute], from: startTime, to: endTime).minute ?? 0
-            HStack {
-                Image(systemName: "timer")
-                    .font(.system(size: 11))
-                Text("DURATION: \(duration) MIN")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+            if hasInvertedTimes {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                    Text("END MUST BE AFTER START")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                }
+                .foregroundColor(.orange)
+            } else {
+                HStack {
+                    Image(systemName: "timer")
+                        .font(.system(size: 11))
+                    Text("DURATION: \(duration) MIN")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                }
+                .foregroundColor(.white.opacity(0.4))
             }
-            .foregroundColor(.white.opacity(0.4))
         }
         .padding(16)
         .background(Color(hex: "#1a1a2e"))
@@ -714,6 +730,9 @@ struct FlightyCreateSessionView: View {
     }
     
     private func createSession() {
+        // Guard: never persist a session with inverted or zero-length time range.
+        guard endTime > startTime else { return }
+
         let attendeeIds = program?.enrolledStudentIds ?? []
         
         let curriculum = SessionCurriculum(

@@ -1,27 +1,12 @@
 import SwiftUI
 
-// MARK: - Session Page View (Recreated - Legacy)
-/// This is a legacy view - FlightySessionPageView is the primary implementation
-struct SessionPageView: View {
-    @EnvironmentObject var dataManager: DataManager
-    @Environment(\.dismiss) var dismiss
-    
-    @State var session: SessionEvent
-    let accessMode: SessionAccessMode
-    
-    var body: some View {
-        // Redirect to Flighty version
-        FlightySessionPageView(session: session, accessMode: accessMode)
-    }
-}
-
 // MARK: - Edit Session Details View
 struct EditSessionDetailsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: DataManager
     @Binding var session: SessionEvent
     var onSave: (() -> Void)? = nil
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -31,14 +16,14 @@ struct EditSessionDetailsView: View {
                     DatePicker("Start Time", selection: $session.startTime, displayedComponents: .hourAndMinute)
                     DatePicker("End Time", selection: $session.endTime, displayedComponents: .hourAndMinute)
                 }
-                
+
                 Section("Location") {
                     TextField("Location", text: Binding(
                         get: { session.location ?? "" },
                         set: { session.location = $0.isEmpty ? nil : $0 }
                     ))
                 }
-                
+
                 Section("Notes") {
                     TextEditor(text: Binding(
                         get: { session.notes ?? "" },
@@ -70,23 +55,23 @@ struct DrillPickerView: View {
     @EnvironmentObject var dataManager: DataManager
     @Binding var selectedDrillIds: [UUID]
     var onSave: (() -> Void)? = nil
-    
+
     // Search and filter state
     @State private var searchText = ""
     @State private var selectedCategory: DrillCategory? = nil
     @State private var selectedDifficulty: DifficultyLevel? = nil
     @State private var showFavoritesOnly = false
-    
+
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-    
+
     init(selectedDrillIds: Binding<[UUID]>, onSave: (() -> Void)? = nil) {
         self._selectedDrillIds = selectedDrillIds
         self.onSave = onSave
     }
-    
+
     var filteredDrills: [DrillItem] {
         var result = dataManager.drills
-        
+
         // Search filter
         if !searchText.isEmpty {
             result = result.filter { drill in
@@ -96,34 +81,34 @@ struct DrillPickerView: View {
                 drill.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
             }
         }
-        
+
         // Category filter
         if let cat = selectedCategory {
             result = result.filter { $0.category == cat }
         }
-        
+
         // Difficulty filter
         if let diff = selectedDifficulty {
             result = result.filter { $0.difficulty == diff }
         }
-        
+
         // Favorites filter
         if showFavoritesOnly {
             result = result.filter { $0.isFavorite }
         }
-        
+
         return result.sorted { $0.name < $1.name }
     }
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Search bar
                 searchBar
-                
+
                 // Filter chips
                 filterChips
-                
+
                 // Drill list
                 if filteredDrills.isEmpty {
                     emptyState
@@ -160,18 +145,18 @@ struct DrillPickerView: View {
             }
         }
     }
-    
+
     // MARK: - Search Bar
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14))
                 .foregroundColor(.white.opacity(0.4))
-            
+
             TextField("", text: $searchText, prompt: Text(isChinese ? "搜索训练..." : "Search drills...").foregroundColor(.white.opacity(0.3)))
                 .font(.system(size: 15))
                 .foregroundColor(.white)
-            
+
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) {
                     Image(systemName: "xmark.circle.fill")
@@ -185,7 +170,7 @@ struct DrillPickerView: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
     }
-    
+
     // MARK: - Filter Chips
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -201,23 +186,23 @@ struct DrillPickerView: View {
                         showFavoritesOnly.toggle()
                     }
                 }
-                
+
                 Divider()
                     .frame(height: 20)
                     .background(Color.white.opacity(0.2))
-                
+
                 // Category: All
                 categoryButton(nil, title: isChinese ? "全部" : "All")
-                
+
                 // Category options
                 ForEach(DrillCategory.allCases, id: \.self) { cat in
                     categoryButton(cat, title: cat.localizedName)
                 }
-                
+
                 Divider()
                     .frame(height: 20)
                     .background(Color.white.opacity(0.2))
-                
+
                 // Difficulty options
                 difficultyButton(nil, title: isChinese ? "所有难度" : "Any Level")
                 ForEach(DifficultyLevel.allCases, id: \.self) { diff in
@@ -228,23 +213,23 @@ struct DrillPickerView: View {
             .padding(.vertical, 12)
         }
     }
-    
+
     // MARK: - Empty State
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: showFavoritesOnly ? "heart.slash" : (searchText.isEmpty ? "figure.basketball" : "magnifyingglass"))
                 .font(.system(size: 40))
                 .foregroundColor(.white.opacity(0.3))
-            
+
             Text(emptyStateTitle)
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundColor(.white.opacity(0.5))
-            
+
             Text(emptyStateSubtitle)
                 .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.4))
                 .multilineTextAlignment(.center)
-            
+
             if hasActiveFilters {
                 Button(action: clearFilters) {
                     Text(isChinese ? "清除筛选" : "Clear Filters")
@@ -260,7 +245,7 @@ struct DrillPickerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    
+
     private var emptyStateTitle: String {
         if showFavoritesOnly {
             return isChinese ? "暂无收藏训练" : "NO FAVORITES"
@@ -270,7 +255,7 @@ struct DrillPickerView: View {
             return isChinese ? "暂无训练" : "NO DRILLS AVAILABLE"
         }
     }
-    
+
     private var emptyStateSubtitle: String {
         if showFavoritesOnly {
             return isChinese ? "在训练详情中点击心形图标收藏" : "Tap the heart icon in drill details to add favorites"
@@ -280,11 +265,11 @@ struct DrillPickerView: View {
             return isChinese ? "在训练库中添加训练" : "Add drills in the Drill Library"
         }
     }
-    
+
     private var hasActiveFilters: Bool {
         !searchText.isEmpty || selectedCategory != nil || selectedDifficulty != nil || showFavoritesOnly
     }
-    
+
     private func clearFilters() {
         withAnimation(.easeInOut(duration: 0.2)) {
             searchText = ""
@@ -293,7 +278,7 @@ struct DrillPickerView: View {
             showFavoritesOnly = false
         }
     }
-    
+
     // MARK: - Drill List
     private var drillList: some View {
         ScrollView(showsIndicators: false) {
@@ -314,7 +299,7 @@ struct DrillPickerView: View {
                     .padding(.horizontal, 4)
                     .padding(.bottom, 8)
                 }
-                
+
                 ForEach(filteredDrills) { drill in
                     drillRow(drill)
                 }
@@ -323,7 +308,7 @@ struct DrillPickerView: View {
             .padding(.vertical, 12)
         }
     }
-    
+
     // MARK: - Helper Views
     private func filterButton(isSelected: Bool, title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -340,7 +325,7 @@ struct DrillPickerView: View {
             .cornerRadius(16)
         }
     }
-    
+
     private func categoryButton(_ cat: DrillCategory?, title: String) -> some View {
         let isSelected = selectedCategory == cat
         return Button(action: {
@@ -357,7 +342,7 @@ struct DrillPickerView: View {
                 .cornerRadius(16)
         }
     }
-    
+
     private func difficultyButton(_ diff: DifficultyLevel?, title: String) -> some View {
         let isSelected = selectedDifficulty == diff
         let color: Color = {
@@ -368,7 +353,7 @@ struct DrillPickerView: View {
             case .advanced: return .red
             }
         }()
-        
+
         return Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedDifficulty = diff
@@ -391,7 +376,7 @@ struct DrillPickerView: View {
             .cornerRadius(16)
         }
     }
-    
+
     private func drillRow(_ drill: DrillItem) -> some View {
         let isSelected = selectedDrillIds.contains(drill.id)
         return Button(action: {
@@ -412,7 +397,7 @@ struct DrillPickerView: View {
                     .frame(width: 40, height: 40)
                     .background(categoryColor(drill.category).opacity(0.15))
                     .cornerRadius(10)
-                
+
                 // Drill info
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
@@ -420,23 +405,23 @@ struct DrillPickerView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                        
+
                         if drill.isFavorite {
                             Image(systemName: "heart.fill")
                                 .font(.system(size: 10))
                                 .foregroundColor(.pink)
                         }
                     }
-                    
+
                     HStack(spacing: 8) {
                         Text(drill.category.localizedName)
                             .font(.system(size: 11, design: .monospaced))
-                        
+
                         Text("•")
-                        
+
                         Text("\(drill.durationMinutes) \(isChinese ? "分钟" : "min")")
                             .font(.system(size: 11, design: .monospaced))
-                        
+
                         // Difficulty stars
                         HStack(spacing: 2) {
                             ForEach(0..<drill.difficulty.stars, id: \.self) { _ in
@@ -448,9 +433,9 @@ struct DrillPickerView: View {
                     }
                     .foregroundColor(.white.opacity(0.4))
                 }
-                
+
                 Spacer()
-                
+
                 // Selection indicator
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 24))
@@ -465,7 +450,7 @@ struct DrillPickerView: View {
             )
         }
     }
-    
+
     private func categoryColor(_ category: DrillCategory) -> Color {
         switch category.color {
         case "orange": return .orange
@@ -487,13 +472,13 @@ struct SessionStudentPickerView: View {
     let students: [Student]
     @Binding var selectedStudentId: UUID?
     var onSave: (() -> Void)? = nil
-    
+
     init(students: [Student], selectedStudentId: Binding<UUID?>, onSave: (() -> Void)? = nil) {
         self.students = students
         self._selectedStudentId = selectedStudentId
         self.onSave = onSave
     }
-    
+
     var body: some View {
         NavigationStack {
             List {

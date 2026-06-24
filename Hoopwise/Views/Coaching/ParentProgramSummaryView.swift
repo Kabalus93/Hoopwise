@@ -109,9 +109,11 @@ struct ParentProgramSummaryView: View {
                 }
             }
             .navigationTitle(loc.parentNotice)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button(loc.close) { dismiss() }
                 }
             }

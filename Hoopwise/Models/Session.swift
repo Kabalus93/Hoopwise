@@ -39,7 +39,7 @@ enum SessionAccessMode {
     case execution   // Read/Update only - accessed from Calendar view
     
     var canCreate: Bool { self == .architect }
-    var canDelete: Bool { true }
+    var canDelete: Bool { self == .architect }  // Execution mode is read/update only — no destructive ops
     var canEdit: Bool { true }
     var canTakeAttendance: Bool { true }
     var canAddNotes: Bool { true }

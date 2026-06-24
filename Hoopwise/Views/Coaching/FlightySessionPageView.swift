@@ -199,7 +199,9 @@ struct FlightySessionPageView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(Color(hex: "#f5f5f7").ignoresSafeArea())
+        #if os(iOS)
         .navigationBarHidden(true)
+        #endif
         .sheet(isPresented: $showingEditSheet) {
             EditSessionDetailsView(session: $session, onSave: saveSession)
         }
@@ -2957,7 +2959,9 @@ private struct QuickCreateDrillSheet: View {
             }
             .background(Color(hex: "#f5f5f7").ignoresSafeArea())
             .navigationTitle(isChinese ? "快速创建训练" : "Quick Create Drill")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -3041,71 +3045,10 @@ struct SkipSessionSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 36))
-                        .foregroundColor(.orange)
-                    Text(isChinese ? "跳过课程" : "Skip Session")
-                        .font(.title2.bold())
-                    Text(isChinese ? "跳过的课程不会计入合同消耗" : "Skipped sessions won't count toward contracts")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 8)
-                
-                // Reason picker
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(isChinese ? "原因" : "Reason")
-                        .font(.subheadline.bold())
-                        .foregroundColor(.secondary)
-                    
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                        ForEach(SkipReason.allCases) { r in
-                            Button {
-                                reason = r
-                                HapticFeedback.impact(.light)
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: r.icon)
-                                        .font(.system(size: 14))
-                                    Text(r.displayName)
-                                        .font(.system(size: 13, weight: .medium))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(reason == r ? Color.orange.opacity(0.15) : Color(.systemGray6))
-                                .foregroundColor(reason == r ? .orange : .primary)
-                                .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(reason == r ? Color.orange : Color.clear, lineWidth: 1.5)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                
+                skipHeader
+                skipReasonPicker
                 Spacer()
-                
-                // Confirm button
-                Button {
-                    onConfirm()
-                    dismiss()
-                } label: {
-                    Text(isChinese ? "确认跳过" : "Confirm Skip")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.orange)
-                        .cornerRadius(14)
-                }
-                .padding(.horizontal)
-                .padding(.bottom)
+                skipConfirmButton
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -3113,6 +3056,78 @@ struct SkipSessionSheet: View {
                 }
             }
         }
+    }
+
+    private var skipHeader: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "forward.fill")
+                .font(.system(size: 36))
+                .foregroundColor(.orange)
+            Text(isChinese ? "跳过课程" : "Skip Session")
+                .font(.title2.bold())
+            Text(isChinese ? "跳过的课程不会计入合同消耗" : "Skipped sessions won't count toward contracts")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 8)
+    }
+
+    private var skipReasonPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(isChinese ? "原因" : "Reason")
+                .font(.subheadline.bold())
+                .foregroundColor(.secondary)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(SkipReason.allCases) { r in
+                    skipReasonButton(for: r)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private func skipReasonButton(for r: SkipReason) -> some View {
+        let isSelected = reason == r
+        return Button {
+            reason = r
+            HapticFeedback.impact(.light)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: r.icon)
+                    .font(.system(size: 14))
+                Text(r.displayName)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(isSelected ? Color.orange.opacity(0.15) : Color.systemGray6)
+            .foregroundColor(isSelected ? .orange : .primary)
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.orange : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var skipConfirmButton: some View {
+        Button {
+            onConfirm()
+            dismiss()
+        } label: {
+            Text(isChinese ? "确认跳过" : "Confirm Skip")
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.orange)
+                .cornerRadius(14)
+        }
+        .padding(.horizontal)
+        .padding(.bottom)
     }
 }
 
@@ -5033,7 +5048,9 @@ struct GameRecapView: View {
             }
             .background(Color(hex: "#f5f5f7"))
             .navigationTitle(isChinese ? "比赛回顾" : "Game Recap")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }
@@ -6175,7 +6192,9 @@ struct SmartDrillPickerSheet: View {
             }
             .background(Color(hex: "#f5f5f7"))
             .navigationTitle(isChinese ? "添加训练" : "Add Drill")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }

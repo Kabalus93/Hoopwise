@@ -498,7 +498,11 @@ struct FlightyProgramsListView: View {
         let matchingCategory = dataManager.ageCategories.first { 
             $0.shortName.uppercased() == program.ageGroup.rawValue.uppercased() 
         }
+        #if canImport(UIKit)
         let customIconImage: UIImage? = matchingCategory?.customIconImage
+        #elseif canImport(AppKit)
+        let customIconImage: NSImage? = matchingCategory?.customIconImage
+        #endif
         
         return HStack(spacing: 10) {
             // Color indicator + mascot icon (from age group or custom category)
@@ -508,11 +512,19 @@ struct FlightyProgramsListView: View {
                     .frame(width: 36, height: 36)
                 
                 if let customImage = customIconImage {
+                    #if canImport(UIKit)
                     Image(uiImage: customImage)
                         .resizable()
                         .renderingMode(.original)
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 24, height: 24)
+                    #elseif canImport(AppKit)
+                    Image(nsImage: customImage)
+                        .resizable()
+                        .renderingMode(.original)
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                    #endif
                 } else {
                     Image(systemName: program.mascotIcon)
                         .font(.system(size: 14, weight: .medium))
@@ -1790,48 +1802,44 @@ struct FlightySessionsCalendarView: View {
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
     
+    /// Does `session` belong to `coachId` — as creator, program owner, or explicit assignee?
+    /// Centralizes coach-visibility logic so admin filters include assistant coaches assigned
+    /// via `assignedCoachIds`, matching the runtime access model in `accessibleSessions`.
+    private func session(_ session: SessionEvent, belongsToCoach coachId: UUID) -> Bool {
+        if session.createdByCoachId == coachId { return true }
+        if session.assignedCoachIds.contains(coachId) { return true }
+        if let programId = session.programId,
+           let program = dataManager.programs.first(where: { $0.id == programId }) {
+            return program.coachId == coachId || program.createdByCoachId == coachId
+        }
+        return false
+    }
+
     var sessionsForSelectedDate: [SessionEvent] {
-        let allSessions = dataManager.sessionEvents
         let filteredSessions: [SessionEvent]
-        
+
         // If admin has selected a coach, filter by that coach's sessions
         if dataManager.isAdmin, let coachId = selectedCoachId {
-            filteredSessions = allSessions.filter { session in
-                // Show sessions from programs assigned to or created by the selected coach
-                if let programId = session.programId,
-                   let program = dataManager.programs.first(where: { $0.id == programId }) {
-                    return program.coachId == coachId || program.createdByCoachId == coachId
-                }
-                // Or sessions created by the coach
-                return session.createdByCoachId == coachId
-            }
+            filteredSessions = dataManager.sessionEvents.filter { session($0, belongsToCoach: coachId) }
         } else {
             // Normal behavior: show accessible sessions
             filteredSessions = dataManager.accessibleSessions
         }
-        
+
         return filteredSessions.filter { event in
             calendar.isDate(event.date, inSameDayAs: selectedDate)
         }.sorted { $0.startTime < $1.startTime }
     }
-    
+
     func sessionsForDate(_ date: Date) -> [SessionEvent] {
-        let allSessions = dataManager.sessionEvents
         let filteredSessions: [SessionEvent]
-        
-        // If admin has selected a coach, filter by that coach's sessions
+
         if dataManager.isAdmin, let coachId = selectedCoachId {
-            filteredSessions = allSessions.filter { session in
-                if let programId = session.programId,
-                   let program = dataManager.programs.first(where: { $0.id == programId }) {
-                    return program.coachId == coachId || program.createdByCoachId == coachId
-                }
-                return session.createdByCoachId == coachId
-            }
+            filteredSessions = dataManager.sessionEvents.filter { session($0, belongsToCoach: coachId) }
         } else {
             filteredSessions = dataManager.accessibleSessions
         }
-        
+
         return filteredSessions.filter { event in
             calendar.isDate(event.date, inSameDayAs: date)
         }
@@ -1959,14 +1967,20 @@ struct FlightySessionsCalendarView: View {
                             let threshold: CGFloat = 50
                             let velocity = value.predictedEndTranslation.width - value.translation.width
                             
+                            #if os(iOS)
+                            let screenWidth = UIScreen.main.bounds.width
+                            #else
+                            let screenWidth = NSScreen.main?.frame.width ?? 1200
+                            #endif
+
                             if value.translation.width < -threshold || velocity < -100 {
                                 // Swipe left: next week
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                    weekDragOffset = -UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = -screenWidth * 0.3
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     navigateWeek(by: 1)
-                                    weekDragOffset = UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = screenWidth * 0.3
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         weekDragOffset = 0
                                     }
@@ -1975,11 +1989,11 @@ struct FlightySessionsCalendarView: View {
                             } else if value.translation.width > threshold || velocity > 100 {
                                 // Swipe right: previous week
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                    weekDragOffset = UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = screenWidth * 0.3
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                     navigateWeek(by: -1)
-                                    weekDragOffset = -UIScreen.main.bounds.width * 0.3
+                                    weekDragOffset = -screenWidth * 0.3
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                         weekDragOffset = 0
                                     }
@@ -2421,12 +2435,8 @@ struct FlightySessionsCalendarView: View {
             
             // Session count for selected coach
             if let coachId = selectedCoachId {
-                let coachSessionCount = dataManager.sessionEvents.filter { session in
-                    if let programId = session.programId,
-                       let program = dataManager.programs.first(where: { $0.id == programId }) {
-                        return program.coachId == coachId || program.createdByCoachId == coachId
-                    }
-                    return session.createdByCoachId == coachId
+                let coachSessionCount = dataManager.sessionEvents.filter {
+                    session($0, belongsToCoach: coachId)
                 }.count
                 
                 Text("\(coachSessionCount)")
