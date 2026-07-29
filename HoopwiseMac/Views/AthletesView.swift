@@ -1,0 +1,969 @@
+import SwiftUI
+
+// MARK: - Athletes
+/// Mac-native roster screen. Sidebar = filter/sort/search + grouped athlete list.
+/// Detail pane = profile hero + stats + tabbed content (Overview / Performance /
+/// Contracts / Notes / History). All mutations route through
+/// `dataManager.updateStudent` / `updateContract`.
+struct AthletesView: View {
+    @EnvironmentObject var dataManager: DataManager
+    @State private var search: String = ""
+    @State private var selected: Student.ID?
+    @State private var filter: AthleteFilter = .all
+    @State private var sort: AthleteSort = .name
+    @State private var groupByGrade = false
+    @State private var showingNew = false
+
+    enum AthleteFilter: String, CaseIterable, Identifiable {
+        case all, active, bundleLow, inactive
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: return "All"
+            case .active: return "Active"
+            case .bundleLow: return "Bundle Low"
+            case .inactive: return "Inactive"
+            }
+        }
+        var systemImage: String {
+            switch self {
+            case .all: return "person.2"
+            case .active: return "person.crop.circle.badge.checkmark"
+            case .bundleLow: return "exclamationmark.triangle.fill"
+            case .inactive: return "person.crop.circle.badge.minus"
+            }
+        }
+    }
+
+    enum AthleteSort: String, CaseIterable, Identifiable {
+        case name, recent, schoolGrade, attendance
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .name: return "Name"
+            case .recent: return "Recent"
+            case .schoolGrade: return "School Grade"
+            case .attendance: return "Attendance"
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            sidebar
+                .frame(minWidth: 320, idealWidth: 360)
+        } detail: {
+            if let id = selected, let student = dataManager.students.first(where: { $0.id == id }) {
+                AthleteDetailView(student: student).id(student.id)
+            } else {
+                EmptyDetail(systemImage: "person.2", title: "Select an Athlete")
+            }
+        }
+        .onAppear { autoSelectIfNeeded() }
+        .onChange(of: filter) { _, _ in autoSelectIfNeeded() }
+        .onReceive(NotificationCenter.default.publisher(for: .macNewAthlete)) { _ in
+            showingNew = true
+        }
+        .sheet(isPresented: $showingNew) {
+            NewAthleteSheet()
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            searchField
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            Picker("Filter", selection: $filter) {
+                ForEach(AthleteFilter.allCases) { f in
+                    Label(f.label, systemImage: f.systemImage).tag(f)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+
+            HStack(spacing: 8) {
+                Picker("Sort", selection: $sort) {
+                    ForEach(AthleteSort.allCases) { s in Text(s.label).tag(s) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+
+                Toggle(isOn: $groupByGrade) {
+                    Label("Group", systemImage: "rectangle.3.group")
+                        .labelStyle(.iconOnly)
+                }
+                .toggleStyle(.button)
+                .controlSize(.small)
+                .help("Group by performance grade")
+
+                Spacer()
+                Text("\(filtered.count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            athletesList
+        }
+        .navigationTitle("Athletes")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingNew = true } label: {
+                    Label("Add Athlete", systemImage: "plus")
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+            }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search by name", text: $search).textFieldStyle(.plain)
+            if !search.isEmpty {
+                Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 6)
+        .background(.quinary, in: .rect(cornerRadius: 6))
+    }
+
+    @ViewBuilder
+    private var athletesList: some View {
+        List(selection: $selected) {
+            if filtered.isEmpty {
+                Text("No athletes match.")
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            } else if groupByGrade {
+                ForEach(grouped, id: \.grade) { group in
+                    Section {
+                        ForEach(group.students) { student in
+                            AthleteRow(student: student, contract: dataManager.currentContract(for: student.id))
+                                .tag(student.id)
+                                .contextMenu { rowContextMenu(student) }
+                        }
+                    } header: {
+                        HStack(spacing: 6) {
+                            Text("Grade \(group.grade.rawValue)")
+                                .font(.caption.weight(.semibold))
+                            Text("\(group.students.count)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } else {
+                ForEach(filtered) { student in
+                    AthleteRow(student: student, contract: dataManager.currentContract(for: student.id))
+                        .tag(student.id)
+                        .contextMenu { rowContextMenu(student) }
+                }
+            }
+        }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(_ student: Student) -> some View {
+        Button("Open", systemImage: "arrow.up.right.square") { selected = student.id }
+        Divider()
+        Button("Delete", systemImage: "trash", role: .destructive) {
+            dataManager.deleteStudent(student)
+            if selected == student.id { selected = nil }
+        }
+    }
+
+    // MARK: - Computed
+
+    private struct GradeGroup {
+        let grade: PerformanceGrade
+        let students: [Student]
+    }
+
+    private var filtered: [Student] {
+        let base: [Student]
+        switch filter {
+        case .all:
+            base = dataManager.students
+        case .active:
+            base = dataManager.students.filter { dataManager.currentContract(for: $0.id)?.status == .active }
+        case .bundleLow:
+            base = dataManager.students.filter { student in
+                guard let c = dataManager.currentContract(for: student.id), c.kind == .privateBundle else { return false }
+                return (c.bundleRedemptionsRemaining ?? .max) <= 3
+            }
+        case .inactive:
+            base = dataManager.students.filter {
+                let status = dataManager.currentContract(for: $0.id)?.status
+                return status == nil || status == .expired || status == .cancelled || status == .completed
+            }
+        }
+        let searched = search.isEmpty ? base : base.filter {
+            $0.name.localizedCaseInsensitiveContains(search) ||
+            ($0.chineseName ?? "").localizedCaseInsensitiveContains(search)
+        }
+        return searched.sorted { lhs, rhs in
+            switch sort {
+            case .name:
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            case .recent:
+                return lhs.createdAt > rhs.createdAt
+            case .schoolGrade:
+                let l = lhs.schoolGrade?.rawValue ?? ""
+                let r = rhs.schoolGrade?.rawValue ?? ""
+                return l < r
+            case .attendance:
+                let la = sessionsAttended(lhs.id)
+                let ra = sessionsAttended(rhs.id)
+                return la > ra
+            }
+        }
+    }
+
+    private var grouped: [GradeGroup] {
+        let buckets = Dictionary(grouping: filtered) { effectiveGrade(for: $0) }
+        return PerformanceGrade.allCases.compactMap { grade in
+            guard let students = buckets[grade], !students.isEmpty else { return nil }
+            return GradeGroup(grade: grade, students: students)
+        }
+    }
+
+    private func sessionsAttended(_ id: UUID) -> Int {
+        dataManager.sessionEvents.filter { $0.actualAttendeeIds.contains(id) }.count
+    }
+
+    private func effectiveGrade(for student: Student) -> PerformanceGrade {
+        if let g = student.performanceGrade { return g }
+        let skills = Dictionary(uniqueKeysWithValues: dataManager.players.map { ($0.studentId, $0.skills) })
+        return StudentPerformanceGrader.computeGrade(
+            for: student,
+            allStudents: dataManager.students,
+            sessions: dataManager.sessionEvents,
+            skills: skills
+        )
+    }
+
+    private func autoSelectIfNeeded() {
+        if let current = selected, dataManager.students.contains(where: { $0.id == current }) { return }
+        selected = filtered.first?.id
+    }
+}
+
+// MARK: - Sidebar Row
+
+private struct AthleteRow: View {
+    let student: Student
+    let contract: Contract?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            AthleteAvatar(student: student, size: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(student.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
+                    if let cn = student.chineseName, !cn.isEmpty, cn != student.displayName {
+                        Text(cn).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                HStack(spacing: 6) {
+                    if let grade = student.schoolGrade {
+                        Text(grade.shortName)
+                            .font(.caption2)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.quaternary, in: .capsule)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let contract {
+                        bundleHint(contract)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            if let g = student.performanceGrade {
+                gradePill(g)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func bundleHint(_ contract: Contract) -> some View {
+        if contract.kind == .privateBundle, let remaining = contract.bundleRedemptionsRemaining {
+            Text("\(remaining) left")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(remaining <= 3 ? .orange : .secondary)
+        } else if contract.status != .active {
+            Text(contract.status.rawValue)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func gradePill(_ g: PerformanceGrade) -> some View {
+        Text(g.rawValue)
+            .font(.caption2.weight(.bold))
+            .frame(width: 22, height: 22)
+            .background(gradeTint(g).opacity(0.18), in: Circle())
+            .foregroundStyle(gradeTint(g))
+    }
+}
+
+// MARK: - Athlete Detail
+
+struct AthleteDetailView: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+    @State private var tab: DetailTab = .overview
+
+    enum DetailTab: String, CaseIterable, Identifiable {
+        case overview, performance, contracts, notes, history
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .overview: return "Overview"
+            case .performance: return "Performance"
+            case .contracts: return "Contracts"
+            case .notes: return "Notes"
+            case .history: return "History"
+            }
+        }
+        var systemImage: String {
+            switch self {
+            case .overview: return "person.crop.rectangle"
+            case .performance: return "chart.bar.fill"
+            case .contracts: return "doc.text.fill"
+            case .notes: return "note.text"
+            case .history: return "clock.arrow.circlepath"
+            }
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                hero
+                statRow
+
+                Picker("Section", selection: $tab) {
+                    ForEach(DetailTab.allCases) { t in
+                        Label(t.label, systemImage: t.systemImage).tag(t)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Group {
+                    switch tab {
+                    case .overview:    OverviewTab(student: student)
+                    case .performance: PerformanceTab(student: student)
+                    case .contracts:   ContractsTab(student: student)
+                    case .notes:       NotesTab(student: student)
+                    case .history:     HistoryTab(student: student)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(28)
+            .frame(maxWidth: 1100, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Color(NSColor.windowBackgroundColor))
+        .navigationTitle(student.displayName)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(role: .destructive) {
+                    dataManager.deleteStudent(student)
+                } label: {
+                    Label("Delete Athlete", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private var hero: some View {
+        HStack(alignment: .top, spacing: 18) {
+            EditAvatarButton(
+                currentData: student.profileImageData,
+                initials: student.initials,
+                avatarColor: student.avatarColor,
+                size: 88,
+                onPicked: { data in
+                    var copy = student
+                    copy.profileImageData = data
+                    copy.thumbnailImageData = data
+                    copy.updatedAt = Date()
+                    dataManager.updateStudent(copy)
+                },
+                onCleared: {
+                    var copy = student
+                    copy.profileImageData = nil
+                    copy.thumbnailImageData = nil
+                    copy.updatedAt = Date()
+                    dataManager.updateStudent(copy)
+                }
+            )
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Text(student.displayName).font(.system(size: 30, weight: .bold))
+                    if let cn = student.chineseName, !cn.isEmpty, cn != student.displayName {
+                        Text(cn).font(.title3).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    gradeBadge
+                }
+                HStack(spacing: 12) {
+                    if let grade = student.schoolGrade {
+                        Label(grade.displayName, systemImage: "graduationcap").labelStyle(.titleAndIcon)
+                    }
+                    if let age = student.age {
+                        Label("\(age) years", systemImage: "calendar").labelStyle(.titleAndIcon)
+                    }
+                    if let pid = student.programId,
+                       let program = dataManager.programs.first(where: { $0.id == pid }) {
+                        Label(program.name, systemImage: "list.clipboard").labelStyle(.titleAndIcon)
+                    }
+                }
+                .font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var gradeBadge: some View {
+        let grade = effectiveGrade
+        return VStack(spacing: 0) {
+            Text(grade.rawValue)
+                .font(.system(size: 28, weight: .black, design: .rounded))
+                .foregroundStyle(gradeTint(grade))
+            Text("Performance")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(gradeTint(grade).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(gradeTint(grade).opacity(0.3), lineWidth: 1))
+    }
+
+    private var statRow: some View {
+        let attended = dataManager.sessionEvents.filter { $0.actualAttendeeIds.contains(student.id) }.count
+        let expected = dataManager.sessionEvents.filter { $0.attendeeIds.contains(student.id) || ($0.programId == student.programId && student.programId != nil) }.count
+        let pct = expected > 0 ? Int((Double(attended) / Double(expected)) * 100) : 0
+        let contract = dataManager.currentContract(for: student.id)
+        let bundle: String = {
+            guard let c = contract else { return "—" }
+            switch c.kind {
+            case .privateBundle: return "\(c.bundleRedemptionsRemaining ?? 0) left"
+            case .privatePayPerSession: return "PAYG"
+            case .group: return "Group"
+            }
+        }()
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
+            StatPill(title: "Attended", value: "\(attended)")
+            StatPill(title: "Attendance", value: expected > 0 ? "\(pct)%" : "—")
+            StatPill(title: "Bundle", value: bundle)
+            StatPill(title: "Status", value: contract?.status.rawValue ?? "No Contract")
+        }
+    }
+
+    private var effectiveGrade: PerformanceGrade {
+        if let g = student.performanceGrade { return g }
+        let skills = Dictionary(uniqueKeysWithValues: dataManager.players.map { ($0.studentId, $0.skills) })
+        return StudentPerformanceGrader.computeGrade(
+            for: student,
+            allStudents: dataManager.students,
+            sessions: dataManager.sessionEvents,
+            skills: skills
+        )
+    }
+}
+
+// MARK: - Avatar
+
+private struct AthleteAvatar: View {
+    let student: Student
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let data = student.profileImageData, let img = NSImage(data: data) {
+                Image(nsImage: img).resizable().scaledToFill()
+            } else {
+                ZStack {
+                    Circle().fill(Color.avatarColor(student.avatarColor))
+                    Text(student.initials)
+                        .font(.system(size: size * 0.36, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+    }
+}
+
+// MARK: - Overview tab
+
+private struct OverviewTab: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+
+    private var program: Program? {
+        guard let pid = student.programId else { return nil }
+        return dataManager.programs.first(where: { $0.id == pid })
+    }
+
+    private var recentSessions: [SessionEvent] {
+        dataManager.sessionEvents
+            .filter { $0.attendeeIds.contains(student.id) || ($0.programId != nil && $0.programId == student.programId) }
+            .sorted { $0.date > $1.date }
+            .prefix(8)
+            .map { $0 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionBlock(title: "Program") {
+                if let program {
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.15))
+                            .frame(width: 44, height: 44)
+                            .overlay(Image(systemName: "list.clipboard.fill").foregroundStyle(Color.accentColor))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(program.name).font(.subheadline.weight(.semibold))
+                            Text("\(program.enrolledStudentIds.count) athletes")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(program.status.rawValue.capitalized)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(.quaternary, in: .capsule)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    EmptyPanel(systemImage: "list.clipboard", text: "Not enrolled in a program.")
+                }
+            }
+
+            SectionBlock(title: "Personal Bests") {
+                if student.personalBests.isEmpty {
+                    EmptyPanel(systemImage: "trophy", text: "No personal bests recorded yet.")
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                        ForEach(Array(student.personalBests.keys.sorted()), id: \.self) { key in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(formatValue(student.personalBests[key] ?? 0))
+                                    .font(.title3.weight(.bold).monospacedDigit())
+                                Text(key).font(.caption).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                }
+            }
+
+            SectionBlock(title: "Recent Sessions") {
+                if recentSessions.isEmpty {
+                    EmptyPanel(systemImage: "calendar", text: "No sessions yet.")
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(recentSessions) { session in
+                            recentSessionRow(session)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func recentSessionRow(_ session: SessionEvent) -> some View {
+        let attended = session.actualAttendeeIds.contains(student.id)
+        return HStack(spacing: 10) {
+            Image(systemName: attended ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(attended ? .green : .secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(session.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                Text(session.date, format: .dateTime.month().day().year().hour().minute())
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let loc = session.location, !loc.isEmpty {
+                Text(loc).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .padding(10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func formatValue(_ v: Double) -> String {
+        if v == v.rounded() { return String(Int(v)) }
+        return String(format: "%.2f", v)
+    }
+}
+
+// MARK: - Performance tab
+
+private struct PerformanceTab: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+    @State private var override: PerformanceGrade?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionBlock(title: "Performance Grade") {
+                HStack(spacing: 14) {
+                    let computed = computedGrade
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Auto-computed")
+                            .font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Text(computed.rawValue)
+                                .font(.system(size: 36, weight: .black, design: .rounded))
+                                .foregroundStyle(gradeTint(computed))
+                            Text(computed.chineseName).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text("Override")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Picker("", selection: Binding(
+                            get: { student.performanceGrade },
+                            set: { newValue in saveOverride(newValue) }
+                        )) {
+                            Text("Use computed").tag(PerformanceGrade?.none)
+                            ForEach(PerformanceGrade.allCases, id: \.self) { g in
+                                Text(g.rawValue).tag(Optional(g))
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .controlSize(.small)
+                    }
+                }
+                .padding(14)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            SectionBlock(title: "Grade History") {
+                if student.gradeHistory.isEmpty {
+                    EmptyPanel(systemImage: "clock", text: "No grade changes recorded.")
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(student.gradeHistory.sorted(by: { $0.date > $1.date }), id: \.id) { entry in
+                            HStack(spacing: 10) {
+                                Text(entry.grade.rawValue)
+                                    .font(.subheadline.weight(.bold))
+                                    .frame(width: 30, height: 30)
+                                    .background(gradeTint(entry.grade).opacity(0.18), in: Circle())
+                                    .foregroundStyle(gradeTint(entry.grade))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(entry.date, format: .dateTime.month().day().year())
+                                        .font(.caption.weight(.semibold))
+                                    Text(entry.wasManual ? "Coach override" : "Auto-computed")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var computedGrade: PerformanceGrade {
+        let skills = Dictionary(uniqueKeysWithValues: dataManager.players.map { ($0.studentId, $0.skills) })
+        return StudentPerformanceGrader.computeGrade(
+            for: student,
+            allStudents: dataManager.students,
+            sessions: dataManager.sessionEvents,
+            skills: skills
+        )
+    }
+
+    private func saveOverride(_ grade: PerformanceGrade?) {
+        var copy = student
+        copy.performanceGrade = grade
+        copy.updatedAt = Date()
+        dataManager.updateStudent(copy)
+    }
+}
+
+// MARK: - Contracts tab
+
+private struct ContractsTab: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+
+    private var contracts: [Contract] {
+        dataManager.cachedContracts
+            .filter { $0.studentId == student.id }
+            .sorted { $0.enrollmentDate > $1.enrollmentDate }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if contracts.isEmpty {
+                EmptyPanel(systemImage: "doc.text", text: "No contracts on file.")
+            } else {
+                ForEach(contracts) { contract in
+                    ContractCard(contract: contract)
+                }
+            }
+        }
+    }
+}
+
+private struct ContractCard: View {
+    let contract: Contract
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("Contract #\(contract.contractNumber)").font(.subheadline.weight(.semibold))
+                kindBadge
+                Spacer()
+                statusBadge
+            }
+            HStack(spacing: 18) {
+                metric("Enrolled", contract.enrollmentDate.formatted(.dateTime.month().day().year()))
+                metric("Per session", contract.pricePerSession.formatted(.currency(code: "USD")))
+                if contract.kind == .privateBundle {
+                    metric("Bundle", "\(contract.bundleSize) sessions")
+                    metric("Remaining", "\(contract.bundleRedemptionsRemaining ?? 0)")
+                }
+            }
+            .font(.caption)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+    }
+
+    private var kindBadge: some View {
+        Text(contract.kind.rawValue)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(.quaternary, in: .capsule)
+            .foregroundStyle(.secondary)
+    }
+
+    private var statusBadge: some View {
+        Text(contract.status.rawValue)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(statusTint.opacity(0.18), in: .capsule)
+            .foregroundStyle(statusTint)
+    }
+
+    private var statusTint: Color {
+        switch contract.status {
+        case .active: return .green
+        case .pending: return .orange
+        case .completed: return .blue
+        case .expired: return .red
+        case .cancelled: return .gray
+        }
+    }
+
+    private func metric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label).foregroundStyle(.secondary)
+            Text(value).font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.primary)
+        }
+    }
+}
+
+// MARK: - Notes tab
+
+private struct NotesTab: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+    @State private var newNote: String = ""
+
+    private var touchpoints: [ParentalTouchpoint] {
+        student.parentalTouchpoints.sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            SectionBlock(title: "Add Touchpoint") {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextEditor(text: $newNote)
+                        .font(.subheadline)
+                        .frame(minHeight: 80)
+                        .padding(8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.separator.opacity(0.4), lineWidth: 0.5))
+                    HStack {
+                        Spacer()
+                        Button("Save Note") { saveNote() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(newNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+
+            SectionBlock(title: "Parental Touchpoints") {
+                if touchpoints.isEmpty {
+                    EmptyPanel(systemImage: "note.text", text: "No notes yet.")
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(touchpoints) { tp in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: tp.type.icon)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 18)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(tp.type.rawValue.capitalized).font(.caption.weight(.semibold))
+                                        Text("·").foregroundStyle(.tertiary)
+                                        Text(tp.date, format: .dateTime.month().day().year())
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    if let notes = tp.notes, !notes.isEmpty {
+                                        Text(notes).font(.subheadline)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func saveNote() {
+        let trimmed = newNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var copy = student
+        let tp = ParentalTouchpoint(id: UUID(), date: Date(), type: .message, notes: trimmed, followUpNeeded: false, followUpDate: nil)
+        copy.parentalTouchpoints.append(tp)
+        copy.lastParentContact = Date()
+        copy.updatedAt = Date()
+        dataManager.updateStudent(copy)
+        newNote = ""
+    }
+}
+
+// MARK: - History tab
+
+private struct HistoryTab: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+
+    private var allSessions: [SessionEvent] {
+        dataManager.sessionEvents
+            .filter {
+                $0.attendeeIds.contains(student.id) ||
+                $0.actualAttendeeIds.contains(student.id) ||
+                ($0.programId != nil && $0.programId == student.programId)
+            }
+            .sorted { $0.date > $1.date }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if allSessions.isEmpty {
+                EmptyPanel(systemImage: "clock", text: "No session history.")
+            } else {
+                ForEach(allSessions) { session in
+                    let attended = session.actualAttendeeIds.contains(student.id)
+                    let excused = session.excusedAbsences.contains(student.id)
+                    HStack(spacing: 10) {
+                        Image(systemName: attended ? "checkmark.circle.fill" : (excused ? "minus.circle.fill" : "xmark.circle"))
+                            .foregroundStyle(attended ? .green : (excused ? .orange : .secondary))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(session.title).font(.subheadline.weight(.medium)).lineLimit(1)
+                            Text(session.date, format: .dateTime.weekday().month().day().year().hour().minute())
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(session.status.rawValue.capitalized)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(.quaternary, in: .capsule)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(10)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Shared atoms
+
+struct StatPill: View {
+    let title: String
+    let value: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value).font(.system(size: 22, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct SectionBlock<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.headline)
+            content()
+        }
+    }
+}
+
+struct EmptyDetail: View {
+    let systemImage: String
+    let title: String
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: systemImage).font(.system(size: 42, weight: .light)).foregroundStyle(.tertiary)
+            Text(title).font(.title3).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+}
+
+// File-private grade tint helper used by both list rows and detail.
+fileprivate func gradeTint(_ g: PerformanceGrade) -> Color {
+    switch g {
+    case .A: return .green
+    case .B: return .blue
+    case .C: return .orange
+    case .ungraded: return .gray
+    }
+}

@@ -1,0 +1,12 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Secrets — keep API keys out of git
+Configuration.xcconfig
+Hoopwise/Configuration.xcconfig
+
+# macOS
+.DS_Store

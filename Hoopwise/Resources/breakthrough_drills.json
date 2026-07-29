@@ -1,0 +1,619 @@
+[
+  {
+    "name": "Mikan Drill",
+    "category": "shooting",
+    "difficulty": "beginner",
+    "durationMinutes": 5,
+    "description": "Classic layup drill alternating sides under the basket",
+    "instructions": [
+      "Start under the basket on the right side",
+      "Make a right-handed layup",
+      "Grab the ball out of the net and immediately go to the left side",
+      "Make a left-handed layup",
+      "Continue alternating for the duration",
+      "Focus on proper footwork and soft touch"
+    ],
+    "keyPoints": [
+      "Use the backboard",
+      "Opposite hand, opposite foot",
+      "Keep the ball high",
+      "Soft touch on the glass"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 1,
+    "maxPlayers": 2,
+    "variations": [
+      "Reverse Mikan (behind the backboard)",
+      "Power Mikan (two-hand finish)",
+      "Timed challenge (30 makes in 60 seconds)"
+    ],
+    "tags": ["layups", "finishing", "fundamentals", "footwork"]
+  },
+  {
+    "name": "Partner Passing",
+    "category": "skills",
+    "difficulty": "beginner",
+    "durationMinutes": 10,
+    "description": "Two-player passing drill working on different pass types",
+    "instructions": [
+      "Partners stand 10-15 feet apart",
+      "Chest pass - 10 reps",
+      "Bounce pass - 10 reps",
+      "Overhead pass - 10 reps",
+      "One-hand push pass (right) - 10 reps",
+      "One-hand push pass (left) - 10 reps",
+      "Behind-the-back pass - 10 reps"
+    ],
+    "keyPoints": [
+      "Step into passes",
+      "Hands ready to receive",
+      "Crisp, accurate passes",
+      "Call for the ball"
+    ],
+    "equipmentNeeded": ["Basketball"],
+    "minPlayers": 2,
+    "maxPlayers": 2,
+    "variations": [
+      "Moving passes (while jogging)",
+      "Competitive (count drops)",
+      "Add defensive pressure"
+    ],
+    "tags": ["passing", "fundamentals", "partner"]
+  },
+  {
+    "name": "Zig-Zag Dribbling",
+    "category": "skills",
+    "difficulty": "intermediate",
+    "durationMinutes": 8,
+    "description": "Full-court dribbling drill working on change of direction",
+    "instructions": [
+      "Start at baseline with ball in right hand",
+      "Dribble at 45-degree angle toward sideline",
+      "At sideline, crossover to left hand",
+      "Dribble at 45-degree angle toward opposite sideline",
+      "Continue zig-zagging down court",
+      "Return using different moves (between legs, behind back)"
+    ],
+    "keyPoints": [
+      "Low, controlled dribble",
+      "Explode out of each move",
+      "Eyes up",
+      "Protect the ball"
+    ],
+    "equipmentNeeded": ["Basketball"],
+    "minPlayers": 1,
+    "maxPlayers": 8,
+    "variations": [
+      "Two-ball zig-zag",
+      "Add defensive pressure",
+      "Speed variation"
+    ],
+    "tags": ["ballhandling", "dribbling", "change-of-direction"]
+  },
+  {
+    "name": "Closeout Drill",
+    "category": "defense",
+    "difficulty": "intermediate",
+    "durationMinutes": 10,
+    "description": "Defensive closeout technique and positioning",
+    "instructions": [
+      "Offensive player starts at three-point line with ball",
+      "Defender starts at free-throw line",
+      "Coach calls 'go' - defender sprints to closeout",
+      "Last 3 steps: short choppy steps, hands up",
+      "Offensive player can shoot, drive, or pass",
+      "Defender must contest shot or stay in front on drive"
+    ],
+    "keyPoints": [
+      "Sprint then chop steps",
+      "High hands on closeout",
+      "Don't fly by",
+      "Stay balanced"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 2,
+    "maxPlayers": 10,
+    "variations": [
+      "Multiple closeouts",
+      "Closeout and recover",
+      "Team rotation drill"
+    ],
+    "tags": ["defense", "closeouts", "positioning"]
+  },
+  {
+    "name": "Two-Ball Dribbling",
+    "category": "skills",
+    "difficulty": "advanced",
+    "durationMinutes": 10,
+    "description": "Advanced ball-handling with two basketballs",
+    "instructions": [
+      "Stationary: Both balls together (30 seconds)",
+      "Stationary: Alternating (30 seconds)",
+      "Stationary: One high, one low (30 seconds)",
+      "Walking: Both together down court",
+      "Walking: Alternating down court",
+      "Jogging: Both together",
+      "Crossovers with both balls"
+    ],
+    "keyPoints": [
+      "Control both balls",
+      "Eyes up as much as possible",
+      "Low dribbles",
+      "Stay balanced"
+    ],
+    "equipmentNeeded": ["2 Basketballs"],
+    "minPlayers": 1,
+    "maxPlayers": 6,
+    "variations": [
+      "Figure-8 with two balls",
+      "Cone weave with two balls",
+      "Speed variations"
+    ],
+    "tags": ["ballhandling", "advanced", "coordination"]
+  },
+  {
+    "name": "Shell Drill",
+    "category": "defense",
+    "difficulty": "intermediate",
+    "durationMinutes": 15,
+    "description": "4-on-4 defensive positioning and help defense",
+    "instructions": [
+      "Four offensive players around perimeter",
+      "Four defenders in help position",
+      "Ball moves around perimeter via passing",
+      "Defenders adjust: on-ball pressure, deny, help position",
+      "On ball reversal, defenders must jump to the ball",
+      "Add live action after mastering positioning"
+    ],
+    "keyPoints": [
+      "Ball-you-man positioning",
+      "Active hands",
+      "Talk on defense",
+      "Quick closeouts"
+    ],
+    "equipmentNeeded": ["Basketball"],
+    "minPlayers": 8,
+    "maxPlayers": 10,
+    "variations": [
+      "3-on-3 shell",
+      "5-on-5 shell",
+      "Add cutters",
+      "Live 4-on-4"
+    ],
+    "tags": ["defense", "team", "help-defense", "positioning"]
+  },
+  {
+    "name": "Spot Shooting - 5 Spots",
+    "category": "shooting",
+    "difficulty": "intermediate",
+    "durationMinutes": 12,
+    "description": "Shooting from five spots around the three-point arc",
+    "instructions": [
+      "Set up at 5 spots: both corners, both wings, top of key",
+      "Start at right corner",
+      "Take 5 shots from each spot",
+      "Track makes out of 25 total shots",
+      "Can add a passer for game-like rhythm",
+      "Move to next spot after completing 5 shots"
+    ],
+    "keyPoints": [
+      "Consistent footwork",
+      "Quick release",
+      "Follow through",
+      "Track your percentage"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 1,
+    "maxPlayers": 3,
+    "variations": [
+      "Add a dribble before shot",
+      "Catch and shoot with passer",
+      "Timed challenge",
+      "Make 3 in a row before moving"
+    ],
+    "tags": ["shooting", "three-point", "repetition"]
+  },
+  {
+    "name": "1-on-1 Full Court",
+    "category": "offense",
+    "difficulty": "intermediate",
+    "durationMinutes": 15,
+    "description": "Full court 1-on-1 developing offensive and defensive skills",
+    "instructions": [
+      "Offensive player starts at baseline with ball",
+      "Defender starts at free-throw line",
+      "Offensive player must advance ball to other end",
+      "Play to score or defensive stop",
+      "Switch roles after each possession",
+      "First to 5 baskets wins"
+    ],
+    "keyPoints": [
+      "Change of pace",
+      "Protect the ball",
+      "Use both hands",
+      "Finish strong"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 2,
+    "maxPlayers": 2,
+    "variations": [
+      "Half court 1-on-1",
+      "2 dribbles max",
+      "Weak hand only"
+    ],
+    "tags": ["1-on-1", "offense", "defense", "competitive"]
+  },
+  {
+    "name": "Defensive Slides",
+    "category": "defense",
+    "difficulty": "beginner",
+    "durationMinutes": 8,
+    "description": "Fundamental defensive footwork and positioning",
+    "instructions": [
+      "Start in defensive stance at baseline",
+      "Slide laterally to sideline (don't cross feet)",
+      "Touch sideline, slide back to middle",
+      "Slide to opposite sideline",
+      "Continue for 30 seconds",
+      "Rest 30 seconds, repeat 3-4 times"
+    ],
+    "keyPoints": [
+      "Stay low",
+      "Don't cross feet",
+      "Push off back foot",
+      "Active hands",
+      "Quick feet"
+    ],
+    "equipmentNeeded": [],
+    "minPlayers": 1,
+    "maxPlayers": 15,
+    "variations": [
+      "Add forward/backward movement",
+      "Zig-zag slides",
+      "Mirror drill with partner"
+    ],
+    "tags": ["defense", "footwork", "conditioning", "fundamentals"]
+  },
+  {
+    "name": "Free Throw Golf",
+    "category": "shooting",
+    "difficulty": "beginner",
+    "durationMinutes": 10,
+    "description": "Free throw practice with scoring system",
+    "instructions": [
+      "Shoot free throws in sets of 3",
+      "Score like golf: Count misses as strokes",
+      "Play 9 'holes' (9 sets of 3 free throws)",
+      "Goal: Lowest score wins",
+      "Perfect score is 0 (make all 27)",
+      "Track your score over time"
+    ],
+    "keyPoints": [
+      "Consistent routine",
+      "Focus on form",
+      "Mental toughness",
+      "Track progress"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "variations": [
+      "Pressure free throws (after sprints)",
+      "Team competition",
+      "18 holes instead of 9"
+    ],
+    "tags": ["free-throws", "shooting", "mental", "game"]
+  },
+  {
+    "name": "3-Man Weave",
+    "category": "offense",
+    "difficulty": "beginner",
+    "durationMinutes": 10,
+    "description": "Classic passing and movement drill",
+    "instructions": [
+      "Three players start across baseline",
+      "Middle player has ball",
+      "Pass to wing, then run behind that player",
+      "Receiver passes to opposite wing",
+      "Continue weaving down court",
+      "Finish with layup",
+      "Return with same pattern"
+    ],
+    "keyPoints": [
+      "Crisp passes",
+      "Sprint to spots",
+      "Call for ball",
+      "No dribbling"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 3,
+    "maxPlayers": 15,
+    "variations": [
+      "Add 2 defenders",
+      "Finish with different shots",
+      "5-man weave"
+    ],
+    "tags": ["passing", "teamwork", "conditioning", "layups"]
+  },
+  {
+    "name": "Cone Dribbling",
+    "category": "skills",
+    "difficulty": "beginner",
+    "durationMinutes": 8,
+    "description": "Dribbling through cones working on control and moves",
+    "instructions": [
+      "Set up 5-6 cones in a line, 5 feet apart",
+      "Dribble through cones using right hand only",
+      "Return using left hand only",
+      "Next: Crossover at each cone",
+      "Next: Between the legs at each cone",
+      "Next: Behind the back at each cone"
+    ],
+    "keyPoints": [
+      "Low dribble",
+      "Control through cones",
+      "Eyes up",
+      "Explode out of moves"
+    ],
+    "equipmentNeeded": ["Basketball", "5-6 Cones"],
+    "minPlayers": 1,
+    "maxPlayers": 8,
+    "variations": [
+      "Two-ball cone dribbling",
+      "Speed variation",
+      "Add defender"
+    ],
+    "tags": ["ballhandling", "dribbling", "cones", "control"]
+  },
+  {
+    "name": "Transition 3-on-2, 2-on-1",
+    "category": "offense",
+    "difficulty": "advanced",
+    "durationMinutes": 15,
+    "description": "Fast break drill with numbers advantage",
+    "instructions": [
+      "Start with 3 offensive players, 2 defenders",
+      "Offense attacks in transition",
+      "After shot, 2 defenders become offense",
+      "1 offensive player stays back on defense (2-on-1)",
+      "Continue pattern",
+      "Emphasize quick decisions and spacing"
+    ],
+    "keyPoints": [
+      "Push the ball",
+      "Wide spacing",
+      "Attack the rim",
+      "Quick decisions"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 5,
+    "maxPlayers": 12,
+    "variations": [
+      "2-on-1, 1-on-1 continuous",
+      "Add more players",
+      "Full court version"
+    ],
+    "tags": ["transition", "fast-break", "team", "decision-making"]
+  },
+  {
+    "name": "Pick and Roll Series",
+    "category": "offense",
+    "difficulty": "advanced",
+    "durationMinutes": 15,
+    "description": "Two-man game focusing on pick and roll execution",
+    "instructions": [
+      "Ball handler and screener start on wing",
+      "Screener sets ball screen",
+      "Ball handler uses screen",
+      "Read defense: shoot, drive, or pass",
+      "Screener rolls or pops based on defense",
+      "Work both sides of floor",
+      "Add defenders for live reps"
+    ],
+    "keyPoints": [
+      "Set solid screen",
+      "Use the screen",
+      "Read the defense",
+      "Screener communication"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 2,
+    "maxPlayers": 4,
+    "variations": [
+      "Pick and pop",
+      "Slip the screen",
+      "Re-screen",
+      "Add help defender"
+    ],
+    "tags": ["pick-and-roll", "two-man-game", "offense", "reads"]
+  },
+  {
+    "name": "Suicide Sprints",
+    "category": "conditioning",
+    "difficulty": "intermediate",
+    "durationMinutes": 10,
+    "description": "Classic basketball conditioning drill",
+    "instructions": [
+      "Start at baseline",
+      "Sprint to near free-throw line, touch, return",
+      "Sprint to half court, touch, return",
+      "Sprint to far free-throw line, touch, return",
+      "Sprint to far baseline, touch, return",
+      "Rest 60 seconds",
+      "Repeat 3-5 times"
+    ],
+    "keyPoints": [
+      "Touch every line",
+      "Full speed",
+      "Quick turns",
+      "Mental toughness"
+    ],
+    "equipmentNeeded": [],
+    "minPlayers": 1,
+    "maxPlayers": 20,
+    "variations": [
+      "Defensive slides instead of sprints",
+      "Timed challenges",
+      "Partner race"
+    ],
+    "tags": ["conditioning", "sprints", "endurance", "mental-toughness"]
+  },
+  {
+    "name": "Form Shooting",
+    "category": "shooting",
+    "difficulty": "beginner",
+    "durationMinutes": 10,
+    "description": "Close-range shooting focusing on proper mechanics",
+    "instructions": [
+      "Start 3-5 feet from basket",
+      "Focus on BEEF (Balance, Eyes, Elbow, Follow-through)",
+      "Shoot 10 makes before moving back",
+      "Move to 5-7 feet, make 10",
+      "Move to 7-10 feet, make 10",
+      "Focus on form, not speed",
+      "One-hand shooting drill"
+    ],
+    "keyPoints": [
+      "Elbow under ball",
+      "Wrist snap",
+      "Hold follow-through",
+      "Soft touch",
+      "Arc on shot"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "variations": [
+      "Eyes closed (feel the shot)",
+      "Off the dribble",
+      "Add a defender"
+    ],
+    "tags": ["shooting", "form", "fundamentals", "mechanics"]
+  },
+  {
+    "name": "Charge/Block Drill",
+    "category": "defense",
+    "difficulty": "intermediate",
+    "durationMinutes": 10,
+    "description": "Teaching proper positioning for taking charges",
+    "instructions": [
+      "Defender starts under basket",
+      "Offensive player starts at free-throw line",
+      "Offensive player drives to basket",
+      "Defender must establish legal guarding position",
+      "Take charge or force miss",
+      "Emphasize getting there early",
+      "Alternate sides and angles"
+    ],
+    "keyPoints": [
+      "Get there early",
+      "Feet set",
+      "Hands up",
+      "Absorb contact",
+      "Fall safely"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 2,
+    "maxPlayers": 8,
+    "variations": [
+      "Help defense charge",
+      "Transition charge",
+      "Post defense charge"
+    ],
+    "tags": ["defense", "charges", "positioning", "toughness"]
+  },
+  {
+    "name": "Outlet Passing",
+    "category": "skills",
+    "difficulty": "intermediate",
+    "durationMinutes": 10,
+    "description": "Rebounding and outlet passing for fast breaks",
+    "instructions": [
+      "Rebounder under basket",
+      "Two outlets on wings at free-throw line extended",
+      "Coach shoots, rebounder gets ball",
+      "Pivot and make strong outlet pass",
+      "Outlet catches and attacks",
+      "Rotate positions",
+      "Emphasize quick outlet"
+    ],
+    "keyPoints": [
+      "Chin the ball",
+      "Pivot away from defense",
+      "Strong overhead pass",
+      "Hit target in stride"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 3,
+    "maxPlayers": 12,
+    "variations": [
+      "Add defender on rebounder",
+      "Full court finish",
+      "Competitive (count turnovers)"
+    ],
+    "tags": ["passing", "rebounding", "transition", "outlet"]
+  },
+  {
+    "name": "Star Passing",
+    "category": "skills",
+    "difficulty": "beginner",
+    "durationMinutes": 8,
+    "description": "Five-player passing drill in star formation",
+    "instructions": [
+      "Five players form a star (pentagon)",
+      "Player 1 passes to player 3 (skip one)",
+      "Player 3 passes to player 5 (skip one)",
+      "Continue pattern around the star",
+      "After 20 passes, reverse direction",
+      "Add second ball for advanced version"
+    ],
+    "keyPoints": [
+      "Crisp passes",
+      "Call for ball",
+      "Step to meet pass",
+      "Focus and communication"
+    ],
+    "equipmentNeeded": ["Basketball"],
+    "minPlayers": 5,
+    "maxPlayers": 10,
+    "variations": [
+      "Two balls",
+      "Different pass types",
+      "Moving star",
+      "Competitive (count drops)"
+    ],
+    "tags": ["passing", "teamwork", "communication", "warmup"]
+  },
+  {
+    "name": "Post Moves Series",
+    "category": "offense",
+    "difficulty": "intermediate",
+    "durationMinutes": 15,
+    "description": "Low post offensive moves and footwork",
+    "instructions": [
+      "Start with back to basket on block",
+      "Drop step baseline - 5 reps each side",
+      "Drop step middle - 5 reps each side",
+      "Up and under - 5 reps each side",
+      "Jump hook - 5 reps each side",
+      "Face-up jumper - 5 reps each side",
+      "Add defender for live reps"
+    ],
+    "keyPoints": [
+      "Seal defender",
+      "Strong pivot",
+      "Protect the ball",
+      "Finish through contact"
+    ],
+    "equipmentNeeded": ["Basketball", "Hoop"],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "variations": [
+      "Add shot fake",
+      "Spin move",
+      "Counter moves",
+      "Live 1-on-1"
+    ],
+    "tags": ["post-play", "offense", "footwork", "finishing"]
+  }
+]

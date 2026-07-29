@@ -1,0 +1,1087 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2D8D33B32FA0B80800F1AD64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */; };
+		2D8D33B42FA0B80800F1AD64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */; };
+		2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2D8D3AA42FA6582F00F1AD64 /* Configuration.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		054981802EE9F81400C56E5A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 054981662EE9F81300C56E5A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0549816D2EE9F81300C56E5A;
+			remoteInfo = SAMp;
+		};
+		0549818A2EE9F81400C56E5A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 054981662EE9F81300C56E5A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0549816D2EE9F81300C56E5A;
+			remoteInfo = SAMp;
+		};
+		2D8D33C12FA0B80800F1AD64 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 054981662EE9F81300C56E5A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2D8D33B12FA0B80800F1AD64;
+			remoteInfo = SAMWidgetsExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2D8D336F2FA0B74300F1AD64 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0549816E2EE9F81300C56E5A /* Hoopwise.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hoopwise.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0549817F2EE9F81400C56E5A /* HoopwiseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoopwiseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		054981892EE9F81400C56E5A /* HoopwiseUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoopwiseUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SAMWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoopwiseMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		054981912EE9F81400C56E5A /* Exceptions for "Hoopwise" folder in "Hoopwise" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0549816D2EE9F81300C56E5A /* Hoopwise */;
+		};
+		2D8D33C72FA0B80800F1AD64 /* Exceptions for "SAMWidgets" folder in "SAMWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */;
+		};
+		2D8D33CB2FA0BB9500F1AD64 /* Exceptions for "Hoopwise" folder in "SAMWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/SessionActivityAttributes.swift,
+			);
+			target = 2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */;
+		};
+		2D8D35752FA6390F00F1AD64 /* Exceptions for "Hoopwise" folder in "HoopwiseMac" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Components/AgeBadge.swift,
+				Components/AvatarView.swift,
+				Components/Cards.swift,
+				Components/FlightyMacDesignSystem.swift,
+				Components/GlassDesignSystem.swift,
+				Components/MacDesignSystem.swift,
+				Components/ProgressViews.swift,
+				Components/SAMLogoView.swift,
+				Components/TeamMascotLogos.swift,
+				Components/Theme.swift,
+				Managers/ImageCacheManager.swift,
+				Managers/PhaseTemplateStore.swift,
+				Managers/SampleDataGenerator.swift,
+				Managers/SwiftDataManager.swift,
+				Models/BasketballCategory.swift,
+				Models/Coach.swift,
+				Models/CoachMentionStore.swift,
+				Models/DrillItem.swift,
+				Models/FEBPhasePresets.swift,
+				Models/League.swift,
+				Models/MicroCycle.swift,
+				Models/Organization.swift,
+				Models/Playbook.swift,
+				Models/Player.swift,
+				Models/PlayerMeasurement.swift,
+				Models/ProfileAuditLog.swift,
+				Models/Program.swift,
+				Models/Reminder.swift,
+				Models/Session.swift,
+				Models/SessionActivityAttributes.swift,
+				Models/SessionFormat.swift,
+				Models/Student.swift,
+				Models/SwiftData/SDCoach.swift,
+				Models/SwiftData/SDContract.swift,
+				Models/SwiftData/SDDrill.swift,
+				Models/SwiftData/SDGame.swift,
+				Models/SwiftData/SDLocation.swift,
+				Models/SwiftData/SDMeasurement.swift,
+				Models/SwiftData/SDMicroCycle.swift,
+				Models/SwiftData/SDPlayer.swift,
+				Models/SwiftData/SDProgram.swift,
+				Models/SwiftData/SDReminder.swift,
+				Models/SwiftData/SDSessionEvent.swift,
+				Models/SwiftData/SDStaffCoach.swift,
+				Models/SwiftData/SDStudent.swift,
+				Models/SwiftData/SDTeam.swift,
+				Models/SyncLogStore.swift,
+				Models/SyncTypes.swift,
+				Services/LiveSessionEngine.swift,
+				Services/MonthlyStudentCardExportService.swift,
+				Services/SessionLiveActivityManager.swift,
+				Services/SessionStatusMonitor.swift,
+				Services/StudentIntelligence.swift,
+				Services/UnsplashConfig.swift,
+				Services/UnsplashImageService.swift,
+				Utilities/DebugLog.swift,
+				Utilities/DrillContentLocalization_Batch1.swift,
+				Utilities/DrillContentLocalization_Batch2.swift,
+				Utilities/DrillContentLocalization_Batch3.swift,
+				Utilities/DrillContentLocalization_Batch4.swift,
+				Utilities/DrillContentLocalization_Batch5.swift,
+				Utilities/DrillImporter.swift,
+				Utilities/DrillLocalization.swift,
+				Utilities/HapticFeedback.swift,
+				Utilities/PerformanceUtilities.swift,
+				Utilities/PhotoCaptureManager.swift,
+				Utilities/PinyinConverter.swift,
+				Utilities/PlatformModifiers.swift,
+			);
+			target = 2D8D35552FA6374E00F1AD64 /* HoopwiseMac */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		054981702EE9F81300C56E5A /* Hoopwise */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				054981912EE9F81400C56E5A /* Exceptions for "Hoopwise" folder in "Hoopwise" target */,
+				2D8D33CB2FA0BB9500F1AD64 /* Exceptions for "Hoopwise" folder in "SAMWidgetsExtension" target */,
+				2D8D35752FA6390F00F1AD64 /* Exceptions for "Hoopwise" folder in "HoopwiseMac" target */,
+			);
+			path = Hoopwise;
+			sourceTree = "<group>";
+		};
+		054981822EE9F81400C56E5A /* SAMpTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SAMpTests;
+			sourceTree = "<group>";
+		};
+		0549818C2EE9F81400C56E5A /* SAMpUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SAMpUITests;
+			sourceTree = "<group>";
+		};
+		2D8D33B52FA0B80800F1AD64 /* SAMWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				2D8D33C72FA0B80800F1AD64 /* Exceptions for "SAMWidgets" folder in "SAMWidgetsExtension" target */,
+			);
+			path = SAMWidgets;
+			sourceTree = "<group>";
+		};
+		2D8D35572FA6374E00F1AD64 /* HoopwiseMac */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HoopwiseMac;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0549816B2EE9F81300C56E5A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0549817C2EE9F81400C56E5A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		054981862EE9F81400C56E5A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D33AF2FA0B80800F1AD64 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2D8D33B42FA0B80800F1AD64 /* SwiftUI.framework in Frameworks */,
+				2D8D33B32FA0B80800F1AD64 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D35532FA6374E00F1AD64 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		054981652EE9F81300C56E5A = {
+			isa = PBXGroup;
+			children = (
+				054981702EE9F81300C56E5A /* Hoopwise */,
+				054981822EE9F81400C56E5A /* SAMpTests */,
+				0549818C2EE9F81400C56E5A /* SAMpUITests */,
+				2D8D33B52FA0B80800F1AD64 /* SAMWidgets */,
+				2D8D35572FA6374E00F1AD64 /* HoopwiseMac */,
+				2D8D33552FA0B74100F1AD64 /* Frameworks */,
+				0549816F2EE9F81300C56E5A /* Products */,
+				2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */,
+			);
+			sourceTree = "<group>";
+		};
+		0549816F2EE9F81300C56E5A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0549816E2EE9F81300C56E5A /* Hoopwise.app */,
+				0549817F2EE9F81400C56E5A /* HoopwiseTests.xctest */,
+				054981892EE9F81400C56E5A /* HoopwiseUITests.xctest */,
+				2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */,
+				2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		2D8D33552FA0B74100F1AD64 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */,
+				2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0549816D2EE9F81300C56E5A /* Hoopwise */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 054981922EE9F81400C56E5A /* Build configuration list for PBXNativeTarget "Hoopwise" */;
+			buildPhases = (
+				0549816A2EE9F81300C56E5A /* Sources */,
+				0549816B2EE9F81300C56E5A /* Frameworks */,
+				0549816C2EE9F81300C56E5A /* Resources */,
+				2D8D336F2FA0B74300F1AD64 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2D8D33C22FA0B80800F1AD64 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				054981702EE9F81300C56E5A /* Hoopwise */,
+			);
+			name = Hoopwise;
+			packageProductDependencies = (
+			);
+			productName = SAMp;
+			productReference = 0549816E2EE9F81300C56E5A /* Hoopwise.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0549817E2EE9F81400C56E5A /* HoopwiseTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 054981972EE9F81400C56E5A /* Build configuration list for PBXNativeTarget "HoopwiseTests" */;
+			buildPhases = (
+				0549817B2EE9F81400C56E5A /* Sources */,
+				0549817C2EE9F81400C56E5A /* Frameworks */,
+				0549817D2EE9F81400C56E5A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				054981812EE9F81400C56E5A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				054981822EE9F81400C56E5A /* SAMpTests */,
+			);
+			name = HoopwiseTests;
+			packageProductDependencies = (
+			);
+			productName = SAMpTests;
+			productReference = 0549817F2EE9F81400C56E5A /* HoopwiseTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		054981882EE9F81400C56E5A /* HoopwiseUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0549819A2EE9F81400C56E5A /* Build configuration list for PBXNativeTarget "HoopwiseUITests" */;
+			buildPhases = (
+				054981852EE9F81400C56E5A /* Sources */,
+				054981862EE9F81400C56E5A /* Frameworks */,
+				054981872EE9F81400C56E5A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0549818B2EE9F81400C56E5A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0549818C2EE9F81400C56E5A /* SAMpUITests */,
+			);
+			name = HoopwiseUITests;
+			packageProductDependencies = (
+			);
+			productName = SAMpUITests;
+			productReference = 054981892EE9F81400C56E5A /* HoopwiseUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D8D33C42FA0B80800F1AD64 /* Build configuration list for PBXNativeTarget "SAMWidgetsExtension" */;
+			buildPhases = (
+				2D8D33AE2FA0B80800F1AD64 /* Sources */,
+				2D8D33AF2FA0B80800F1AD64 /* Frameworks */,
+				2D8D33B02FA0B80800F1AD64 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2D8D33B52FA0B80800F1AD64 /* SAMWidgets */,
+			);
+			name = SAMWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = SAMWidgetsExtension;
+			productReference = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		2D8D35552FA6374E00F1AD64 /* HoopwiseMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D8D355E2FA6375000F1AD64 /* Build configuration list for PBXNativeTarget "HoopwiseMac" */;
+			buildPhases = (
+				2D8D35522FA6374E00F1AD64 /* Sources */,
+				2D8D35532FA6374E00F1AD64 /* Frameworks */,
+				2D8D35542FA6374E00F1AD64 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2D8D35572FA6374E00F1AD64 /* HoopwiseMac */,
+			);
+			name = HoopwiseMac;
+			packageProductDependencies = (
+			);
+			productName = HoopwiseMac;
+			productReference = 2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		054981662EE9F81300C56E5A /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					0549816D2EE9F81300C56E5A = {
+						CreatedOnToolsVersion = 26.1.1;
+					};
+					0549817E2EE9F81400C56E5A = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = 0549816D2EE9F81300C56E5A;
+					};
+					054981882EE9F81400C56E5A = {
+						CreatedOnToolsVersion = 26.1.1;
+						TestTargetID = 0549816D2EE9F81300C56E5A;
+					};
+					2D8D33B12FA0B80800F1AD64 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					2D8D35552FA6374E00F1AD64 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = 054981692EE9F81300C56E5A /* Build configuration list for PBXProject "Hoopwise" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 054981652EE9F81300C56E5A;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0549816F2EE9F81300C56E5A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0549816D2EE9F81300C56E5A /* Hoopwise */,
+				0549817E2EE9F81400C56E5A /* HoopwiseTests */,
+				054981882EE9F81400C56E5A /* HoopwiseUITests */,
+				2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */,
+				2D8D35552FA6374E00F1AD64 /* HoopwiseMac */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0549816C2EE9F81300C56E5A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2D8D3AA42FA6582F00F1AD64 /* Configuration.xcconfig in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0549817D2EE9F81400C56E5A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		054981872EE9F81400C56E5A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D33B02FA0B80800F1AD64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D35542FA6374E00F1AD64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0549816A2EE9F81300C56E5A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0549817B2EE9F81400C56E5A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		054981852EE9F81400C56E5A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D33AE2FA0B80800F1AD64 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2D8D35522FA6374E00F1AD64 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		054981812EE9F81400C56E5A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0549816D2EE9F81300C56E5A /* Hoopwise */;
+			targetProxy = 054981802EE9F81400C56E5A /* PBXContainerItemProxy */;
+		};
+		0549818B2EE9F81400C56E5A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0549816D2EE9F81300C56E5A /* Hoopwise */;
+			targetProxy = 0549818A2EE9F81400C56E5A /* PBXContainerItemProxy */;
+		};
+		2D8D33C22FA0B80800F1AD64 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */;
+			targetProxy = 2D8D33C12FA0B80800F1AD64 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		054981932EE9F81400C56E5A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = Hoopwise/Hoopwise.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Hoopwise/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 2;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 26.1;
+			};
+			name = Debug;
+		};
+		054981942EE9F81400C56E5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = Hoopwise/Hoopwise.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Hoopwise/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 2;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				XROS_DEPLOYMENT_TARGET = 26.1;
+			};
+			name = Release;
+		};
+		054981952EE9F81400C56E5A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 3DC6CKCGA5;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		054981962EE9F81400C56E5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 3DC6CKCGA5;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		054981982EE9F81400C56E5A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3DC6CKCGA5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMpTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SAMp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SAMp";
+				XROS_DEPLOYMENT_TARGET = 26.1;
+			};
+			name = Debug;
+		};
+		054981992EE9F81400C56E5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3DC6CKCGA5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMpTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SAMp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SAMp";
+				XROS_DEPLOYMENT_TARGET = 26.1;
+			};
+			name = Release;
+		};
+		0549819B2EE9F81400C56E5A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3DC6CKCGA5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMpUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = SAMp;
+				XROS_DEPLOYMENT_TARGET = 26.1;
+			};
+			name = Debug;
+		};
+		0549819C2EE9F81400C56E5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3DC6CKCGA5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				MACOSX_DEPLOYMENT_TARGET = 26.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMpUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = SAMp;
+				XROS_DEPLOYMENT_TARGET = 26.1;
+			};
+			name = Release;
+		};
+		2D8D33C52FA0B80800F1AD64 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SAMWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SAMWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.SAMWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2D8D33C62FA0B80800F1AD64 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SAMWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SAMWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.SAMWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		2D8D355F2FA6375000F1AD64 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HoopwiseMac/HoopwiseMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.HoopwiseMac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2D8D35602FA6375000F1AD64 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HoopwiseMac/HoopwiseMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.HoopwiseMac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		054981692EE9F81300C56E5A /* Build configuration list for PBXProject "Hoopwise" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				054981952EE9F81400C56E5A /* Debug */,
+				054981962EE9F81400C56E5A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		054981922EE9F81400C56E5A /* Build configuration list for PBXNativeTarget "Hoopwise" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				054981932EE9F81400C56E5A /* Debug */,
+				054981942EE9F81400C56E5A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		054981972EE9F81400C56E5A /* Build configuration list for PBXNativeTarget "HoopwiseTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				054981982EE9F81400C56E5A /* Debug */,
+				054981992EE9F81400C56E5A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0549819A2EE9F81400C56E5A /* Build configuration list for PBXNativeTarget "HoopwiseUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0549819B2EE9F81400C56E5A /* Debug */,
+				0549819C2EE9F81400C56E5A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D8D33C42FA0B80800F1AD64 /* Build configuration list for PBXNativeTarget "SAMWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D8D33C52FA0B80800F1AD64 /* Debug */,
+				2D8D33C62FA0B80800F1AD64 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D8D355E2FA6375000F1AD64 /* Build configuration list for PBXNativeTarget "HoopwiseMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D8D355F2FA6375000F1AD64 /* Debug */,
+				2D8D35602FA6375000F1AD64 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 054981662EE9F81300C56E5A /* Project object */;
+}
