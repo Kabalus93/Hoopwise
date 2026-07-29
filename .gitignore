@@ -10,3 +10,4 @@ Hoopwise/Configuration.xcconfig
 
 # macOS
 .DS_Store
+Configuration.xcconfig
