@@ -136,6 +136,18 @@ enum PathKind: String, Codable, CaseIterable, Hashable {
 }
 
 /// One point in time for one entity.
+///
+/// SEGMENT CONVENTION — `pathKind` describes the segment *leaving* this
+/// keyframe, not an instant:
+///
+///   keyframe[N].pathKind  governs the segment from keyframe[N] to keyframe[N+1]
+///   keyframe[last].pathKind  is IGNORED — there is no segment after it
+///
+/// So a player who cuts and then receives a pass has `.cut` on the keyframe
+/// where the cut begins, not the one where it ends. `easing` runs the other
+/// way — it governs how motion *arrives* at this keyframe — because easing is a
+/// property of the approach and path kind is a property of the departure.
+/// Editors should render the final keyframe's path-kind control as disabled.
 struct Keyframe: Identifiable, Codable, Hashable {
     let id: UUID
     /// Seconds from the start of the owning read node.
@@ -143,7 +155,8 @@ struct Keyframe: Identifiable, Codable, Hashable {
     var position: CGPoint
     /// How motion arrives at this keyframe from the previous one.
     var easing: Easing
-    /// What the segment into this keyframe represents.
+    /// What the segment LEAVING this keyframe represents. Ignored on the last
+    /// keyframe of a track — see the segment convention above.
     var pathKind: PathKind
     /// Optional bezier control points, in court feet, for curved paths. Empty
     /// means a straight segment.
@@ -205,49 +218,157 @@ struct Track: Identifiable, Codable, Hashable {
     }
 }
 
+// MARK: - Scalar Animation
+
+/// A keyframe for a single animated number.
+struct ScalarKeyframe: Identifiable, Codable, Hashable {
+    let id: UUID
+    /// Seconds from the start of the play.
+    var t: Double
+    var value: Double
+    /// How the value arrives here from the previous keyframe.
+    var easing: Easing
+
+    init(id: UUID = UUID(), t: Double, value: Double, easing: Easing = .easeInOut) {
+        self.id = id
+        self.t = t
+        self.value = value
+        self.easing = easing
+    }
+}
+
+/// An animated scalar, using the same easing machinery as entity motion.
+struct ScalarTrack: Codable, Hashable {
+    var keyframes: [ScalarKeyframe]
+
+    init(keyframes: [ScalarKeyframe] = []) {
+        self.keyframes = keyframes
+    }
+
+    /// A track that holds one value for the whole play.
+    init(constant: Double) {
+        self.keyframes = [ScalarKeyframe(t: 0, value: constant)]
+    }
+
+    var sortedKeyframes: [ScalarKeyframe] { keyframes.sorted { $0.t < $1.t } }
+
+    var duration: Double { sortedKeyframes.last?.t ?? 0 }
+
+    /// True when the value never changes — lets renderers skip per-frame work
+    /// and lets the PDF exporter pick a single representative angle.
+    var isStatic: Bool {
+        let values = keyframes.map(\.value)
+        guard let first = values.first else { return true }
+        return values.allSatisfy { $0 == first }
+    }
+
+    /// Value at `time`, holding the endpoints outside the keyframed range.
+    func value(at time: Double) -> Double? {
+        let frames = sortedKeyframes
+        guard let first = frames.first else { return nil }
+        if time <= first.t { return first.value }
+        guard let last = frames.last else { return nil }
+        if time >= last.t { return last.value }
+
+        for (index, frame) in frames.enumerated() where frame.t > time {
+            let previous = frames[index - 1]
+            let span = frame.t - previous.t
+            guard span > 0 else { return frame.value }
+            let progress = frame.easing.apply((time - previous.t) / span)
+            return previous.value + (frame.value - previous.value) * progress
+        }
+        return last.value
+    }
+}
+
 // MARK: - Read Tree
 
-/// A node in the play's decision tree.
+/// What an outgoing edge means.
+enum ReadEdgeKind: String, Codable, CaseIterable, Hashable {
+    /// A new read — the play continues into fresh action.
+    case branch
+    /// The play loops back to an earlier node. Continuity offenses do this by
+    /// design: Princeton's chin series returns to its starting alignment,
+    /// motion offense repeats, and "the defender denies so we're back where we
+    /// started" is a legitimate read outcome, not malformed data.
+    ///
+    /// A return edge TERMINATES the export path — the walk stops rather than
+    /// re-entering the cycle. It renders as "returns to <node>" in the PDF and
+    /// can drive a real loop in animation export.
+    case returns
+}
+
+/// A directed edge out of a read node.
+///
+/// The edge carries the read, because the read is what selects it. `condition`
+/// lives here rather than on the target node: with explicit edges, a node's
+/// "how did we get here" is a property of the incoming edge, and duplicating it
+/// on the node would be a second source of truth.
+struct ReadEdge: Identifiable, Codable, Hashable {
+    let id: UUID
+    /// The node this edge leads to. For `.returns`, an ancestor.
+    var targetId: UUID
+    var kind: ReadEdgeKind
+    /// The defensive read that selects this edge — "if they go under",
+    /// "if the help digs".
+    var condition: String?
+
+    init(id: UUID = UUID(),
+         targetId: UUID,
+         kind: ReadEdgeKind = .branch,
+         condition: String? = nil) {
+        self.id = id
+        self.targetId = targetId
+        self.kind = kind
+        self.condition = condition
+    }
+}
+
+/// A node in the play's read graph.
 ///
 /// A play is not a linear sequence. Each node is a slice of action, and its
-/// children are the alternative continuations depending on what the defense
-/// does. `condition` is the read that selects a branch — "if the help digs",
-/// "if they go under the screen".
+/// outgoing edges are the alternative continuations depending on what the
+/// defense does.
 ///
-/// Children are referenced by id and stored flat on the diagram rather than
-/// nested inline. Nesting a recursive struct forces indirection and makes
-/// editing a deep branch an O(depth) rewrite; a flat table with id references
-/// keeps edits local and Codable output readable.
+/// Nodes are stored flat on the diagram and referenced by id rather than nested
+/// inline. Nesting a recursive struct forces indirection and makes editing a
+/// deep branch an O(depth) rewrite; a flat table keeps edits local and the
+/// Codable output readable. It also lets a `.returns` edge point at an ancestor,
+/// which a nested tree cannot express at all.
 struct ReadNode: Identifiable, Codable, Hashable {
     let id: UUID
     /// Short name for the branch, e.g. "Base" or "Reject".
     var title: String
-    /// The defensive read that leads here. Nil on the root.
-    var condition: String?
     /// Coaching notes for this branch specifically.
     var teachingPoints: [String]
     /// Motion for this slice. Time is local to the node: each node starts at 0.
     var tracks: [Track]
-    /// Ordered alternatives. Order is the order they appear in the UI.
-    var childIds: [UUID]
+    /// Ordered outgoing edges. Order is the order they appear in the UI.
+    var edges: [ReadEdge]
 
     init(id: UUID = UUID(),
          title: String,
-         condition: String? = nil,
          teachingPoints: [String] = [],
          tracks: [Track] = [],
-         childIds: [UUID] = []) {
+         edges: [ReadEdge] = []) {
         self.id = id
         self.title = title
-        self.condition = condition
         self.teachingPoints = teachingPoints
         self.tracks = tracks
-        self.childIds = childIds
+        self.edges = edges
     }
 
     var duration: Double { tracks.map(\.duration).max() ?? 0 }
 
-    var isLeaf: Bool { childIds.isEmpty }
+    /// Edges that continue into new action.
+    var branchEdges: [ReadEdge] { edges.filter { $0.kind == .branch } }
+
+    /// Edges that loop back. At most one is meaningful in practice.
+    var returnEdges: [ReadEdge] { edges.filter { $0.kind == .returns } }
+
+    /// No new action follows. A node whose only outgoing edge is a return is
+    /// still terminal for export purposes.
+    var isTerminal: Bool { branchEdges.isEmpty }
 }
 
 // MARK: - Diagram
@@ -261,13 +382,22 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
     var space: CourtSpace
     /// Everything that can appear on the floor.
     var entities: [DiagramEntity]
-    /// Flat node table. Walk it from `rootNodeId` via `childIds`.
+    /// Flat node table. Walk it from `rootNodeId` via each node's `edges`.
     var nodes: [ReadNode]
     var rootNodeId: UUID
-    /// Oblique camera. 0 is straight-down; 1 is the maximum authored tilt.
-    /// Applied as a perspective projection of the court plane at render time,
-    /// and animatable — it is a parameter, not a scene.
-    var cameraAngle: Double
+
+    /// Camera elevation over time, in DEGREES:
+    ///   90 = straight down (plan view, what a clipboard diagram looks like)
+    ///    0 = at floor level
+    /// Values between are the oblique look, applied as a perspective projection
+    /// of the court plane at render time.
+    ///
+    /// This is a track, not a scalar, because the oblique-to-top-down move is
+    /// the signature output of this tool — "start at 55 degrees, ease to 90
+    /// over two seconds" is the shot, and a single angle cannot express it.
+    /// It reuses the same easing machinery as entity motion.
+    var camera: ScalarTrack
+
     var createdAt: Date
     var updatedAt: Date
 
@@ -277,7 +407,7 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
          entities: [DiagramEntity] = [],
          nodes: [ReadNode]? = nil,
          rootNodeId: UUID? = nil,
-         cameraAngle: Double = 0,
+         camera: ScalarTrack = ScalarTrack(constant: 90),
          createdAt: Date = Date(),
          updatedAt: Date = Date()) {
         self.id = id
@@ -288,9 +418,14 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
         let root = ReadNode(title: "Base")
         self.nodes = nodes ?? [root]
         self.rootNodeId = rootNodeId ?? nodes?.first?.id ?? root.id
-        self.cameraAngle = cameraAngle
+        self.camera = camera
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    /// Camera elevation at a point in time, defaulting to plan view.
+    func cameraAngle(at time: Double) -> Double {
+        camera.value(at: time) ?? 90
     }
 
     func node(_ id: UUID) -> ReadNode? {
@@ -299,45 +434,94 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
 
     var rootNode: ReadNode? { node(rootNodeId) }
 
+    /// Nodes reachable by `.branch` edges. Return edges are deliberately
+    /// excluded — they close a loop rather than continue the play.
     func children(of nodeId: UUID) -> [ReadNode] {
         guard let node = node(nodeId) else { return [] }
-        return node.childIds.compactMap { self.node($0) }
+        return node.branchEdges.compactMap { self.node($0.targetId) }
     }
 
     func entity(_ id: UUID) -> DiagramEntity? {
         entities.first { $0.id == id }
     }
 
-    /// Every root-to-leaf path. Each is one complete way the play can unfold,
-    /// and each is what a single animation export renders.
+    /// One complete way the play can unfold: the nodes walked, and the return
+    /// edge that closed it if it looped.
+    struct Branch {
+        var nodes: [ReadNode]
+        /// Set when the path ended on a `.returns` edge, for rendering
+        /// "returns to <node>" and for looping animation export.
+        var returnsTo: ReadNode?
+
+        var duration: Double { nodes.reduce(0) { $0 + $1.duration } }
+    }
+
+    /// Default ceiling on path enumeration. Three reads per node at depth five
+    /// is 243 paths; Triangle-family material goes deeper still.
+    static let defaultBranchLimit = 256
+
+    /// Every root-to-terminal path. DERIVED, NEVER PERSISTED — materialized
+    /// paths duplicate node payloads and explode combinatorially, which would
+    /// collide with the CKRecord size budget. `SDPlayDiagram` stores the flat
+    /// node table only; this is computed on demand.
     ///
-    /// Guards against cycles. The node table is flat with id references, so a
-    /// malformed `childIds` can point back up the tree; without the visited set
-    /// that would hang the renderer rather than draw something wrong.
-    var branches: [[ReadNode]] {
-        guard let root = rootNode else { return [] }
-        var result: [[ReadNode]] = []
+    /// A `.returns` edge terminates its path rather than re-entering the loop,
+    /// so continuity offenses enumerate cleanly. The visited set remains as a
+    /// backstop against genuine corruption — a `.branch` edge pointing at an
+    /// ancestor — not as the cycle strategy.
+    func branches(limit: Int = PlayDiagram.defaultBranchLimit) -> (branches: [Branch], truncated: Bool) {
+        guard let root = rootNode else { return ([], false) }
+        var result: [Branch] = []
+        var truncated = false
 
         func walk(_ node: ReadNode, _ prefix: [ReadNode], _ visited: Set<UUID>) {
+            guard result.count < limit else { truncated = true; return }
+            // Corruption backstop only: a branch edge that loops.
             guard !visited.contains(node.id) else { return }
+
             let path = prefix + [node]
             let kids = children(of: node.id)
+
             if kids.isEmpty {
-                result.append(path)
+                let target = node.returnEdges.first.flatMap { self.node($0.targetId) }
+                result.append(Branch(nodes: path, returnsTo: target))
                 return
             }
+
             let seen = visited.union([node.id])
             for kid in kids { walk(kid, path, seen) }
         }
 
         walk(root, [], [])
-        return result
+        return (result, truncated)
     }
 
-    /// Longest branch duration — how long the play runs end to end.
+    /// Longest path duration, computed by memoized DFS rather than by
+    /// materializing every path — O(V+E) instead of exponential.
     var totalDuration: Double {
-        branches.map { $0.reduce(0) { $0 + $1.duration } }.max() ?? 0
+        var memo: [UUID: Double] = [:]
+
+        func longest(_ nodeId: UUID, _ visited: Set<UUID>) -> Double {
+            if let cached = memo[nodeId] { return cached }
+            guard !visited.contains(nodeId), let node = node(nodeId) else { return 0 }
+            let seen = visited.union([nodeId])
+            let onward = node.branchEdges
+                .map { longest($0.targetId, seen) }
+                .max() ?? 0
+            let total = node.duration + onward
+            // Only memoize when no cycle guard was in play on this path, so a
+            // truncated result never poisons the cache.
+            if node.branchEdges.allSatisfy({ !seen.contains($0.targetId) }) {
+                memo[nodeId] = total
+            }
+            return total
+        }
+
+        return longest(rootNodeId, [])
     }
+
+    /// Cheap structural size, for list display and size budgeting.
+    var nodeCount: Int { nodes.count }
 }
 
 // MARK: - Play Families

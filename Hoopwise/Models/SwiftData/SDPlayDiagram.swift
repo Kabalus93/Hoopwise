@@ -25,7 +25,11 @@ final class SDPlayDiagram {
     var courtStandardRaw: String = CourtStandard.fiba.rawValue
     var courtModeRaw: String = CourtMode.half.rawValue
     var durationSeconds: Double = 0
-    var branchCount: Int = 1
+    /// Structural size. Deliberately NOT a branch count: enumerating every
+    /// root-to-terminal path is exponential in tree depth, and recomputing it
+    /// on every save would make deep Triangle-family trees expensive to edit.
+    /// Call `PlayDiagram.branches(limit:)` when a path count is actually needed.
+    var nodeCount: Int = 1
 
     /// JSON `PlayDiagram`. External storage keeps large diagrams out of the
     /// record body and under CloudKit's per-field limits.
@@ -60,7 +64,7 @@ final class SDPlayDiagram {
                 courtStandard = newValue.space.standard
                 courtMode = newValue.space.mode
                 durationSeconds = newValue.totalDuration
-                branchCount = max(1, newValue.branches.count)
+                nodeCount = newValue.nodeCount
                 updatedAt = Date()
             }
         }
