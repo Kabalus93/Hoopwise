@@ -169,7 +169,9 @@ class SwiftDataManager: ObservableObject {
     
     // Categories (static, not stored in SwiftData)
     var categories: [BasketballCategory] = BasketballCategory.samples
-    var plays: [Play] = []
+    /// Backed by SDPlay. Refreshed by `reloadPlays()`; published so the
+    /// playbook views update when a play is saved.
+    @Published var plays: [Play] = []
     var playbookCollections: [PlaybookCollection] = []
     var enrollments: [ProgramEnrollment] = []
     var phaseSessions: [PhaseSession] = []
@@ -271,7 +273,15 @@ class SwiftDataManager: ObservableObject {
             SDSchool.self,
             SDReminder.self,
             SDEntityRevision.self,
-            SDImportLog.self
+            SDImportLog.self,
+            // Registered together so the CloudKit schema deploys once and a
+            // single iOS build carries every new record type. SDConceptNode and
+            // SDConceptLink have no UI yet — empty models cost nothing to
+            // carry, and a second deploy would cost another iOS release.
+            SDPlay.self,
+            SDPlayDiagram.self,
+            SDConceptNode.self,
+            SDConceptLink.self
         ])
         
         // Use platform-specific local storage
@@ -405,6 +415,9 @@ class SwiftDataManager: ObservableObject {
             
             let sdContracts = try modelContext.fetch(FetchDescriptor<SDContract>())
             cachedContracts = sdContracts.map { $0.toStruct() }
+
+            let sdPlays = try modelContext.fetch(FetchDescriptor<SDPlay>())
+            plays = sdPlays.map { $0.toStruct() }
             
             let sdPrograms = try modelContext.fetch(FetchDescriptor<SDProgram>())
             cachedPrograms = sdPrograms.map { $0.toStruct() }
@@ -2270,27 +2283,62 @@ class SwiftDataManager: ObservableObject {
     }
     
     // MARK: - Play CRUD
+    //
+    // These used to mutate an in-memory array and nothing else, so every play a
+    // coach authored was discarded at quit. They now write through to SDPlay.
+
     func addPlay(_ play: Play) {
-        plays.append(play)
-        objectWillChange.send()
+        upsertPlay(play)
     }
-    
+
     func updatePlay(_ play: Play) {
-        if let index = plays.firstIndex(where: { $0.id == play.id }) {
-            plays[index] = play
-            objectWillChange.send()
+        upsertPlay(play)
+    }
+
+    private func upsertPlay(_ play: Play) {
+        do {
+            let pid = play.id
+            let descriptor = FetchDescriptor<SDPlay>(predicate: #Predicate { $0.id == pid })
+            if let existing = try modelContext.fetch(descriptor).first {
+                existing.apply(play)
+            } else {
+                modelContext.insert(SDPlay.from(play))
+            }
+            try modelContext.save()
+            reloadPlays()
+        } catch {
+            debugLog("❌ Failed to save play: \(error)")
         }
     }
-    
+
     func deletePlay(_ play: Play) {
-        plays.removeAll { $0.id == play.id }
-        objectWillChange.send()
+        do {
+            let pid = play.id
+            let descriptor = FetchDescriptor<SDPlay>(predicate: #Predicate { $0.id == pid })
+            if let existing = try modelContext.fetch(descriptor).first {
+                modelContext.delete(existing)
+                try modelContext.save()
+            }
+            reloadPlays()
+        } catch {
+            debugLog("❌ Failed to delete play: \(error)")
+        }
     }
-    
+
     func togglePlayFavorite(_ play: Play) {
-        if let index = plays.firstIndex(where: { $0.id == play.id }) {
-            plays[index].isFavorite.toggle()
+        var updated = play
+        updated.isFavorite.toggle()
+        updated.updatedAt = Date()
+        upsertPlay(updated)
+    }
+
+    /// Refreshes the `plays` cache from the store.
+    func reloadPlays() {
+        do {
+            plays = try modelContext.fetch(FetchDescriptor<SDPlay>()).map { $0.toStruct() }
             objectWillChange.send()
+        } catch {
+            debugLog("❌ Failed to load plays: \(error)")
         }
     }
     
@@ -3631,6 +3679,9 @@ class SwiftDataManager: ObservableObject {
             
             let sdContracts = try modelContext.fetch(FetchDescriptor<SDContract>())
             cachedContracts = sdContracts.map { $0.toStruct() }
+
+            let sdPlays = try modelContext.fetch(FetchDescriptor<SDPlay>())
+            plays = sdPlays.map { $0.toStruct() }
             
             let sdPrograms = try modelContext.fetch(FetchDescriptor<SDProgram>())
             cachedPrograms = sdPrograms.map { $0.toStruct() }
