@@ -240,6 +240,57 @@ struct ContractPayment: Identifiable, Codable, Hashable {
     }
 }
 
+/// What a media consent covers. Clause 8 of the training agreement requires
+/// the two purposes to be authorised separately.
+enum MediaConsentPurpose: String, Codable, CaseIterable, Hashable {
+    /// Coaching analysis, used only between coach and client.
+    case coachingAnalysis
+    /// Public publication — social media, instructional content.
+    case publicPublication
+
+    var displayName: String {
+        switch self {
+        case .coachingAnalysis:   return "Coaching analysis"
+        case .publicPublication:  return "Public publication"
+        }
+    }
+
+    var displayNameChinese: String {
+        switch self {
+        case .coachingAnalysis:   return "教学分析"
+        case .publicPublication:  return "公开发布"
+        }
+    }
+}
+
+/// One consent decision, at a point in time.
+///
+/// A ledger rather than a pair of booleans. Clause 8 grants the client the
+/// right to withdraw either consent in writing at any time, and a bare Bool
+/// loses both the date and the fact that a withdrawal happened — which is
+/// precisely the evidence that matters if a guardian later objects to a
+/// published clip. Entries are append-only in practice; the current state is
+/// the most recent entry per purpose.
+struct MediaConsentEntry: Identifiable, Codable, Hashable {
+    let id: UUID
+    var purpose: MediaConsentPurpose
+    var granted: Bool
+    var date: Date
+    var note: String?
+
+    init(id: UUID = UUID(),
+         purpose: MediaConsentPurpose,
+         granted: Bool,
+         date: Date = Date(),
+         note: String? = nil) {
+        self.id = id
+        self.purpose = purpose
+        self.granted = granted
+        self.date = date
+        self.note = note
+    }
+}
+
 /// How a contract's travel fee is charged.
 enum TravelFeeBasis: String, Codable, CaseIterable {
     /// One lump sum for the whole contract — e.g. a travel stipend paid
@@ -304,6 +355,17 @@ struct Contract: Identifiable, Codable, Hashable {
 
     var travelFeeBasis: TravelFeeBasis
 
+    /// Media consent decisions, oldest first. Current state per purpose is the
+    /// most recent entry — see `consentState(for:)`.
+    var consents: [MediaConsentEntry]
+
+    /// Length of one session in minutes, for the agreement's clause 2.
+    var sessionMinutes: Int
+
+    /// How long the agreement remains valid, for clause 3. Zero means unset and
+    /// prints as a fill-in rule rather than a fabricated term.
+    var validityMonths: Int
+
     var notes: String?
     var createdByCoachId: UUID?
     var manualStatus: ContractStatus?
@@ -324,6 +386,9 @@ struct Contract: Identifiable, Codable, Hashable {
         payments: [ContractPayment] = [],
         travelFeeAmount: Double = 0,
         travelFeeBasis: TravelFeeBasis = .perContract,
+        consents: [MediaConsentEntry] = [],
+        sessionMinutes: Int = 90,
+        validityMonths: Int = 0,
         programId: UUID? = nil,
         notes: String? = nil,
         createdByCoachId: UUID? = nil,
@@ -343,6 +408,9 @@ struct Contract: Identifiable, Codable, Hashable {
         self.payments = payments
         self.travelFeeAmount = travelFeeAmount
         self.travelFeeBasis = travelFeeBasis
+        self.consents = consents
+        self.sessionMinutes = sessionMinutes
+        self.validityMonths = validityMonths
         self.programId = programId
         self.notes = notes
         self.createdByCoachId = createdByCoachId
@@ -376,6 +444,9 @@ struct Contract: Identifiable, Codable, Hashable {
         payments = try c.decodeIfPresent([ContractPayment].self, forKey: .payments) ?? []
         travelFeeAmount = try c.decodeIfPresent(Double.self, forKey: .travelFeeAmount) ?? 0
         travelFeeBasis = try c.decodeIfPresent(TravelFeeBasis.self, forKey: .travelFeeBasis) ?? .perContract
+        consents = try c.decodeIfPresent([MediaConsentEntry].self, forKey: .consents) ?? []
+        sessionMinutes = try c.decodeIfPresent(Int.self, forKey: .sessionMinutes) ?? 90
+        validityMonths = try c.decodeIfPresent(Int.self, forKey: .validityMonths) ?? 0
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         createdByCoachId = try c.decodeIfPresent(UUID.self, forKey: .createdByCoachId)
         manualStatus = try c.decodeIfPresent(ContractStatus.self, forKey: .manualStatus)
@@ -387,6 +458,7 @@ struct Contract: Identifiable, Codable, Hashable {
         case id, studentId, contractNumber, kind, enrollmentDate, pricePerSession
         case bundleSize, bundlePurchaseDate, bundleSessionIds
         case payments, travelFeeAmount, travelFeeBasis
+        case consents, sessionMinutes, validityMonths
         case programId, notes, createdByCoachId, manualStatus, createdAt, updatedAt
         // Legacy
         case contractType, startDate, attendedSessionIds, programAssignments
@@ -409,6 +481,9 @@ struct Contract: Identifiable, Codable, Hashable {
         try c.encode(payments, forKey: .payments)
         try c.encode(travelFeeAmount, forKey: .travelFeeAmount)
         try c.encode(travelFeeBasis, forKey: .travelFeeBasis)
+        try c.encode(consents, forKey: .consents)
+        try c.encode(sessionMinutes, forKey: .sessionMinutes)
+        try c.encode(validityMonths, forKey: .validityMonths)
         try c.encodeIfPresent(programId, forKey: .programId)
         try c.encodeIfPresent(notes, forKey: .notes)
         try c.encodeIfPresent(createdByCoachId, forKey: .createdByCoachId)
@@ -494,6 +569,42 @@ struct Contract: Identifiable, Codable, Hashable {
     }
 
     var hasTravelFee: Bool { travelFeeAmount != 0 }
+
+    // MARK: - Media Consent
+
+    /// Current consent for a purpose: the most recent entry, or nil when the
+    /// client has never been asked.
+    ///
+    /// Nil is meaningfully different from false. Unasked prints empty boxes on
+    /// a fresh agreement; declined must block publication.
+    func consentState(for purpose: MediaConsentPurpose) -> Bool? {
+        consents
+            .filter { $0.purpose == purpose }
+            .max(by: { $0.date < $1.date })?
+            .granted
+    }
+
+    /// Full history for a purpose, oldest first — including withdrawals.
+    func consentHistory(for purpose: MediaConsentPurpose) -> [MediaConsentEntry] {
+        consents.filter { $0.purpose == purpose }.sorted { $0.date < $1.date }
+    }
+
+    /// True only when publication was explicitly granted. Unasked and declined
+    /// both return false, so the safe answer is the default.
+    var allowsPublicPublication: Bool {
+        consentState(for: .publicPublication) == true
+    }
+
+    /// Records a decision. Append-only: withdrawing consent adds an entry
+    /// rather than editing or removing the grant, so the history survives.
+    mutating func recordConsent(_ purpose: MediaConsentPurpose,
+                                granted: Bool,
+                                date: Date = Date(),
+                                note: String? = nil) {
+        consents.append(MediaConsentEntry(purpose: purpose, granted: granted,
+                                          date: date, note: note))
+        updatedAt = Date()
+    }
 
     var contractLabel: String {
         let suffix: String

@@ -34,8 +34,7 @@ enum TrainingAgreementDocument {
         var validityMonths: String = ""
 
         /// Clause 8 consent. `nil` renders empty boxes for signing; a value
-        /// renders the stored state. Currently always nil — the contract has no
-        /// consent columns yet.
+        /// renders the stored state from the contract's consent ledger.
         var consentCoachingAnalysis: Bool? = nil
         var consentPublicPublication: Bool? = nil
     }
@@ -79,9 +78,14 @@ enum TrainingAgreementDocument {
         }
 
         fields.startDate = dateString(contract.enrollmentDate)
+        fields.sessionMinutes = "\(contract.sessionMinutes)"
+        // Zero means unset: print a fill-in rule rather than "0 months".
+        fields.validityMonths = contract.validityMonths > 0 ? "\(contract.validityMonths)" : ""
 
-        // sessionMinutes and validityMonths have no home on Contract yet, so
-        // they stay blank and print as a rule to complete by hand.
+        // Stored consent state. A fresh agreement for signing must pass nil
+        // instead, so both boxes print empty.
+        fields.consentCoachingAnalysis = contract.consentState(for: .coachingAnalysis)
+        fields.consentPublicPublication = contract.consentState(for: .publicPublication)
         return fields
     }
 
@@ -212,20 +216,41 @@ enum TrainingAgreementDocument {
         clauseHeading(doc, "8. 肖像与影像使用 / Image and Video Use")
         doc.text("甲方可能在训练中拍摄照片或视频。用途分为两项，须分别授权：", style: .body())
         doc.spacer(3)
-        doc.text("（一）教学分析（仅供甲方与乙方内部使用）：\(checkbox(f.consentCoachingAnalysis, positive: true)) 同意  \(checkbox(f.consentCoachingAnalysis, positive: false)) 不同意",
-                 style: .body(), indent: 12)
-        doc.text("（二）公开发布（社交媒体、教学内容等）：\(checkbox(f.consentPublicPublication, positive: true)) 同意  \(checkbox(f.consentPublicPublication, positive: false)) 不同意",
-                 style: .body(), indent: 12)
+        // Boxes are drawn geometry, not glyphs — see PDFDocumentRenderer.inlineRow.
+        doc.inlineRow([
+            .text("（一）教学分析（仅供甲方与乙方内部使用）："),
+            .checkbox(box(f.consentCoachingAnalysis, positive: true)),
+            .text("同意"),
+            .checkbox(box(f.consentCoachingAnalysis, positive: false)),
+            .text("不同意")
+        ], style: .body(), indent: 12)
+        doc.inlineRow([
+            .text("（二）公开发布（社交媒体、教学内容等）："),
+            .checkbox(box(f.consentPublicPublication, positive: true)),
+            .text("同意"),
+            .checkbox(box(f.consentPublicPublication, positive: false)),
+            .text("不同意")
+        ], style: .body(), indent: 12)
         doc.spacer(3)
         doc.text("乙方可随时以书面方式撤回上述任一授权。", style: .body())
         doc.spacer(5)
         doc.text("Party A may photograph or record video during training. The two purposes require separate consent:",
                  style: .body())
         doc.spacer(3)
-        doc.text("(a) Coaching analysis, used only between Party A and Party B:  \(asciiBox(f.consentCoachingAnalysis, positive: true)) Consent  \(asciiBox(f.consentCoachingAnalysis, positive: false)) Do not consent",
-                 style: .body(), indent: 12)
-        doc.text("(b) Public publication, including social media and instructional content:  \(asciiBox(f.consentPublicPublication, positive: true)) Consent  \(asciiBox(f.consentPublicPublication, positive: false)) Do not consent",
-                 style: .body(), indent: 12)
+        doc.inlineRow([
+            .text("(a) Coaching analysis, used only between Party A and Party B:"),
+            .checkbox(box(f.consentCoachingAnalysis, positive: true)),
+            .text("Consent"),
+            .checkbox(box(f.consentCoachingAnalysis, positive: false)),
+            .text("Do not consent")
+        ], style: .body(), indent: 12)
+        doc.inlineRow([
+            .text("(b) Public publication, including social media and instructional content:"),
+            .checkbox(box(f.consentPublicPublication, positive: true)),
+            .text("Consent"),
+            .checkbox(box(f.consentPublicPublication, positive: false)),
+            .text("Do not consent")
+        ], style: .body(), indent: 12)
         doc.spacer(3)
         doc.text("Party B may withdraw either consent in writing at any time.", style: .body())
     }
@@ -260,16 +285,13 @@ enum TrainingAgreementDocument {
         return trimmed.isEmpty ? String(repeating: "_", count: width) : trimmed
     }
 
-    /// Chinese checkbox. Empty when consent is unrecorded, so a fresh agreement
-    /// prints blank boxes to tick by hand.
-    private static func checkbox(_ state: Bool?, positive: Bool) -> String {
-        guard let state else { return "□" }
-        return state == positive ? "☑" : "□"
-    }
-
-    private static func asciiBox(_ state: Bool?, positive: Bool) -> String {
-        guard let state else { return "[  ]" }
-        return state == positive ? "[X]" : "[  ]"
+    /// Resolves one of the two boxes on a consent line.
+    ///
+    /// `nil` consent leaves both boxes empty, which is what a fresh agreement
+    /// for signing must print — never hand someone a pre-ticked consent form.
+    private static func box(_ state: Bool?, positive: Bool) -> Bool? {
+        guard let state else { return nil }
+        return state == positive
     }
 
     private static func currencySymbol(for code: String) -> String {

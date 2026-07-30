@@ -25,6 +25,14 @@ final class SDContract {
     /// the payment ledger on purpose; see `Contract`'s money section.
     var travelFeeAmount: Double = 0
     var travelFeeBasisRaw: String = TravelFeeBasis.perContract.rawValue
+    /// JSON `[MediaConsentEntry]`. A ledger, not two booleans: clause 8 of the
+    /// agreement lets the client withdraw consent at any time, and a bare Bool
+    /// would lose the date and the fact of a withdrawal.
+    var consentsData: Data?
+    /// Session length in minutes, for the agreement's clause 2.
+    var sessionMinutes: Int = 90
+    /// Agreement validity in months, for clause 3. Zero means unset.
+    var validityMonths: Int = 0
     var programId: UUID?
     var notes: String?
     var createdByCoachId: UUID?
@@ -78,6 +86,14 @@ final class SDContract {
         set { travelFeeBasisRaw = newValue.rawValue }
     }
 
+    var consents: [MediaConsentEntry] {
+        get {
+            guard let consentsData else { return [] }
+            return (try? JSONDecoder().decode([MediaConsentEntry].self, from: consentsData)) ?? []
+        }
+        set { consentsData = try? JSONEncoder().encode(newValue) }
+    }
+
     init(
         id: UUID = UUID(),
         studentId: UUID,
@@ -91,6 +107,9 @@ final class SDContract {
         payments: [ContractPayment] = [],
         travelFeeAmount: Double = 0,
         travelFeeBasis: TravelFeeBasis = .perContract,
+        consents: [MediaConsentEntry] = [],
+        sessionMinutes: Int = 90,
+        validityMonths: Int = 0,
         programId: UUID? = nil,
         notes: String? = nil,
         createdByCoachId: UUID? = nil,
@@ -108,6 +127,8 @@ final class SDContract {
         self.bundlePurchaseDate = bundlePurchaseDate
         self.travelFeeAmount = travelFeeAmount
         self.travelFeeBasisRaw = travelFeeBasis.rawValue
+        self.sessionMinutes = sessionMinutes
+        self.validityMonths = validityMonths
         self.programId = programId
         self.notes = notes
         self.createdByCoachId = createdByCoachId
@@ -117,6 +138,7 @@ final class SDContract {
         defer {
             self.bundleSessionIds = bundleSessionIds
             self.payments = payments
+            self.consents = consents
         }
     }
 
@@ -134,6 +156,9 @@ final class SDContract {
             payments: payments,
             travelFeeAmount: travelFeeAmount,
             travelFeeBasis: travelFeeBasis,
+            consents: consents,
+            sessionMinutes: sessionMinutes,
+            validityMonths: validityMonths,
             programId: programId,
             notes: notes,
             createdByCoachId: createdByCoachId,
@@ -157,6 +182,9 @@ final class SDContract {
             payments: contract.payments,
             travelFeeAmount: contract.travelFeeAmount,
             travelFeeBasis: contract.travelFeeBasis,
+            consents: contract.consents,
+            sessionMinutes: contract.sessionMinutes,
+            validityMonths: contract.validityMonths,
             programId: contract.programId,
             notes: contract.notes,
             createdByCoachId: contract.createdByCoachId,

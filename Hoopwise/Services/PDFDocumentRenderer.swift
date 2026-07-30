@@ -314,6 +314,79 @@ final class PDFDocumentRenderer {
         CTFrameDraw(frame, context)
     }
 
+    // MARK: - Inline Runs
+
+    /// A piece of an inline row.
+    enum InlineItem {
+        case text(String)
+        /// A checkbox drawn as vector geometry. `nil` is unticked-and-unrecorded,
+        /// `true` draws a tick, `false` draws an empty box.
+        case checkbox(Bool?)
+    }
+
+    /// Draws text and checkboxes on one line, advancing horizontally.
+    ///
+    /// Checkboxes are STROKED PATHS, not glyphs. U+25A1 and U+2611 are absent
+    /// from PingFang SC, so as characters they fell through the cascade to
+    /// whatever face happened to have them — Hiragino on this Mac. Font
+    /// availability differs between iOS and macOS, so a glyph resolving
+    /// differently per platform would break the identical-output guarantee for
+    /// a signed document. Drawing the box removes the dependency, and it sizes
+    /// and aligns to the text rather than to some designer's idea of a box.
+    func inlineRow(_ items: [InlineItem],
+                   style: PDFTextStyle,
+                   indent: CGFloat = 0,
+                   itemSpacing: CGFloat = 3) {
+        guard let context else { return }
+        let font = style.font
+        let ascent = CTFontGetAscent(font)
+        let descent = CTFontGetDescent(font)
+        let lineHeight = ascent + descent + style.lineSpacing
+        let boxSide = CTFontGetCapHeight(font) * 0.95
+
+        ensureSpace(lineHeight)
+        let baselineY = flipped(cursorY + ascent)
+        var x = margins.left + indent
+
+        for item in items {
+            switch item {
+            case .text(let string):
+                guard !string.isEmpty else { continue }
+                let attributed = NSAttributedString(string: string, attributes: style.attributes())
+                let line = CTLineCreateWithAttributedString(attributed)
+                context.textPosition = CGPoint(x: x, y: baselineY)
+                CTLineDraw(line, context)
+                x += CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) + itemSpacing
+
+            case .checkbox(let state):
+                let rect = CGRect(x: x, y: baselineY, width: boxSide, height: boxSide)
+                context.saveGState()
+                context.setStrokeColor(style.color)
+                context.setLineWidth(max(0.6, boxSide * 0.07))
+                context.stroke(rect)
+                if state == true {
+                    // Tick drawn inside the box, inset so it reads as a mark
+                    // rather than filling the frame.
+                    let inset = boxSide * 0.22
+                    context.setLineWidth(max(0.8, boxSide * 0.12))
+                    context.setLineCap(.round)
+                    context.setLineJoin(.round)
+                    context.move(to: CGPoint(x: rect.minX + inset,
+                                             y: rect.midY))
+                    context.addLine(to: CGPoint(x: rect.minX + boxSide * 0.42,
+                                                y: rect.minY + inset))
+                    context.addLine(to: CGPoint(x: rect.maxX - inset,
+                                                y: rect.maxY - inset))
+                    context.strokePath()
+                }
+                context.restoreGState()
+                x += boxSide + itemSpacing
+            }
+        }
+
+        cursorY += lineHeight
+    }
+
     /// Horizontal rule at the cursor.
     func rule(color: CGColor = CGColor(gray: 0.8, alpha: 1), width lineWidth: CGFloat = 0.5) {
         guard let context else { return }
