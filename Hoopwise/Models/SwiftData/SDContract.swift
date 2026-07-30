@@ -17,6 +17,14 @@ final class SDContract {
     var bundleSize: Int = 0
     var bundlePurchaseDate: Date?
     var bundleSessionIdsData: Data?
+    /// JSON `[ContractPayment]`. Same idiom as `bundleSessionIdsData` — a
+    /// ledger rather than a single `amountPaid` column, so partial and
+    /// installment payments are representable without a second record type.
+    var paymentsData: Data?
+    /// Travel fee / stipend. Interpreted per `travelFeeBasisRaw`. Kept out of
+    /// the payment ledger on purpose; see `Contract`'s money section.
+    var travelFeeAmount: Double = 0
+    var travelFeeBasisRaw: String = TravelFeeBasis.perContract.rawValue
     var programId: UUID?
     var notes: String?
     var createdByCoachId: UUID?
@@ -55,6 +63,21 @@ final class SDContract {
         }
     }
 
+    var payments: [ContractPayment] {
+        get {
+            guard let data = paymentsData else { return [] }
+            return (try? JSONDecoder().decode([ContractPayment].self, from: data)) ?? []
+        }
+        set {
+            paymentsData = try? JSONEncoder().encode(newValue)
+        }
+    }
+
+    var travelFeeBasis: TravelFeeBasis {
+        get { TravelFeeBasis(rawValue: travelFeeBasisRaw) ?? .perContract }
+        set { travelFeeBasisRaw = newValue.rawValue }
+    }
+
     init(
         id: UUID = UUID(),
         studentId: UUID,
@@ -65,6 +88,9 @@ final class SDContract {
         bundleSize: Int = 0,
         bundlePurchaseDate: Date? = nil,
         bundleSessionIds: [UUID] = [],
+        payments: [ContractPayment] = [],
+        travelFeeAmount: Double = 0,
+        travelFeeBasis: TravelFeeBasis = .perContract,
         programId: UUID? = nil,
         notes: String? = nil,
         createdByCoachId: UUID? = nil,
@@ -80,13 +106,18 @@ final class SDContract {
         self.pricePerSession = pricePerSession
         self.bundleSize = bundleSize
         self.bundlePurchaseDate = bundlePurchaseDate
+        self.travelFeeAmount = travelFeeAmount
+        self.travelFeeBasisRaw = travelFeeBasis.rawValue
         self.programId = programId
         self.notes = notes
         self.createdByCoachId = createdByCoachId
         self.manualStatusRaw = manualStatus?.rawValue
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        defer { self.bundleSessionIds = bundleSessionIds }
+        defer {
+            self.bundleSessionIds = bundleSessionIds
+            self.payments = payments
+        }
     }
 
     func toStruct() -> Contract {
@@ -100,6 +131,9 @@ final class SDContract {
             bundleSize: bundleSize,
             bundlePurchaseDate: bundlePurchaseDate,
             bundleSessionIds: bundleSessionIds,
+            payments: payments,
+            travelFeeAmount: travelFeeAmount,
+            travelFeeBasis: travelFeeBasis,
             programId: programId,
             notes: notes,
             createdByCoachId: createdByCoachId,
@@ -120,6 +154,9 @@ final class SDContract {
             bundleSize: contract.bundleSize,
             bundlePurchaseDate: contract.bundlePurchaseDate,
             bundleSessionIds: contract.bundleSessionIds,
+            payments: contract.payments,
+            travelFeeAmount: contract.travelFeeAmount,
+            travelFeeBasis: contract.travelFeeBasis,
             programId: contract.programId,
             notes: contract.notes,
             createdByCoachId: contract.createdByCoachId,

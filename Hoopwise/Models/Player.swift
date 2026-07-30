@@ -215,6 +215,54 @@ struct AttendedSessionRecord: Codable, Hashable, Identifiable {
 /// Three-kind contract model. See `ContractKind` for the rules.
 /// Legacy fields exist only as Codable migration sinks and computed shims so
 /// older UI keeps compiling while it's migrated kind by kind.
+/// A single payment against a contract. Contracts hold a ledger of these
+/// rather than one `amountPaid` figure so partial and installment payments
+/// are representable.
+///
+/// Session money only. Travel money is tracked separately on the contract via
+/// `travelFeeAmount` — mixing the two corrupts the paid-sessions arithmetic,
+/// because a lump travel stipend paid alongside a bundle prepayment would
+/// otherwise read as extra sessions purchased.
+struct ContractPayment: Identifiable, Codable, Hashable {
+    let id: UUID
+    var date: Date
+    var amount: Double
+    var method: String?
+    var note: String?
+
+    init(id: UUID = UUID(), date: Date = Date(), amount: Double,
+         method: String? = nil, note: String? = nil) {
+        self.id = id
+        self.date = date
+        self.amount = amount
+        self.method = method
+        self.note = note
+    }
+}
+
+/// How a contract's travel fee is charged.
+enum TravelFeeBasis: String, Codable, CaseIterable {
+    /// One lump sum for the whole contract — e.g. a travel stipend paid
+    /// alongside a bundle prepayment.
+    case perContract
+    /// Charged again for each session, for venues with a real per-trip cost.
+    case perSession
+
+    var displayName: String {
+        switch self {
+        case .perContract: return "Per contract"
+        case .perSession:  return "Per session"
+        }
+    }
+
+    func localizedDisplayName(isChinese: Bool) -> String {
+        switch self {
+        case .perContract: return isChinese ? "每份合同" : "Per contract"
+        case .perSession:  return isChinese ? "每节课"   : "Per session"
+        }
+    }
+}
+
 struct Contract: Identifiable, Codable, Hashable {
     let id: UUID
     var studentId: UUID
@@ -246,6 +294,16 @@ struct Contract: Identifiable, Codable, Hashable {
     /// attendance counting. Nil for private kinds (any private session counts).
     var programId: UUID?
 
+    /// Session payments, oldest first. Sum is `amountPaid`. Excludes travel.
+    var payments: [ContractPayment]
+
+    /// Travel fee / stipend for this contract, in the coach's currency.
+    /// Interpreted per `travelFeeBasis`. Deliberately excluded from
+    /// `amountPaid` and from session revenue.
+    var travelFeeAmount: Double
+
+    var travelFeeBasis: TravelFeeBasis
+
     var notes: String?
     var createdByCoachId: UUID?
     var manualStatus: ContractStatus?
@@ -263,6 +321,9 @@ struct Contract: Identifiable, Codable, Hashable {
         bundleSize: Int = 0,
         bundlePurchaseDate: Date? = nil,
         bundleSessionIds: [UUID] = [],
+        payments: [ContractPayment] = [],
+        travelFeeAmount: Double = 0,
+        travelFeeBasis: TravelFeeBasis = .perContract,
         programId: UUID? = nil,
         notes: String? = nil,
         createdByCoachId: UUID? = nil,
@@ -279,6 +340,9 @@ struct Contract: Identifiable, Codable, Hashable {
         self.bundleSize = bundleSize
         self.bundlePurchaseDate = bundlePurchaseDate
         self.bundleSessionIds = bundleSessionIds
+        self.payments = payments
+        self.travelFeeAmount = travelFeeAmount
+        self.travelFeeBasis = travelFeeBasis
         self.programId = programId
         self.notes = notes
         self.createdByCoachId = createdByCoachId
@@ -309,6 +373,9 @@ struct Contract: Identifiable, Codable, Hashable {
             ?? []
         programId = try c.decodeIfPresent(UUID.self, forKey: .programId)
             ?? (try c.decodeIfPresent([UUID].self, forKey: .programAssignments))?.first
+        payments = try c.decodeIfPresent([ContractPayment].self, forKey: .payments) ?? []
+        travelFeeAmount = try c.decodeIfPresent(Double.self, forKey: .travelFeeAmount) ?? 0
+        travelFeeBasis = try c.decodeIfPresent(TravelFeeBasis.self, forKey: .travelFeeBasis) ?? .perContract
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         createdByCoachId = try c.decodeIfPresent(UUID.self, forKey: .createdByCoachId)
         manualStatus = try c.decodeIfPresent(ContractStatus.self, forKey: .manualStatus)
@@ -319,6 +386,7 @@ struct Contract: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, studentId, contractNumber, kind, enrollmentDate, pricePerSession
         case bundleSize, bundlePurchaseDate, bundleSessionIds
+        case payments, travelFeeAmount, travelFeeBasis
         case programId, notes, createdByCoachId, manualStatus, createdAt, updatedAt
         // Legacy
         case contractType, startDate, attendedSessionIds, programAssignments
@@ -338,6 +406,9 @@ struct Contract: Identifiable, Codable, Hashable {
         try c.encode(bundleSize, forKey: .bundleSize)
         try c.encodeIfPresent(bundlePurchaseDate, forKey: .bundlePurchaseDate)
         try c.encode(bundleSessionIds, forKey: .bundleSessionIds)
+        try c.encode(payments, forKey: .payments)
+        try c.encode(travelFeeAmount, forKey: .travelFeeAmount)
+        try c.encode(travelFeeBasis, forKey: .travelFeeBasis)
         try c.encodeIfPresent(programId, forKey: .programId)
         try c.encodeIfPresent(notes, forKey: .notes)
         try c.encodeIfPresent(createdByCoachId, forKey: .createdByCoachId)
@@ -363,6 +434,66 @@ struct Contract: Identifiable, Codable, Hashable {
     var effectiveBundlePurchaseDate: Date {
         bundlePurchaseDate ?? enrollmentDate
     }
+
+    // MARK: - Money
+    //
+    // Session money and travel money are kept strictly apart. `amountPaid`,
+    // `sessionAmountDue` and `sessionAmountOwed` are session-only; travel is
+    // reported by `travelFeeTotal(sessionCount:)`. Folding travel into either
+    // side would make a lump stipend read as extra sessions purchased.
+
+    /// Sum of the payment ledger. Session money only.
+    var amountPaid: Double {
+        payments.reduce(0) { $0 + $1.amount }
+    }
+
+    /// What the sessions themselves cost.
+    ///
+    /// - `.privateBundle`: the whole bundle is owed on purchase.
+    /// - `.privatePayPerSession`: depends on sessions attended, which lives
+    ///   outside this struct — pass a count to `sessionAmountDue(sessionCount:)`.
+    /// - `.group`: priced by the program, not per session.
+    var sessionAmountDue: Double {
+        kind.isBundle ? bundleAmount : 0
+    }
+
+    /// Session cost for a known number of attended sessions. Bundles ignore
+    /// the count — the bundle is owed in full regardless of redemptions.
+    func sessionAmountDue(sessionCount: Int) -> Double {
+        switch kind {
+        case .privateBundle:        return bundleAmount
+        case .privatePayPerSession: return pricePerSession * Double(max(0, sessionCount))
+        case .group:                return 0
+        }
+    }
+
+    /// Outstanding session money. Negative means paid ahead / credit.
+    var sessionAmountOwed: Double {
+        sessionAmountDue - amountPaid
+    }
+
+    func sessionAmountOwed(sessionCount: Int) -> Double {
+        sessionAmountDue(sessionCount: sessionCount) - amountPaid
+    }
+
+    /// Travel money for this contract. `.perContract` ignores the count;
+    /// `.perSession` multiplies by it. For bundles, `bundleSize` is the
+    /// natural count to pass.
+    func travelFeeTotal(sessionCount: Int) -> Double {
+        switch travelFeeBasis {
+        case .perContract: return travelFeeAmount
+        case .perSession:  return travelFeeAmount * Double(max(0, sessionCount))
+        }
+    }
+
+    /// Travel total using the contract's own session basis where one exists.
+    /// Bundles use `bundleSize`; other kinds have no intrinsic count, so a
+    /// `.perSession` fee reports as the single-session rate.
+    var travelFeeTotalForContract: Double {
+        travelFeeTotal(sessionCount: kind.isBundle ? bundleSize : 1)
+    }
+
+    var hasTravelFee: Bool { travelFeeAmount != 0 }
 
     var contractLabel: String {
         let suffix: String
@@ -408,13 +539,13 @@ struct Contract: Identifiable, Codable, Hashable {
         get { [] }
         set { _ = newValue }
     }
-    var totalAmount: Double { kind.isBundle ? bundleAmount : 0 }
-    var amountPaid: Double {
-        // Bundle is paid up-front. Pay-per-session and group are not tracked here.
-        kind.isBundle ? bundleAmount : 0
-    }
-    var outstandingBalance: Double { 0 }
-    var isFullyPaid: Bool { true }
+    var totalAmount: Double { sessionAmountDue }
+    // `amountPaid` used to assume every bundle was paid in full up front, and
+    // `outstandingBalance`/`isFullyPaid` were hardcoded to 0 and true. The UI
+    // rendered those fabricated figures as though they were real. They now read
+    // from the payment ledger. Travel is excluded — see the money section.
+    var outstandingBalance: Double { max(0, sessionAmountOwed) }
+    var isFullyPaid: Bool { sessionAmountOwed <= 0 }
     var isSigned: Bool {
         get { true }
         set { _ = newValue }

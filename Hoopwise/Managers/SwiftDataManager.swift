@@ -2496,6 +2496,9 @@ class SwiftDataManager: ObservableObject {
         sd.bundleSize = contract.bundleSize
         sd.bundlePurchaseDate = contract.bundlePurchaseDate
         sd.bundleSessionIds = contract.bundleSessionIds
+        sd.payments = contract.payments
+        sd.travelFeeAmount = contract.travelFeeAmount
+        sd.travelFeeBasis = contract.travelFeeBasis
         sd.programId = contract.programId
         sd.notes = contract.notes
         sd.manualStatus = contract.manualStatus

@@ -19,6 +19,11 @@ struct AddEditContractSheet: View {
     @State private var bundlePurchaseDate: Date
     @State private var programId: UUID?
     @State private var notes: String
+    @State private var payments: [ContractPayment]
+    @State private var travelFeeAmount: Double
+    @State private var travelFeeBasis: TravelFeeBasis
+    @State private var newPaymentAmount: Double = 0
+    @State private var newPaymentDate: Date = Date()
 
     private var isChinese: Bool {
         LocalizationManager.shared.currentLanguage == .chinese
@@ -51,6 +56,9 @@ struct AddEditContractSheet: View {
         _bundlePurchaseDate = State(initialValue: existing?.bundlePurchaseDate ?? existing?.enrollmentDate ?? Date())
         _programId = State(initialValue: existing?.programId)
         _notes = State(initialValue: existing?.notes ?? "")
+        _payments = State(initialValue: existing?.payments ?? [])
+        _travelFeeAmount = State(initialValue: existing?.travelFeeAmount ?? 0)
+        _travelFeeBasis = State(initialValue: existing?.travelFeeBasis ?? .perContract)
     }
 
     var body: some View {
@@ -58,6 +66,10 @@ struct AddEditContractSheet: View {
             Form {
                 kindSection
                 fieldsSection
+                if kind != .group {
+                    paymentsSection
+                    travelSection
+                }
                 notesSection
                 if existing != nil { dangerSection }
             }
@@ -192,6 +204,109 @@ struct AddEditContractSheet: View {
         }
     }
 
+    /// Session payments only. Travel is entered separately below and is
+    /// deliberately not part of this ledger — see `Contract`'s money section.
+    private var paymentsSection: some View {
+        Section {
+            ForEach(payments) { payment in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(currencyString(payment.amount))
+                            .monospacedDigit()
+                        Text(payment.date.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+            }
+            .onDelete { payments.remove(atOffsets: $0) }
+
+            HStack {
+                TextField(isChinese ? "金额" : "Amount",
+                          value: $newPaymentAmount, format: .number)
+                    .keyboardTypeCompat(.decimalPad)
+                    .monospacedDigit()
+                DatePicker("", selection: $newPaymentDate, displayedComponents: .date)
+                    .labelsHidden()
+                Button {
+                    payments.append(ContractPayment(date: newPaymentDate, amount: newPaymentAmount))
+                    payments.sort { $0.date < $1.date }
+                    newPaymentAmount = 0
+                    newPaymentDate = Date()
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .disabled(newPaymentAmount <= 0)
+            }
+
+            HStack {
+                Text(isChinese ? "已付" : "Paid")
+                Spacer()
+                Text(currencyString(paidTotal))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Text(isChinese ? "应付" : "Owed")
+                Spacer()
+                Text(currencyString(owedTotal))
+                    .monospacedDigit()
+                    .foregroundStyle(owedTotal > 0 ? .orange : .green)
+            }
+        } header: {
+            Text(isChinese ? "付款" : "Payments")
+        } footer: {
+            Text(isChinese
+                 ? "可记录多笔部分付款。差旅费用不计入此处。"
+                 : "Record partial or installment payments. Travel is tracked separately and is not counted here.")
+        }
+    }
+
+    private var travelSection: some View {
+        Section {
+            HStack {
+                Text(isChinese ? "差旅费" : "Travel fee")
+                Spacer()
+                TextField("0", value: $travelFeeAmount, format: .number)
+                    .keyboardTypeCompat(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+                    .frame(maxWidth: 120)
+            }
+            Picker(isChinese ? "计费方式" : "Basis", selection: $travelFeeBasis) {
+                ForEach(TravelFeeBasis.allCases, id: \.self) { basis in
+                    Text(basis.localizedDisplayName(isChinese: isChinese)).tag(basis)
+                }
+            }
+            if travelFeeAmount != 0, travelFeeBasis == .perSession, kind == .privateBundle {
+                HStack {
+                    Text(isChinese ? "差旅合计" : "Travel total")
+                    Spacer()
+                    Text(currencyString(travelFeeAmount * Double(bundleSize)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text(isChinese ? "差旅" : "Travel")
+        } footer: {
+            Text(isChinese
+                 ? "差旅费独立于课时收入统计，不影响已付/应付课时金额。"
+                 : "Travel is tracked apart from session revenue and does not affect paid or owed session amounts.")
+        }
+    }
+
+    private var paidTotal: Double {
+        payments.reduce(0) { $0 + $1.amount }
+    }
+
+    private var owedTotal: Double {
+        let due = kind == .privateBundle ? pricePerSession * Double(bundleSize) : 0
+        return max(0, due - paidTotal)
+    }
+
     private var notesSection: some View {
         Section {
             TextField(isChinese ? "备注（可选）" : "Notes (optional)",
@@ -244,6 +359,9 @@ struct AddEditContractSheet: View {
             bundleSize: size,
             bundlePurchaseDate: purchase,
             bundleSessionIds: existing?.bundleSessionIds ?? [],
+            payments: kind == .group ? [] : payments,
+            travelFeeAmount: kind == .group ? 0 : travelFeeAmount,
+            travelFeeBasis: travelFeeBasis,
             programId: pid,
             notes: notes.isEmpty ? nil : notes,
             createdByCoachId: existing?.createdByCoachId ?? dataManager.loggedInCoachId,

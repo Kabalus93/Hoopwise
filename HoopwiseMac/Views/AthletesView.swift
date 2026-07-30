@@ -755,11 +755,41 @@ private struct ContractCard: View {
                 }
             }
             .font(.caption)
+
+            // Session money. Travel is shown on its own row below because it
+            // is deliberately excluded from paid/owed.
+            if contract.kind != .group {
+                HStack(spacing: 18) {
+                    metric("Paid", contract.amountPaid.formatted(.currency(code: "USD")))
+                    metric("Owed", contract.sessionAmountOwed.formatted(.currency(code: "USD")))
+                        .foregroundStyle(contract.sessionAmountOwed > 0 ? .orange : .green)
+                    if contract.hasTravelFee {
+                        metric("Travel", travelLabel)
+                    }
+                }
+                .font(.caption)
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+    }
+
+    /// Per-contract fees show the flat figure; per-session fees show the rate
+    /// and, for bundles, what it totals across the bundle.
+    private var travelLabel: String {
+        let amount = contract.travelFeeAmount.formatted(.currency(code: "USD"))
+        switch contract.travelFeeBasis {
+        case .perContract:
+            return amount
+        case .perSession:
+            guard contract.kind == .privateBundle, contract.bundleSize > 0 else {
+                return "\(amount)/session"
+            }
+            let total = contract.travelFeeTotalForContract.formatted(.currency(code: "USD"))
+            return "\(amount)/session · \(total)"
+        }
     }
 
     private var kindBadge: some View {
