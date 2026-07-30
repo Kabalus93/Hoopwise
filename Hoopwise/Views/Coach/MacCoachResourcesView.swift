@@ -555,220 +555,235 @@ struct MacCoachResourcesView: View {
     
     // MARK: - Drill Detail Column (Flighty Style)
     private func drillDetailColumn(_ drill: DrillItem) -> some View {
-        let schemes = dataManager.schemesForDrill(drill.id)
-        
-        return VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        selectedDrill = nil
-                    }
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text("Back")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(.orange)
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Button(action: { dataManager.toggleDrillFavorite(drill) }) {
-                    Image(systemName: drill.isFavorite ? "star.fill" : "star")
-                        .font(.system(size: 12))
-                        .foregroundColor(drill.isFavorite ? .yellow : .gray)
-                }
-                .buttonStyle(.plain)
-                
-                Button(action: {
-                    var newScheme = CourtScheme(name: "\(drill.name) Diagram", schemeType: .drill)
-                    newScheme.drillId = drill.id
-                    editingScheme = newScheme
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sportscourt")
-                            .font(.system(size: 9))
-                        Text("Add Diagram")
-                            .font(.system(size: 9, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.orange)
-                    .cornerRadius(5)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.6))
-            
+        VStack(alignment: .leading, spacing: 0) {
+            drillDetailHeader(drill)
             Divider()
-            
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Drill header
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(systemName: drill.category.icon)
-                                .font(.system(size: 18))
-                                .foregroundColor(categoryColor(drill.category))
-                                .frame(width: 36, height: 36)
-                                .background(categoryColor(drill.category).opacity(0.1))
-                                .cornerRadius(8)
-                            
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(drill.name)
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(.black)
-                                
-                                Text(drill.category.displayName)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(categoryColor(drill.category))
-                            }
-                            
-                            Spacer()
-                        }
-                        
-                        // Stats row
-                        HStack(spacing: 12) {
-                            drillStatPill(icon: "clock", value: "\(drill.durationMinutes) min")
-                            drillStatPill(icon: "person.2", value: drill.playerRange)
-                            drillStatPill(icon: "star", value: drill.difficulty.displayName, color: difficultyColor(drill.difficulty))
-                        }
-                    }
-                    .padding(10)
-                    .background(Color.white)
-                    .cornerRadius(10)
-                    .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-                    
-                    // Court Schemes section
-                    if !schemes.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("DIAGRAMS")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.gray)
-                                Spacer()
-                                Text("\(schemes.count)")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            ForEach(schemes) { scheme in
-                                schemePreviewRow(scheme)
-                            }
-                        }
-                    }
-                    
-                    // Description
-                    if !drill.description.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("DESCRIPTION")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            Text(drill.description)
-                                .font(.system(size: 10))
-                                .foregroundColor(.black)
-                        }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-                    }
-                    
-                    // Instructions
-                    if !drill.instructions.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("INSTRUCTIONS")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            ForEach(Array(drill.instructions.enumerated()), id: \.offset) { index, instruction in
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text("\(index + 1)")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 16, height: 16)
-                                        .background(Color.orange)
-                                        .cornerRadius(8)
-                                    
-                                    Text(instruction)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.black)
-                                }
-                            }
-                        }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-                    }
-                    
-                    // Key Points
-                    if !drill.keyPoints.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("KEY POINTS")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            ForEach(drill.keyPoints, id: \.self) { point in
-                                HStack(alignment: .top, spacing: 6) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.green)
-                                    
-                                    Text(point)
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.black)
-                                }
-                            }
-                        }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-                    }
-                    
-                    // Equipment
-                    if !drill.equipmentNeeded.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("EQUIPMENT")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            FlowLayout(spacing: 4) {
-                                ForEach(drill.equipmentNeeded, id: \.self) { item in
-                                    Text(item)
-                                        .font(.system(size: 9))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(Color.orange.opacity(0.1))
-                                        .foregroundColor(.orange)
-                                        .cornerRadius(4)
-                                }
-                            }
-                        }
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white)
-                        .cornerRadius(8)
-                        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
-                    }
+                    drillSummaryCard(drill)
+                    drillSchemesSection(dataManager.schemesForDrill(drill.id))
+                    drillDescriptionSection(drill)
+                    drillInstructionsSection(drill)
+                    drillKeyPointsSection(drill)
+                    drillEquipmentSection(drill)
                 }
                 .padding(10)
             }
         }
         .frame(minWidth: 320, maxWidth: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    // MARK: Drill detail sections
+    //
+    // Split out of drillDetailColumn, which as a single expression exceeded the
+    // type checker's budget ("unable to type-check this expression in
+    // reasonable time"). It never surfaced because the whole file is wrapped in
+    // #if os(macOS) and only belongs to the iOS target, so nothing ever
+    // compiled it.
+
+    /// Shared chrome for the detail cards.
+    private func detailCard<Content: View>(
+        spacing: CGFloat = 6,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            content()
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white)
+        .cornerRadius(8)
+        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+    }
+
+    private func detailSectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .foregroundColor(.gray)
+    }
+
+    private func drillDetailHeader(_ drill: DrillItem) -> some View {
+        HStack {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    selectedDrill = nil
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Back")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(.orange)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button {
+                dataManager.toggleDrillFavorite(drill)
+            } label: {
+                Image(systemName: drill.isFavorite ? "star.fill" : "star")
+                    .font(.system(size: 12))
+                    .foregroundColor(drill.isFavorite ? .yellow : .gray)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                var newScheme = CourtScheme(name: "\(drill.name) Diagram", schemeType: .drill)
+                newScheme.drillId = drill.id
+                editingScheme = newScheme
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "sportscourt")
+                        .font(.system(size: 9))
+                    Text("Add Diagram")
+                        .font(.system(size: 9, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.orange)
+                .cornerRadius(5)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.6))
+    }
+
+    private func drillSummaryCard(_ drill: DrillItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: drill.category.icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(categoryColor(drill.category))
+                    .frame(width: 36, height: 36)
+                    .background(categoryColor(drill.category).opacity(0.1))
+                    .cornerRadius(8)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(drill.name)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.black)
+
+                    Text(drill.category.displayName)
+                        .font(.system(size: 10))
+                        .foregroundColor(categoryColor(drill.category))
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                drillStatPill(icon: "clock", value: "\(drill.durationMinutes) min")
+                drillStatPill(icon: "person.2", value: drill.playerRange)
+                drillStatPill(icon: "star",
+                              value: drill.difficulty.displayName,
+                              color: difficultyColor(drill.difficulty))
+            }
+        }
+        .padding(10)
+        .background(Color.white)
+        .cornerRadius(10)
+        .shadow(color: .black.opacity(0.03), radius: 4, y: 1)
+    }
+
+    @ViewBuilder
+    private func drillSchemesSection(_ schemes: [CourtScheme]) -> some View {
+        if !schemes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    detailSectionLabel("DIAGRAMS")
+                    Spacer()
+                    Text("\(schemes.count)")
+                        .font(.system(size: 9))
+                        .foregroundColor(.gray)
+                }
+
+                ForEach(schemes) { scheme in
+                    schemePreviewRow(scheme)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func drillDescriptionSection(_ drill: DrillItem) -> some View {
+        if !drill.description.isEmpty {
+            detailCard(spacing: 4) {
+                detailSectionLabel("DESCRIPTION")
+                Text(drill.description)
+                    .font(.system(size: 10))
+                    .foregroundColor(.black)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func drillInstructionsSection(_ drill: DrillItem) -> some View {
+        if !drill.instructions.isEmpty {
+            detailCard {
+                detailSectionLabel("INSTRUCTIONS")
+                ForEach(Array(drill.instructions.enumerated()), id: \.offset) { index, instruction in
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 16, height: 16)
+                            .background(Color.orange)
+                            .cornerRadius(8)
+
+                        Text(instruction)
+                            .font(.system(size: 10))
+                            .foregroundColor(.black)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func drillKeyPointsSection(_ drill: DrillItem) -> some View {
+        if !drill.keyPoints.isEmpty {
+            detailCard {
+                detailSectionLabel("KEY POINTS")
+                ForEach(drill.keyPoints, id: \.self) { point in
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.green)
+
+                        Text(point)
+                            .font(.system(size: 10))
+                            .foregroundColor(.black)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func drillEquipmentSection(_ drill: DrillItem) -> some View {
+        if !drill.equipmentNeeded.isEmpty {
+            detailCard {
+                detailSectionLabel("EQUIPMENT")
+                FlowLayout(spacing: 4) {
+                    ForEach(drill.equipmentNeeded, id: \.self) { item in
+                        Text(item)
+                            .font(.system(size: 9))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.orange.opacity(0.1))
+                            .foregroundColor(.orange)
+                            .cornerRadius(4)
+                    }
+                }
+            }
+        }
     }
     
     private func drillStatPill(icon: String, value: String, color: Color = .secondary) -> some View {
