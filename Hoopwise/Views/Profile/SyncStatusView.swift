@@ -5,9 +5,10 @@ import CloudKit
 struct SyncStatusView: View {
     @Environment(\.dismiss) private var dismiss
 
-    @State private var accountStatus: CKAccountStatus = .couldNotDetermine
-    @State private var lastSyncDate: Date? = UserDefaults.standard.object(forKey: "lastCloudKitSyncDate") as? Date
-    @State private var isRefreshing = false
+    @StateObject private var syncMonitor = CloudSyncMonitor.shared
+
+    private var accountStatus: CKAccountStatus { syncMonitor.accountStatus }
+    private var isRefreshing: Bool { syncMonitor.isCheckingAccount }
 
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
 
@@ -58,6 +59,13 @@ struct SyncStatusView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let error = syncMonitor.lastErrorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Divider()
 
             HStack {
@@ -88,6 +96,24 @@ struct SyncStatusView: View {
                  : "Your coaching data syncs securely across all devices signed in to the same Apple ID through iCloud.")
                 .font(.system(size: 14))
                 .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            HStack {
+                Text(isChinese ? "环境" : "Environment")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(syncMonitor.environmentLabel)
+                    .font(.system(size: 13, weight: .medium))
+            }
+
+            Text(isChinese
+                 ? "开发与生产环境是两个独立的数据库，彼此看不到对方的数据。"
+                 : "Development and Production are separate databases and never see each other's data.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -131,27 +157,10 @@ struct SyncStatusView: View {
         }
     }
 
-    private var lastSyncedLabel: String {
-        guard let date = lastSyncDate else { return "—" }
-        return date.formatted(.relative(presentation: .numeric))
-    }
+    private var lastSyncedLabel: String { syncMonitor.lastSyncLabel }
 
     // MARK: - Refresh
     private func refreshAccountStatus() async {
-        await MainActor.run { isRefreshing = true }
-        do {
-            let status = try await CKContainer.default().accountStatus()
-            await MainActor.run {
-                self.accountStatus = status
-                self.lastSyncDate = UserDefaults.standard.object(forKey: "lastCloudKitSyncDate") as? Date
-                self.isRefreshing = false
-            }
-        } catch {
-            debugLog("SyncStatusView: failed to read iCloud account status: \(error)")
-            await MainActor.run {
-                self.accountStatus = .couldNotDetermine
-                self.isRefreshing = false
-            }
-        }
+        await syncMonitor.refreshAccountStatus()
     }
 }

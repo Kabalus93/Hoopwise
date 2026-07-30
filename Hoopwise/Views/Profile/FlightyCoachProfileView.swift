@@ -15,6 +15,7 @@ struct FlightyCoachProfileView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var showingEditProfile = false
     @State private var localSettings: AppSettings = AppSettings.default
+    @StateObject private var syncMonitor = CloudSyncMonitor.shared
     @State private var iCloudAccountLabel: String?
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
     @State private var isRefreshing = false
@@ -502,10 +503,9 @@ struct FlightyCoachProfileView: View {
     // MARK: - Sync Section
     private var syncSection: some View {
         Section {
-            Toggle(isOn: $localSettings.autoSyncEnabled) {
-                Label(isChinese ? "自动同步" : "Auto Sync", systemImage: "arrow.triangle.2.circlepath")
-            }
-
+            // No "Auto Sync" toggle: SwiftData drives CloudKit itself and the setting
+            // gated nothing. The stored SDCoach.autoSyncEnabled field is left alone so
+            // the schema is unchanged.
             if let label = iCloudAccountLabel {
                 HStack {
                     Label {
@@ -523,11 +523,27 @@ struct FlightyCoachProfileView: View {
                 }
             }
 
+            HStack {
+                Text(isChinese ? "上次同步" : "Last synced")
+                Spacer()
+                Text(syncMonitor.lastSyncLabel)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            if let error = syncMonitor.lastErrorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Was labelled "Sync Now", which was false — it only re-reads the local
+            // store into memory. Same action, honest name.
             Button {
                 refreshCache()
             } label: {
                 HStack {
-                    Label(isChinese ? "立即同步" : "Sync Now",
+                    Label(isChinese ? "重新载入数据" : "Reload Data",
                           systemImage: showingRefreshSuccess ? "checkmark" : "arrow.clockwise")
                     Spacer()
                     if isRefreshing { ProgressView().controlSize(.small) }
@@ -538,8 +554,8 @@ struct FlightyCoachProfileView: View {
             Text(isChinese ? "同步" : "Sync")
         } footer: {
             Text(isChinese
-                 ? "在云端帐户和本设备之间同步所有数据。"
-                 : "Syncs all data between iCloud and this device.")
+                 ? "数据通过 iCloud 自动同步，无需手动触发。「重新载入数据」仅刷新本设备上已有的数据。"
+                 : "Data syncs with iCloud automatically; there is nothing to trigger by hand. Reload Data only refreshes what is already on this device.")
         }
     }
 
@@ -615,7 +631,10 @@ struct FlightyCoachProfileView: View {
         Task {
             let status: CKAccountStatus
             do {
-                status = try await CKContainer.default().accountStatus()
+                // Not CKContainer.default(): that resolves to iCloud.{bundleID},
+                // which exists for neither target, so it never reported real status.
+                status = try await CKContainer(identifier: CloudSyncMonitor.containerIdentifier)
+                    .accountStatus()
             } catch {
                 await MainActor.run {
                     iCloudStatus = .couldNotDetermine
