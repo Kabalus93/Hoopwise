@@ -616,6 +616,8 @@ struct SessionEvent: Identifiable, Codable, Hashable {
     var attendeeIds: [UUID]       // Expected attendees (from program enrollment)
     var actualAttendeeIds: [UUID] // Who actually showed up
     var excusedAbsences: [UUID]   // Students who notified absence in advance (session preserved)
+    /// Explicitly recorded unexcused absence. Distinct from "not marked yet".
+    var unexcusedAbsences: [UUID]
     var attendancePhotoPath: String? // Local path to compressed attendance photo
     
     // Notes
@@ -644,7 +646,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
          sessionType: SessionType = .training, title: String, date: Date, startTime: Date, endTime: Date,
          location: String? = nil, status: SessionEventStatus = .scheduled,
          curriculum: SessionCurriculum = SessionCurriculum(),
-         attendeeIds: [UUID] = [], actualAttendeeIds: [UUID] = [], excusedAbsences: [UUID] = [], attendancePhotoPath: String? = nil,
+         attendeeIds: [UUID] = [], actualAttendeeIds: [UUID] = [], excusedAbsences: [UUID] = [], unexcusedAbsences: [UUID] = [], attendancePhotoPath: String? = nil,
          notes: String? = nil, coachNotes: String? = nil,
          developmentFocus: [TrainingFocus] = [],
          manOfTheMatchId: UUID? = nil, drillsCompleted: [UUID] = [], rating: Int? = nil,
@@ -665,6 +667,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
         self.attendeeIds = attendeeIds
         self.actualAttendeeIds = actualAttendeeIds
         self.excusedAbsences = excusedAbsences
+        self.unexcusedAbsences = unexcusedAbsences
         self.attendancePhotoPath = attendancePhotoPath
         self.notes = notes
         self.coachNotes = coachNotes

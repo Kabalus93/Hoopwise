@@ -26,7 +26,7 @@ enum AttendanceStatementDocument {
         var note: String?
 
         enum Attendance {
-            case present, absent, excused
+            case present, absent, excused, unmarked
         }
     }
 
@@ -86,6 +86,7 @@ enum AttendanceStatementDocument {
                 let involved = event.attendeeIds.contains(studentId)
                     || event.actualAttendeeIds.contains(studentId)
                     || event.excusedAbsences.contains(studentId)
+                    || event.unexcusedAbsences.contains(studentId)
                 guard involved else { return false }
                 if let periodStart, event.date < periodStart { return false }
                 if let periodEnd, event.date > periodEnd { return false }
@@ -95,12 +96,16 @@ enum AttendanceStatementDocument {
 
         let lines: [SessionLine] = events.map { event in
             let status: SessionLine.Attendance
+            // Four states, three stores. Unmarked is NOT absent — an absence
+            // consumes a session, so it must be explicitly recorded.
             if event.actualAttendeeIds.contains(studentId) {
                 status = .present
             } else if event.excusedAbsences.contains(studentId) {
                 status = .excused
-            } else {
+            } else if event.unexcusedAbsences.contains(studentId) {
                 status = .absent
+            } else {
+                status = .unmarked
             }
             return SessionLine(
                 date: event.date,
@@ -302,9 +307,10 @@ enum AttendanceStatementDocument {
 
     private static func statusLabel(_ status: SessionLine.Attendance) -> String {
         switch status {
-        case .present: return "出席 Present"
-        case .absent:  return "缺席 Absent"
-        case .excused: return "请假 Excused"
+        case .present:  return "出席 Present"
+        case .absent:   return "缺席 Absent"
+        case .excused:  return "请假 Excused"
+        case .unmarked: return "未记录 Not recorded"
         }
     }
 

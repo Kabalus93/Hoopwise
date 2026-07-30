@@ -24,6 +24,13 @@ final class SDSessionEvent {
     var attendeeIds: [UUID] = []
     var actualAttendeeIds: [UUID] = []
     var excusedAbsences: [UUID] = []  // Students who notified absence in advance (session preserved)
+    /// Students recorded as an unexcused absence — a no-show, or notice too
+    /// late to excuse. Stored EXPLICITLY rather than inferred from "not in
+    /// actualAttendeeIds", because that inference cannot tell a no-show from a
+    /// student whose attendance simply has not been taken yet. Since an
+    /// unexcused absence consumes a bundle session (agreement clause 4), that
+    /// ambiguity would invent revenue.
+    var unexcusedAbsences: [UUID] = []
     var attendancePhotoPath: String?
     
     // Notes
@@ -65,6 +72,7 @@ final class SDSessionEvent {
         attendeeIds: [UUID] = [],
         actualAttendeeIds: [UUID] = [],
         excusedAbsences: [UUID] = [],
+        unexcusedAbsences: [UUID] = [],
         attendancePhotoPath: String? = nil,
         notes: String? = nil,
         coachNotes: String? = nil,
@@ -91,6 +99,7 @@ final class SDSessionEvent {
         self.attendeeIds = attendeeIds
         self.actualAttendeeIds = actualAttendeeIds
         self.excusedAbsences = excusedAbsences
+        self.unexcusedAbsences = unexcusedAbsences
         self.attendancePhotoPath = attendancePhotoPath
         self.notes = notes
         self.coachNotes = coachNotes
@@ -185,6 +194,7 @@ final class SDSessionEvent {
             attendeeIds: attendeeIds,
             actualAttendeeIds: actualAttendeeIds,
             excusedAbsences: excusedAbsences,
+            unexcusedAbsences: unexcusedAbsences,
             attendancePhotoPath: attendancePhotoPath,
             notes: notes,
             coachNotes: coachNotes,
@@ -225,6 +235,7 @@ final class SDSessionEvent {
             attendeeIds: event.attendeeIds,
             actualAttendeeIds: event.actualAttendeeIds,
             excusedAbsences: event.excusedAbsences,
+            unexcusedAbsences: event.unexcusedAbsences,
             attendancePhotoPath: event.attendancePhotoPath,
             notes: event.notes,
             coachNotes: event.coachNotes,

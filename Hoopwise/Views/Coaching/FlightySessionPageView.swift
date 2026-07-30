@@ -2391,13 +2391,12 @@ struct FlightySessionPageView: View {
     }
     
     private func setAttendanceState(for studentId: UUID, state: AttendanceState) {
-        let wasPresent = session.actualAttendeeIds.contains(studentId)
-
         // Optimistic local update so the toggle animates immediately. The
         // canonical write goes through the field-level helper below so
         // siblings (games, photo) survive even if our @State is stale.
         session.actualAttendeeIds.removeAll { $0 == studentId }
         session.excusedAbsences.removeAll { $0 == studentId }
+        session.unexcusedAbsences.removeAll { $0 == studentId }
 
         let mappedState: AttendanceTriState
         switch state {
@@ -2408,22 +2407,20 @@ struct FlightySessionPageView: View {
             session.excusedAbsences.append(studentId)
             mappedState = .excused
         case .absent:
+            session.unexcusedAbsences.append(studentId)
             mappedState = .absent
         }
 
+        // Redemption is handled inside setStudentAttendanceState via the single
+        // FIFO authority. Do not redeem here — a second call site is exactly
+        // how the two divergent redemption paths arose. Nothing un-charges a
+        // session automatically either; that is refundSessionToBundle, an
+        // explicit correction.
         dataManager.setStudentAttendanceState(
             sessionId: session.id,
             studentId: studentId,
             state: mappedState
         )
-
-        // Bundle redemption follows present/absent transitions for private sessions.
-        let isNowPresent = (state == .present)
-        if isNowPresent && !wasPresent {
-            dataManager.redeemPrivateAttendance(sessionId: session.id, studentId: studentId)
-        } else if !isNowPresent && wasPresent {
-            dataManager.reverseRedemption(sessionId: session.id, studentId: studentId)
-        }
     }
     
     // MARK: - Games Tab (iOS Only)
@@ -6163,10 +6160,15 @@ struct LiveAttendanceSheet: View {
                             } else {
                                 session.actualAttendeeIds.removeAll { $0 == student.id }
                             }
+                            // Un-tapping clears to UNMARKED, never to absent.
+                            // An unexcused absence consumes a bundle session
+                            // under clause 4, so it has to be chosen
+                            // deliberately in the session's attendance tab —
+                            // not fall out of toggling a row off.
                             dataManager.setStudentAttendanceState(
                                 sessionId: session.id,
                                 studentId: student.id,
-                                state: willBePresent ? .present : .absent
+                                state: willBePresent ? .present : .unmarked
                             )
                         }
                     }

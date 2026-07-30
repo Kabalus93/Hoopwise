@@ -12,8 +12,14 @@ typealias DataManager = SwiftDataManager
 /// Three-way attendance state used by `SwiftDataManager.setStudentAttendanceState`.
 /// Lives at file scope so it's accessible from views without leaking
 /// view-private types into the manager API.
+/// The four distinguishable attendance states.
+///
+/// `unmarked` is not the same as `absent`, and the difference is money: an
+/// unexcused absence consumes a bundle session under agreement clause 4, while
+/// a student whose attendance has not been taken yet must consume nothing.
+/// Three stored arrays give four states — membership in one of them, or none.
 enum AttendanceTriState {
-    case present, excused, absent
+    case unmarked, present, excused, absent
 }
 
 class SwiftDataManager: ObservableObject {
@@ -1618,15 +1624,19 @@ class SwiftDataManager: ObservableObject {
         mutateSession(id: sessionId, reason: .manualEdit) { sd in
             var actual = Set(sd.actualAttendeeIds)
             var excused = Set(sd.excusedAbsences)
+            var unexcused = Set(sd.unexcusedAbsences)
             actual.remove(studentId)
             excused.remove(studentId)
+            unexcused.remove(studentId)
             switch state {
-            case .present: actual.insert(studentId)
-            case .excused: excused.insert(studentId)
-            case .absent:  break  // neither set membership
+            case .present:  actual.insert(studentId)
+            case .excused:  excused.insert(studentId)
+            case .absent:   unexcused.insert(studentId)
+            case .unmarked: break  // membership in none of the three
             }
             sd.actualAttendeeIds = Array(actual)
             sd.excusedAbsences = Array(excused)
+            sd.unexcusedAbsences = Array(unexcused)
         }
         if let fresh = sessionEvents.first(where: { $0.id == sessionId }) {
             updateContractsForAttendance(sessionEvent: fresh)
@@ -1703,68 +1713,27 @@ class SwiftDataManager: ObservableObject {
     }
 
     /// Update contracts to reflect attendance changes for a session
+    /// Applies bundle redemption for everyone whose state on this session
+    /// consumes one.
+    ///
+    /// This used to contain a second, divergent redemption implementation that
+    /// selected the contract by highest contract number, while
+    /// `redeemPrivateAttendance` selected the oldest bundle with capacity. The
+    /// same session could be charged to different bundles depending on which
+    /// path ran. There is now one authority and it is FIFO.
+    ///
+    /// Deliberately NOT retroactive and deliberately never un-charges: a
+    /// session already redeemed stays redeemed unless the coach explicitly
+    /// calls `refundSessionToBundle`. Silently reclaiming past sessions would
+    /// move a client's balance without her knowing why.
     private func updateContractsForAttendance(sessionEvent: SessionEvent) {
-        // Count any session where attendance is marked (regardless of status)
-        // If someone is marked as attended, they attended
-        
-        // For each student who attended, ensure their contract has this session
-        for studentId in sessionEvent.actualAttendeeIds {
-            guard var contract = currentContract(for: studentId) else {
-                // No contract exists for this student. Skip silently — the
-                // coach must explicitly create a contract before attendance
-                // contributes to revenue or bundle redemption.
-                _ = sessionEvent
-                continue
-                debugLog("📝 Created contract for \(studentId) with session \(sessionEvent.id)")
-                continue
-            }
-            
-            // Add session to contract if not already there
-            if !contract.attendedSessionIds.contains(sessionEvent.id) {
-                contract.attendedSessionIds.append(sessionEvent.id)
-                updateContract(contract)
-                debugLog("📝 Added session \(sessionEvent.id) to contract for \(studentId)")
-            }
-        }
-        
-        // For students who were removed from attendance, remove session from their contract
-        for contract in cachedContracts {
-            if contract.attendedSessionIds.contains(sessionEvent.id) &&
-               !sessionEvent.actualAttendeeIds.contains(contract.studentId) {
-                var updatedContract = contract
-                updatedContract.attendedSessionIds.removeAll { $0 == sessionEvent.id }
-                updateContract(updatedContract)
-                debugLog("📝 Removed session \(sessionEvent.id) from contract for \(contract.studentId)")
-            }
-        }
-    }
-    
-    /// Mark a student as present. For private sessions, also redeems the
-    /// session against the student's oldest active bundle (if any).
-    func markStudentPresent(studentId: UUID, in sessionEvent: SessionEvent) {
-        var updatedSession = sessionEvent
-        if !updatedSession.actualAttendeeIds.contains(studentId) {
-            updatedSession.actualAttendeeIds.append(studentId)
-            updateSessionEvent(updatedSession)
+        let consuming = Set(sessionEvent.actualAttendeeIds)
+            .union(sessionEvent.unexcusedAbsences)
+        for studentId in consuming {
             redeemPrivateAttendance(sessionId: sessionEvent.id, studentId: studentId)
         }
     }
 
-    /// Mark a student as absent. Reverses any bundle redemption tied to this
-    /// session so a mistakenly-marked student doesn't burn a bundle slot.
-    func markStudentAbsent(studentId: UUID, in sessionEvent: SessionEvent) {
-        var updatedSession = sessionEvent
-        if let index = updatedSession.actualAttendeeIds.firstIndex(of: studentId) {
-            updatedSession.actualAttendeeIds.remove(at: index)
-            updateSessionEvent(updatedSession)
-            reverseRedemption(sessionId: sessionEvent.id, studentId: studentId)
-        }
-    }
-    
-    /// DEPRECATED: Manual contract deduction is no longer used
-    /// Session consumption is now calculated from SessionEvent records via sessionsConsumed(for:)
-    /// This function is kept for backward compatibility but does nothing
-    @available(*, deprecated, message: "Session consumption is now event-based. Use sessionsConsumed(for:) instead.")
     private func deductSessionFromContract(studentId: UUID, programId: UUID?) {
         // No-op: Session consumption is now derived from SessionEvent.actualAttendeeIds
         debugLog("⚠️ deductSessionFromContract is deprecated - session consumption is now event-based")
@@ -2847,27 +2816,53 @@ class SwiftDataManager: ObservableObject {
 
     // MARK: - Bundle redemption
 
-    /// Redeem `sessionId` against the oldest bundle with capacity for this
-    /// student. Called when a private session attendance is marked. No-op if
-    /// the student has no active private bundle.
+    /// THE redemption authority. Every path that consumes a bundle session
+    /// goes through here.
+    ///
+    /// FIFO by `effectiveBundlePurchaseDate`: a client who buys a second bundle
+    /// before exhausting the first expects sessions consumed in purchase order.
+    /// Charging the newest bundle would strand sessions she has already paid
+    /// for. This replaces a second, divergent path in
+    /// `updateContractsForAttendance` which selected by highest contract
+    /// number and could charge a different bundle for the same session.
+    ///
+    /// A session is consumed when the student is PRESENT or recorded as an
+    /// UNEXCUSED ABSENCE — agreement clause 4: cancellation inside 24 hours or
+    /// non-attendance consumes the session. Excused and unmarked consume
+    /// nothing.
     func redeemPrivateAttendance(sessionId: UUID, studentId: UUID) {
         guard let event = cachedSessionEvents.first(where: { $0.id == sessionId }),
               eventIsPrivate(event) else { return }
+
+        let consumes = event.actualAttendeeIds.contains(studentId)
+            || event.unexcusedAbsences.contains(studentId)
+        guard consumes else { return }
+
+        // Already charged somewhere? Don't double-charge.
+        guard !cachedContracts.contains(where: {
+            $0.studentId == studentId && $0.bundleSessionIds.contains(sessionId)
+        }) else { return }
 
         let bundles = cachedContracts
             .filter { $0.studentId == studentId
                       && $0.kind == .privateBundle
                       && ($0.bundleRedemptionsRemaining ?? 0) > 0 }
-            .sorted { $0.createdAt < $1.createdAt }
+            .sorted { $0.effectiveBundlePurchaseDate < $1.effectiveBundlePurchaseDate }
 
-        guard var oldest = bundles.first,
-              !oldest.bundleSessionIds.contains(sessionId) else { return }
+        guard var oldest = bundles.first else { return }
         oldest.bundleSessionIds.append(sessionId)
         updateContract(oldest)
     }
 
-    /// Reverse a redemption (e.g., attendance was marked then unmarked).
-    func reverseRedemption(sessionId: UUID, studentId: UUID) {
+    /// Explicitly return a consumed session to its bundle.
+    ///
+    /// This is a DELIBERATE undo, invoked by the coach when a session was
+    /// charged in error — not a side effect of changing attendance state.
+    /// It used to fire automatically from `markStudentAbsent`, which is how a
+    /// no-show silently got its session refunded in contradiction of clause 4.
+    /// Marking someone absent now consumes the session; only this action
+    /// returns it.
+    func refundSessionToBundle(sessionId: UUID, studentId: UUID) {
         for var contract in cachedContracts where contract.studentId == studentId
                                                 && contract.kind == .privateBundle
                                                 && contract.bundleSessionIds.contains(sessionId) {

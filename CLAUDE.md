@@ -240,6 +240,38 @@ it produces confident wrong numbers the coach reconciles books against.
   follows the existing SDDrillMedia pattern (paths in the model, bytes on
   disk via DrillMediaStorage).
 
+## Attendance and bundle redemption — read before touching any of it
+- FOUR states, THREE stored arrays on SDSessionEvent: actualAttendeeIds,
+  excusedAbsences, unexcusedAbsences. Membership in none means UNMARKED.
+  Unmarked is NOT absent. An unexcused absence consumes a bundle session
+  (agreement clause 4); a student whose attendance has not been taken yet
+  must consume nothing. Inferring absence from "not present" would invent
+  revenue, which is worse than the bug it would fix.
+- ONE redemption authority: redeemPrivateAttendance. FIFO by
+  effectiveBundlePurchaseDate. A client who buys a second bundle before
+  exhausting the first expects sessions consumed in purchase order;
+  charging the newest strands sessions already paid for. A second path in
+  updateContractsForAttendance used to select by highest contract number
+  and could charge a different bundle for the same session — it is gone.
+  Do not add a second redemption call site.
+- Present and unexcused-absent consume. Excused and unmarked do not.
+- NOT RETROACTIVE, deliberately. Absences recorded before this change stay
+  un-deducted. Silently reclaiming past sessions would move a client's
+  balance without her knowing why and would contradict figures already
+  discussed with her. Do not "fix" this with a backfill migration.
+- Nothing un-charges a session automatically. refundSessionToBundle is an
+  explicit correction the coach invokes when a session was charged in
+  error. It used to fire as a side effect of marking someone absent, which
+  is how a no-show silently got refunded.
+- The 24-hour threshold in clause 4 is NOT representable in data. Nothing
+  timestamps when notice was given, so excused-vs-absent rests on the
+  coach's judgement at the moment of marking. This is acceptable and
+  intentional. Do not add a notice-timestamp field.
+- No 'late' state. A late arrival consumes the session exactly as present
+  does, so it earns a schema change for nothing, and "late" printed on a
+  payment statement to a parent is not wanted. Behavioural detail goes in
+  the session note.
+
 ## Contract decisions
 - Payments are a JSON ledger (paymentsData: Data? holding
   [ContractPayment]), not a separate record type — same idiom as
