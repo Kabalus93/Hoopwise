@@ -310,20 +310,27 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
 
     /// Every root-to-leaf path. Each is one complete way the play can unfold,
     /// and each is what a single animation export renders.
+    ///
+    /// Guards against cycles. The node table is flat with id references, so a
+    /// malformed `childIds` can point back up the tree; without the visited set
+    /// that would hang the renderer rather than draw something wrong.
     var branches: [[ReadNode]] {
         guard let root = rootNode else { return [] }
         var result: [[ReadNode]] = []
-        var walk: (ReadNode, [ReadNode]) -> Void = { _, _ in }
-        walk = { node, prefix in
+
+        func walk(_ node: ReadNode, _ prefix: [ReadNode], _ visited: Set<UUID>) {
+            guard !visited.contains(node.id) else { return }
             let path = prefix + [node]
             let kids = children(of: node.id)
             if kids.isEmpty {
                 result.append(path)
-            } else {
-                for kid in kids { walk(kid, path) }
+                return
             }
+            let seen = visited.union([node.id])
+            for kid in kids { walk(kid, path, seen) }
         }
-        walk(root, [])
+
+        walk(root, [], [])
         return result
     }
 
