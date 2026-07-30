@@ -729,7 +729,7 @@ private struct ContractsTab: View {
                 EmptyPanel(systemImage: "doc.text", text: "No contracts on file.")
             } else {
                 ForEach(contracts) { contract in
-                    ContractCard(contract: contract)
+                    ContractCard(contract: contract, currencyCode: dataManager.appSettings.currency.currencyCode)
                 }
             }
         }
@@ -738,6 +738,10 @@ private struct ContractsTab: View {
 
 private struct ContractCard: View {
     let contract: Contract
+    /// Passed in rather than read from the environment: this is a private
+    /// leaf view with no dataManager, and the figures must match the coach's
+    /// configured currency rather than a hardcoded USD.
+    let currencyCode: String
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -748,7 +752,7 @@ private struct ContractCard: View {
             }
             HStack(spacing: 18) {
                 metric("Enrolled", contract.enrollmentDate.formatted(.dateTime.month().day().year()))
-                metric("Per session", contract.pricePerSession.formatted(.currency(code: "USD")))
+                metric("Per session", contract.pricePerSession.formatted(.currency(code: currencyCode)))
                 if contract.kind == .privateBundle {
                     metric("Bundle", "\(contract.bundleSize) sessions")
                     metric("Remaining", "\(contract.bundleRedemptionsRemaining ?? 0)")
@@ -760,8 +764,8 @@ private struct ContractCard: View {
             // is deliberately excluded from paid/owed.
             if contract.kind != .group {
                 HStack(spacing: 18) {
-                    metric("Paid", contract.amountPaid.formatted(.currency(code: "USD")))
-                    metric("Owed", contract.sessionAmountOwed.formatted(.currency(code: "USD")))
+                    metric("Paid", contract.amountPaid.formatted(.currency(code: currencyCode)))
+                    metric("Owed", contract.sessionAmountOwed.formatted(.currency(code: currencyCode)))
                         .foregroundStyle(contract.sessionAmountOwed > 0 ? .orange : .green)
                     if contract.hasTravelFee {
                         metric("Travel", travelLabel)
@@ -779,7 +783,7 @@ private struct ContractCard: View {
     /// Per-contract fees show the flat figure; per-session fees show the rate
     /// and, for bundles, what it totals across the bundle.
     private var travelLabel: String {
-        let amount = contract.travelFeeAmount.formatted(.currency(code: "USD"))
+        let amount = contract.travelFeeAmount.formatted(.currency(code: currencyCode))
         switch contract.travelFeeBasis {
         case .perContract:
             return amount
@@ -787,7 +791,7 @@ private struct ContractCard: View {
             guard contract.kind == .privateBundle, contract.bundleSize > 0 else {
                 return "\(amount)/session"
             }
-            let total = contract.travelFeeTotalForContract.formatted(.currency(code: "USD"))
+            let total = contract.travelFeeTotalForContract.formatted(.currency(code: currencyCode))
             return "\(amount)/session · \(total)"
         }
     }
