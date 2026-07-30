@@ -143,6 +143,7 @@
 				Models/SwiftData/SDTeam.swift,
 				Models/SyncLogStore.swift,
 				Models/SyncTypes.swift,
+				Services/CloudSyncMonitor.swift,
 				Services/DrillPlanGenerator.swift,
 				Services/HoopwiseBundle.swift,
 				Services/HoopwiseBundleImporter.swift,
