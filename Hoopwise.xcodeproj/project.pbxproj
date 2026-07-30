@@ -156,6 +156,7 @@
 				Services/HoopwiseBundleImporter.swift,
 				Services/LiveSessionEngine.swift,
 				Services/MonthlyStudentCardExportService.swift,
+				Services/PDFDocumentRenderer.swift,
 				Services/SessionLiveActivityManager.swift,
 				Services/SessionStatusMonitor.swift,
 				Services/StudentIntelligence.swift,
