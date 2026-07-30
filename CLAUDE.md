@@ -34,7 +34,30 @@ development and currently raw. Version 2, Build 2.
 - Mac Settings has a Sync tab with account status, activity, last sync,
   errors, and the CloudKit environment.
 
+## Fabricated accessors — the recurring failure mode here
+Contract carries legacy compile-time shims for fields the model no longer
+has. Several return constants that the UI renders as real data, and
+several have setters that silently discard writes. Three were fixed in
+July 2026 (amountPaid, outstandingBalance, isFullyPaid — they now derive
+from the payment ledger); the rest are still live and are listed under
+"Known broken things" below.
+
+When touching any accessor in the legacy-shim block of Contract, assume
+it lies until proven otherwise, and check whether a view renders it.
+`grep -n "get { \(true\|false\|nil\|0\|\[\]\) }"` finds the family.
+Fabricating a value the UI presents as fact is worse than crashing —
+it produces confident wrong numbers the coach reconciles books against.
+
 ## Known broken things (do not mistake these for working)
+- Contract legacy shims that lie. Read-path (always show the same value
+  regardless of reality): isSigned (always true), isExpired (always
+  false, 9 UI refs incl. a red warning that can never fire),
+  jerseyGiven/ballGiven (always false), jerseyNumber/jerseySize on
+  Contract (always nil — note Player.jerseyNumber IS real),
+  weeklyAttendance (always empty, so those sections never render).
+  Write-path (setter discards, but the UI offers a control and calls
+  save): SalesView's Contract Signed, Jersey Given and Ball Given
+  toggles all no-op while appearing to save.
 - syncFromCloud() and syncToCloud() in SwiftDataManager are no-ops that
   only stamp lastSyncDate.
 - getLocalStorageURL() returns a URL that is never passed to
@@ -112,6 +135,18 @@ development and currently raw. Version 2, Build 2.
   build type: debug to Development, archive/TestFlight/App Store to
   Production. A debug Mac build will never see data written by a
   TestFlight iOS build.
+- Setting com.apple.developer.icloud-container-environment to force debug
+  builds onto Production is PERMANENTLY DECLINED. It would mix
+  development experiments with real student data. Do not propose it
+  again.
+- KNOWN FUTURE TASK, with a data-migration problem inside it: shipping a
+  TestFlight or App Store release requires deploying the CloudKit schema
+  to Production first (CLAUDE.md rule 7d). Development DATA does not
+  transfer — only the schema. All authoring done in debug builds lives in
+  Development and will not appear in a released build. Whoever plans that
+  release has to decide how real content crosses the boundary; there is
+  no supported automatic path, and re-authoring or an export/import round
+  trip through HoopwiseBundle are the realistic options.
 - Console noise about hapticpatternlibrary.plist and
   UIKBFeedbackGenerator is ignorable iOS haptics logging on macOS.
 
@@ -128,12 +163,30 @@ development and currently raw. Version 2, Build 2.
 - CloudKit sync works. Both apps see the same private-database data.
 - HoopwiseMac builds and runs; Settings has General / Profile / Sync /
   Data.
-- Roadmap: (1) contracts — payments ledger + travel fee, (2) persist
-  Play/CourtScheme and define the four new record types, (3) deploy
-  schema Dev→Production, (4) ship one iOS build carrying the new types,
-  (5) Mac court editor UI, (6) PDF then PNG then ProRes export,
-  (7) knowledge base, (8) bundle import/export via HoopwiseBundle.swift,
-  (9) Mac-idiomatic UI polish, (10) delete dead Supabase code and SQL.
+- Roadmap: (1) DONE contracts — payments ledger + travel fee, (2) DONE
+  persist Play, four new record types defined and registered,
+  (3) deploy schema Dev→Production — only needed ahead of a released
+  build; debug-to-debug authoring runs entirely in Development,
+  (4) ship one iOS build carrying the new types — a debug install to the
+  device is sufficient while working in Development, (5) Mac court editor
+  UI, (6) PDF then PNG then ProRes export, (7) knowledge base, (8) bundle
+  import/export via HoopwiseBundle.swift, (9) Mac-idiomatic UI polish,
+  (10) delete dead Supabase code and SQL.
+- SDCourtScheme was considered and DECLINED. CloudKit Production schemas
+  are additive only — a record type cannot be removed once deployed, so
+  persisting the legacy frame-based CourtScheme would be permanent schema
+  debt plus a migration, and what it preserves is in the wrong coordinate
+  convention (0-1, not court-feet) and the wrong time model (frames, not
+  tracks). Do not author in the Basketball Lab until the step 5 editor
+  exists; that work is discarded at quit.
+- MacCoachResourcesView.swift is iOS-membership-only and is NOT a simple
+  membership flip: it pulls in BasketballCourtLabView, CourtLinesView,
+  MiniCourtPreview, FlatEndMarker, ScreenEndMarker, AddEditDrillSheet,
+  FlowLayout, ArrowHead, and an AddEditPlaySheet that does not exist
+  under that name. Port it as part of the step 5 court editor. Its body
+  also exceeds the type-checker's budget at line 560 ("unable to
+  type-check this expression in reasonable time") — decompose it during
+  the port rather than working around it.
 
 ## Court / play authoring decisions (July 2026)
 - Coordinate space is COURT-FEET, not normalized 0-1. The legacy
