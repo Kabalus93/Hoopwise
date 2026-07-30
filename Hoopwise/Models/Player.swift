@@ -550,9 +550,15 @@ struct Contract: Identifiable, Codable, Hashable {
         get { true }
         set { _ = newValue }
     }
+    /// Read-only. The setter used to write `enrollmentDate`, so toggling
+    /// "Contract Signed" in SalesView overwrote the enrollment date with today
+    /// and persisted it — and because bundle revenue is attributed via
+    /// `effectiveBundlePurchaseDate` (which falls back to `enrollmentDate`),
+    /// that silently moved revenue between months. There is no real signed-date
+    /// field to write to, so the setter now discards like its siblings.
     var signedDate: Date? {
         get { enrollmentDate }
-        set { if let v = newValue { enrollmentDate = v } }
+        set { _ = newValue }
     }
     var jerseyGiven: Bool {
         get { false }
