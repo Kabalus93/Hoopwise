@@ -11,6 +11,9 @@ struct DiagramCanvasView: View {
     var onPlaced: () -> Void
 
     @State private var dragEntityId: UUID?
+    /// Where the ball is being dragged, for the drop preview. The ball is never
+    /// keyframed by dragging when possession is on.
+    @State private var ballDragLocation: CGPoint?
 
     // Court-feet radii, so markers stay the right size relative to the floor.
     private let puckRadiusFeet: CGFloat = 1.6
@@ -99,19 +102,44 @@ struct DiagramCanvasView: View {
                     if let point = track.position(at: t) { courtPoints.append(point) }
                 }
                 guard courtPoints.count > 1 else { continue }
-                // pathKind on the FROM keyframe governs this segment.
-                drawSegment(courtPoints, kind: from.pathKind, tint: tint,
+                // While the entity holds the ball its line IS the dribble,
+                // regardless of the authored path kind — and the ball draws
+                // nothing of its own.
+                let kind: PathKind = (model.possessionEnabled
+                                      && model.isDribbling(track.entityId, at: from.t))
+                    ? .dribble : from.pathKind
+                drawSegment(courtPoints, kind: kind, tint: tint,
                             projection: projection, into: &context)
             }
         }
 
-        // Passes derive from possession gaps.
+        // Pass and shot lines DERIVE from possession — one source of truth for
+        // "the ball went from here to there".
         if model.possessionEnabled {
-            for pass in node.passes {
-                let a = model.position(of: pass.fromId, at: pass.departure)
-                let b = model.position(of: pass.toId, at: pass.arrival)
-                drawSegment([a, b], kind: .pass, tint: Color(hex: model.theme.ballHex),
-                            projection: projection, into: &context)
+            let releases = node.releases(passSpeed: model.look.passSpeedFeetPerSecond,
+                                         shotSpeed: model.look.shotSpeedFeetPerSecond) { id, t in
+                model.position(of: id, at: t)
+            }
+            for item in releases {
+                let tint = Color(hex: model.theme.ballHex)
+                switch item.release {
+                case .pass:
+                    drawSegment([item.from, item.to], kind: .pass, tint: tint,
+                                projection: projection, into: &context)
+                case .shot:
+                    // Shallow parabola toward the rim, sampled in court feet so
+                    // it projects with the floor.
+                    var points: [CGPoint] = []
+                    for step in 0...20 {
+                        let f = CGFloat(step) / 20
+                        let x = item.from.x + (item.to.x - item.from.x) * f
+                        let y = item.from.y + (item.to.y - item.from.y) * f
+                        let arc = sin(Double(f) * .pi) * 1.6
+                        points.append(CGPoint(x: x, y: y - CGFloat(arc)))
+                    }
+                    drawSegment(points, kind: .pass, tint: tint,
+                                projection: projection, into: &context)
+                }
             }
         }
     }
@@ -296,7 +324,6 @@ struct DiagramCanvasView: View {
     private func dragGesture(_ projection: CourtProjection) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
-                let court = projection.unproject(value.location)
                 if dragEntityId == nil {
                     let start = projection.unproject(value.startLocation)
                     dragEntityId = hitTest(start, projection: projection)
@@ -307,22 +334,39 @@ struct DiagramCanvasView: View {
                         model.registerUndo("Move Entity")
                     }
                 }
-                guard let id = dragEntityId else { return }
-                // Dragging writes a keyframe at the playhead. That is the whole
-                // authoring loop: scrub to a moment, move a player, keyframe.
+                guard let id = dragEntityId, let entity = model.entity(id) else { return }
+
+                // THE BALL IS NOT DRAGGED INTO POSITION when possession is on.
+                // Writing keyframes here is what made the drop author position
+                // instead of possession — the ball had a track, possession was
+                // never recorded, and the derived pass line had nothing to
+                // derive from. The drag only previews; the drop authors.
+                if case .ball = entity.kind, model.possessionEnabled {
+                    ballDragLocation = value.location
+                    return
+                }
+
+                let court = projection.unproject(value.location)
                 model.setKeyframe(for: id, at: model.playhead, position: court)
             }
             .onEnded { value in
-                defer { dragEntityId = nil }
-                guard let id = dragEntityId,
-                      let entity = model.entity(id),
-                      case .ball = entity.kind,
-                      model.possessionEnabled else { return }
-                // Dropping the ball on a player authors possession; dropping it
-                // on a second player later authors the pass between them.
+                defer {
+                    dragEntityId = nil
+                    ballDragLocation = nil
+                }
+                guard let id = dragEntityId, let entity = model.entity(id) else { return }
+                guard case .ball = entity.kind, model.possessionEnabled else { return }
+
                 let drop = projection.unproject(value.location)
-                if let target = hitTestPlayers(drop) {
-                    model.givePossession(to: target, at: model.playhead)
+                // Target decides: the rim is a shot, a player is a pass.
+                if model.isRimTarget(drop) {
+                    model.authorShot(at: model.playhead)
+                } else if let target = hitTestPlayers(drop) {
+                    if case .held = model.ballState(at: model.playhead) {
+                        model.authorPass(to: target, at: model.playhead)
+                    } else {
+                        model.beginPossession(target, at: model.playhead)
+                    }
                 }
             }
     }

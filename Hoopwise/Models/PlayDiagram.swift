@@ -298,14 +298,18 @@ struct Possession: Identifiable, Codable, Hashable {
     var holderId: UUID
     /// When possession begins, in node-local seconds.
     var start: Double
-    /// When possession ends. Nil means "holds until the end of the node".
+    /// When possession ends — the release. Nil means "holds to the end".
     var end: Double?
+    /// How possession ended. Nil while still held.
+    var release: BallRelease?
 
-    init(id: UUID = UUID(), holderId: UUID, start: Double, end: Double? = nil) {
+    init(id: UUID = UUID(), holderId: UUID, start: Double,
+         end: Double? = nil, release: BallRelease? = nil) {
         self.id = id
         self.holderId = holderId
         self.start = start
         self.end = end
+        self.release = release
     }
 
     func contains(_ time: Double) -> Bool {
@@ -315,12 +319,25 @@ struct Possession: Identifiable, Codable, Hashable {
     }
 }
 
+/// How a possession ended.
+///
+/// The distinction is the TARGET: dropping the ball on a player is a pass,
+/// on the rim it is a shot.
+enum BallRelease: Codable, Hashable {
+    case pass(toId: UUID)
+    /// Target is the rim, in court feet, so the shot survives a court-standard
+    /// change without re-deriving from metrics that may have moved.
+    case shot(target: CGPoint)
+}
+
 /// The ball's state at a moment.
 enum BallState: Equatable {
     /// Held by an entity; position derives from the holder.
     case held(holderId: UUID)
     /// Travelling between two possessions.
     case inFlight(fromId: UUID, toId: UUID, progress: Double)
+    /// A shot in flight toward the rim.
+    case shot(fromId: UUID, target: CGPoint, progress: Double)
     /// No possession authored — the ball follows its own keyframes.
     case free
 }
@@ -410,35 +427,90 @@ struct ReadNode: Identifiable, Codable, Hashable {
 
     /// Ball state at `time`.
     ///
-    /// Held when a possession covers it; in flight in the gap between two
-    /// consecutive possessions — that gap IS the pass, and the dashed pass line
-    /// derives from it rather than being drawn separately.
-    func ballState(at time: Double) -> BallState {
+    /// Ball timing is DERIVED, not keyframed: flight duration comes from
+    /// distance / speed. A player can move fast or slow between keyframes; the
+    /// ball cannot, so its travel is computed rather than authored.
+    func ballState(at time: Double,
+                   passSpeed: Double,
+                   shotSpeed: Double,
+                   positionOf: (UUID, Double) -> CGPoint) -> BallState {
         let sorted = sortedPossessions
         guard !sorted.isEmpty else { return .free }
         if let holding = sorted.first(where: { $0.contains(time) }) {
             return .held(holderId: holding.holderId)
         }
-        for index in 0..<(sorted.count - 1) {
-            let from = sorted[index], to = sorted[index + 1]
-            guard let fromEnd = from.end, time > fromEnd, time < to.start else { continue }
-            let span = to.start - fromEnd
-            let progress = span > 0 ? (time - fromEnd) / span : 1
-            return .inFlight(fromId: from.holderId, toId: to.holderId, progress: progress)
+
+        for possession in sorted {
+            guard let releaseTime = possession.end,
+                  let release = possession.release,
+                  time > releaseTime else { continue }
+
+            let from = positionOf(possession.holderId, releaseTime)
+            switch release {
+            case .pass(let toId):
+                let to = positionOf(toId, time)
+                let distance = Double(hypot(to.x - from.x, to.y - from.y))
+                let duration = max(0.08, distance / max(passSpeed, 1))
+                guard time <= releaseTime + duration else { continue }
+                let progress = (time - releaseTime) / duration
+                return .inFlight(fromId: possession.holderId, toId: toId, progress: progress)
+
+            case .shot(let target):
+                let distance = Double(hypot(target.x - from.x, target.y - from.y))
+                let duration = max(0.12, distance / max(shotSpeed, 1))
+                guard time <= releaseTime + duration else { continue }
+                let progress = (time - releaseTime) / duration
+                return .shot(fromId: possession.holderId, target: target, progress: progress)
+            }
         }
         return .free
     }
 
-    /// Passes as (from, to, departure, arrival) — each gap between
-    /// consecutive possessions.
-    var passes: [(fromId: UUID, toId: UUID, departure: Double, arrival: Double)] {
-        let sorted = sortedPossessions
-        guard sorted.count > 1 else { return [] }
-        var result: [(UUID, UUID, Double, Double)] = []
-        for index in 0..<(sorted.count - 1) {
-            let from = sorted[index], to = sorted[index + 1]
-            guard let fromEnd = from.end, to.start > fromEnd else { continue }
-            result.append((from.holderId, to.holderId, fromEnd, to.start))
+    /// When a released ball arrives, derived from distance and speed.
+    func arrivalTime(of possession: Possession,
+                     passSpeed: Double,
+                     shotSpeed: Double,
+                     positionOf: (UUID, Double) -> CGPoint) -> Double? {
+        guard let releaseTime = possession.end, let release = possession.release else { return nil }
+        let from = positionOf(possession.holderId, releaseTime)
+        switch release {
+        case .pass(let toId):
+            let to = positionOf(toId, releaseTime)
+            let distance = Double(hypot(to.x - from.x, to.y - from.y))
+            return releaseTime + max(0.08, distance / max(passSpeed, 1))
+        case .shot(let target):
+            let distance = Double(hypot(target.x - from.x, target.y - from.y))
+            return releaseTime + max(0.12, distance / max(shotSpeed, 1))
+        }
+    }
+
+    /// Whether this entity holds the ball at `time` — the holder's own movement
+    /// line renders as a dribble.
+    func isDribbling(_ entityId: UUID, at time: Double) -> Bool {
+        sortedPossessions.contains { $0.holderId == entityId && $0.contains(time) }
+    }
+
+    /// Releases with their derived arrival, for drawing pass and shot lines.
+    ///
+    /// The line derives from possession rather than being drawn separately, so
+    /// there is one source of truth for "the ball went from here to there".
+    func releases(passSpeed: Double,
+                  shotSpeed: Double,
+                  positionOf: (UUID, Double) -> CGPoint)
+    -> [(from: CGPoint, to: CGPoint, release: BallRelease, departure: Double, arrival: Double)] {
+        var result: [(CGPoint, CGPoint, BallRelease, Double, Double)] = []
+        for possession in sortedPossessions {
+            guard let departure = possession.end, let release = possession.release else { continue }
+            guard let arrival = arrivalTime(of: possession, passSpeed: passSpeed,
+                                            shotSpeed: shotSpeed, positionOf: positionOf)
+            else { continue }
+            let from = positionOf(possession.holderId, departure)
+            let to: CGPoint
+            switch release {
+            case .pass(let toId): to = positionOf(toId, arrival)
+            case .shot(let target): to = target
+            }
+            result.append((from, to, release, departure, arrival))
         }
         return result
     }
@@ -543,29 +615,6 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
     }
 
     var canAddBall: Bool { ball == nil }
-
-    /// Where the ball renders at `time`.
-    ///
-    /// While held, it derives from the holder and needs no keyframes at all.
-    /// In flight, it interpolates between the two holders. Free, it follows its
-    /// own track like any other entity.
-    func ballPosition(at time: Double,
-                      in node: ReadNode,
-                      positionOf: (UUID, Double) -> CGPoint) -> CGPoint? {
-        guard let ball else { return nil }
-        switch node.ballState(at: time) {
-        case .held(let holderId):
-            return positionOf(holderId, time)
-        case .inFlight(let fromId, let toId, let progress):
-            let a = positionOf(fromId, time)
-            let b = positionOf(toId, time)
-            let eased = Easing.easeOut.apply(progress)
-            return CGPoint(x: a.x + (b.x - a.x) * eased,
-                           y: a.y + (b.y - a.y) * eased)
-        case .free:
-            return positionOf(ball.id, time)
-        }
-    }
 
     /// One complete way the play can unfold: the nodes walked, and the return
     /// edge that closed it if it looped.

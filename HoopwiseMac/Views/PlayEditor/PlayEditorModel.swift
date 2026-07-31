@@ -247,19 +247,83 @@ final class PlayEditorModel: ObservableObject {
 
     var possessions: [Possession] { activeNode?.sortedPossessions ?? [] }
 
-    /// Gives the ball to `holderId` from the playhead onward.
-    ///
-    /// Closes any possession still open, which is what authors a pass: A's
-    /// possession ends at t1 and B's begins at t2, and the dashed pass line
-    /// derives from that gap.
-    func givePossession(to holderId: UUID, at time: Double, flightTime: Double = 0.4) {
+    /// Rim position for the near basket, in court feet — the shot target.
+    var rimPosition: CGPoint { diagram.space.metrics.nearBasket }
+
+    /// Whether a court point is close enough to the rim to count as a shot.
+    func isRimTarget(_ court: CGPoint) -> Bool {
+        let rim = rimPosition
+        return hypot(court.x - rim.x, court.y - rim.y) <= 3.5
+    }
+
+    func ballState(at time: Double) -> BallState {
+        guard let node = activeNode else { return .free }
+        return node.ballState(at: time,
+                              passSpeed: look.passSpeedFeetPerSecond,
+                              shotSpeed: look.shotSpeedFeetPerSecond) { [weak self] id, t in
+            self?.position(of: id, at: t) ?? .zero
+        }
+    }
+
+    /// Whether this entity is dribbling at the playhead — its own movement line
+    /// then renders with the dribble convention and the ball draws none.
+    func isDribbling(_ entityId: UUID, at time: Double) -> Bool {
+        activeNode?.isDribbling(entityId, at: time) ?? false
+    }
+
+    /// Gives the ball to `holderId` starting at `time`. Used for the first drop.
+    func beginPossession(_ holderId: UUID, at time: Double) {
+        registerUndo("Give Possession")
         mutateActiveNode { node in
+            node.possessions.removeAll { $0.start >= time }
             for index in node.possessions.indices where node.possessions[index].end == nil {
                 node.possessions[index].end = max(node.possessions[index].start, time)
+                node.possessions[index].release = nil
             }
-            let start = node.possessions.isEmpty ? time : time + flightTime
-            node.possessions.append(Possession(holderId: holderId, start: start))
+            node.possessions.append(Possession(holderId: holderId, start: time))
             node.possessions.sort { $0.start < $1.start }
+        }
+    }
+
+    /// Authors a pass: the current holder releases at `time` and the receiver
+    /// gains possession when the ball ARRIVES, derived from distance / speed.
+    func authorPass(to receiverId: UUID, at time: Double) {
+        guard let node = activeNode,
+              let holding = node.sortedPossessions.last(where: { $0.contains(time) }),
+              holding.holderId != receiverId else {
+            beginPossession(receiverId, at: time)
+            return
+        }
+        registerUndo("Author Pass")
+
+        let from = position(of: holding.holderId, at: time)
+        let to = position(of: receiverId, at: time)
+        let distance = Double(hypot(to.x - from.x, to.y - from.y))
+        let arrival = time + max(0.08, distance / max(look.passSpeedFeetPerSecond, 1))
+
+        mutateActiveNode { node in
+            guard let index = node.possessions.firstIndex(where: { $0.id == holding.id })
+            else { return }
+            node.possessions[index].end = time
+            node.possessions[index].release = .pass(toId: receiverId)
+            node.possessions.removeAll { $0.start > time && $0.id != holding.id }
+            node.possessions.append(Possession(holderId: receiverId, start: arrival))
+            node.possessions.sort { $0.start < $1.start }
+        }
+    }
+
+    /// Authors a shot at the rim. Possession ends and nothing receives it.
+    func authorShot(at time: Double) {
+        guard let node = activeNode,
+              let holding = node.sortedPossessions.last(where: { $0.contains(time) }) else { return }
+        registerUndo("Author Shot")
+        let target = rimPosition
+        mutateActiveNode { node in
+            guard let index = node.possessions.firstIndex(where: { $0.id == holding.id })
+            else { return }
+            node.possessions[index].end = time
+            node.possessions[index].release = .shot(target: target)
+            node.possessions.removeAll { $0.start > time }
         }
     }
 
@@ -267,16 +331,32 @@ final class PlayEditorModel: ObservableObject {
         mutateActiveNode { $0.possessions.removeAll() }
     }
 
-    func ballState(at time: Double) -> BallState {
-        activeNode?.ballState(at: time) ?? .free
-    }
-
     /// Ball position honouring possession when enabled.
+    ///
+    /// While held it derives from the holder and the ball needs no keyframes of
+    /// its own — which is the fix for the drag gesture writing position
+    /// keyframes instead of possession.
     func ballPosition(at time: Double) -> CGPoint? {
-        guard let node = activeNode, let ball = diagram.ball else { return nil }
+        guard let ball = diagram.ball else { return nil }
         guard possessionEnabled else { return position(of: ball.id, at: time) }
-        return diagram.ballPosition(at: time, in: node) { [weak self] id, t in
-            self?.position(of: id, at: t) ?? .zero
+        switch ballState(at: time) {
+        case .held(let holderId):
+            return position(of: holderId, at: time)
+        case .inFlight(let fromId, let toId, let progress):
+            let a = position(of: fromId, at: time)
+            let b = position(of: toId, at: time)
+            return CGPoint(x: a.x + (b.x - a.x) * progress,
+                           y: a.y + (b.y - a.y) * progress)
+        case .shot(let fromId, let target, let progress):
+            let a = position(of: fromId, at: time)
+            // Shallow parabola toward the rim: lateral interpolation plus a
+            // perpendicular rise that peaks mid-flight.
+            let x = a.x + (target.x - a.x) * progress
+            let y = a.y + (target.y - a.y) * progress
+            let arc = sin(progress * .pi) * 1.6
+            return CGPoint(x: x, y: y - arc)
+        case .free:
+            return position(of: ball.id, at: time)
         }
     }
 

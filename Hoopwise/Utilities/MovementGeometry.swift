@@ -15,10 +15,13 @@ import CoreGraphics
 ///   screen     solid line ending in a perpendicular T bar, NO arrowhead
 enum MovementGeometry {
 
-    /// Head size in court feet.
-    static let arrowLengthFeet: CGFloat = 2.0
-    static let arrowHalfWidthFeet: CGFloat = 1.0
-    static let screenBarHalfWidthFeet: CGFloat = 2.0
+    // Head sizes in COURT FEET, so they scale with the court and shrink with
+    // depth under projection rather than staying a fixed pixel size. Sized
+    // relative to a ~2ft player puck: an arrowhead as long as a player is
+    // wide reads as oversized, which is what it looked like at 2.0ft.
+    static let arrowLengthFeet: CGFloat = 1.15
+    static let arrowHalfWidthFeet: CGFloat = 0.5
+    static let screenBarHalfWidthFeet: CGFloat = 1.5
     /// Wave amplitude and period for the dribble line, in feet.
     static let waveAmplitudeFeet: CGFloat = 0.6
     static let wavePeriodFeet: CGFloat = 2.4

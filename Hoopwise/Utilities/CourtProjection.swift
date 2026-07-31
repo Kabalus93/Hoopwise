@@ -65,6 +65,13 @@ struct CourtLookParameters: Codable, Hashable {
     /// inverse degrades near the horizon and the diagram stops being usable
     /// for placement.
     var minElevationDegrees: Double
+    /// Pass speed in FEET PER SECOND. Ball flight duration is derived from
+    /// distance / speed rather than keyframed, so this is the constant that
+    /// sets how snappy passes feel. Tunable against real playback.
+    var passSpeedFeetPerSecond: Double
+    /// Shot speed in feet per second. Slower than a pass, and rendered as a
+    /// shallow parabola toward the rim.
+    var shotSpeedFeetPerSecond: Double
     /// Colour scheme.
     var theme: CourtTheme
     /// Labels never render smaller than this, in POINTS.
@@ -79,11 +86,15 @@ struct CourtLookParameters: Codable, Hashable {
          minDepthScale: CGFloat = 0.45,
          minElevationDegrees: Double = 25,
          minLabelPointSize: CGFloat = 9,
+         passSpeedFeetPerSecond: Double = 34,
+         shotSpeedFeetPerSecond: Double = 26,
          theme: CourtTheme = .video) {
         self.maxConvergence = maxConvergence
         self.minDepthScale = minDepthScale
         self.minElevationDegrees = minElevationDegrees
         self.minLabelPointSize = minLabelPointSize
+        self.passSpeedFeetPerSecond = passSpeedFeetPerSecond
+        self.shotSpeedFeetPerSecond = shotSpeedFeetPerSecond
         self.theme = theme
     }
 
