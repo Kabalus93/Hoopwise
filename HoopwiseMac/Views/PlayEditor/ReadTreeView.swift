@@ -171,7 +171,11 @@ struct ReadTreeView: View {
                 Text("PLAYBACK PATH")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
-                Picker("", selection: $model.activeBranchIndex) {
+                // Clamped binding: NSPopUpButton traps on an out-of-range
+                // selection index, so the binding itself must never hand it one.
+                Picker("", selection: Binding(
+                    get: { max(0, min(model.activeBranchIndex, all.count - 1)) },
+                    set: { model.activeBranchIndex = max(0, min($0, all.count - 1)) })) {
                     ForEach(Array(all.enumerated()), id: \.offset) { index, branch in
                         Text(branch.nodes.map(\.title).joined(separator: " → "))
                             .tag(index)

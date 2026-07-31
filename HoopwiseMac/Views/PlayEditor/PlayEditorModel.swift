@@ -500,6 +500,11 @@ final class PlayEditorModel: ObservableObject {
         selectedKeyframeIds = []
         cursorEntityId = nil
         playhead = 0
+        // Stale from the previous play. The playback-path Picker bridges to
+        // NSPopUpButton, and selecting an index beyond its item range raises
+        // "Index out of range" — which is exactly what clicking a read did
+        // after switching from a play with more paths to one with fewer.
+        activeBranchIndex = 0
         stop()
         repairPossessions()
         look.theme = CourtTheme.all.first { $0.name == stored.themeName } ?? .video
@@ -523,7 +528,7 @@ final class PlayEditorModel: ObservableObject {
     var activeBranch: PlayDiagram.Branch? {
         let all = branches
         guard !all.isEmpty else { return nil }
-        return all[min(activeBranchIndex, all.count - 1)]
+        return all[max(0, min(activeBranchIndex, all.count - 1))]
     }
 
     /// Nodes on the active path, for highlighting the tree.
@@ -639,6 +644,7 @@ final class PlayEditorModel: ObservableObject {
         registerUndo("Remove Read")
         diagram.nodes[index].edges.removeAll { $0.id == edgeId }
         diagram.updatedAt = Date()
+        clampBranchIndex()
     }
 
     /// Deletes a read node and everything below it.
@@ -659,6 +665,15 @@ final class PlayEditorModel: ObservableObject {
         }
         if doomed.contains(activeNodeId) { activeNodeId = diagram.rootNodeId }
         diagram.updatedAt = Date()
+        clampBranchIndex()
+    }
+
+    /// Keeps activeBranchIndex inside the current branch list. Every structural
+    /// tree change must call this — the index outliving the list is the crash
+    /// class, not a cosmetic issue.
+    func clampBranchIndex() {
+        let count = branches.count
+        activeBranchIndex = max(0, min(activeBranchIndex, max(0, count - 1)))
     }
 
     func renameNode(_ nodeId: UUID, to title: String) {
