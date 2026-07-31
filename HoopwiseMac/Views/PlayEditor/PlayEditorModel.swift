@@ -908,6 +908,26 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - Landmark snapping
+
+    /// Magnet: entities snap to blocks, elbows, slots, corners and the top of
+    /// the key while dragging.
+    @Published var snapToLandmarks = true
+    private static let landmarkSnapFeet: CGFloat = 1.4
+
+    /// Snaps a court point to the nearest landmark when the magnet is on.
+    func maybeSnap(_ court: CGPoint) -> CGPoint {
+        guard snapToLandmarks else { return court }
+        let candidates = CourtGeometry(space: diagram.space).landmarks()
+        var best = court
+        var bestDistance = Self.landmarkSnapFeet
+        for landmark in candidates {
+            let d = hypot(landmark.x - court.x, landmark.y - court.y)
+            if d < bestDistance { bestDistance = d; best = landmark }
+        }
+        return best
+    }
+
     // MARK: - Work area
 
     /// In/out range for looped playback — the AE ritual for iterating one

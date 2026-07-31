@@ -226,6 +226,12 @@ struct PlayEditorView: View {
             .toggleStyle(.button)
             .help("Ball follows possession (S). Off lets you keyframe it freehand.")
 
+            Toggle(isOn: $model.snapToLandmarks) {
+                Label("Snap", systemImage: "dot.scope")
+            }
+            .toggleStyle(.button)
+            .help("Snap entities to court landmarks — blocks, elbows, slots, corners, top of key")
+
             Toggle(isOn: $model.showGhostTrails) {
                 Label("Trails", systemImage: "circle.dotted.and.circle")
             }

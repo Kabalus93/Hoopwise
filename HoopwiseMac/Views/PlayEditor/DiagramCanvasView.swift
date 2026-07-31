@@ -429,7 +429,7 @@ struct DiagramCanvasView: View {
     // MARK: - Interaction
 
     private func handleTap(at location: CGPoint, projection: CourtProjection) {
-        let court = projection.unproject(location)
+        let court = model.maybeSnap(projection.unproject(location))
         if let kind = placementKind {
             model.addEntity(kind: kind, at: court, label: nextLabel(for: kind))
             onPlaced()
@@ -519,7 +519,7 @@ struct DiagramCanvasView: View {
                     return
                 }
 
-                let court = projection.unproject(value.location)
+                let court = model.maybeSnap(projection.unproject(value.location))
                 // Keyframes are node-local; the playhead is absolute.
                 model.setKeyframe(for: id, at: model.currentLocalTime, position: court)
             }

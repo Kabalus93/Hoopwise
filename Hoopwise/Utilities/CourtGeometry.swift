@@ -259,6 +259,43 @@ struct CourtGeometry {
     }
 }
 
+// MARK: - Landmarks
+
+extension CourtGeometry {
+    /// Named court positions entities snap to. Derived from CourtMetrics so
+    /// NBA and FIBA both come out right, and mirrored for the far end in full
+    /// court — never hardcoded points.
+    func landmarks() -> [CGPoint] {
+        let m = metrics
+        let cx = m.width / 2
+        let laneEdge = m.keyWidth / 2
+        let junction = cornerArcJunctionFromBaseline
+
+        func end(_ y: (CGFloat) -> CGFloat) -> [CGPoint] {
+            [
+                CGPoint(x: cx, y: y(m.basketFromBaseline)),                    // rim
+                CGPoint(x: cx - laneEdge, y: y(7)),                            // blocks
+                CGPoint(x: cx + laneEdge, y: y(7)),
+                CGPoint(x: cx - laneEdge, y: y(m.freeThrowLineFromBaseline)),  // elbows
+                CGPoint(x: cx + laneEdge, y: y(m.freeThrowLineFromBaseline)),
+                CGPoint(x: cx, y: y(m.freeThrowLineFromBaseline + m.freeThrowCircleRadius)), // top of key
+                CGPoint(x: cx - laneEdge - 4, y: y(m.freeThrowLineFromBaseline + 3)), // slots
+                CGPoint(x: cx + laneEdge + 4, y: y(m.freeThrowLineFromBaseline + 3)),
+                CGPoint(x: m.cornerThreeInsetFromSideline + 1, y: y(2)),       // corners
+                CGPoint(x: m.width - m.cornerThreeInsetFromSideline - 1, y: y(2)),
+                CGPoint(x: cx - m.width * 0.3, y: y(junction + 3)),            // wings
+                CGPoint(x: cx + m.width * 0.3, y: y(junction + 3)),
+            ]
+        }
+
+        var points = end { $0 }
+        if space.mode == .full {
+            points += end { m.fullLength - $0 }
+        }
+        return points
+    }
+}
+
 // MARK: - Transform
 
 /// Court feet to view points.
