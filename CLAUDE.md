@@ -252,6 +252,40 @@ it produces confident wrong numbers the coach reconciles books against.
   both had to be split into explicit statements. Write geometry as explicit
   typed steps, not one expression.
 
+## Court editor phase (August 2026) — what landed and its rules
+- Playhead is ABSOLUTE branch time. Chained playback resolution lives in
+  PlayDiagram (segmentIndex/resolvedPosition/segmentPosition over
+  BranchSteps), NOT the view model — the frame exporter uses the same
+  resolver so playback and export cannot disagree. Boundary continuity is
+  by construction: a read without a track resolves to the branch-moment
+  position recursively.
+- The playback-path Picker bridges to NSPopUpButton, which TRAPS on an
+  out-of-range selection index. activeBranchIndex must be reset on load
+  and clamped after every structural tree change (clampBranchIndex), and
+  the binding clamps both directions.
+- Auto-dribble is COMPUTED at render from (movement AND possession
+  overlap) at segment midpoints. Never store a dribble style.
+- Easing gained .hold (apply() = 0): previous value holds, jumps at the
+  keyframe. Context-menu interpolation actions set the segment LEAVING
+  the clicked key, which this model stores on the ARRIVING keyframe —
+  the off-by-one is deliberate; see setOutgoingEasing.
+- Layer eye/lock/solo are transient editor state, deliberately outside
+  undo. Locked and hidden layers pass canvas clicks through.
+- Save to Playbook: family lives in SDPlay.formation, note in
+  playDescription, thumbnail PATH in the legacy diagramUrl (bytes on disk
+  under Application Support, never CloudKit). savedToPlaybook derives
+  from formation being non-empty. No close prompt by design: the diagram
+  autosaves continuously, so a data-loss prompt would lie; the edited dot
+  signals unpublished metadata only.
+- PlayFrameExporter.renderFrame is THE export renderer: absolute time,
+  transparent background (verified: corner alpha 0, court alpha 255 at
+  1080p), same geometry/projection/movement code as the canvas. The PNG
+  sequence and ProRes 4444 encoders must consume it, not re-render.
+- SwiftUI type-checker budget failures in this codebase so far: bezier
+  flattening, hitTest chain, drillDetailColumn, and the editor's body
+  modifier chain. Write geometry and long modifier chains as explicit
+  statements / hoisted subviews.
+
 ## Export decisions
 - PDF: draw with CoreGraphics into CGPDFContext. NOT ImageRenderer —
   it silently rasterizes any view containing materials, blurs, or images,
