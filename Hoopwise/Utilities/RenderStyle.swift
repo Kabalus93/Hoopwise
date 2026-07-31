@@ -191,6 +191,30 @@ enum PathConsumption {
                               headAngle: atan2(last.y - previous.y, last.x - previous.x))
     }
 
+    /// The head belongs to the TRACK, not a segment: it sits at the
+    /// destination, oriented to the final tangent, and is visible whenever any
+    /// portion of the path is — disappearing with the last consumed piece.
+    /// Gating it to the final segment's own window left mid-path frames with
+    /// no direction cue at all.
+    static func trackHead(track: Track, at t: Double,
+                          style: RenderStyle) -> (at: CGPoint, angle: CGFloat)? {
+        let frames = track.sortedKeyframes
+        guard frames.count > 1, let last = frames.last else { return nil }
+        // Any segment visible?
+        var anyVisible = false
+        for index in 0..<(frames.count - 1) {
+            if visibleSegment(track: track, from: frames[index], to: frames[index + 1],
+                              at: t, style: style, samples: 4) != nil {
+                anyVisible = true
+                break
+            }
+        }
+        guard anyVisible else { return nil }
+        let beforeEnd = track.position(at: last.t - 0.06) ?? last.position
+        let angle = atan2(last.position.y - beforeEnd.y, last.position.x - beforeEnd.x)
+        return (last.position, angle)
+    }
+
     private static func fullSegment(track: Track, from: Keyframe, to: Keyframe,
                                     samples: Int) -> VisibleSegment? {
         var points: [CGPoint] = []

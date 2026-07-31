@@ -134,6 +134,10 @@ struct DiagramCanvasView: View {
 
         var brush = context
         brush.addFilter(.blur(radius: blurRadius))
+        // Heads composite through a LIGHTER blur so they stay soft-edged but
+        // structurally crisp — full path blur ate the direction entirely.
+        var headBrush = context
+        headBrush.addFilter(.blur(radius: blurRadius * 0.5))
         let brushStyle = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
 
         for step in model.activeSteps {
@@ -154,21 +158,30 @@ struct DiagramCanvasView: View {
                     brush.stroke(Path(projection.project(path: line)),
                                  with: .color(stroke), style: brushStyle)
 
-                    // ONE head per path, at the destination — a multi-keyframe
-                    // cut is one movement in the video language, so direction
-                    // changes must not sprout their own arrowheads. Screens
-                    // keep the T-bar at the screen point.
-                    let isScreen = frames[index].pathKind == .screen
-                    let isFinal = index == frames.count - 2
-                    guard isScreen || isFinal else { continue }
-                    let head: CGPath = isScreen
-                        ? MovementGeometry.brushScreenBar(
+                    // Screens keep their T-bar at the screen point.
+                    if frames[index].pathKind == .screen {
+                        let bar = MovementGeometry.brushScreenBar(
                             at: visible.headAt, angle: visible.headAngle,
                             halfWidthFeet: projection.transform.courtFeet(width))
-                        : MovementGeometry.hookedHead(
-                            at: visible.headAt, angle: visible.headAngle)
-                    brush.stroke(Path(projection.project(path: head)),
-                                 with: .color(stroke), style: brushStyle)
+                        headBrush.stroke(Path(projection.project(path: bar)),
+                                         with: .color(stroke), style: brushStyle)
+                    }
+                }
+
+                // ONE chevron per track, at the destination, visible whenever
+                // any part of the path is. A solid filled shape survives blur;
+                // fill + round-join stroke rounds the corners.
+                if track.sortedKeyframes.last?.pathKind != .screen,
+                   let head = PathConsumption.trackHead(track: track, at: localT, style: style) {
+                    let chevron = MovementGeometry.filledChevronHead(
+                        at: head.at, angle: head.angle,
+                        strokeWidthFeet: projection.transform.courtFeet(width))
+                    let projected = Path(projection.project(path: chevron))
+                    headBrush.fill(projected, with: .color(stroke))
+                    headBrush.stroke(projected, with: .color(stroke),
+                                     style: StrokeStyle(lineWidth: width * 0.4,
+                                                        lineCap: .round,
+                                                        lineJoin: .round))
                 }
             }
 

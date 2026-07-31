@@ -104,6 +104,38 @@ enum MovementGeometry {
         return path
     }
 
+    /// Filled chevron head for the presentation brush.
+    ///
+    /// A SOLID shape survives blur; the two-stroke hooked V smeared into a
+    /// directionless blob under the gaussian pass. Closed wedge with a concave
+    /// back (chevron, not plain triangle), sized from the stroke width so it
+    /// scales with the brush: length ~2.35x stroke width, splay ~60 degrees.
+    /// Corners are rounded by the caller filling AND stroking with round joins.
+    static func filledChevronHead(at tip: CGPoint, angle: CGFloat,
+                                  strokeWidthFeet: CGFloat) -> CGPath {
+        let length = strokeWidthFeet * 2.35
+        let splay: CGFloat = 30 * .pi / 180        // half of ~60 degrees
+        let back = CGPoint(x: tip.x - cos(angle) * length,
+                           y: tip.y - sin(angle) * length)
+        let leftAngle = angle + .pi - splay
+        let rightAngle = angle + .pi + splay
+        let left = CGPoint(x: tip.x + cos(leftAngle) * length,
+                           y: tip.y + sin(leftAngle) * length)
+        let right = CGPoint(x: tip.x + cos(rightAngle) * length,
+                            y: tip.y + sin(rightAngle) * length)
+        // Concave back point sits partway toward the tip, making the chevron.
+        let notch = CGPoint(x: tip.x - cos(angle) * length * 0.55,
+                            y: tip.y - sin(angle) * length * 0.55)
+        _ = back
+        let path = CGMutablePath()
+        path.move(to: tip)
+        path.addLine(to: left)
+        path.addLine(to: notch)
+        path.addLine(to: right)
+        path.closeSubpath()
+        return path
+    }
+
     /// Hooked V arrowhead for the presentation brush: two strokes meeting at
     /// the tip, slightly asymmetric, STROKED in the same soft brush — not a
     /// filled geometric triangle. Sized in court feet like everything else.

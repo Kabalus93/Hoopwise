@@ -221,13 +221,19 @@ enum PlayFrameExporter {
                                        transform: CourtTransform,
                                        size: CGSize,
                                        look: CourtLookParameters) {
-        guard let layer = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
-                                    bitsPerComponent: 8, bytesPerRow: 0,
-                                    space: CGColorSpaceCreateDeviceRGB(),
-                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-        else { return }
-        layer.translateBy(x: 0, y: size.height)
-        layer.scaleBy(x: 1, y: -1)
+        func makeLayer() -> CGContext? {
+            guard let ctx = CGContext(data: nil, width: Int(size.width), height: Int(size.height),
+                                      bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return nil }
+            ctx.translateBy(x: 0, y: size.height)
+            ctx.scaleBy(x: 1, y: -1)
+            return ctx
+        }
+        // Heads live on their own layer with a LIGHTER blur — the full path
+        // blur smeared them into directionless blobs.
+        guard let layer = makeLayer(), let headLayer = makeLayer() else { return }
 
         let midDepth = projection.depthScale(at: CGPoint(x: diagram.space.width / 2,
                                                          y: diagram.space.length / 2))
@@ -251,18 +257,37 @@ enum PlayFrameExporter {
                     layer.addPath(projection.project(
                         path: MovementGeometry.line(points: visible.points, kind: .run)))
                     layer.strokePath()
-                    // ONE head per path, at the destination; screens keep their
-                    // T-bar. Direction changes must not sprout arrowheads.
-                    let isScreen = frames[index].pathKind == .screen
-                    guard isScreen || index == frames.count - 2 else { continue }
-                    let head: CGPath = isScreen
-                        ? MovementGeometry.brushScreenBar(at: visible.headAt,
-                                                          angle: visible.headAngle,
-                                                          halfWidthFeet: transform.courtFeet(width))
-                        : MovementGeometry.hookedHead(at: visible.headAt,
-                                                      angle: visible.headAngle)
-                    layer.addPath(projection.project(path: head))
-                    layer.strokePath()
+                    // Screens keep their T-bar at the screen point.
+                    if frames[index].pathKind == .screen {
+                        headLayer.setStrokeColor(cgColor(style.pathStrokeHex))
+                        headLayer.setLineCap(.round)
+                        headLayer.setLineJoin(.round)
+                        headLayer.setLineWidth(width)
+                        headLayer.addPath(projection.project(
+                            path: MovementGeometry.brushScreenBar(
+                                at: visible.headAt, angle: visible.headAngle,
+                                halfWidthFeet: transform.courtFeet(width))))
+                        headLayer.strokePath()
+                    }
+                }
+
+                // ONE chevron per track at the destination, visible whenever
+                // any part of the path is.
+                if track.sortedKeyframes.last?.pathKind != .screen,
+                   let head = PathConsumption.trackHead(track: track, at: localT, style: style) {
+                    let chevron = projection.project(
+                        path: MovementGeometry.filledChevronHead(
+                            at: head.at, angle: head.angle,
+                            strokeWidthFeet: transform.courtFeet(width)))
+                    headLayer.setStrokeColor(cgColor(style.pathStrokeHex))
+                    headLayer.setFillColor(cgColor(style.pathStrokeHex))
+                    headLayer.setLineCap(.round)
+                    headLayer.setLineJoin(.round)
+                    headLayer.addPath(chevron)
+                    headLayer.fillPath()
+                    headLayer.setLineWidth(width * 0.4)
+                    headLayer.addPath(chevron)
+                    headLayer.strokePath()
                 }
             }
             // Remaining pass flight ahead of the ball, same brush.
@@ -292,21 +317,25 @@ enum PlayFrameExporter {
             }
         }
 
-        guard let raw = layer.makeImage() else { return }
-        // Blur AFTER trimming, path layer only.
-        let ci = CIImage(cgImage: raw)
-        let blurred = ci.applyingGaussianBlur(sigma: Double(width * style.pathBlurFactor))
-            .cropped(to: ci.extent)
+        // Blur AFTER trimming: full radius on the path layer, HALF on the head
+        // layer so direction stays legible.
         let ciContext = CIContext()
-        guard let composited = ciContext.createCGImage(blurred, from: ci.extent) else {
-            context.draw(raw, in: CGRect(origin: .zero, size: size))
-            return
+        func blurred(_ ctx: CGContext, sigma: Double) -> CGImage? {
+            guard let raw = ctx.makeImage() else { return nil }
+            let ci = CIImage(cgImage: raw)
+            let out = ci.applyingGaussianBlur(sigma: sigma).cropped(to: ci.extent)
+            return ciContext.createCGImage(out, from: ci.extent)
         }
         context.saveGState()
-        // The frame context is already y-flipped; draw the layer unflipped.
+        // The frame context is already y-flipped; draw layers unflipped.
         context.translateBy(x: 0, y: size.height)
         context.scaleBy(x: 1, y: -1)
-        context.draw(composited, in: CGRect(origin: .zero, size: size))
+        if let paths = blurred(layer, sigma: Double(width * style.pathBlurFactor)) {
+            context.draw(paths, in: CGRect(origin: .zero, size: size))
+        }
+        if let heads = blurred(headLayer, sigma: Double(width * style.pathBlurFactor) * 0.5) {
+            context.draw(heads, in: CGRect(origin: .zero, size: size))
+        }
         context.restoreGState()
     }
 
