@@ -908,6 +908,19 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - Work area
+
+    /// In/out range for looped playback — the AE ritual for iterating one
+    /// action. Set by shift-dragging in the ruler; cleared by double-click.
+    @Published var workArea: ClosedRange<Double>?
+
+    func setWorkArea(from a: Double, to b: Double) {
+        let lower = max(0, min(a, b))
+        let upper = min(timelineDuration, max(a, b))
+        guard upper - lower > 0.1 else { return }
+        workArea = lower...upper
+    }
+
     // MARK: - Ghost trails
 
     /// Show each moving entity's recent positions at decaying opacity during
@@ -1289,7 +1302,11 @@ final class PlayEditorModel: ObservableObject {
 
     func play() {
         guard !isPlaying else { return }
-        if playhead >= timelineDuration - 0.05 { playhead = 0 }
+        if let area = workArea {
+            if !area.contains(playhead) { playhead = area.lowerBound }
+        } else if playhead >= timelineDuration - 0.05 {
+            playhead = 0
+        }
         isPlaying = true
         lastTick = Date()
         playbackTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common)
@@ -1311,7 +1328,10 @@ final class PlayEditorModel: ObservableObject {
         let delta = lastTick.map { now.timeIntervalSince($0) } ?? (1.0 / 60.0)
         lastTick = now
         playhead += delta
-        if playhead >= timelineDuration {
+        if let area = workArea {
+            // Loop the work area rather than stopping.
+            if playhead >= area.upperBound { playhead = area.lowerBound }
+        } else if playhead >= timelineDuration {
             playhead = timelineDuration
             stop()
         }

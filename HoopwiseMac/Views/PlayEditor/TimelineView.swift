@@ -111,12 +111,33 @@ struct TimelineView: View {
             }
             .frame(width: width, height: rulerHeight)
             .contentShape(Rectangle())
+            .overlay(alignment: .leading) {
+                // Work-area band.
+                if let area = model.workArea {
+                    let x0 = CGFloat(area.lowerBound / duration) * width
+                    let x1 = CGFloat(area.upperBound / duration) * width
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.18))
+                        .overlay(Rectangle().stroke(Color.accentColor.opacity(0.5), lineWidth: 1))
+                        .frame(width: max(1, x1 - x0), height: rulerHeight)
+                        .offset(x: x0)
+                        .allowsHitTesting(false)
+                }
+            }
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
-                    model.stop()
-                    model.playhead = min(max(0, Double(value.location.x / width) * duration), duration)
+                    let t = min(max(0, Double(value.location.x / width) * duration), duration)
+                    // Shift-drag sets the work area; a plain drag scrubs.
+                    if NSEvent.modifierFlags.contains(.shift) {
+                        let start = min(max(0, Double(value.startLocation.x / width) * duration), duration)
+                        model.setWorkArea(from: start, to: t)
+                    } else {
+                        model.stop()
+                        model.playhead = t
+                    }
                 }
             )
+            .onTapGesture(count: 2) { model.workArea = nil }
         }
         .frame(height: rulerHeight)
     }
