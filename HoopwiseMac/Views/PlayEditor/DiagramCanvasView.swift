@@ -11,9 +11,6 @@ struct DiagramCanvasView: View {
     var onPlaced: () -> Void
 
     @State private var dragEntityId: UUID?
-    /// Where the ball is being dragged, for the drop preview. The ball is never
-    /// keyframed by dragging when possession is on.
-    @State private var ballDragLocation: CGPoint?
 
     // Court-feet radii, so markers stay the right size relative to the floor.
     private let puckRadiusFeet: CGFloat = 1.6
@@ -32,6 +29,7 @@ struct DiagramCanvasView: View {
                 draw(court: projection, into: &context)
                 drawMotionPaths(projection, into: &context)
                 drawEntities(projection, into: &context)
+                drawBallDragPreview(projection, into: &context)
             }
             .contentShape(Rectangle())
             .onAppear { model.lastProjection = projection }
@@ -226,7 +224,9 @@ struct DiagramCanvasView: View {
 
         for entity in props { drawEntity(entity, projection, into: &context) }
         for entity in players { drawEntity(entity, projection, into: &context) }
-        if let ball { drawEntity(ball, projection, into: &context) }
+        // Mid-drag the ball renders under the cursor in the preview layer, not
+        // at its resolved position — "in hand", visible the whole drag.
+        if let ball, !model.isBallDragging { drawEntity(ball, projection, into: &context) }
 
         // Labels last: always legible, never occluded by a puck drawn after.
         for entity in players + (ball.map { [$0] } ?? []) {
@@ -305,6 +305,56 @@ struct DiagramCanvasView: View {
     private func markRadius(for entity: DiagramEntity, puckRadius: CGFloat) -> CGFloat {
         if case .ball = entity.kind { return puckRadius * 0.68 }
         return puckRadius
+    }
+
+    /// Live feedback while dragging the ball: enlarged glowing glyph under the
+    /// cursor, a provisional dashed line from the current holder, and a ring on
+    /// the receiver it would snap to.
+    private func drawBallDragPreview(_ projection: CourtProjection,
+                                     into context: inout GraphicsContext) {
+        guard let cursor = model.ballDragLocation else { return }
+        let ballColor = Color(hex: model.theme.ballHex)
+
+        // Provisional dashed line from the holder (or the ball's rest point).
+        let fromCourt: CGPoint
+        switch model.ballState(at: model.playhead) {
+        case .held(let holderId):
+            fromCourt = model.resolvedPosition(of: holderId, at: model.playhead)
+        case .atRest(let point):
+            fromCourt = point
+        case .inFlight(let from, _, _, _):
+            fromCourt = from
+        }
+        let fromView = projection.project(fromCourt)
+        // Snapped: the line goes to the receiver, not the raw cursor.
+        let toView: CGPoint
+        if let target = model.ballDragSnapTarget {
+            let targetCourt = model.resolvedPosition(of: target, at: model.playhead)
+            toView = projection.project(targetCourt)
+            // Highlight ring on the receiver.
+            let depth = projection.depthScale(at: targetCourt)
+            let radius = projection.transform.length(puckRadiusFeet) * depth + 5
+            let ring = CGRect(x: toView.x - radius, y: toView.y - radius,
+                              width: radius * 2, height: radius * 2)
+            context.stroke(Path(ellipseIn: ring), with: .color(ballColor),
+                           style: StrokeStyle(lineWidth: 2.5))
+        } else {
+            toView = cursor
+        }
+        var line = Path()
+        line.move(to: fromView)
+        line.addLine(to: toView)
+        context.stroke(line, with: .color(ballColor.opacity(0.85)),
+                       style: StrokeStyle(lineWidth: 1.8, lineCap: .round, dash: [7, 5]))
+
+        // The ball itself, slightly enlarged with a glow so it reads as in hand.
+        let radius = projection.transform.length(puckRadiusFeet) * 0.85
+        let glyph = CGRect(x: cursor.x - radius, y: cursor.y - radius,
+                           width: radius * 2, height: radius * 2)
+        var glow = context
+        glow.addFilter(.shadow(color: ballColor.opacity(0.8), radius: 8))
+        glow.fill(Path(ellipseIn: glyph), with: .color(ballColor))
+        context.stroke(Path(ellipseIn: glyph), with: .color(.white.opacity(0.9)), lineWidth: 1.2)
     }
 
     private func drawLabel(_ entity: DiagramEntity,
@@ -417,12 +467,12 @@ struct DiagramCanvasView: View {
                 guard let id = dragEntityId, let entity = model.entity(id) else { return }
 
                 // THE BALL IS NOT DRAGGED INTO POSITION when possession is on.
-                // Writing keyframes here is what made the drop author position
-                // instead of possession — the ball had a track, possession was
-                // never recorded, and the derived pass line had nothing to
-                // derive from. The drag only previews; the drop authors.
+                // The drag only previews; the drop authors.
                 if case .ball = entity.kind, model.possessionEnabled {
-                    ballDragLocation = value.location
+                    guard !model.ballDragCancelled else { return }   // Esc: stop previewing
+                    model.ballDragLocation = value.location
+                    let court = projection.unproject(value.location)
+                    model.ballDragSnapTarget = hitTestPlayers(court)
                     return
                 }
 
@@ -433,21 +483,29 @@ struct DiagramCanvasView: View {
             .onEnded { value in
                 defer {
                     dragEntityId = nil
-                    ballDragLocation = nil
+                    model.ballDragLocation = nil
+                    model.ballDragSnapTarget = nil
+                    model.ballDragCancelled = false
                 }
+                // Esc during the drag: revert with no state mutation.
+                guard !model.ballDragCancelled else { return }
                 guard let id = dragEntityId, let entity = model.entity(id) else { return }
                 guard case .ball = entity.kind, model.possessionEnabled else { return }
 
+                // Snap: commit to the highlighted receiver, not the raw drop
+                // point, so what the preview showed is what happens.
                 let drop = projection.unproject(value.location)
                 // Target decides: the rim is a shot, a player is a pass.
                 if model.isRimTarget(drop) {
                     model.authorShot(at: model.currentLocalTime)
-                } else if let target = hitTestPlayers(drop) {
+                } else if let target = model.ballDragSnapTarget ?? hitTestPlayers(drop) {
                     // authorPass falls back to beginPossession itself when
                     // there is no prior holder, so the caller does not need to
                     // second-guess the state machine.
                     model.authorPass(to: target, at: model.currentLocalTime)
                 }
+                // Drop over empty court: revert. No loose-ball state exists and
+                // this deliberately does not invent one.
             }
     }
 }

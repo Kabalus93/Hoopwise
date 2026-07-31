@@ -893,6 +893,26 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - Live Ball Drag
+
+    /// View-space cursor location while the ball is being dragged, or nil.
+    /// On the model because Esc is handled by the parent view and must be able
+    /// to cancel the canvas's gesture mid-flight.
+    @Published var ballDragLocation: CGPoint?
+    /// Receiver currently within snap radius, for the highlight ring.
+    @Published var ballDragSnapTarget: UUID?
+    /// Set by Esc. The gesture observes it, stops previewing, and its drop
+    /// mutates nothing.
+    @Published var ballDragCancelled = false
+
+    var isBallDragging: Bool { ballDragLocation != nil }
+
+    func cancelBallDrag() {
+        ballDragCancelled = true
+        ballDragLocation = nil
+        ballDragSnapTarget = nil
+    }
+
     // MARK: - Debug Readout
 
     @Published var showDebugPanel = false

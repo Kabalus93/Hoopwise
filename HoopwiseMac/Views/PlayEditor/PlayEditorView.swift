@@ -98,8 +98,14 @@ struct PlayEditorView: View {
         }
         .focusable()
         .onKeyPress(.escape) {
-            placementKind = nil
-            model.activeToolName = "Select"
+            // Mid ball-drag, Esc cancels the drag cleanly; otherwise it
+            // deselects the tool.
+            if model.isBallDragging {
+                model.cancelBallDrag()
+            } else {
+                placementKind = nil
+                model.activeToolName = "Select"
+            }
             return .handled
         }
         .onKeyPress(.delete) {
