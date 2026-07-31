@@ -31,12 +31,36 @@ import CoreGraphics
 //   y = 0 near baseline, y increasing away from the near basket
 //   y is UP here. CourtTransform applies the flip to view space.
 
-/// Court markings split by stroke style.
+/// Court markings, split by how they are drawn.
+///
+/// Fills are separate paths rather than styling hints because the video style
+/// is white line work over a coloured floor: the renderer fills the regions
+/// first, then strokes the lines on top. A stroke-only CourtPaths forced every
+/// caller to reconstruct the painted areas itself.
 struct CourtPaths {
+    /// The whole playing surface.
+    var floor: CGPath
+    /// The painted lane(s). Both ends in full-court mode.
+    var paint: CGPath
+    /// Restricted-area semicircle(s) under the basket.
+    var restrictedArea: CGPath
+    /// Centre circle. Half of it in half-court mode.
+    var centerCircle: CGPath
     /// Everything drawn as a solid line.
     var solid: CGPath
-    /// Everything drawn dashed — free-throw circles, restricted-area arcs.
+    /// Everything drawn dashed — free-throw circles.
     var dashed: CGPath
+
+    /// Fill regions in back-to-front paint order.
+    var fillRegions: [(path: CGPath, role: CourtFillRole)] {
+        [(floor, .floor), (paint, .paint),
+         (restrictedArea, .restrictedArea), (centerCircle, .centerCircle)]
+    }
+}
+
+/// What a fill region represents, so callers can colour it without guessing.
+enum CourtFillRole: String, CaseIterable, Hashable {
+    case floor, paint, restrictedArea, centerCircle
 }
 
 /// Builds court markings in court feet from a `CourtSpace`.
@@ -72,36 +96,49 @@ struct CourtGeometry {
     func paths() -> CourtPaths {
         let solid = CGMutablePath()
         let dashed = CGMutablePath()
+        let paint = CGMutablePath()
+        let restricted = CGMutablePath()
+        let centre = CGMutablePath()
         let m = metrics
 
+        let floor = CGPath(rect: CGRect(x: 0, y: 0, width: space.width, height: space.length),
+                           transform: nil)
         // Outer boundary.
         solid.addRect(CGRect(x: 0, y: 0, width: space.width, height: space.length))
 
         switch space.mode {
         case .half:
-            addEnd(solid: solid, dashed: dashed, mirrored: false)
+            addEnd(solid: solid, dashed: dashed, paint: paint, restricted: restricted,
+                   mirrored: false)
             // The half-court line is the far edge of a half-court diagram, so
             // the boundary already drew it. Only the centre semicircle is left.
             addCentreCircle(into: solid, atY: space.length, halfOnly: true)
+            addCentreCircle(into: centre, atY: space.length, halfOnly: true)
 
         case .full:
-            addEnd(solid: solid, dashed: dashed, mirrored: false)
-            addEnd(solid: solid, dashed: dashed, mirrored: true)
+            addEnd(solid: solid, dashed: dashed, paint: paint, restricted: restricted,
+                   mirrored: false)
+            addEnd(solid: solid, dashed: dashed, paint: paint, restricted: restricted,
+                   mirrored: true)
 
             let midY = m.fullLength / 2
             solid.move(to: CGPoint(x: 0, y: midY))
             solid.addLine(to: CGPoint(x: m.width, y: midY))
             addCentreCircle(into: solid, atY: midY, halfOnly: false)
+            addCentreCircle(into: centre, atY: midY, halfOnly: false)
         }
 
-        return CourtPaths(solid: solid, dashed: dashed)
+        return CourtPaths(floor: floor, paint: paint, restrictedArea: restricted,
+                          centerCircle: centre, solid: solid, dashed: dashed)
     }
 
     // MARK: - One End
 
     /// Draws one basket's markings. `mirrored` flips to the far end, which only
     /// happens in `.full` mode.
-    private func addEnd(solid: CGMutablePath, dashed: CGMutablePath, mirrored: Bool) {
+    private func addEnd(solid: CGMutablePath, dashed: CGMutablePath,
+                        paint: CGMutablePath, restricted: CGMutablePath,
+                        mirrored: Bool) {
         let m = metrics
         let centreX = m.width / 2
 
@@ -114,10 +151,12 @@ struct CourtGeometry {
         let laneLeft = centreX - m.keyWidth / 2
         let laneNear = y(0)
         let laneFar = y(m.freeThrowLineFromBaseline)
-        solid.addRect(CGRect(x: laneLeft,
-                             y: min(laneNear, laneFar),
-                             width: m.keyWidth,
-                             height: abs(laneFar - laneNear)))
+        let laneRect = CGRect(x: laneLeft,
+                              y: min(laneNear, laneFar),
+                              width: m.keyWidth,
+                              height: abs(laneFar - laneNear))
+        solid.addRect(laneRect)
+        paint.addRect(laneRect)
 
         // Free-throw circle, dashed. Drawn whole; the lane rect overlaps its
         // near half, which is how coaching diagrams conventionally read.
@@ -171,6 +210,14 @@ struct CourtGeometry {
                       startAngle: restrictedStart,
                       endAngle: restrictedEnd,
                       clockwise: mirrored)
+        // Closed version for filling.
+        restricted.move(to: basket)
+        restricted.addArc(center: basket,
+                          radius: m.restrictedAreaRadius,
+                          startAngle: restrictedStart,
+                          endAngle: restrictedEnd,
+                          clockwise: mirrored)
+        restricted.closeSubpath()
     }
 
     private func addCentreCircle(into path: CGMutablePath, atY centreY: CGFloat, halfOnly: Bool) {
@@ -238,4 +285,19 @@ struct CourtTransform {
 
     /// Court feet to points, for line widths and marker radii.
     func length(_ courtFeet: CGFloat) -> CGFloat { courtFeet * scale }
+
+    /// View points back to court feet — the exact inverse of `point`.
+    ///
+    /// Every drag, placement and hit test in the editor needs this. Note the
+    /// y flip: view y grows downward, court y grows away from the near basket.
+    func inverse(_ viewPoint: CGPoint) -> CGPoint {
+        guard scale > 0 else { return .zero }
+        return CGPoint(x: (viewPoint.x - origin.x) / scale,
+                       y: (origin.y + courtSize.height - viewPoint.y) / scale)
+    }
+
+    /// Points back to court feet, for distances.
+    func courtFeet(_ points: CGFloat) -> CGFloat {
+        scale > 0 ? points / scale : 0
+    }
 }

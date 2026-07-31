@@ -524,6 +524,105 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
     var nodeCount: Int { nodes.count }
 }
 
+// MARK: - Mirroring
+
+extension PlayDiagram {
+    /// Flips the play across the court's long axis: x → width − x.
+    ///
+    /// A MODEL operation, not a render flag. Mirroring at render time would
+    /// leave the stored geometry and the teaching-point text disagreeing with
+    /// what is on screen, and any export that skipped the flag would emit the
+    /// unmirrored play.
+    ///
+    /// Left/right words in prose are swapped too. A mirrored play whose
+    /// coaching note still says "cut off the left elbow" is worse than not
+    /// mirroring at all, because the diagram now contradicts its own
+    /// instructions.
+    func mirroredHorizontally() -> PlayDiagram {
+        var copy = self
+        let width = space.width
+
+        func flip(_ point: CGPoint) -> CGPoint {
+            CGPoint(x: width - point.x, y: point.y)
+        }
+
+        copy.entities = entities.map { entity in
+            var e = entity
+            e.homePosition = flip(entity.homePosition)
+            if case .annotation(.polygon(let points)) = entity.kind {
+                e.kind = .annotation(.polygon(points.map(flip)))
+            }
+            return e
+        }
+
+        copy.nodes = nodes.map { node in
+            var n = node
+            n.teachingPoints = node.teachingPoints.map { Self.swapSides(in: $0) }
+            n.tracks = node.tracks.map { track in
+                var t = track
+                t.keyframes = track.keyframes.map { frame in
+                    var f = frame
+                    f.position = flip(frame.position)
+                    f.controlPoints = frame.controlPoints.map(flip)
+                    return f
+                }
+                return t
+            }
+            n.edges = node.edges.map { edge in
+                var e = edge
+                e.condition = edge.condition.map { Self.swapSides(in: $0) }
+                return e
+            }
+            return n
+        }
+
+        copy.updatedAt = Date()
+        return copy
+    }
+
+    /// Swaps left/right words in English and Chinese.
+    ///
+    /// ONE pass over a single alternation, mapping each match to its
+    /// counterpart. A two-pass approach cannot work: replacing "left"→"right"
+    /// and then "right"→"left" immediately undoes the first pass, which is
+    /// exactly the bug the round-trip test caught.
+    ///
+    /// Latin terms match on word boundaries so "strong-side" and names survive;
+    /// CJK has no word boundaries so those match directly. Longer terms are
+    /// listed first so "lefty" wins over "left".
+    static func swapSides(in text: String) -> String {
+        let mapping: [String: String] = [
+            "lefty": "righty", "righty": "lefty",
+            "Lefty": "Righty", "Righty": "Lefty",
+            "left": "right",   "right": "left",
+            "Left": "Right",   "Right": "Left",
+            "LEFT": "RIGHT",   "RIGHT": "LEFT",
+            "左": "右",        "右": "左"
+        ]
+        // Longest first so "lefty" is preferred over "left".
+        let terms = mapping.keys.sorted { $0.count > $1.count }
+        let alternation = terms.map { term -> String in
+            let escaped = NSRegularExpression.escapedPattern(for: term)
+            return term.allSatisfy(\.isASCII) ? "\\b\(escaped)\\b" : escaped
+        }.joined(separator: "|")
+
+        guard let regex = try? NSRegularExpression(pattern: alternation) else { return text }
+        let full = NSRange(text.startIndex..., in: text)
+        var result = ""
+        var cursor = text.startIndex
+
+        for match in regex.matches(in: text, range: full) {
+            guard let range = Range(match.range, in: text) else { continue }
+            result += text[cursor..<range.lowerBound]
+            let matched = String(text[range])
+            result += mapping[matched] ?? matched
+            cursor = range.upperBound
+        }
+        result += text[cursor...]
+        return result
+    }
+}
+
 // MARK: - Play Families
 
 /// A variation that stays linked to a base diagram.
