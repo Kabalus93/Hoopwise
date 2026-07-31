@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The court editor: canvas above, timeline below, inspector to the side.
 ///
@@ -87,32 +88,16 @@ struct PlayEditorView: View {
         }
         .onChange(of: systemUndoManager) { _, manager in model.undoManager = manager }
         .onDisappear { model.save() }
-        .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePlay)) { _ in
-            model.togglePlayback()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macEditorMirror)) { _ in
-            model.mirror()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePaths)) { _ in
-            model.showMovementPaths.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macEditorToggleSticky)) { _ in
-            model.possessionEnabled.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macEditorSave)) { _ in
-            if model.savedToPlaybook { model.saveToPlaybook() }
-            else { showingSaveSheet = true }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macOpenPlayInEditor)) { note in
-            if let id = note.object as? UUID,
-               let stored = dataManager.allPlayDiagrams().first(where: { $0.id == id }) {
-                model.save()
-                model.load(stored.diagram, name: stored.name)
-            }
-        }
+        .background(notificationHandlers)
         .onChange(of: model.isDirty) { _, dirty in
             // Standard macOS edited dot in the window proxy.
             NSApp.keyWindow?.isDocumentEdited = dirty
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorExportFrame)) { _ in
+            exportFrame()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorExportSheet)) { _ in
+            exportSheet()
         }
         .sheet(isPresented: $showingSaveSheet) { saveSheet }
         .sheet(isPresented: $showingVariationSheet) { variationSheet }
@@ -448,6 +433,65 @@ struct PlayEditorView: View {
                     .controlSize(.small)
             }
         }
+    }
+
+    /// Notification plumbing, hoisted out of `body` — the inline chain pushed
+    /// the view past the type checker's budget (the recurring failure mode
+    /// recorded in CLAUDE.md).
+    private var notificationHandlers: some View {
+        Color.clear
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePlay)) { _ in
+            model.togglePlayback()
+        }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorMirror)) { _ in
+            model.mirror()
+        }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePaths)) { _ in
+            model.showMovementPaths.toggle()
+        }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorToggleSticky)) { _ in
+            model.possessionEnabled.toggle()
+        }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorSave)) { _ in
+            if model.savedToPlaybook { model.saveToPlaybook() }
+            else { showingSaveSheet = true }
+        }
+            .onReceive(NotificationCenter.default.publisher(for: .macOpenPlayInEditor)) { note in
+            if let id = note.object as? UUID,
+               let stored = dataManager.allPlayDiagrams().first(where: { $0.id == id }) {
+                model.save()
+                model.load(stored.diagram, name: stored.name)
+            }
+        }
+    }
+
+    // MARK: - Export stubs
+
+    /// One 1080p frame with alpha at the playhead — the single-frame proof of
+    /// the PNG-sequence/ProRes pipeline before the encoder work.
+    private func exportFrame() {
+        guard let image = PlayFrameExporter.renderFrame(
+            diagram: model.diagram,
+            steps: model.activeSteps,
+            at: model.playhead,
+            elevationDegrees: model.renderElevation,
+            look: model.look) else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "\(model.diagramName)-frame.png"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        _ = PlayFrameExporter.writePNG(image, to: url)
+    }
+
+    private func exportSheet() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "\(model.diagramName).pdf"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? PlaySheetExporter.export(diagram: model.diagram,
+                                      name: model.diagramName,
+                                      family: model.playFamily,
+                                      to: url)
     }
 
     // MARK: - Save Sheet

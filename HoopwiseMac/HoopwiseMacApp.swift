@@ -50,6 +50,16 @@ struct HoopwiseMacApp: App {
                     NotificationCenter.default.post(name: .macEditorTogglePaths, object: nil)
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+                Divider()
+                Button("Export Frame (PNG)…") {
+                    NotificationCenter.default.post(name: .macEditorExportFrame, object: nil)
+                }
+                .keyboardShortcut("e", modifiers: .command)
+                Button("Export Play Sheet (PDF)…") {
+                    NotificationCenter.default.post(name: .macEditorExportSheet, object: nil)
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                Divider()
                 Button("Toggle Sticky Ball") {
                     NotificationCenter.default.post(name: .macEditorToggleSticky, object: nil)
                 }
@@ -90,6 +100,8 @@ extension Notification.Name {
     static let macEditorToggleSticky = Notification.Name("MacEditorToggleSticky")
     static let macEditorSave = Notification.Name("MacEditorSave")
     static let macOpenPlayInEditor = Notification.Name("MacOpenPlayInEditor")
+    static let macEditorExportFrame = Notification.Name("MacEditorExportFrame")
+    static let macEditorExportSheet = Notification.Name("MacEditorExportSheet")
 }
 
 struct MacSplashView: View {
