@@ -132,6 +132,21 @@ struct CourtGeometry {
                           centerCircle: centre, solid: solid, dashed: dashed)
     }
 
+    /// Starts a new subpath at an arc's first point before appending the arc.
+    ///
+    /// CGPath.addArc appends a LINE from the current point to the arc's start
+    /// when a current point exists. Without this, each arc was joined to
+    /// whatever was drawn before it — which is what produced the long diagonal
+    /// from the three-point arc's end to the centre circle, and stray lines
+    /// into the restricted-area and three-point arcs.
+    private func beginArc(_ path: CGMutablePath,
+                          center: CGPoint,
+                          radius: CGFloat,
+                          startAngle: CGFloat) {
+        path.move(to: CGPoint(x: center.x + radius * cos(startAngle),
+                              y: center.y + radius * sin(startAngle)))
+    }
+
     // MARK: - One End
 
     /// Draws one basket's markings. `mirrored` flips to the far end, which only
@@ -196,6 +211,7 @@ struct CourtGeometry {
         let startAngle = atan2(leftJunction.y - basket.y, leftJunction.x - basket.x)
         let endAngle = atan2(rightJunction.y - basket.y, rightJunction.x - basket.x)
 
+        beginArc(solid, center: basket, radius: m.threePointRadius, startAngle: startAngle)
         solid.addArc(center: basket,
                      radius: m.threePointRadius,
                      startAngle: startAngle,
@@ -205,6 +221,8 @@ struct CourtGeometry {
         // Restricted area, dashed half-circle opening away from the baseline.
         let restrictedStart: CGFloat = mirrored ? .pi : 0
         let restrictedEnd: CGFloat = mirrored ? 0 : .pi
+        beginArc(dashed, center: basket, radius: m.restrictedAreaRadius,
+                 startAngle: restrictedStart)
         dashed.addArc(center: basket,
                       radius: m.restrictedAreaRadius,
                       startAngle: restrictedStart,
@@ -226,6 +244,7 @@ struct CourtGeometry {
         if halfOnly {
             // Half-court diagram: only the half of the circle inside the court
             // is visible, which is the half nearer the basket.
+            beginArc(path, center: centre, radius: m.centerCircleRadius, startAngle: .pi)
             path.addArc(center: centre,
                         radius: m.centerCircleRadius,
                         startAngle: .pi,
