@@ -209,7 +209,8 @@ struct DiagramCanvasView: View {
     /// (floor fills, court lines and movement paths are drawn before this by
     /// the caller, in that order.)
     private func drawEntities(_ projection: CourtProjection, into context: inout GraphicsContext) {
-        let props = model.diagram.entities.filter { entity in
+        let visible = model.diagram.entities.filter { !model.isHidden($0.id) }
+        let props = visible.filter { entity in
             switch entity.kind {
             case .screen, .cone, .annotation: return true
             default: return false
@@ -217,10 +218,10 @@ struct DiagramCanvasView: View {
         }
         // Players still sort far-to-near among THEMSELVES so nearer players
         // overlap farther ones. That is depth, not array order.
-        let players = model.diagram.entities
+        let players = visible
             .filter(\.isPlayer)
             .sorted { resolvedPosition($0).y > resolvedPosition($1).y }
-        let ball = model.diagram.entities.first { if case .ball = $0.kind { return true } else { return false } }
+        let ball = visible.first { if case .ball = $0.kind { return true } else { return false } }
 
         for entity in props { drawEntity(entity, projection, into: &context) }
         for entity in players { drawEntity(entity, projection, into: &context) }
@@ -243,6 +244,9 @@ struct DiagramCanvasView: View {
     private func drawEntity(_ entity: DiagramEntity,
                             _ projection: CourtProjection,
                             into context: inout GraphicsContext) {
+        // Solo dims everything but the soloed layer to 25%.
+        var context = context
+        context.opacity = model.opacity(for: entity.id)
         let court = resolvedPosition(entity)
         let centre = projection.project(court)
         let depth = projection.depthScale(at: court)
@@ -361,6 +365,8 @@ struct DiagramCanvasView: View {
                            _ projection: CourtProjection,
                            into context: inout GraphicsContext) {
         guard let label = entityLabel(entity), !label.isEmpty else { return }
+        var context = context
+        context.opacity = model.opacity(for: entity.id)
         let court = resolvedPosition(entity)
         let centre = projection.project(court)
         // Labels stop shrinking at the legibility floor.
@@ -418,6 +424,9 @@ struct DiagramCanvasView: View {
         var best: UUID?
         var bestDistance: CGFloat = .greatestFiniteMagnitude
         for entity in model.diagram.entities {
+            // Hidden layers are not on the court; locked layers ignore clicks —
+            // both pass through to whatever is beneath.
+            if model.isHidden(entity.id) || model.isLocked(entity.id) { continue }
             // Resolver, not raw track: a ball with no track was hit-tested at
             // its home position while being drawn by the possession resolver,
             // which made it unselectable after the first pass.

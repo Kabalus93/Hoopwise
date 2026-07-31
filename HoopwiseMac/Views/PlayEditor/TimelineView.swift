@@ -7,8 +7,18 @@ struct TimelineView: View {
     @ObservedObject var model: PlayEditorModel
 
     private let laneHeight: CGFloat = 26
-    private let labelWidth: CGFloat = 120
+    private let labelWidth: CGFloat = 196
     private let rulerHeight: CGFloat = 22
+
+    // Multi-drag: initial local times captured on gesture start so relative
+    // spacing is preserved (and option-scale has a fixed reference).
+    @State private var dragInitial: [UUID: (nodeId: UUID, entityId: UUID, local: Double, absolute: Double)]?
+    @State private var dragAnchorId: UUID?
+    // Box selection rubber band, in lanes coordinate space.
+    @State private var boxStart: CGPoint?
+    @State private var boxCurrent: CGPoint?
+    @State private var renamingEntity: DiagramEntity?
+    @State private var renameDraft = ""
 
     var body: some View {
         GeometryReader { geo in
@@ -24,6 +34,37 @@ struct TimelineView: View {
                         ForEach(model.diagram.entities) { entity in
                             entityLane(entity, width: trackWidth, duration: duration)
                         }
+                    }
+                    .coordinateSpace(name: "lanes")
+                    // Box-select in empty timeline area. Keyframe markers carry
+                    // their own drag gesture, which wins where they are; empty
+                    // track falls through to this.
+                    .gesture(boxSelectGesture(width: trackWidth, duration: duration))
+                    .overlay {
+                        if let start = boxStart, let current = boxCurrent {
+                            let rect = CGRect(x: min(start.x, current.x),
+                                              y: min(start.y, current.y),
+                                              width: abs(current.x - start.x),
+                                              height: abs(current.y - start.y))
+                            Rectangle()
+                                .fill(Color.accentColor.opacity(0.12))
+                                .overlay(Rectangle().stroke(Color.accentColor.opacity(0.7), lineWidth: 1))
+                                .frame(width: rect.width, height: rect.height)
+                                .position(x: rect.midX, y: rect.midY)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                }
+                .alert("Rename Layer", isPresented: Binding(
+                    get: { renamingEntity != nil },
+                    set: { if !$0 { renamingEntity = nil } })) {
+                    TextField("Label", text: $renameDraft)
+                    Button("Cancel", role: .cancel) { renamingEntity = nil }
+                    Button("Rename") {
+                        if let entity = renamingEntity {
+                            model.renameEntity(entity.id, to: renameDraft)
+                        }
+                        renamingEntity = nil
                     }
                 }
             }
@@ -127,21 +168,80 @@ struct TimelineView: View {
         let isSelected = model.selectedEntityId == entity.id
 
         return HStack(spacing: 0) {
-            Button {
-                model.selectedEntityId = entity.id
-            } label: {
-                HStack(spacing: 5) {
-                    Circle().fill(laneColor(entity)).frame(width: 8, height: 8)
-                    Text(laneTitle(entity))
-                        .font(.caption)
-                        .lineLimit(1)
+            HStack(spacing: 3) {
+                Button {
+                    model.selectedEntityId = entity.id
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle().fill(laneColor(entity)).frame(width: 8, height: 8)
+                        Text(laneTitle(entity))
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
+                    .frame(width: 52, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .frame(width: labelWidth, alignment: .leading)
-                .padding(.leading, 8)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .contextMenu {
+                    if entity.isPlayer {
+                        Button("Rename…") {
+                            renameDraft = entity.label ?? ""
+                            renamingEntity = entity
+                        }
+                    }
+                    Button("Clear All Keyframes", role: .destructive) {
+                        model.clearTrack(entity.id)
+                    }
+                    Menu("Duplicate Track To") {
+                        ForEach(model.diagram.nodes.filter { $0.id != model.activeNodeId },
+                                id: \.id) { node in
+                            Button(node.title) { model.duplicateTrack(entity.id, to: node.id) }
+                        }
+                    }
+                }
+
+                // Visibility / lock / solo — transient editor state, no undo.
+                layerToggle("eye", active: !model.isHidden(entity.id),
+                            help: "Show / hide on the court") {
+                    if model.isHidden(entity.id) { model.hiddenEntityIds.remove(entity.id) }
+                    else { model.hiddenEntityIds.insert(entity.id) }
+                }
+                layerToggle("lock.fill", active: model.isLocked(entity.id),
+                            help: "Lock — canvas clicks pass through") {
+                    if model.isLocked(entity.id) { model.lockedEntityIds.remove(entity.id) }
+                    else { model.lockedEntityIds.insert(entity.id) }
+                }
+                layerToggle("scope", active: model.soloEntityId == entity.id,
+                            help: "Solo — dim everything else to 25%") {
+                    model.soloEntityId = model.soloEntityId == entity.id ? nil : entity.id
+                }
+
+                // AE keyframe cluster: prev · add/remove in place · next.
+                Button { model.jumpToKeyframe(entity.id, direction: -1) } label: {
+                    Image(systemName: "arrowtriangle.left.fill").font(.system(size: 7))
+                }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("Previous keyframe (J)")
+
+                Button { model.toggleKeyframeInPlace(entity.id) } label: {
+                    Image(systemName: model.hasKeyframeAtPlayhead(entity.id)
+                          ? "diamond.fill" : "diamond")
+                        .font(.system(size: 9))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(model.hasKeyframeAtPlayhead(entity.id)
+                                 ? laneColor(entity) : .secondary)
+                .help("Add or remove a keyframe here, pinning the current position (K)")
+
+                Button { model.jumpToKeyframe(entity.id, direction: 1) } label: {
+                    Image(systemName: "arrowtriangle.right.fill").font(.system(size: 7))
+                }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("Next keyframe (L)")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            .frame(width: labelWidth, alignment: .leading)
+            .padding(.leading, 6)
 
             ZStack(alignment: .leading) {
                 Rectangle()
@@ -153,34 +253,160 @@ struct TimelineView: View {
 
                 ForEach(model.laneKeyframes(for: entity.id)) { lane in
                     marker(color: laneColor(entity).opacity(lane.inWindow ? 1 : 0.35),
-                           selected: isSelected && abs(lane.absoluteTime - model.playhead) < 0.02)
+                           selected: model.selectedKeyframeIds.contains(lane.keyframe.id))
                         .position(x: CGFloat(lane.absoluteTime / duration) * width, y: laneHeight / 2)
-                        .gesture(
-                            DragGesture(minimumDistance: 1)
-                                .onChanged { value in
-                                    let absolute = Double(value.location.x / width) * duration
-                                    let start = lane.absoluteTime - lane.keyframe.t
-                                    model.moveKeyframe(nodeId: lane.nodeId,
-                                                       entityId: entity.id,
-                                                       keyframeId: lane.keyframe.id,
-                                                       toLocal: max(0, absolute - start))
-                                }
-                        )
+                        .gesture(keyframeDrag(lane: lane, entity: entity,
+                                              width: width, duration: duration))
                         .onTapGesture {
                             model.selectedEntityId = entity.id
-                            model.playhead = lane.absoluteTime
+                            // Click selects; shift-click adds. Playhead stays
+                            // put — selection and scrubbing are separate acts.
+                            if NSEvent.modifierFlags.contains(.shift) {
+                                if model.selectedKeyframeIds.contains(lane.keyframe.id) {
+                                    model.selectedKeyframeIds.remove(lane.keyframe.id)
+                                } else {
+                                    model.selectedKeyframeIds.insert(lane.keyframe.id)
+                                }
+                            } else {
+                                model.selectedKeyframeIds = [lane.keyframe.id]
+                            }
                         }
                         .contextMenu {
-                            Button("Delete Keyframe", role: .destructive) {
+                            Button("Delete", role: .destructive) {
                                 model.deleteKeyframe(entityId: entity.id,
                                                      keyframeId: lane.keyframe.id)
                             }
+                            Divider()
+                            // Interpolation of the segment LEAVING this key —
+                            // AE semantics; stored on the next keyframe.
+                            Button("Hold") {
+                                model.setOutgoingEasing(nodeId: lane.nodeId, entityId: entity.id,
+                                                        keyframeId: lane.keyframe.id, easing: .hold)
+                            }
+                            Button("Linear") {
+                                model.setOutgoingEasing(nodeId: lane.nodeId, entityId: entity.id,
+                                                        keyframeId: lane.keyframe.id, easing: .linear)
+                            }
+                            Button("Ease In/Out") {
+                                model.setOutgoingEasing(nodeId: lane.nodeId, entityId: entity.id,
+                                                        keyframeId: lane.keyframe.id, easing: .easeInOut)
+                            }
+                            Divider()
+                            Button("Copy") {
+                                if !model.selectedKeyframeIds.contains(lane.keyframe.id) {
+                                    model.selectedKeyframeIds = [lane.keyframe.id]
+                                }
+                                model.copySelectedKeyframes()
+                            }
+                            Button("Paste at Playhead") { model.pasteKeyframesAtPlayhead() }
+                                .disabled(!model.clipboardHasKeyframes)
                         }
                 }
             }
             .frame(width: width, height: laneHeight)
         }
         .frame(height: laneHeight)
+    }
+
+    /// Drag: single keyframe, or the whole selection preserving relative
+    /// spacing; option-drag on the LAST selected keyframe scales the spacing
+    /// (AE stretch). One undo entry per gesture, registered on the first tick.
+    private func keyframeDrag(lane: PlayEditorModel.LaneKeyframe,
+                              entity: DiagramEntity,
+                              width: CGFloat,
+                              duration: Double) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                if dragInitial == nil {
+                    model.registerUndo("Retime Keyframes")
+                    if !model.selectedKeyframeIds.contains(lane.keyframe.id) {
+                        model.selectedKeyframeIds = [lane.keyframe.id]
+                    }
+                    var initial: [UUID: (UUID, UUID, Double, Double)] = [:]
+                    for member in model.diagram.entities.flatMap({ model.laneKeyframes(for: $0.id) })
+                    where model.selectedKeyframeIds.contains(member.keyframe.id) {
+                        if let owner = model.diagram.entities.first(where: { e in
+                            model.laneKeyframes(for: e.id).contains { $0.keyframe.id == member.keyframe.id }
+                        }) {
+                            initial[member.keyframe.id] = (member.nodeId, owner.id,
+                                                           member.keyframe.t, member.absoluteTime)
+                        }
+                    }
+                    dragInitial = initial
+                    dragAnchorId = lane.keyframe.id
+                }
+                guard let initial = dragInitial,
+                      let dragged = initial[lane.keyframe.id] else { return }
+                let absoluteNow = Double(value.location.x / width) * duration
+                let scaling = NSEvent.modifierFlags.contains(.option)
+                    && lane.keyframe.id == initial.max { $0.value.3 < $1.value.3 }?.key
+
+                if scaling, initial.count > 1 {
+                    // Stretch: anchor at the earliest selected keyframe.
+                    let anchor = initial.values.map(\.3).min() ?? 0
+                    let oldSpan = dragged.3 - anchor
+                    guard oldSpan > 0.01 else { return }
+                    let factor = max(0.05, (absoluteNow - anchor) / oldSpan)
+                    for (id, info) in initial {
+                        let newAbsolute = anchor + (info.3 - anchor) * factor
+                        let delta = newAbsolute - info.3
+                        model.moveKeyframe(nodeId: info.0, entityId: info.1,
+                                           keyframeId: id,
+                                           toLocal: model.snapped(info.2 + delta))
+                    }
+                } else {
+                    let delta = absoluteNow - dragged.3
+                    for (id, info) in initial {
+                        model.moveKeyframe(nodeId: info.0, entityId: info.1,
+                                           keyframeId: id,
+                                           toLocal: model.snapped(info.2 + delta))
+                    }
+                }
+            }
+            .onEnded { _ in
+                dragInitial = nil
+                dragAnchorId = nil
+            }
+    }
+
+    private func boxSelectGesture(width: CGFloat, duration: Double) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .named("lanes"))
+            .onChanged { value in
+                if boxStart == nil { boxStart = value.startLocation }
+                boxCurrent = value.location
+            }
+            .onEnded { value in
+                defer { boxStart = nil; boxCurrent = nil }
+                guard let start = boxStart else { return }
+                let rect = CGRect(x: min(start.x, value.location.x),
+                                  y: min(start.y, value.location.y),
+                                  width: abs(value.location.x - start.x),
+                                  height: abs(value.location.y - start.y))
+                var hit: Set<UUID> = NSEvent.modifierFlags.contains(.shift)
+                    ? model.selectedKeyframeIds : []
+                // Lane 0 is the camera; entities start below it.
+                for (row, entity) in model.diagram.entities.enumerated() {
+                    let laneY = CGFloat(row + 1) * laneHeight + laneHeight / 2
+                    guard rect.minY...rect.maxY ~= laneY else { continue }
+                    for lane in model.laneKeyframes(for: entity.id) {
+                        let x = labelWidth + 6 + CGFloat(lane.absoluteTime / duration) * width
+                        if rect.minX...rect.maxX ~= x { hit.insert(lane.keyframe.id) }
+                    }
+                }
+                model.selectedKeyframeIds = hit
+            }
+    }
+
+    private func layerToggle(_ icon: String, active: Bool, help: String,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 8))
+                .foregroundStyle(active ? Color.accentColor : Color.secondary.opacity(0.5))
+                .frame(width: 14, height: 14)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private func marker(color: Color, selected: Bool) -> some View {

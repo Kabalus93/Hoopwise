@@ -85,6 +85,9 @@ enum Easing: String, Codable, CaseIterable, Hashable {
     case easeIn
     case easeOut
     case easeInOut
+    /// No interpolation: the previous value holds for the whole segment, then
+    /// jumps at this keyframe — how a player "stays put then cuts".
+    case hold
 
     /// Maps normalized progress 0...1 through the curve.
     func apply(_ t: Double) -> Double {
@@ -94,6 +97,7 @@ enum Easing: String, Codable, CaseIterable, Hashable {
         case .easeIn:    return x * x
         case .easeOut:   return 1 - (1 - x) * (1 - x)
         case .easeInOut: return x < 0.5 ? 2 * x * x : 1 - pow(-2 * x + 2, 2) / 2
+        case .hold:      return 0
         }
     }
 }

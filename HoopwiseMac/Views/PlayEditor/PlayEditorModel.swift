@@ -893,6 +893,186 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - AE-style keyframe interaction
+
+    /// Adds a keyframe at the playhead HOLDING the entity's current resolved
+    /// value — pinning it where it sits — or removes the keyframe already
+    /// there. The AE diamond.
+    func toggleKeyframeInPlace(_ entityId: UUID) {
+        if let ball = diagram.ball, ball.id == entityId, possessionEnabled { return }
+        let local = currentLocalTime
+        if let track = track(for: entityId),
+           let existing = track.keyframes.first(where: { abs($0.t - local) < 0.02 }) {
+            deleteKeyframe(entityId: entityId, keyframeId: existing.id)
+            return
+        }
+        registerUndo("Add Keyframe")
+        let pinned = resolvedPosition(of: entityId, at: playhead)
+        setKeyframe(for: entityId, at: local, position: pinned)
+    }
+
+    /// Whether a keyframe sits at the playhead on this layer — drives the
+    /// diamond's filled state.
+    func hasKeyframeAtPlayhead(_ entityId: UUID) -> Bool {
+        let local = currentLocalTime
+        return track(for: entityId)?.keyframes.contains { abs($0.t - local) < 0.02 } ?? false
+    }
+
+    /// Jumps the playhead to the previous or next keyframe on this layer.
+    func jumpToKeyframe(_ entityId: UUID, direction: Int) {
+        let times = laneKeyframes(for: entityId).map(\.absoluteTime).sorted()
+        guard !times.isEmpty else { return }
+        if direction < 0 {
+            if let previous = times.last(where: { $0 < playhead - 0.02 }) { playhead = previous }
+        } else {
+            if let next = times.first(where: { $0 > playhead + 0.02 }) { playhead = next }
+        }
+    }
+
+    /// Sets the interpolation of the segment LEAVING a keyframe.
+    ///
+    /// AE puts interpolation on the outgoing side of the key you clicked; this
+    /// model stores easing on the ARRIVING keyframe. So the menu action on
+    /// keyframe k writes to the keyframe after it. Same behaviour, different
+    /// storage side — documented here because it will look off-by-one in code.
+    func setOutgoingEasing(nodeId: UUID, entityId: UUID, keyframeId: UUID, easing: Easing) {
+        guard let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == nodeId }),
+              let trackIndex = diagram.nodes[nodeIndex].tracks.firstIndex(where: { $0.entityId == entityId })
+        else { return }
+        let sorted = diagram.nodes[nodeIndex].tracks[trackIndex].sortedKeyframes
+        guard let position = sorted.firstIndex(where: { $0.id == keyframeId }),
+              position + 1 < sorted.count else { return }
+        let nextId = sorted[position + 1].id
+        guard let frameIndex = diagram.nodes[nodeIndex].tracks[trackIndex].keyframes
+            .firstIndex(where: { $0.id == nextId }) else { return }
+        registerUndo(easing == .hold ? "Hold" : "Change Interpolation")
+        diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].easing = easing
+        diagram.updatedAt = Date()
+    }
+
+    // MARK: - Keyframe clipboard
+
+    private struct CopiedKeyframe {
+        let entityId: UUID
+        let offset: Double        // from the earliest copied keyframe
+        let keyframe: Keyframe
+    }
+    private var keyframeClipboard: [CopiedKeyframe] = []
+
+    /// Copies the selected keyframes, preserving relative spacing.
+    func copySelectedKeyframes() {
+        var copied: [CopiedKeyframe] = []
+        for lane in diagram.entities.flatMap({ laneKeyframes(for: $0.id) })
+        where selectedKeyframeIds.contains(lane.keyframe.id) {
+            guard let entity = entityForKeyframe(lane.keyframe.id) else { continue }
+            copied.append(CopiedKeyframe(entityId: entity, offset: lane.absoluteTime,
+                                         keyframe: lane.keyframe))
+        }
+        guard let earliest = copied.map(\.offset).min() else { return }
+        keyframeClipboard = copied.map {
+            CopiedKeyframe(entityId: $0.entityId, offset: $0.offset - earliest, keyframe: $0.keyframe)
+        }
+    }
+
+    /// Pastes at the playhead into each keyframe's ORIGINAL entity, keeping
+    /// relative offsets. Cross-entity paste was judged not cheap; same-entity is.
+    func pasteKeyframesAtPlayhead() {
+        guard !keyframeClipboard.isEmpty else { return }
+        registerUndo("Paste Keyframes")
+        let baseLocal = currentLocalTime
+        for item in keyframeClipboard {
+            var frame = Keyframe(t: baseLocal + item.offset,
+                                 position: item.keyframe.position,
+                                 easing: item.keyframe.easing,
+                                 pathKind: item.keyframe.pathKind,
+                                 pathStyle: item.keyframe.pathStyle,
+                                 controlPoints: item.keyframe.controlPoints)
+            frame.t = snapped(frame.t)
+            mutateActiveNode { node in
+                if let trackIndex = node.tracks.firstIndex(where: { $0.entityId == item.entityId }) {
+                    node.tracks[trackIndex].keyframes.append(frame)
+                    node.tracks[trackIndex].keyframes.sort { $0.t < $1.t }
+                } else {
+                    node.tracks.append(Track(entityId: item.entityId, keyframes: [frame]))
+                }
+            }
+        }
+    }
+
+    var clipboardHasKeyframes: Bool { !keyframeClipboard.isEmpty }
+
+    private func entityForKeyframe(_ keyframeId: UUID) -> UUID? {
+        for step in activeSteps {
+            for track in step.node.tracks where track.keyframes.contains(where: { $0.id == keyframeId }) {
+                return track.entityId
+            }
+        }
+        return nil
+    }
+
+    /// Deletes the selection wherever it lives along the path — not just the
+    /// active node.
+    func deleteSelectedKeyframesEverywhere() {
+        guard !selectedKeyframeIds.isEmpty else { return }
+        registerUndo("Delete Keyframes")
+        for nodeIndex in diagram.nodes.indices {
+            for trackIndex in diagram.nodes[nodeIndex].tracks.indices {
+                diagram.nodes[nodeIndex].tracks[trackIndex].keyframes
+                    .removeAll { selectedKeyframeIds.contains($0.id) }
+            }
+            diagram.nodes[nodeIndex].tracks.removeAll { $0.keyframes.isEmpty }
+        }
+        selectedKeyframeIds.removeAll()
+        diagram.updatedAt = Date()
+    }
+
+    // MARK: - Layer states (transient; deliberately no undo)
+
+    @Published var hiddenEntityIds: Set<UUID> = []
+    @Published var lockedEntityIds: Set<UUID> = []
+    /// Solo dims everything else to 25% — AE's focus mode, doubling as the
+    /// video-production isolate.
+    @Published var soloEntityId: UUID?
+
+    func isHidden(_ id: UUID) -> Bool { hiddenEntityIds.contains(id) }
+    func isLocked(_ id: UUID) -> Bool { lockedEntityIds.contains(id) }
+    func opacity(for id: UUID) -> Double {
+        guard let solo = soloEntityId, solo != id else { return 1 }
+        return 0.25
+    }
+
+    func renameEntity(_ id: UUID, to label: String) {
+        guard let index = diagram.entities.firstIndex(where: { $0.id == id }) else { return }
+        registerUndo("Rename")
+        diagram.entities[index].label = label
+        diagram.updatedAt = Date()
+    }
+
+    /// Removes every keyframe this entity has in the current read.
+    func clearTrack(_ entityId: UUID) {
+        registerUndo("Clear Keyframes")
+        mutateActiveNode { node in
+            node.tracks.removeAll { $0.entityId == entityId }
+        }
+    }
+
+    /// Copies this entity's current-read track into another read.
+    func duplicateTrack(_ entityId: UUID, to nodeId: UUID) {
+        guard let track = track(for: entityId),
+              let index = diagram.nodes.firstIndex(where: { $0.id == nodeId }) else { return }
+        registerUndo("Duplicate Track")
+        var copy = Track(entityId: entityId,
+                         keyframes: track.keyframes.map {
+                             Keyframe(t: $0.t, position: $0.position, easing: $0.easing,
+                                      pathKind: $0.pathKind, pathStyle: $0.pathStyle,
+                                      controlPoints: $0.controlPoints)
+                         })
+        copy.keyframes.sort { $0.t < $1.t }
+        diagram.nodes[index].tracks.removeAll { $0.entityId == entityId }
+        diagram.nodes[index].tracks.append(copy)
+        diagram.updatedAt = Date()
+    }
+
     // MARK: - Live Ball Drag
 
     /// View-space cursor location while the ball is being dragged, or nil.

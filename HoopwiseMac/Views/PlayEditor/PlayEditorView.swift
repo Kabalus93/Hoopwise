@@ -109,7 +109,13 @@ struct PlayEditorView: View {
             return .handled
         }
         .onKeyPress(.delete) {
-            model.deleteSelectedKeyframes()
+            // Selection can span segments; delete it wherever it lives, or
+            // fall back to the selected entity.
+            if !model.selectedKeyframeIds.isEmpty {
+                model.deleteSelectedKeyframesEverywhere()
+            } else if model.selectedEntityId != nil {
+                model.deleteSelectedEntity()
+            }
             return .handled
         }
         .onKeyPress(.leftArrow) {
@@ -135,6 +141,15 @@ struct PlayEditorView: View {
             case "c": placementKind = .cone; model.activeToolName = "Cone"
             case "s": model.possessionEnabled.toggle()
             case "p": model.showMovementPaths.toggle()
+            case "k":
+                guard let id = model.selectedEntityId else { return .ignored }
+                model.toggleKeyframeInPlace(id)
+            case "j":
+                guard let id = model.selectedEntityId else { return .ignored }
+                model.jumpToKeyframe(id, direction: -1)
+            case "l":
+                guard let id = model.selectedEntityId else { return .ignored }
+                model.jumpToKeyframe(id, direction: 1)
             default:  return .ignored
             }
             return .handled
