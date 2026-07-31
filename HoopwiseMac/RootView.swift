@@ -36,6 +36,11 @@ enum SidebarSection: String, CaseIterable, Identifiable {
 struct RootView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var selection: SidebarSection? = .today
+    /// The court editor's model lives with the WINDOW. NSUndoManager holds its
+    /// targets unowned(unsafe); a per-visit model left dangling actions in the
+    /// window's undo stack, and Cmd-Z after navigation dereferenced freed
+    /// memory. Window lifetime plus purge-on-teardown removes the class.
+    @StateObject private var editorModel = PlayEditorModel(diagram: PlayEditorModel.newDiagram())
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
@@ -62,7 +67,7 @@ struct RootView: View {
         case .programs: ProgramsView()
         case .drills:   DrillsView()
         case .playbook: PlaybookMacView()
-        case .courtEditor: PlayEditorView()
+        case .courtEditor: PlayEditorView(model: editorModel)
         case .league:   LeagueMacView()
         case .hub:      HubMacView()
         }

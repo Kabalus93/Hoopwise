@@ -34,11 +34,42 @@ final class PlayEditorModel: ObservableObject {
     private var playbackTimer: AnyCancellable?
     private var lastTick: Date?
     private var autosave: AnyCancellable?
+    /// One-time attach guard, now that the model outlives sidebar visits.
+    var hasAttached = false
 
     /// Set by the view so edits reach SwiftData.
     weak var dataManager: SwiftDataManager?
+
     /// Undo target, set by the view.
-    weak var undoManager: UndoManager?
+    ///
+    /// NSUndoManager holds registered targets unowned(unsafe), and the WINDOW's
+    /// undo manager outlives this model — RootView recreates the editor (and
+    /// this @StateObject) on every sidebar switch. Actions left behind after
+    /// the model dies made Cmd-Z dereference freed memory and cast whatever now
+    /// lived at that address ("Could not cast Swift._DictionaryStorage ... to
+    /// PlayEditorModel"). So: purge this model's actions whenever the manager
+    /// reference is swapped, whenever the diagram is replaced, and at teardown.
+    weak var undoManager: UndoManager? {
+        willSet {
+            if newValue !== undoManager {
+                undoManager?.removeAllActions(withTarget: self)
+            }
+        }
+    }
+
+    /// Removes every action targeting this model from its undo manager.
+    /// Idempotent; called from load(), the view's disappearance, and deinit.
+    func purgeUndoActions() {
+        undoManager?.removeAllActions(withTarget: self)
+    }
+
+    deinit {
+        // Captured locally: deinit is nonisolated and must not re-enter actor
+        // state. The @StateObject is destroyed on the main thread, where the
+        // window's UndoManager lives, so the call itself is safe.
+        let manager = undoManager
+        manager?.removeAllActions(withTarget: self)
+    }
 
     @Published var diagramName: String = "Untitled Play"
     @Published var showMovementPaths = true
@@ -632,6 +663,11 @@ final class PlayEditorModel: ObservableObject {
         selectedKeyframeIds = []
         cursorEntityId = nil
         playhead = 0
+        // Two reasons to purge here, not just at teardown: stale actions from
+        // the previous play would otherwise RESTORE THAT PLAY'S SNAPSHOT into
+        // this one on Cmd-Z (a correctness bug even when nothing dangles), and
+        // the stack must never outlive the diagram it snapshots.
+        purgeUndoActions()
         // Stale from the previous play. The playback-path Picker bridges to
         // NSPopUpButton, and selecting an index beyond its item range raises
         // "Index out of range" — which is exactly what clicking a read did

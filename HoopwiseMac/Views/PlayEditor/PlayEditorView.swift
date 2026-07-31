@@ -8,7 +8,11 @@ import UniformTypeIdentifiers
 struct PlayEditorView: View {
     @EnvironmentObject private var dataManager: DataManager
     @Environment(\.undoManager) private var systemUndoManager
-    @StateObject private var model: PlayEditorModel
+    /// Owned by RootView so the model's lifetime matches the WINDOW, not one
+    /// sidebar visit. Recreating it per visit was why undo targets dangled —
+    /// and it also discarded transient editor state (look tweaks, work area,
+    /// layer locks) on every navigation.
+    @ObservedObject var model: PlayEditorModel
     /// Sticky: stays active until deselected or Escape.
     @State private var placementKind: DiagramEntityKind?
     @State private var showingLookPanel = false
@@ -24,11 +28,6 @@ struct PlayEditorView: View {
         if responder is NSTextView { return true }
         if let view = responder as? NSView, view is NSTextField { return true }
         return false
-    }
-
-    init(diagram: PlayDiagram? = nil) {
-        _model = StateObject(wrappedValue:
-            PlayEditorModel(diagram: diagram ?? PlayEditorModel.newDiagram()))
     }
 
     var body: some View {
@@ -80,6 +79,10 @@ struct PlayEditorView: View {
         .onAppear {
             model.dataManager = dataManager
             model.undoManager = systemUndoManager
+            // One-time setup: the model now outlives sidebar visits, so
+            // re-running this on every appearance would reload over live edits.
+            guard !model.hasAttached else { return }
+            model.hasAttached = true
             // Reopen the most recent diagram so quitting does not lose work.
             if let stored = dataManager.allPlayDiagrams().first {
                 model.load(stored.diagram, name: stored.name)
@@ -87,7 +90,13 @@ struct PlayEditorView: View {
             model.startAutosave()
         }
         .onChange(of: systemUndoManager) { _, manager in model.undoManager = manager }
-        .onDisappear { model.save() }
+        .onDisappear {
+            model.save()
+            // The window's undo manager survives this view; the model may not.
+            // Purge here as well as in deinit so no dangling target exists even
+            // if something briefly retains the model past disappearance.
+            model.purgeUndoActions()
+        }
         .background(notificationHandlers)
         .onChange(of: model.isDirty) { _, dirty in
             // Standard macOS edited dot in the window proxy.

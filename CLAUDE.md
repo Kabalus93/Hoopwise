@@ -259,6 +259,15 @@ it produces confident wrong numbers the coach reconciles books against.
   resolver so playback and export cannot disagree. Boundary continuity is
   by construction: a read without a track resolves to the branch-moment
   position recursively.
+- NSUndoManager holds registered targets unowned(unsafe). Any model that
+  registers undo actions against the WINDOW's undo manager must purge them
+  (removeAllActions(withTarget:)) when the manager reference swaps, when
+  its content is replaced, on view disappearance, and in deinit — a
+  dangling target makes Cmd-Z dereference freed memory and crash with a
+  nonsense cast. The editor model is owned by RootView so its lifetime
+  matches the window; do not move it back to a per-visit @StateObject.
+  Purge-on-load also matters for correctness: without it, Cmd-Z after a
+  play switch restores the PREVIOUS play's snapshot into the current one.
 - The playback-path Picker bridges to NSPopUpButton, which TRAPS on an
   out-of-range selection index. activeBranchIndex must be reset on load
   and clamped after every structural tree change (clampBranchIndex), and
