@@ -177,71 +177,107 @@ struct DiagramCanvasView: View {
 
     // MARK: - Entities
 
+    /// Explicit layer stack. Draw order NEVER depends on the order entities
+    /// happen to sit in the array — that is why the ball rendered sometimes
+    /// above and sometimes below the receiving player.
+    ///
+    ///   screens/cones -> player pucks -> ball -> labels
+    ///
+    /// (floor fills, court lines and movement paths are drawn before this by
+    /// the caller, in that order.)
     private func drawEntities(_ projection: CourtProjection, into context: inout GraphicsContext) {
-        // Painter's algorithm: far entities first so near ones overlap them.
-        let ordered = model.diagram.entities.sorted {
-            model.position(of: $0.id, at: model.playhead).y >
-            model.position(of: $1.id, at: model.playhead).y
-        }
-
-        for entity in ordered {
-            // The ball derives from possession when it is enabled.
-            let court: CGPoint
-            if case .ball = entity.kind, let derived = model.ballPosition(at: model.playhead) {
-                court = derived
-            } else {
-                court = model.position(of: entity.id, at: model.playhead)
-            }
-            let centre = projection.project(court)
-            let depth = projection.depthScale(at: court)
-            let radius = projection.transform.length(puckRadiusFeet) * depth
-
-            // Shadow IS the projected ellipse; the puck is not.
-            let shadowRect = CGRect(x: centre.x - radius, y: centre.y - radius * 0.35,
-                                    width: radius * 2, height: radius * 0.7)
-            context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
-
-            // Puck: BILLBOARDED — drawn upright and scaled, never pushed
-            // through the homography, which would shear it into a wrong ellipse.
-            let puck = CGRect(x: centre.x - radius, y: centre.y - radius,
-                              width: radius * 2, height: radius * 2)
-            let tint = color(for: entity)
-
+        let props = model.diagram.entities.filter { entity in
             switch entity.kind {
-            case .ball:
-                context.fill(Path(ellipseIn: puck), with: .color(Color(hex: model.theme.ballHex)))
-            case .cone:
-                var triangle = Path()
-                triangle.move(to: CGPoint(x: centre.x, y: centre.y - radius))
-                triangle.addLine(to: CGPoint(x: centre.x - radius, y: centre.y + radius * 0.8))
-                triangle.addLine(to: CGPoint(x: centre.x + radius, y: centre.y + radius * 0.8))
-                triangle.closeSubpath()
-                context.fill(triangle, with: .color(.yellow))
-            case .screen:
-                let bar = CGRect(x: centre.x - radius, y: centre.y - radius * 0.28,
-                                 width: radius * 2, height: radius * 0.56)
-                context.fill(Path(bar), with: .color(.white))
-            default:
-                context.fill(Path(ellipseIn: puck), with: .color(tint))
-                context.stroke(Path(ellipseIn: puck), with: .color(.white.opacity(0.9)),
-                               lineWidth: 1.4)
-            }
-
-            if model.selectedEntityId == entity.id {
-                let ring = puck.insetBy(dx: -4, dy: -4)
-                context.stroke(Path(ellipseIn: ring), with: .color(.accentColor),
-                               style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
-            }
-
-            // Labels stop shrinking at the legibility floor.
-            if let label = entityLabel(entity), !label.isEmpty {
-                let size = projection.labelPointSize(base: baseLabelSize, at: court)
-                let text = Text(label)
-                    .font(.system(size: size, weight: .bold))
-                    .foregroundStyle(Color(hex: model.theme.labelHex))
-                context.draw(context.resolve(text), at: centre, anchor: .center)
+            case .screen, .cone, .annotation: return true
+            default: return false
             }
         }
+        // Players still sort far-to-near among THEMSELVES so nearer players
+        // overlap farther ones. That is depth, not array order.
+        let players = model.diagram.entities
+            .filter(\.isPlayer)
+            .sorted { resolvedPosition($0).y > resolvedPosition($1).y }
+        let ball = model.diagram.entities.first { if case .ball = $0.kind { return true } else { return false } }
+
+        for entity in props { drawEntity(entity, projection, into: &context) }
+        for entity in players { drawEntity(entity, projection, into: &context) }
+        if let ball { drawEntity(ball, projection, into: &context) }
+
+        // Labels last: always legible, never occluded by a puck drawn after.
+        for entity in players + (ball.map { [$0] } ?? []) {
+            drawLabel(entity, projection, into: &context)
+        }
+    }
+
+    /// Where an entity actually is at the playhead, ball included.
+    private func resolvedPosition(_ entity: DiagramEntity) -> CGPoint {
+        if case .ball = entity.kind, let derived = model.ballPosition(at: model.playhead) {
+            return derived
+        }
+        return model.position(of: entity.id, at: model.playhead)
+    }
+
+    private func drawEntity(_ entity: DiagramEntity,
+                            _ projection: CourtProjection,
+                            into context: inout GraphicsContext) {
+        let court = resolvedPosition(entity)
+        let centre = projection.project(court)
+        let depth = projection.depthScale(at: court)
+        let radius = projection.transform.length(puckRadiusFeet) * depth
+        let tint = color(for: entity)
+
+        // Shadow IS the projected ellipse; the puck is not.
+        let shadowRect = CGRect(x: centre.x - radius, y: centre.y - radius * 0.35,
+                                width: radius * 2, height: radius * 0.7)
+        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
+
+        // Puck: BILLBOARDED — upright and depth-scaled, never pushed through
+        // the homography, which would shear it into a wrong ellipse.
+        let puck = CGRect(x: centre.x - radius, y: centre.y - radius,
+                          width: radius * 2, height: radius * 2)
+
+        switch entity.kind {
+        case .ball:
+            let ballRect = puck.insetBy(dx: radius * 0.32, dy: radius * 0.32)
+            context.fill(Path(ellipseIn: ballRect), with: .color(Color(hex: model.theme.ballHex)))
+            context.stroke(Path(ellipseIn: ballRect), with: .color(.black.opacity(0.35)),
+                           lineWidth: 1)
+        case .cone:
+            var triangle = Path()
+            triangle.move(to: CGPoint(x: centre.x, y: centre.y - radius))
+            triangle.addLine(to: CGPoint(x: centre.x - radius, y: centre.y + radius * 0.8))
+            triangle.addLine(to: CGPoint(x: centre.x + radius, y: centre.y + radius * 0.8))
+            triangle.closeSubpath()
+            context.fill(triangle, with: .color(.yellow))
+        case .screen:
+            let bar = CGRect(x: centre.x - radius, y: centre.y - radius * 0.28,
+                             width: radius * 2, height: radius * 0.56)
+            context.fill(Path(bar), with: .color(Color(hex: model.theme.lineHex)))
+        default:
+            context.fill(Path(ellipseIn: puck), with: .color(tint))
+            context.stroke(Path(ellipseIn: puck), with: .color(Color(hex: model.theme.lineHex).opacity(0.9)),
+                           lineWidth: 1.4)
+        }
+
+        if model.selectedEntityId == entity.id {
+            let ring = puck.insetBy(dx: -4, dy: -4)
+            context.stroke(Path(ellipseIn: ring), with: .color(.accentColor),
+                           style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+        }
+    }
+
+    private func drawLabel(_ entity: DiagramEntity,
+                           _ projection: CourtProjection,
+                           into context: inout GraphicsContext) {
+        guard let label = entityLabel(entity), !label.isEmpty else { return }
+        let court = resolvedPosition(entity)
+        let centre = projection.project(court)
+        // Labels stop shrinking at the legibility floor.
+        let size = projection.labelPointSize(base: baseLabelSize, at: court)
+        let text = Text(label)
+            .font(.system(size: size, weight: .bold))
+            .foregroundStyle(Color(hex: model.theme.labelHex))
+        context.draw(context.resolve(text), at: centre, anchor: .center)
     }
 
     private func entityLabel(_ entity: DiagramEntity) -> String? {
@@ -362,11 +398,10 @@ struct DiagramCanvasView: View {
                 if model.isRimTarget(drop) {
                     model.authorShot(at: model.playhead)
                 } else if let target = hitTestPlayers(drop) {
-                    if case .held = model.ballState(at: model.playhead) {
-                        model.authorPass(to: target, at: model.playhead)
-                    } else {
-                        model.beginPossession(target, at: model.playhead)
-                    }
+                    // authorPass falls back to beginPossession itself when
+                    // there is no prior holder, so the caller does not need to
+                    // second-guess the state machine.
+                    model.authorPass(to: target, at: model.playhead)
                 }
             }
     }

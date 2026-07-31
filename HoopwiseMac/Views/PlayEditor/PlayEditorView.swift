@@ -256,6 +256,16 @@ struct PlayEditorView: View {
                 labelled("Min elevation", CGFloat(model.look.minElevationDegrees), "%.0f°")
                 Slider(value: $model.look.minElevationDegrees, in: 10...60, step: 1)
             }
+            Section("Ball") {
+                labelled("Pass speed", CGFloat(model.look.passSpeedFeetPerSecond), "%.0f ft/s")
+                Slider(value: $model.look.passSpeedFeetPerSecond, in: 12...60, step: 1)
+                labelled("Shot speed", CGFloat(model.look.shotSpeedFeetPerSecond), "%.0f ft/s")
+                Slider(value: $model.look.shotSpeedFeetPerSecond, in: 10...50, step: 1)
+                labelled("Held offset", model.look.ballHeldOffsetFeet, "%.1f ft")
+                Slider(value: $model.look.ballHeldOffsetFeet, in: 0...4, step: 0.1)
+                Text("Flight duration is derived from distance / speed, so these set how snappy passes and shots feel.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
             Section("Legibility") {
                 labelled("Min label size", model.look.minLabelPointSize, "%.0f pt")
                 Slider(value: $model.look.minLabelPointSize, in: 5...16, step: 0.5)

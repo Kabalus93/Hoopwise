@@ -89,6 +89,27 @@ struct TimelineView: View {
         .frame(height: laneHeight)
     }
 
+    /// Possession events on the Ball row.
+    ///
+    /// Zero position keyframes there is CORRECT — the ball has no position
+    /// track. These are EVENTS, drawn as circles rather than diamonds so an
+    /// event is never mistaken for a keyframe. Read-only for now: retiming and
+    /// deleting them is a larger job than it looks, because a pass's arrival is
+    /// derived from distance and speed rather than stored independently.
+    @ViewBuilder
+    private func possessionMarkers(width: CGFloat, duration: Double) -> some View {
+        let events = model.possessionEvents
+        ForEach(events, id: \.id) { event in
+            Circle()
+                .fill(event.color)
+                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1))
+                .frame(width: 9, height: 9)
+                .position(x: CGFloat(min(event.time, duration) / duration) * width,
+                          y: laneHeight / 2)
+                .help(event.label)
+        }
+    }
+
     private func entityLane(_ entity: DiagramEntity, width: CGFloat, duration: Double) -> some View {
         let track = model.track(for: entity.id)
         let isSelected = model.selectedEntityId == entity.id
@@ -113,6 +134,10 @@ struct TimelineView: View {
             ZStack(alignment: .leading) {
                 Rectangle()
                     .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.05))
+
+                if case .ball = entity.kind, model.possessionEnabled {
+                    possessionMarkers(width: width, duration: duration)
+                }
 
                 if let track {
                     ForEach(track.sortedKeyframes) { frame in

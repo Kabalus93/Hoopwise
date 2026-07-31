@@ -256,11 +256,16 @@ final class PlayEditorModel: ObservableObject {
         return hypot(court.x - rim.x, court.y - rim.y) <= 3.5
     }
 
+    /// Ball home, used before anything is authored.
+    private var ballHome: CGPoint { diagram.ball?.homePosition ?? rimPosition }
+
     func ballState(at time: Double) -> BallState {
-        guard let node = activeNode else { return .free }
+        guard let node = activeNode else { return .atRest(ballHome) }
         return node.ballState(at: time,
                               passSpeed: look.passSpeedFeetPerSecond,
-                              shotSpeed: look.shotSpeedFeetPerSecond) { [weak self] id, t in
+                              shotSpeed: look.shotSpeedFeetPerSecond,
+                              ballHome: ballHome,
+                              heldOffsetFeet: look.ballHeldOffsetFeet) { [weak self] id, t in
             self?.position(of: id, at: t) ?? .zero
         }
     }
@@ -269,6 +274,44 @@ final class PlayEditorModel: ObservableObject {
     /// then renders with the dribble convention and the ball draws none.
     func isDribbling(_ entityId: UUID, at time: Double) -> Bool {
         activeNode?.isDribbling(entityId, at: time) ?? false
+    }
+
+    /// A possession change worth showing on the timeline.
+    struct PossessionEvent: Identifiable {
+        let id: UUID
+        let time: Double
+        let label: String
+        let color: Color
+    }
+
+    /// Possession start, pass departure, arrival, and shot release.
+    var possessionEvents: [PossessionEvent] {
+        guard let node = activeNode else { return [] }
+        var events: [PossessionEvent] = []
+        for possession in node.sortedPossessions {
+            let who = entityLabel(possession.holderId)
+            events.append(PossessionEvent(id: possession.id, time: possession.start,
+                                          label: "\(who) gains possession", color: .green))
+            guard let end = possession.end, let release = possession.release else { continue }
+            switch release {
+            case .pass(let toId):
+                events.append(PossessionEvent(id: UUID(), time: end,
+                                              label: "\(who) passes to \(entityLabel(toId))",
+                                              color: .orange))
+            case .shot:
+                events.append(PossessionEvent(id: UUID(), time: end,
+                                              label: "\(who) shoots", color: .red))
+            }
+        }
+        return events
+    }
+
+    private func entityLabel(_ id: UUID) -> String {
+        guard let entity = diagram.entity(id) else { return "?" }
+        if case .player(let team, _, _) = entity.kind {
+            return "\(team == .offense ? "O" : "D")\(entity.label ?? "")"
+        }
+        return entity.label ?? "Ball"
     }
 
     /// Gives the ball to `holderId` starting at `time`. Used for the first drop.
@@ -288,12 +331,19 @@ final class PlayEditorModel: ObservableObject {
     /// Authors a pass: the current holder releases at `time` and the receiver
     /// gains possession when the ball ARRIVES, derived from distance / speed.
     func authorPass(to receiverId: UUID, at time: Double) {
-        guard let node = activeNode,
-              let holding = node.sortedPossessions.last(where: { $0.contains(time) }),
+        // The holder is whoever has it at `time`, or failing that the most
+        // recent possession starting at or before it. Requiring an exact
+        // .held match meant a drop just after a release silently became a new
+        // possession instead of a pass, and no release was ever recorded — so
+        // no derived line was drawn.
+        let holder = activeNode?.sortedPossessions.last { $0.contains(time) }
+            ?? activeNode?.sortedPossessions.last { $0.start <= time }
+        guard let node = activeNode, let holding = holder,
               holding.holderId != receiverId else {
             beginPossession(receiverId, at: time)
             return
         }
+        _ = node
         registerUndo("Author Pass")
 
         let from = position(of: holding.holderId, at: time)
@@ -314,8 +364,9 @@ final class PlayEditorModel: ObservableObject {
 
     /// Authors a shot at the rim. Possession ends and nothing receives it.
     func authorShot(at time: Double) {
-        guard let node = activeNode,
-              let holding = node.sortedPossessions.last(where: { $0.contains(time) }) else { return }
+        let holder = activeNode?.sortedPossessions.last { $0.contains(time) }
+            ?? activeNode?.sortedPossessions.last { $0.start <= time }
+        guard let holding = holder else { return }
         registerUndo("Author Shot")
         let target = rimPosition
         mutateActiveNode { node in
@@ -331,32 +382,18 @@ final class PlayEditorModel: ObservableObject {
         mutateActiveNode { $0.possessions.removeAll() }
     }
 
-    /// Ball position honouring possession when enabled.
-    ///
-    /// While held it derives from the holder and the ball needs no keyframes of
-    /// its own — which is the fix for the drag gesture writing position
-    /// keyframes instead of possession.
+    /// Ball position honouring possession when enabled. NEVER nil.
     func ballPosition(at time: Double) -> CGPoint? {
         guard let ball = diagram.ball else { return nil }
-        guard possessionEnabled else { return position(of: ball.id, at: time) }
-        switch ballState(at: time) {
-        case .held(let holderId):
-            return position(of: holderId, at: time)
-        case .inFlight(let fromId, let toId, let progress):
-            let a = position(of: fromId, at: time)
-            let b = position(of: toId, at: time)
-            return CGPoint(x: a.x + (b.x - a.x) * progress,
-                           y: a.y + (b.y - a.y) * progress)
-        case .shot(let fromId, let target, let progress):
-            let a = position(of: fromId, at: time)
-            // Shallow parabola toward the rim: lateral interpolation plus a
-            // perpendicular rise that peaks mid-flight.
-            let x = a.x + (target.x - a.x) * progress
-            let y = a.y + (target.y - a.y) * progress
-            let arc = sin(progress * .pi) * 1.6
-            return CGPoint(x: x, y: y - arc)
-        case .free:
+        guard possessionEnabled, let node = activeNode else {
             return position(of: ball.id, at: time)
+        }
+        return node.ballPosition(at: time,
+                                 passSpeed: look.passSpeedFeetPerSecond,
+                                 shotSpeed: look.shotSpeedFeetPerSecond,
+                                 ballHome: ballHome,
+                                 heldOffsetFeet: look.ballHeldOffsetFeet) { [weak self] id, t in
+            self?.position(of: id, at: t) ?? .zero
         }
     }
 

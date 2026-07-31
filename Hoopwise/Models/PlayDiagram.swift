@@ -331,15 +331,22 @@ enum BallRelease: Codable, Hashable {
 }
 
 /// The ball's state at a moment.
+///
+/// TOTAL: every time resolves to one of these. There is no gap and no nil.
+/// The previous shape had a hole — flight duration was computed independently
+/// at author time and at render time, so if the receiver moved, the derived
+/// window and the stored arrival disagreed and the ball fell through to a
+/// fallback that placed it back at its home position. That is what "disappears
+/// and reappears instantly" was.
 enum BallState: Equatable {
     /// Held by an entity; position derives from the holder.
     case held(holderId: UUID)
-    /// Travelling between two possessions.
-    case inFlight(fromId: UUID, toId: UUID, progress: Double)
-    /// A shot in flight toward the rim.
-    case shot(fromId: UUID, target: CGPoint, progress: Double)
-    /// No possession authored — the ball follows its own keyframes.
-    case free
+    /// Travelling. Endpoints are already resolved, so nothing is recomputed
+    /// downstream and the two calculations cannot drift apart.
+    case inFlight(from: CGPoint, to: CGPoint, progress: Double, isShot: Bool)
+    /// Sitting still at a resolved point: before the first possession, after a
+    /// shot completes, or anywhere else nothing else applies.
+    case atRest(CGPoint)
 }
 
 // MARK: - Read Tree
@@ -425,48 +432,154 @@ struct ReadNode: Identifiable, Codable, Hashable {
 
     var sortedPossessions: [Possession] { possessions.sorted { $0.start < $1.start } }
 
-    /// Ball state at `time`.
+    /// Ball state at `time`. Never returns nothing.
     ///
-    /// Ball timing is DERIVED, not keyframed: flight duration comes from
-    /// distance / speed. A player can move fast or slow between keyframes; the
-    /// ball cannot, so its travel is computed rather than authored.
+    /// The flight window runs from a release to the NEXT possession's start, so
+    /// it fills the gap exactly by construction. Duration is still derived from
+    /// distance / speed — that is what authoring writes into the receiver's
+    /// start — but rendering trusts the recorded interval rather than
+    /// recomputing it, so the two can never disagree.
     func ballState(at time: Double,
                    passSpeed: Double,
                    shotSpeed: Double,
+                   ballHome: CGPoint,
+                   heldOffsetFeet: CGFloat = 0,
                    positionOf: (UUID, Double) -> CGPoint) -> BallState {
+        // Flight endpoints use the SAME held offset as the held state, so the
+        // ball does not pop sideways by the offset at release and again at the
+        // catch. The sampling test caught a 3.3ft jump from exactly that.
+        func heldPoint(_ id: UUID, _ t: Double) -> CGPoint {
+            let centre = positionOf(id, t)
+            guard heldOffsetFeet != 0 else { return centre }
+            let direction = holderDirection(id, at: t, positionOf: positionOf)
+            return CGPoint(x: centre.x + direction.dx * heldOffsetFeet,
+                           y: centre.y + direction.dy * heldOffsetFeet)
+        }
         let sorted = sortedPossessions
-        guard !sorted.isEmpty else { return .free }
-        if let holding = sorted.first(where: { $0.contains(time) }) {
+        guard !sorted.isEmpty else { return .atRest(ballHome) }
+
+        // Before anything is authored, the ball waits where it was placed.
+        if let first = sorted.first, time < first.start {
+            return .atRest(ballHome)
+        }
+
+        if let holding = sorted.last(where: { $0.contains(time) }) {
             return .held(holderId: holding.holderId)
         }
 
-        for possession in sorted {
+        // Walk releases in order, remembering where the ball last came to
+        // rest. Returning on the FIRST release whose time has passed was wrong:
+        // once a pass completed, a later shot was never evaluated and the ball
+        // fell through to the receiver's position instead of flying to the rim.
+        var lastResolved: CGPoint?
+        for (index, possession) in sorted.enumerated() {
             guard let releaseTime = possession.end,
                   let release = possession.release,
                   time > releaseTime else { continue }
 
-            let from = positionOf(possession.holderId, releaseTime)
+            let from = heldPoint(possession.holderId, releaseTime)
+
             switch release {
             case .pass(let toId):
-                let to = positionOf(toId, time)
-                let distance = Double(hypot(to.x - from.x, to.y - from.y))
-                let duration = max(0.08, distance / max(passSpeed, 1))
-                guard time <= releaseTime + duration else { continue }
-                let progress = (time - releaseTime) / duration
-                return .inFlight(fromId: possession.holderId, toId: toId, progress: progress)
+                let arrival = sorted.dropFirst(index + 1).first?.start
+                    ?? (releaseTime + Double(hypot(positionOf(toId, releaseTime).x - from.x,
+                                                   positionOf(toId, releaseTime).y - from.y))
+                        / max(passSpeed, 1))
+                let to = heldPoint(toId, arrival)
+                if time <= arrival {
+                    let span = max(arrival - releaseTime, 0.0001)
+                    return .inFlight(from: from, to: to,
+                                     progress: (time - releaseTime) / span, isShot: false)
+                }
+                lastResolved = to
 
             case .shot(let target):
                 let distance = Double(hypot(target.x - from.x, target.y - from.y))
                 let duration = max(0.12, distance / max(shotSpeed, 1))
-                guard time <= releaseTime + duration else { continue }
-                let progress = (time - releaseTime) / duration
-                return .shot(fromId: possession.holderId, target: target, progress: progress)
+                if time <= releaseTime + duration {
+                    return .inFlight(from: from, to: target,
+                                     progress: (time - releaseTime) / duration, isShot: true)
+                }
+                // A completed shot leaves the ball at the rim.
+                lastResolved = target
             }
         }
-        return .free
+
+        if let lastResolved { return .atRest(lastResolved) }
+
+        // Held to the end, or an unreleased possession: rest with the last
+        // holder rather than falling through to nothing.
+        if let last = sorted.last {
+            return .atRest(heldPoint(last.holderId, time))
+        }
+        return .atRest(ballHome)
     }
 
-    /// When a released ball arrives, derived from distance and speed.
+    /// Resolved ball position. Total by construction — see `ballState`.
+    func ballPosition(at time: Double,
+                      passSpeed: Double,
+                      shotSpeed: Double,
+                      ballHome: CGPoint,
+                      heldOffsetFeet: CGFloat,
+                      positionOf: (UUID, Double) -> CGPoint) -> CGPoint {
+        switch ballState(at: time, passSpeed: passSpeed, shotSpeed: shotSpeed,
+                         ballHome: ballHome, heldOffsetFeet: heldOffsetFeet,
+                         positionOf: positionOf) {
+        case .held(let holderId):
+            let centre = positionOf(holderId, time)
+            let direction = holderDirection(holderId, at: time, positionOf: positionOf)
+            // BESIDE the holder, not on top of him.
+            return CGPoint(x: centre.x + direction.dx * heldOffsetFeet,
+                           y: centre.y + direction.dy * heldOffsetFeet)
+        case .inFlight(let from, let to, let progress, let isShot):
+            let x = from.x + (to.x - from.x) * CGFloat(progress)
+            let y = from.y + (to.y - from.y) * CGFloat(progress)
+            guard isShot else { return CGPoint(x: x, y: y) }
+            // Shallow parabola toward the rim.
+            let arc = sin(progress * .pi) * 1.6
+            return CGPoint(x: x, y: y - CGFloat(arc))
+        case .atRest(let point):
+            return point
+        }
+    }
+
+    /// Direction the holder is travelling, for the held-ball offset.
+    ///
+    /// When he is stationary this RETAINS the last direction he actually moved,
+    /// searching backwards, rather than snapping to a fixed default. Snapping
+    /// swings the ball by twice the offset the instant he stops — the sampling
+    /// test measured a 3.3ft jump at exactly the moment a holder reached his
+    /// last keyframe. Only a holder who has never moved gets the default.
+    private func holderDirection(_ holderId: UUID,
+                                 at time: Double,
+                                 positionOf: (UUID, Double) -> CGPoint) -> (dx: CGFloat, dy: CGFloat) {
+        let epsilon = 0.12
+        let threshold: CGFloat = 0.02
+
+        func sample(_ t: Double) -> (CGFloat, CGFloat, CGFloat) {
+            let now = positionOf(holderId, t)
+            let ahead = positionOf(holderId, t + epsilon)
+            let dx = ahead.x - now.x
+            let dy = ahead.y - now.y
+            return (dx, dy, (dx * dx + dy * dy).squareRoot())
+        }
+
+        let (dx, dy, magnitude) = sample(time)
+        if magnitude > threshold { return (dx / magnitude, dy / magnitude) }
+
+        // Walk back to the last moment he was moving.
+        var back = time - epsilon
+        var guard_ = 0
+        while back >= 0, guard_ < 200 {
+            let (bdx, bdy, bmag) = sample(back)
+            if bmag > threshold { return (bdx / bmag, bdy / bmag) }
+            back -= epsilon
+            guard_ += 1
+        }
+        return (1, 0)
+    }
+
+    /// When a released ball arrives, derived from distance and speed.    /// When a released ball arrives, derived from distance and speed.
     func arrivalTime(of possession: Possession,
                      passSpeed: Double,
                      shotSpeed: Double,

@@ -72,6 +72,9 @@ struct CourtLookParameters: Codable, Hashable {
     /// Shot speed in feet per second. Slower than a pass, and rendered as a
     /// shallow parabola toward the rim.
     var shotSpeedFeetPerSecond: Double
+    /// How far BESIDE the holder the ball sits, in court feet. On his centre it
+    /// hides him; roughly a puck radius out and both read clearly.
+    var ballHeldOffsetFeet: CGFloat
     /// Colour scheme.
     var theme: CourtTheme
     /// Labels never render smaller than this, in POINTS.
@@ -88,6 +91,7 @@ struct CourtLookParameters: Codable, Hashable {
          minLabelPointSize: CGFloat = 9,
          passSpeedFeetPerSecond: Double = 34,
          shotSpeedFeetPerSecond: Double = 26,
+         ballHeldOffsetFeet: CGFloat = 1.9,
          theme: CourtTheme = .video) {
         self.maxConvergence = maxConvergence
         self.minDepthScale = minDepthScale
@@ -95,6 +99,7 @@ struct CourtLookParameters: Codable, Hashable {
         self.minLabelPointSize = minLabelPointSize
         self.passSpeedFeetPerSecond = passSpeedFeetPerSecond
         self.shotSpeedFeetPerSecond = shotSpeedFeetPerSecond
+        self.ballHeldOffsetFeet = ballHeldOffsetFeet
         self.theme = theme
     }
 
