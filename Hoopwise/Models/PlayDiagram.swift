@@ -149,6 +149,21 @@ enum PathKind: String, Codable, CaseIterable, Hashable {
 /// property of the approach and path kind is a property of the departure.
 /// Editors should render the final keyframe's path-kind control as disabled.
 struct Keyframe: Identifiable, Codable, Hashable {
+    enum CodingKeys: String, CodingKey {
+        case id, t, position, easing, pathKind, pathStyle, controlPoints
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        t = try c.decode(Double.self, forKey: .t)
+        position = try c.decode(CGPoint.self, forKey: .position)
+        easing = try c.decodeIfPresent(Easing.self, forKey: .easing) ?? .easeInOut
+        pathKind = try c.decodeIfPresent(PathKind.self, forKey: .pathKind) ?? .run
+        pathStyle = try c.decodeIfPresent(PathStyle.self, forKey: .pathStyle) ?? .sharp
+        controlPoints = try c.decodeIfPresent([CGPoint].self, forKey: .controlPoints) ?? []
+    }
+
     let id: UUID
     /// Seconds from the start of the owning read node.
     var t: Double
@@ -158,21 +173,30 @@ struct Keyframe: Identifiable, Codable, Hashable {
     /// What the segment LEAVING this keyframe represents. Ignored on the last
     /// keyframe of a track — see the segment convention above.
     var pathKind: PathKind
-    /// Optional bezier control points, in court feet, for curved paths. Empty
-    /// means a straight segment.
+    /// Whether the segment LEAVING this keyframe runs straight or curves
+    /// through its neighbours. Reuses the legacy CourtMovement vocabulary.
+    var pathStyle: PathStyle
+    /// Optional bezier control points, in court feet. Empty means the style
+    /// decides: sharp is a straight segment, curved is a Catmull-Rom spline
+    /// through the surrounding keyframes.
     var controlPoints: [CGPoint]
 
+    /// `easing` defaults to easeInOut. Linear is the opt-in — real movement
+    /// accelerates and decelerates, and a linear default made every play read
+    /// mechanical.
     init(id: UUID = UUID(),
          t: Double,
          position: CGPoint,
-         easing: Easing = .linear,
+         easing: Easing = .easeInOut,
          pathKind: PathKind = .run,
+         pathStyle: PathStyle = .sharp,
          controlPoints: [CGPoint] = []) {
         self.id = id
         self.t = t
         self.position = position
         self.easing = easing
         self.pathKind = pathKind
+        self.pathStyle = pathStyle
         self.controlPoints = controlPoints
     }
 }
@@ -194,6 +218,21 @@ struct Track: Identifiable, Codable, Hashable {
 
     var duration: Double { sortedKeyframes.last?.t ?? 0 }
 
+    /// Standard Catmull-Rom, written as explicit typed steps because the
+    /// single-expression form exceeds the type checker's budget.
+    static func catmullRom(_ p0: CGPoint, _ p1: CGPoint,
+                           _ p2: CGPoint, _ p3: CGPoint, _ t: CGFloat) -> CGPoint {
+        let t2: CGFloat = t * t
+        let t3: CGFloat = t2 * t
+        let a: CGFloat = -0.5 * t3 + t2 - 0.5 * t
+        let b: CGFloat = 1.5 * t3 - 2.5 * t2 + 1.0
+        let c: CGFloat = -1.5 * t3 + 2.0 * t2 + 0.5 * t
+        let d: CGFloat = 0.5 * t3 - 0.5 * t2
+        let x: CGFloat = a * p0.x + b * p1.x + c * p2.x + d * p3.x
+        let y: CGFloat = a * p0.y + b * p1.y + c * p2.y + d * p3.y
+        return CGPoint(x: x, y: y)
+    }
+
     /// Position at time `t`, interpolated with the incoming keyframe's easing.
     /// Before the first keyframe holds the first position; after the last holds
     /// the last. Returns nil only when the track has no keyframes at all.
@@ -209,10 +248,19 @@ struct Track: Identifiable, Codable, Hashable {
             let span = frame.t - previous.t
             guard span > 0 else { return frame.position }
             let progress = frame.easing.apply((time - previous.t) / span)
-            return CGPoint(
-                x: previous.position.x + (frame.position.x - previous.position.x) * progress,
-                y: previous.position.y + (frame.position.y - previous.position.y) * progress
-            )
+
+            // pathStyle on the DEPARTING keyframe governs this segment.
+            guard previous.pathStyle == .curved else {
+                return CGPoint(
+                    x: previous.position.x + (frame.position.x - previous.position.x) * progress,
+                    y: previous.position.y + (frame.position.y - previous.position.y) * progress)
+            }
+            // Catmull-Rom through the surrounding keyframes, clamping at the
+            // ends so a curve at the start or finish does not overshoot.
+            let before = index >= 2 ? frames[index - 2].position : previous.position
+            let after = index + 1 < frames.count ? frames[index + 1].position : frame.position
+            return Self.catmullRom(before, previous.position, frame.position, after,
+                                   CGFloat(progress))
         }
         return last.position
     }

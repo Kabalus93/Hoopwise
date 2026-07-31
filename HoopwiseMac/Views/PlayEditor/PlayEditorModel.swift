@@ -197,8 +197,17 @@ final class PlayEditorModel: ObservableObject {
     ///
     /// Dragging on the canvas calls this with the playhead, which is the whole
     /// authoring loop: scrub to a moment, move a player, a keyframe appears.
+    /// Default line kind for an entity. A DEFAULT per kind, not something set
+    /// per path: player movement is continuous, ball movement is dashed.
+    func defaultPathKind(for entityId: UUID) -> PathKind {
+        guard let entity = diagram.entity(entityId) else { return .run }
+        if case .ball = entity.kind { return .pass }
+        return .run
+    }
+
     func setKeyframe(for entityId: UUID, at time: Double, position: CGPoint) {
         let clamped = diagram.space.clamp(position)
+        let defaultKind = defaultPathKind(for: entityId)
         mutateActiveNode { node in
             if let trackIndex = node.tracks.firstIndex(where: { $0.entityId == entityId }) {
                 if let frameIndex = node.tracks[trackIndex].keyframes
@@ -206,12 +215,14 @@ final class PlayEditorModel: ObservableObject {
                     node.tracks[trackIndex].keyframes[frameIndex].position = clamped
                 } else {
                     node.tracks[trackIndex].keyframes.append(
-                        Keyframe(t: time, position: clamped))
+                        Keyframe(t: time, position: clamped,
+                                 pathKind: defaultKind))
                     node.tracks[trackIndex].keyframes.sort { $0.t < $1.t }
                 }
             } else {
                 node.tracks.append(Track(entityId: entityId,
-                                         keyframes: [Keyframe(t: time, position: clamped)]))
+                                         keyframes: [Keyframe(t: time, position: clamped,
+                                                              pathKind: defaultKind)]))
             }
         }
     }
@@ -241,14 +252,17 @@ final class PlayEditorModel: ObservableObject {
     func updateKeyframe(entityId: UUID,
                         keyframeId: UUID,
                         easing: Easing? = nil,
-                        pathKind: PathKind? = nil) {
-        registerUndo(easing != nil ? "Change Easing" : "Change Path Kind")
+                        pathKind: PathKind? = nil,
+                        pathStyle: PathStyle? = nil) {
+        registerUndo(easing != nil ? "Change Easing"
+                     : (pathStyle != nil ? "Change Path Style" : "Change Path Kind"))
         mutateActiveNode { node in
             guard let trackIndex = node.tracks.firstIndex(where: { $0.entityId == entityId }),
                   let frameIndex = node.tracks[trackIndex].keyframes
                     .firstIndex(where: { $0.id == keyframeId }) else { return }
             if let easing { node.tracks[trackIndex].keyframes[frameIndex].easing = easing }
             if let pathKind { node.tracks[trackIndex].keyframes[frameIndex].pathKind = pathKind }
+            if let pathStyle { node.tracks[trackIndex].keyframes[frameIndex].pathStyle = pathStyle }
         }
     }
 
@@ -451,13 +465,19 @@ final class PlayEditorModel: ObservableObject {
         diagram.camera.keyframes[index].easing = easing
     }
 
-    /// Replaces the whole diagram, e.g. when reopening stored work.
-    func load(_ stored: PlayDiagram) {
+    /// Which stored diagram is open, for library selection.
+    var currentDiagramId: UUID { diagram.id }
+
+    /// Replaces the whole diagram, e.g. when opening a play from the library.
+    func load(_ stored: PlayDiagram, name: String? = nil) {
         diagram = stored
+        if let name { diagramName = name }
         activeNodeId = stored.rootNodeId
         selectedEntityId = nil
         selectedKeyframeIds = []
+        cursorEntityId = nil
         playhead = 0
+        stop()
         look.theme = CourtTheme.all.first { $0.name == stored.themeName } ?? .video
     }
 

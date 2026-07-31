@@ -11,6 +11,8 @@ struct PlayEditorView: View {
     /// Sticky: stays active until deselected or Escape.
     @State private var placementKind: DiagramEntityKind?
     @State private var showingLookPanel = false
+    /// True while a text field owns focus, so single-letter shortcuts stand down.
+    @FocusState private var isTextFieldFocused: Bool
 
     init(diagram: PlayDiagram? = nil) {
         _model = StateObject(wrappedValue:
@@ -20,6 +22,9 @@ struct PlayEditorView: View {
     var body: some View {
         VSplitView {
             HStack(spacing: 0) {
+                PlayLibraryView(model: model)
+                    .frame(width: 210)
+                Divider()
                 // Sticky tool: placing does NOT clear the selection, so a
                 // whole lineup goes down without re-picking each time.
                 DiagramCanvasView(model: model, placementKind: placementKind) { }
@@ -34,6 +39,10 @@ struct PlayEditorView: View {
                     }
                 }
                 .frame(width: 260)
+                // Constrain the panel to its frame. Long unbroken values —
+                // a UUID prefix, a play name — were painting past the right
+                // edge because nothing clipped the column.
+                .clipped()
             }
             .frame(minHeight: 340)
 
@@ -46,13 +55,25 @@ struct PlayEditorView: View {
             model.dataManager = dataManager
             model.undoManager = systemUndoManager
             // Reopen the most recent diagram so quitting does not lose work.
-            if let stored = dataManager.mostRecentPlayDiagram() {
-                model.load(stored)
+            if let stored = dataManager.allPlayDiagrams().first {
+                model.load(stored.diagram, name: stored.name)
             }
             model.startAutosave()
         }
         .onChange(of: systemUndoManager) { _, manager in model.undoManager = manager }
         .onDisappear { model.save() }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePlay)) { _ in
+            model.togglePlayback()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorMirror)) { _ in
+            model.mirror()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePaths)) { _ in
+            model.showMovementPaths.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorToggleSticky)) { _ in
+            model.possessionEnabled.toggle()
+        }
         .focusable()
         .onKeyPress(.escape) {
             placementKind = nil
@@ -71,6 +92,25 @@ struct PlayEditorView: View {
             model.nudgeSelectedKeyframes(by: model.snapEnabled ? model.snapInterval : 0.05)
             return .handled
         }
+        // Single-letter tool keys, GATED on no text field having focus —
+        // naming a play must not place players.
+        .onKeyPress(phases: .down) { press in
+            guard !isTextFieldFocused else { return .ignored }
+            switch press.characters.lowercased() {
+            case "a": placementKind = nil; model.activeToolName = "Select"
+            case "o": placementKind = .player(team: .offense, number: nil, role: nil)
+                      model.activeToolName = "Offense"
+            case "d": placementKind = .player(team: .defense, number: nil, role: nil)
+                      model.activeToolName = "Defense"
+            case "b": guard model.canPlace(.ball) else { return .ignored }
+                      placementKind = .ball; model.activeToolName = "Ball"
+            case "c": placementKind = .cone; model.activeToolName = "Cone"
+            case "s": model.possessionEnabled.toggle()
+            case "p": model.showMovementPaths.toggle()
+            default:  return .ignored
+            }
+            return .handled
+        }
     }
 
     // MARK: - Toolbar
@@ -78,55 +118,68 @@ struct PlayEditorView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
-            palette
+            groupLabel("Tools")
+            toolButton("Select", "cursorarrow", "A", nil)
+            toolButton("Offense", "person.fill", "O",
+                       .player(team: .offense, number: nil, role: nil))
+            toolButton("Defense", "person.fill.badge.minus", "D",
+                       .player(team: .defense, number: nil, role: nil))
+            toolButton("Ball", "basketball.fill", "B", .ball)
+            toolButton("Screen", "rectangle.fill", "S", .screen)
+            toolButton("Cone", "triangle.fill", "C", .cone)
         }
-        ToolbarItemGroup(placement: .primaryAction) {
-            Button {
-                model.togglePlayback()
-            } label: {
+
+        ToolbarItemGroup(placement: .principal) {
+            Divider()
+            groupLabel("Playback")
+            Button { model.togglePlayback() } label: {
                 Label(model.isPlaying ? "Pause" : "Play",
                       systemImage: model.isPlaying ? "pause.fill" : "play.fill")
             }
-            .keyboardShortcut(.space, modifiers: [])
+            .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
 
-            Button {
-                model.stop()
-                model.playhead = 0
-            } label: {
+            Button { model.stop(); model.playhead = 0 } label: {
                 Label("Rewind", systemImage: "backward.end.fill")
             }
+            .help("Rewind to start")
 
+            scrubber
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
             Divider()
-
-            Button { model.mirror() } label: {
-                Label("Mirror", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+            groupLabel("View")
+            Picker("Theme", selection: Binding(
+                get: { model.theme }, set: { model.setTheme($0) })) {
+                ForEach(CourtTheme.all) { Text($0.name).tag($0) }
             }
-            .help("Flip the play across the court, swapping left/right in teaching points")
+            .pickerStyle(.menu).fixedSize()
+            .help("Colour theme — Print for paper, Video for film")
 
             Toggle(isOn: $model.showMovementPaths) {
                 Label("Paths", systemImage: "scribble")
             }
             .toggleStyle(.button)
-            .help("Show or hide movement paths — off gives a clean court for stills")
+            .help("Show movement paths (P)")
 
             Toggle(isOn: $model.possessionEnabled) {
-                Label("Possession", systemImage: "hand.raised.fill")
+                Label("Sticky Ball", systemImage: "hand.raised.fill")
             }
             .toggleStyle(.button)
-            .help("Ball follows possession. Off lets you keyframe it freehand.")
+            .help("Ball follows possession (S). Off lets you keyframe it freehand.")
 
-            Picker("Theme", selection: Binding(
-                get: { model.theme },
-                set: { model.setTheme($0) })) {
-                ForEach(CourtTheme.all) { Text($0.name).tag($0) }
+            Button { model.mirror() } label: {
+                Label("Mirror", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
             }
-            .pickerStyle(.menu)
-            .fixedSize()
+            .help("Mirror the play, swapping left/right in teaching points (⌘M)")
+
+            Divider()
 
             Button { showingLookPanel.toggle() } label: {
                 Label("Look", systemImage: "slider.horizontal.3")
             }
             .popover(isPresented: $showingLookPanel) { lookPanel }
+            .help("Look parameters — tilt, ball speed, colours")
 
             Toggle(isOn: $model.showDebugPanel) {
                 Label("Debug", systemImage: "ladybug")
@@ -136,37 +189,49 @@ struct PlayEditorView: View {
         }
     }
 
-    private var palette: some View {
-        HStack(spacing: 6) {
-            paletteButton("Offense", "person.fill", .blue,
-                          .player(team: .offense, number: nil, role: nil))
-            paletteButton("Defense", "person.fill.badge.minus", .red,
-                          .player(team: .defense, number: nil, role: nil))
-            paletteButton("Ball", "basketball.fill", .orange, .ball)
-            paletteButton("Screen", "rectangle.fill", .white, .screen)
-            paletteButton("Cone", "triangle.fill", .yellow, .cone)
-        }
+    private func groupLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .fixedSize()
     }
 
-    private func paletteButton(_ title: String, _ icon: String,
-                               _ tint: Color, _ kind: DiagramEntityKind) -> some View {
+    private var scrubber: some View {
+        HStack(spacing: 5) {
+            Slider(value: Binding(
+                get: { model.playhead },
+                set: { model.stop(); model.playhead = $0 }),
+                   in: 0...model.timelineDuration)
+            .frame(width: 130)
+            Text(String(format: "%.2fs", model.playhead))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .leading)
+        }
+        .help("Scrub the playhead")
+    }
+
+    /// Tool button with a visible armed state.
+    ///
+    /// `kind == nil` is Select — arming nothing. There was previously no Select
+    /// tool at all and no way to tell which tool was live.
+    private func toolButton(_ title: String, _ icon: String,
+                            _ key: String, _ kind: DiagramEntityKind?) -> some View {
         let isActive = placementKind == kind
-        let available = model.canPlace(kind)
+        let available = kind.map { model.canPlace($0) } ?? true
         return Button {
-            placementKind = isActive ? nil : kind
-            model.activeToolName = isActive ? "Select" : title
+            placementKind = kind
+            model.activeToolName = title
         } label: {
             Label(title, systemImage: icon)
                 .labelStyle(.iconOnly)
-                .foregroundStyle(isActive ? Color.white : (available ? tint : Color.secondary))
-                .padding(.horizontal, 5).padding(.vertical, 3)
+                .frame(width: 24, height: 20)
+                .foregroundStyle(isActive ? Color.white : (available ? .primary : Color.secondary))
                 .background(isActive ? Color.accentColor : Color.clear,
                             in: RoundedRectangle(cornerRadius: 5))
         }
         .disabled(!available)
-        .help(available
-              ? (isActive ? "\(title) tool active — keeps placing until Escape" : "Place \(title)")
-              : "Only one ball per diagram")
+        .help(available ? "\(title) (\(key))" : "Only one ball per diagram")
     }
 
     // MARK: - Inspector
@@ -211,6 +276,7 @@ struct PlayEditorView: View {
             keyframeSection
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -232,6 +298,15 @@ struct PlayEditorView: View {
                     ForEach(PathKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .disabled(isFinal)
+
+                Picker("Shape", selection: Binding(
+                    get: { keyframe.pathStyle },
+                    set: { model.updateKeyframe(entityId: entityId,
+                                                keyframeId: keyframe.id, pathStyle: $0) })) {
+                    ForEach(PathStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .disabled(isFinal)
+                .help("Sharp runs straight to the next keyframe; curved arcs through its neighbours")
 
                 if isFinal {
                     // Segment convention: pathKind governs the segment LEAVING a
@@ -282,6 +357,7 @@ struct PlayEditorView: View {
                 Text(model.debugReadout)
                     .font(.system(size: 10, design: .monospaced))
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 8)

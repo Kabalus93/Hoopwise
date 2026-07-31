@@ -168,7 +168,11 @@ struct CourtProjection {
         let (u, v) = normalise(courtPoint)
         let w = 1 + k * v
         let projectedU = u / w
-        let projectedV = (v * s) / w
+        // Renormalised so the far baseline still lands at v'=1 and the court
+        // FILLS its frame. Without this the projected court shrank into part of
+        // the view and left a dead band — visible immediately at 55 degrees,
+        // invisible at 90 where the projection is identity.
+        let projectedV = v * (1 + k) / w
         return denormalise(u: projectedU, v: projectedV)
     }
 
@@ -180,8 +184,8 @@ struct CourtProjection {
         guard !isPlanView else { return transform.inverse(viewPoint) }
 
         let (projectedU, projectedV) = normaliseView(viewPoint)
-        let denominator = s - k * projectedV
-        // Behind the horizon: nothing on the floor maps here.
+        // Inverse of v' = v(1+k)/(1+kv)  =>  v = v'/(1+k-v'k)
+        let denominator = (1 + k) - projectedV * k
         guard abs(denominator) > 1e-6 else {
             return CGPoint(x: space.width / 2, y: space.length)
         }

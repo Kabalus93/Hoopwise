@@ -29,6 +29,30 @@ struct HoopwiseMacApp: App {
                 Button("New Athlete") { NotificationCenter.default.post(name: .macNewAthlete, object: nil) }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
             }
+            // Court editor commands, so every shortcut is discoverable rather
+            // than only living in a tooltip.
+            CommandMenu("Play") {
+                Button("Play / Pause") {
+                    NotificationCenter.default.post(name: .macEditorTogglePlay, object: nil)
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                Button("Mirror Play") {
+                    NotificationCenter.default.post(name: .macEditorMirror, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: .command)
+                Divider()
+                Button("Toggle Movement Paths") {
+                    NotificationCenter.default.post(name: .macEditorTogglePaths, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                Button("Toggle Sticky Ball") {
+                    NotificationCenter.default.post(name: .macEditorToggleSticky, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
+                Text("Tools: A select · O offense · D defense · B ball · S sticky · P paths")
+            }
+
             CommandGroup(after: .toolbar) {
                 Button("Refresh") {
                     Task { await SwiftDataManager.shared.refreshAllCaches() }
@@ -55,6 +79,10 @@ extension Notification.Name {
     static let macNewSession = Notification.Name("MacNewSession")
     static let macNewAthlete = Notification.Name("MacNewAthlete")
     static let macSidebarSelection = Notification.Name("MacSidebarSelection")
+    static let macEditorTogglePlay = Notification.Name("MacEditorTogglePlay")
+    static let macEditorMirror = Notification.Name("MacEditorMirror")
+    static let macEditorTogglePaths = Notification.Name("MacEditorTogglePaths")
+    static let macEditorToggleSticky = Notification.Name("MacEditorToggleSticky")
 }
 
 struct MacSplashView: View {
