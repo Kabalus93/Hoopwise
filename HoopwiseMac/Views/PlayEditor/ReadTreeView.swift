@@ -125,6 +125,10 @@ struct ReadTreeView: View {
             }
             Divider()
             if node.id != model.diagram.rootNodeId {
+                Button("Duplicate Read") { model.duplicateRead(node.id) }
+                Button("Move Up") { model.reorderRead(node.id, direction: -1) }
+                Button("Move Down") { model.reorderRead(node.id, direction: 1) }
+                Divider()
                 Button("Delete Read", role: .destructive) { model.deleteNode(node.id) }
             }
         }

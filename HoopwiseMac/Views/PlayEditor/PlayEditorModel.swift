@@ -822,6 +822,52 @@ final class PlayEditorModel: ObservableObject {
         activeBranchIndex = max(0, min(activeBranchIndex, max(0, count - 1)))
     }
 
+    /// Duplicates a read as a sibling branch. Fresh ids throughout — keyframes,
+    /// tracks and possessions — so the copy is independent, not aliased.
+    func duplicateRead(_ nodeId: UUID) {
+        guard nodeId != diagram.rootNodeId,
+              let source = diagram.node(nodeId),
+              let parentIndex = diagram.nodes.firstIndex(where: {
+                  $0.branchEdges.contains { $0.targetId == nodeId } }) else { return }
+        registerUndo("Duplicate Read")
+        var copy = ReadNode(title: source.title + " copy",
+                            teachingPoints: source.teachingPoints)
+        copy.tracks = source.tracks.map { track in
+            Track(entityId: track.entityId,
+                  keyframes: track.keyframes.map {
+                      Keyframe(t: $0.t, position: $0.position, easing: $0.easing,
+                               pathKind: $0.pathKind, pathStyle: $0.pathStyle,
+                               controlPoints: $0.controlPoints)
+                  })
+        }
+        copy.possessions = source.possessions.map {
+            Possession(holderId: $0.holderId, start: $0.start, end: $0.end, release: $0.release)
+        }
+        diagram.nodes.append(copy)
+        if let edge = diagram.nodes[parentIndex].branchEdges.first(where: { $0.targetId == nodeId }) {
+            diagram.nodes[parentIndex].edges.append(
+                ReadEdge(targetId: copy.id, kind: .branch,
+                         condition: edge.condition.map { $0 + " (copy)" },
+                         branchTime: edge.branchTime))
+        }
+        diagram.updatedAt = Date()
+        clampBranchIndex()
+    }
+
+    /// Moves a read up or down among its siblings — edge order is UI order.
+    func reorderRead(_ nodeId: UUID, direction: Int) {
+        guard let parentIndex = diagram.nodes.firstIndex(where: {
+            $0.branchEdges.contains { $0.targetId == nodeId } }) else { return }
+        let edges = diagram.nodes[parentIndex].edges
+        guard let from = edges.firstIndex(where: { $0.targetId == nodeId && $0.kind == .branch })
+        else { return }
+        let to = from + direction
+        guard to >= 0, to < edges.count, edges[to].kind == .branch else { return }
+        registerUndo("Reorder Reads")
+        diagram.nodes[parentIndex].edges.swapAt(from, to)
+        diagram.updatedAt = Date()
+    }
+
     func renameNode(_ nodeId: UUID, to title: String) {
         guard let index = diagram.nodes.firstIndex(where: { $0.id == nodeId }) else { return }
         registerUndo("Rename Read")
