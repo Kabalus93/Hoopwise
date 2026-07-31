@@ -136,7 +136,16 @@ final class PlayEditorModel: ObservableObject {
                                    homePosition: diagram.space.clamp(courtPoint))
         diagram.entities.append(entity)
         selectedEntityId = entity.id
-        // A new entity gets a keyframe at the playhead so it is immediately
+
+        // The ball NEVER gets a position track while possession is on. Placing
+        // it used to author a keyframe, leaving a leftover track alongside the
+        // possession resolver — two answers to "where is the ball", which is
+        // the second-source-of-truth problem the resolver exists to remove.
+        // Placement on empty floor authors nothing; dropping on a player
+        // authors possession.
+        if case .ball = kind, possessionEnabled { return }
+
+        // Everything else gets a keyframe at the playhead so it is immediately
         // part of the animation rather than a static prop.
         setKeyframe(for: entity.id, at: playhead, position: entity.homePosition)
     }
@@ -153,8 +162,24 @@ final class PlayEditorModel: ObservableObject {
 
     func entity(_ id: UUID) -> DiagramEntity? { diagram.entity(id) }
 
-    /// Where an entity sits at a given time: its track if it has one, otherwise
-    /// its home position.
+    /// THE position authority. Drawing, hit testing, the timeline and the
+    /// inspector all go through this.
+    ///
+    /// The ball is resolved by possession; everything else by its track. Hit
+    /// testing used to read `position(of:)` directly, which for a ball with no
+    /// track returned its home position — so after the first pass the ball was
+    /// drawn by the resolver but hit-tested somewhere else entirely, and became
+    /// unselectable. If it is drawn at a point it must be selectable there.
+    func resolvedPosition(of entityId: UUID, at time: Double) -> CGPoint {
+        if let ball = diagram.ball, ball.id == entityId,
+           possessionEnabled, let derived = ballPosition(at: time) {
+            return derived
+        }
+        return position(of: entityId, at: time)
+    }
+
+    /// Raw track position. Prefer `resolvedPosition(of:at:)` unless you
+    /// specifically need the underlying track.
     func position(of entityId: UUID, at time: Double) -> CGPoint {
         if let track = track(for: entityId), let point = track.position(at: time) {
             return point
@@ -441,6 +466,102 @@ final class PlayEditorModel: ObservableObject {
     var renderElevation: Double {
         diagram.camera.isStatic ? cameraElevation : diagram.cameraAngle(at: playhead)
     }
+
+    // MARK: - Debug Readout
+
+    @Published var showDebugPanel = false
+    /// Court point under the cursor, published by the canvas.
+    @Published var cursorCourtPoint: CGPoint?
+    /// Entity the hit test finds under the cursor.
+    @Published var cursorEntityId: UUID?
+    /// Active placement tool, published by the editor view.
+    @Published var activeToolName: String = "Select"
+    /// Last projection used to draw, so the readout can report screen points.
+    var lastProjection: CourtProjection?
+
+    /// Everything the editor resolves at the playhead, as text.
+    ///
+    /// This exists because three increments of ball bugs each passed a model
+    /// test while the UI still misbehaved. The gap was that runtime resolution
+    /// was invisible, so every cycle cost a full round trip. Paste this instead
+    /// of describing symptoms.
+    var debugReadout: String {
+        var lines: [String] = []
+        lines.append(String(format: "t = %.3f s   (duration %.2f)", playhead, timelineDuration))
+        lines.append("tool: \(activeToolName)   possession: \(possessionEnabled ? "on" : "off")")
+        lines.append("camera: \(Int(renderElevation))°  theme: \(theme.name)")
+
+        if let ball = diagram.ball {
+            let state = ballState(at: playhead)
+            lines.append("— ball —")
+            lines.append("state: \(describe(state))")
+            let court = ballPosition(at: playhead) ?? .zero
+            lines.append(String(format: "court:  (%.2f, %.2f) ft", court.x, court.y))
+            if let projection = lastProjection {
+                let screen = projection.project(court)
+                lines.append(String(format: "screen: (%.1f, %.1f) pt   depthScale %.3f",
+                                    screen.x, screen.y, projection.depthScale(at: court)))
+            }
+            let hasTrack = activeNode?.tracks.contains { $0.entityId == ball.id } ?? false
+            lines.append("has position track: \(hasTrack)  \(hasTrack ? "<- SHOULD BE FALSE" : "")")
+        } else {
+            lines.append("— ball — none placed")
+        }
+
+        let possessions = activeNode?.sortedPossessions ?? []
+        lines.append("— possessions (\(possessions.count)) —")
+        for possession in possessions {
+            let end = possession.end.map { String(format: "%.2f", $0) } ?? "open"
+            let release: String
+            switch possession.release {
+            case .pass(let toId): release = "pass -> \(label(toId))"
+            case .shot: release = "shot"
+            case nil: release = "—"
+            }
+            let active = possession.contains(playhead) ? " *ACTIVE*" : ""
+            lines.append(String(format: "  %@  %.2f..%@  %@%@",
+                                label(possession.holderId), possession.start, end, release, active))
+        }
+
+        lines.append("— selection —")
+        if let id = selectedEntityId {
+            let point = resolvedPosition(of: id, at: playhead)
+            lines.append(String(format: "  %@ %@  (%.2f, %.2f) ft",
+                                label(id), id.uuidString.prefix(8).description, point.x, point.y))
+            if let keyframe = selectedKeyframe {
+                lines.append(String(format: "  keyframe t=%.2f  %@ / %@",
+                                    keyframe.t, keyframe.easing.rawValue, keyframe.pathKind.displayName))
+            } else {
+                lines.append("  no keyframe at playhead")
+            }
+        } else {
+            lines.append("  none")
+        }
+
+        lines.append("— cursor —")
+        if let point = cursorCourtPoint {
+            lines.append(String(format: "  court (%.2f, %.2f) ft", point.x, point.y))
+        } else {
+            lines.append("  outside canvas")
+        }
+        lines.append("  hit: \(cursorEntityId.map { label($0) } ?? "none")")
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func describe(_ state: BallState) -> String {
+        switch state {
+        case .held(let holderId):
+            return "held by \(label(holderId))"
+        case .inFlight(let from, let to, let progress, let isShot):
+            return String(format: "%@ (%.1f,%.1f) -> (%.1f,%.1f) progress %.2f",
+                          isShot ? "shot" : "inFlight", from.x, from.y, to.x, to.y, progress)
+        case .atRest(let point):
+            return String(format: "atRest (%.2f, %.2f)", point.x, point.y)
+        }
+    }
+
+    private func label(_ id: UUID) -> String { entityLabel(id) }
 
     // MARK: - Playback
 

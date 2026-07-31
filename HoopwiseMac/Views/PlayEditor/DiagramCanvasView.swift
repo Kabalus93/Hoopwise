@@ -34,6 +34,20 @@ struct DiagramCanvasView: View {
                 drawEntities(projection, into: &context)
             }
             .contentShape(Rectangle())
+            .onAppear { model.lastProjection = projection }
+            .onChange(of: model.renderElevation) { _, _ in model.lastProjection = projection }
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    model.lastProjection = projection
+                    let court = projection.unproject(location)
+                    model.cursorCourtPoint = court
+                    model.cursorEntityId = hitTest(court, projection: projection)
+                case .ended:
+                    model.cursorCourtPoint = nil
+                    model.cursorEntityId = nil
+                }
+            }
             .gesture(dragGesture(projection))
             .onTapGesture { location in
                 handleTap(at: location, projection: projection)
@@ -209,12 +223,10 @@ struct DiagramCanvasView: View {
         }
     }
 
-    /// Where an entity actually is at the playhead, ball included.
+    /// Where an entity actually is at the playhead. Delegates to the model's
+    /// single position authority so drawing and hit testing cannot disagree.
     private func resolvedPosition(_ entity: DiagramEntity) -> CGPoint {
-        if case .ball = entity.kind, let derived = model.ballPosition(at: model.playhead) {
-            return derived
-        }
-        return model.position(of: entity.id, at: model.playhead)
+        model.resolvedPosition(of: entity.id, at: model.playhead)
     }
 
     private func drawEntity(_ entity: DiagramEntity,
@@ -226,15 +238,27 @@ struct DiagramCanvasView: View {
         let radius = projection.transform.length(puckRadiusFeet) * depth
         let tint = color(for: entity)
 
-        // Shadow IS the projected ellipse; the puck is not.
-        let shadowRect = CGRect(x: centre.x - radius, y: centre.y - radius * 0.35,
-                                width: radius * 2, height: radius * 0.7)
-        context.fill(Path(ellipseIn: shadowRect), with: .color(.black.opacity(0.28)))
-
         // Puck: BILLBOARDED — upright and depth-scaled, never pushed through
         // the homography, which would shear it into a wrong ellipse.
         let puck = CGRect(x: centre.x - radius, y: centre.y - radius,
                           width: radius * 2, height: radius * 2)
+
+        // Shadow derives ENTIRELY from tilt and vanishes at plan view. It used
+        // to be a fixed ellipse, which showed as an oval artifact at 90° where
+        // the projection is exactly affine and a floor shadow must coincide
+        // with what casts it. It is also sized to the mark actually drawn —
+        // the ball is inset, so a puck-sized shadow peeked out around it.
+        let tilt = projection.tilt
+        if tilt > 0.001 {
+            let drawnRadius = markRadius(for: entity, puckRadius: radius)
+            let lift = drawnRadius * 0.9 * tilt
+            let shadowRect = CGRect(x: centre.x - drawnRadius,
+                                    y: centre.y + lift - drawnRadius * 0.3 * tilt,
+                                    width: drawnRadius * 2,
+                                    height: drawnRadius * 0.6 * tilt)
+            context.fill(Path(ellipseIn: shadowRect),
+                         with: .color(.black.opacity(0.30 * Double(tilt))))
+        }
 
         switch entity.kind {
         case .ball:
@@ -264,6 +288,12 @@ struct DiagramCanvasView: View {
             context.stroke(Path(ellipseIn: ring), with: .color(.accentColor),
                            style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
         }
+    }
+
+    /// Radius of the mark actually drawn, so the shadow matches it.
+    private func markRadius(for entity: DiagramEntity, puckRadius: CGFloat) -> CGFloat {
+        if case .ball = entity.kind { return puckRadius * 0.68 }
+        return puckRadius
     }
 
     private func drawLabel(_ entity: DiagramEntity,
@@ -327,7 +357,10 @@ struct DiagramCanvasView: View {
         var best: UUID?
         var bestDistance: CGFloat = .greatestFiniteMagnitude
         for entity in model.diagram.entities {
-            let point = model.position(of: entity.id, at: model.playhead)
+            // Resolver, not raw track: a ball with no track was hit-tested at
+            // its home position while being drawn by the possession resolver,
+            // which made it unselectable after the first pass.
+            let point = model.resolvedPosition(of: entity.id, at: model.playhead)
             let dx: CGFloat = point.x - court.x
             let dy: CGFloat = point.y - court.y
             let distance: CGFloat = (dx * dx + dy * dy).squareRoot()
@@ -345,7 +378,7 @@ struct DiagramCanvasView: View {
         var best: UUID?
         var bestDistance: CGFloat = .greatestFiniteMagnitude
         for entity in model.diagram.entities where entity.isPlayer {
-            let point = model.position(of: entity.id, at: model.playhead)
+            let point = model.resolvedPosition(of: entity.id, at: model.playhead)
             let dx: CGFloat = point.x - court.x
             let dy: CGFloat = point.y - court.y
             let distance: CGFloat = (dx * dx + dy * dy).squareRoot()

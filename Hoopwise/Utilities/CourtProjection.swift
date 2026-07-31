@@ -146,6 +146,19 @@ struct CourtProjection {
     /// True when the camera is at plan view and the mapping is purely affine.
     var isPlanView: Bool { k == 0 && s == 1 }
 
+    /// 0 at plan view, 1 at the minimum elevation.
+    ///
+    /// Anything that only exists because the camera is tilted — floor shadows
+    /// above all — must derive from this and vanish at 90 degrees. A fixed
+    /// shadow offset shows up as an oval artifact in plan view, where the
+    /// projection is exactly affine and a floor shadow should coincide with
+    /// what casts it.
+    var tilt: CGFloat {
+        let floorAngle = min(max(look.minElevationDegrees, 5), 89)
+        let span = max(90 - floorAngle, 1)
+        return CGFloat((90 - elevationDegrees) / span)
+    }
+
     // MARK: - Forward
 
     /// Court feet → view points.

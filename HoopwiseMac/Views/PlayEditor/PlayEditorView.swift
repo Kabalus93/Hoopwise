@@ -26,7 +26,14 @@ struct PlayEditorView: View {
                 .frame(minWidth: 420, minHeight: 320)
 
                 Divider()
-                inspector.frame(width: 240)
+                VStack(spacing: 0) {
+                    inspector
+                    if model.showDebugPanel {
+                        Divider()
+                        debugPanel
+                    }
+                }
+                .frame(width: 260)
             }
             .frame(minHeight: 340)
 
@@ -49,6 +56,7 @@ struct PlayEditorView: View {
         .focusable()
         .onKeyPress(.escape) {
             placementKind = nil
+            model.activeToolName = "Select"
             return .handled
         }
         .onKeyPress(.delete) {
@@ -119,6 +127,12 @@ struct PlayEditorView: View {
                 Label("Look", systemImage: "slider.horizontal.3")
             }
             .popover(isPresented: $showingLookPanel) { lookPanel }
+
+            Toggle(isOn: $model.showDebugPanel) {
+                Label("Debug", systemImage: "ladybug")
+            }
+            .toggleStyle(.button)
+            .help("Show what the editor resolves at the playhead")
         }
     }
 
@@ -140,6 +154,7 @@ struct PlayEditorView: View {
         let available = model.canPlace(kind)
         return Button {
             placementKind = isActive ? nil : kind
+            model.activeToolName = isActive ? "Select" : title
         } label: {
             Label(title, systemImage: icon)
                 .labelStyle(.iconOnly)
@@ -238,6 +253,42 @@ struct PlayEditorView: View {
                     .controlSize(.small)
             }
         }
+    }
+
+    // MARK: - Debug Panel
+
+    /// Runtime state readout. Exists so a misbehaving editor can be diagnosed
+    /// from resolved state rather than from a description of the symptom.
+    private var debugPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("STATE").font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(model.debugReadout, forType: .string)
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help("Copy readout")
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+
+            ScrollView {
+                Text(model.debugReadout)
+                    .font(.system(size: 10, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+            }
+        }
+        .frame(height: 300)
+        .background(Color(NSColor.textBackgroundColor).opacity(0.4))
     }
 
     // MARK: - Look Panel
