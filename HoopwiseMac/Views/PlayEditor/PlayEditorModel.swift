@@ -990,6 +990,21 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - Render style
+
+    /// Presentation is the published video look; edit is the authoring
+    /// overlay. View state — deliberately not undoable.
+    @Published var isPresentation = false
+    /// Auto-switch to presentation when playback starts, back on stop.
+    @Published var autoPresentOnPlay: Bool =
+        UserDefaults.standard.object(forKey: "autoPresentOnPlay") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoPresentOnPlay, forKey: "autoPresentOnPlay") }
+    }
+    /// What the style was before playback auto-switched, so stop restores it.
+    private var stylePresentationBeforePlayback: Bool?
+
+    var renderStyle: RenderStyle { isPresentation ? .presentation : .edit }
+
     // MARK: - Landmark snapping
 
     /// Magnet: entities snap to blocks, elbows, slots, corners and the top of
@@ -1414,6 +1429,10 @@ final class PlayEditorModel: ObservableObject {
 
     func play() {
         guard !isPlaying else { return }
+        if autoPresentOnPlay, !isPresentation {
+            stylePresentationBeforePlayback = isPresentation
+            isPresentation = true
+        }
         if let area = workArea {
             if !area.contains(playhead) { playhead = area.lowerBound }
         } else if playhead >= timelineDuration - 0.05 {
@@ -1427,6 +1446,10 @@ final class PlayEditorModel: ObservableObject {
     }
 
     func stop() {
+        if let previous = stylePresentationBeforePlayback {
+            isPresentation = previous
+            stylePresentationBeforePlayback = nil
+        }
         isPlaying = false
         playbackTimer?.cancel()
         playbackTimer = nil

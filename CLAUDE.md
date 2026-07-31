@@ -286,6 +286,22 @@ it produces confident wrong numbers the coach reconciles books against.
   from formation being non-empty. No close prompt by design: the diagram
   autosaves continuously, so a data-loss prompt would lie; the edited dot
   signals unpublished metadata only.
+- RENDER STYLES: RenderStyle (Utilities/, both targets) owns every visual
+  decision as data — .edit is the authoring overlay (numbers, full paths,
+  semantic dash/wavy), .presentation is the published video look
+  (terracotta #A76458 soft brush at 0.6x puck diameter with 0.35x blur,
+  flat #FFFF70 discs, #FE1A2C ball at 0.4x, black court, white lines).
+  Semantic pass/cut/dribble distinctions stay in the DATA; presentation
+  renders one uniform brush and the travelling ball reads as the pass.
+- PATH CONSUMPTION (PathConsumption, pure functions of t): presentation
+  paths live AHEAD of motion only — draw-on tip-first 0.25s starting 0.3s
+  before the segment, consumed behind with the tail tucked 0.8 FEET
+  (distance, not time — a time tuck stretches with velocity) under the
+  puck, gone at completion. Stateless in t so scrubbing regrows. Blur is
+  applied AFTER trimming, path layer only, never entities or court. ONE
+  arrowhead per path at the destination — direction changes must not
+  sprout heads. Canvas blurs via GraphicsContext.addFilter(.blur) (GPU);
+  the exporter via CIGaussianBlur on the offscreen path layer.
 - PlayFrameExporter.renderFrame is THE export renderer: absolute time,
   transparent background (verified: corner alpha 0, court alpha 255 at
   1080p), same geometry/projection/movement code as the canvas. The PNG

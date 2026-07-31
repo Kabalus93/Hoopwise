@@ -220,12 +220,18 @@ struct PlayEditorView: View {
 
         ToolbarItemGroup(placement: .primaryAction) {
             groupLabel("View")
+            Toggle(isOn: $model.isPresentation) {
+                Label("Presentation", systemImage: "sparkles.tv")
+            }
+            .toggleStyle(.button)
+            .help("Presentation style — the published video look. Playback auto-switches when the preference is on.")
+
             Picker("Theme", selection: Binding(
                 get: { model.theme }, set: { model.setTheme($0) })) {
                 ForEach(CourtTheme.all) { Text($0.name).tag($0) }
             }
             .pickerStyle(.menu).fixedSize()
-            .help("Colour theme — Print for paper, Video for film")
+            .help("Colour theme — Print for paper, Video for film (edit style only)")
 
             Toggle(isOn: $model.showMovementPaths) {
                 Label("Paths", systemImage: "scribble")
@@ -643,6 +649,11 @@ struct PlayEditorView: View {
                 labelled("Min label size", model.look.minLabelPointSize, "%.0f pt")
                 Slider(value: $model.look.minLabelPointSize, in: 5...16, step: 0.5)
                 Text("Labels stop shrinking here. Billboarding fixes orientation, not size — far-side numbers go unreadable in a 1080p export without a floor.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            Section("Style") {
+                Toggle("Auto-present on playback", isOn: $model.autoPresentOnPlay)
+                Text("Playback switches to the presentation style and back on stop.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
             Section("Timeline") {

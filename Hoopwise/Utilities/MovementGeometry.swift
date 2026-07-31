@@ -104,6 +104,35 @@ enum MovementGeometry {
         return path
     }
 
+    /// Hooked V arrowhead for the presentation brush: two strokes meeting at
+    /// the tip, slightly asymmetric, STROKED in the same soft brush — not a
+    /// filled geometric triangle. Sized in court feet like everything else.
+    static func hookedHead(at tip: CGPoint, angle: CGFloat,
+                           lengthFeet: CGFloat = 1.5) -> CGPath {
+        let path = CGMutablePath()
+        // Slight asymmetry keeps it hand-drawn rather than geometric.
+        let left = angle + .pi - 0.52
+        let right = angle + .pi + 0.60
+        path.move(to: CGPoint(x: tip.x + cos(left) * lengthFeet,
+                              y: tip.y + sin(left) * lengthFeet))
+        path.addLine(to: tip)
+        path.addLine(to: CGPoint(x: tip.x + cos(right) * lengthFeet * 0.85,
+                                 y: tip.y + sin(right) * lengthFeet * 0.85))
+        return path
+    }
+
+    /// T-bar for the presentation brush; crossbar length passed in feet so the
+    /// caller can size it at ~2x the stroke width.
+    static func brushScreenBar(at point: CGPoint, angle: CGFloat,
+                               halfWidthFeet: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        let px = -sin(angle) * halfWidthFeet
+        let py = cos(angle) * halfWidthFeet
+        path.move(to: CGPoint(x: point.x + px, y: point.y + py))
+        path.addLine(to: CGPoint(x: point.x - px, y: point.y - py))
+        return path
+    }
+
     /// Perpendicular bar at the screen point — the convention for "screen set
     /// here", deliberately without an arrowhead.
     private static func screenBar(at point: CGPoint, angle: CGFloat) -> CGPath {

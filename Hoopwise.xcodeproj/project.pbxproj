@@ -114,8 +114,8 @@
 				Models/League.swift,
 				Models/MicroCycle.swift,
 				Models/Organization.swift,
-				Models/Playbook.swift,
 				Models/PlayDiagram.swift,
+				Models/Playbook.swift,
 				Models/Player.swift,
 				Models/PlayerMeasurement.swift,
 				Models/ProfileAuditLog.swift,
@@ -182,6 +182,7 @@
 				Utilities/PhotoCaptureManager.swift,
 				Utilities/PinyinConverter.swift,
 				Utilities/PlatformModifiers.swift,
+				Utilities/RenderStyle.swift,
 			);
 			target = 2D8D35552FA6374E00F1AD64 /* HoopwiseMac */;
 		};

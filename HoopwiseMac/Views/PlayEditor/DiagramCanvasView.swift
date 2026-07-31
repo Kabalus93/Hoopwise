@@ -76,6 +76,15 @@ struct DiagramCanvasView: View {
     }
 
     private func fillColor(for role: CourtFillRole) -> Color {
+        let style = model.renderStyle
+        // Presentation forces the video court: black floor, white lines.
+        if let floorHex = style.courtFloorHex {
+            switch role {
+            case .floor, .paint: return Color(hex: floorHex)
+            case .restrictedArea, .centerCircle:
+                return Color(hex: style.courtLineHex ?? "#FFFFFF").opacity(0.04)
+            }
+        }
         let theme = model.theme
         switch role {
         case .floor:          return Color(hex: theme.floorHex)
@@ -85,7 +94,9 @@ struct DiagramCanvasView: View {
         }
     }
 
-    private var lineColor: Color { Color(hex: model.theme.lineHex) }
+    private var lineColor: Color {
+        Color(hex: model.renderStyle.courtLineHex ?? model.theme.lineHex)
+    }
 
     // MARK: - Motion
 
@@ -97,8 +108,83 @@ struct DiagramCanvasView: View {
     /// an oblique court.
     private func drawMotionPaths(_ projection: CourtProjection, into context: inout GraphicsContext) {
         guard model.showMovementPaths else { return }
+        if model.renderStyle.consumeBehindMotion {
+            drawPresentationPaths(projection, into: &context)
+        } else {
+            for step in model.activeSteps {
+                drawNodePaths(step.node, projection: projection, into: &context)
+            }
+        }
+    }
+
+    /// The video brush: uniform soft terracotta strokes that live AHEAD of
+    /// motion only. Everything paints into one blurred layer — blur applied
+    /// AFTER trimming so the consumed edge stays soft — while players, ball
+    /// and court lines stay sharp outside it.
+    private func drawPresentationPaths(_ projection: CourtProjection,
+                                       into context: inout GraphicsContext) {
+        let style = model.renderStyle
+        let stroke = Color(hex: style.pathStrokeHex)
+        // Uniform width: fraction of puck diameter, at mid-court depth.
+        let midDepth = projection.depthScale(at: CGPoint(x: model.diagram.space.width / 2,
+                                                         y: model.diagram.space.length / 2))
+        let width = projection.transform.length(puckRadiusFeet * 2) * midDepth
+            * style.pathWidthPuckFactor
+        let blurRadius = width * style.pathBlurFactor
+
+        var brush = context
+        brush.addFilter(.blur(radius: blurRadius))
+        let brushStyle = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
+
         for step in model.activeSteps {
-            drawNodePaths(step.node, projection: projection, into: &context)
+            let node = step.node
+            let localT = model.playhead - step.startsAt
+            for track in node.tracks {
+                guard let entity = model.entity(track.entityId), !model.isHidden(entity.id)
+                else { continue }
+                if case .ball = entity.kind, model.possessionEnabled { continue }
+                let frames = track.sortedKeyframes
+                guard frames.count > 1 else { continue }
+                for index in 0..<(frames.count - 1) {
+                    guard let visible = PathConsumption.visibleSegment(
+                        track: track, from: frames[index], to: frames[index + 1],
+                        at: localT, style: style) else { continue }
+
+                    let line = MovementGeometry.line(points: visible.points, kind: .run)
+                    brush.stroke(Path(projection.project(path: line)),
+                                 with: .color(stroke), style: brushStyle)
+
+                    // ONE head per path, at the destination — a multi-keyframe
+                    // cut is one movement in the video language, so direction
+                    // changes must not sprout their own arrowheads. Screens
+                    // keep the T-bar at the screen point.
+                    let isScreen = frames[index].pathKind == .screen
+                    let isFinal = index == frames.count - 2
+                    guard isScreen || isFinal else { continue }
+                    let head: CGPath = isScreen
+                        ? MovementGeometry.brushScreenBar(
+                            at: visible.headAt, angle: visible.headAngle,
+                            halfWidthFeet: projection.transform.courtFeet(width))
+                        : MovementGeometry.hookedHead(
+                            at: visible.headAt, angle: visible.headAngle)
+                    brush.stroke(Path(projection.project(path: head)),
+                                 with: .color(stroke), style: brushStyle)
+                }
+            }
+
+            // Pass: the ball's REMAINING flight arc, consumed behind it. No
+            // dashed line — the travelling ball is what reads as the pass.
+            if model.possessionEnabled {
+                if case .inFlight(_, let to, _, _) = model.ballState(at: model.playhead),
+                   let ballAt = model.ballPosition(at: model.playhead) {
+                    var flight = Path()
+                    flight.move(to: projection.project(ballAt))
+                    flight.addLine(to: projection.project(to))
+                    brush.stroke(flight, with: .color(stroke),
+                                 style: StrokeStyle(lineWidth: width * 0.7,
+                                                    lineCap: .round))
+                }
+            }
         }
     }
 
@@ -276,12 +362,18 @@ struct DiagramCanvasView: View {
                          with: .color(.black.opacity(0.30 * Double(tilt))))
         }
 
+        let style = model.renderStyle
         switch entity.kind {
         case .ball:
-            let ballRect = puck.insetBy(dx: radius * 0.32, dy: radius * 0.32)
-            context.fill(Path(ellipseIn: ballRect), with: .color(Color(hex: model.theme.ballHex)))
-            context.stroke(Path(ellipseIn: ballRect), with: .color(.black.opacity(0.35)),
-                           lineWidth: 1)
+            // Presentation: small red disc tucked adjacent to the holder.
+            let inset = radius * (1 - style.ballScaleFactor)
+            let ballRect = puck.insetBy(dx: inset, dy: inset)
+            let hex = style.uniformBrush ? style.ballHex : model.theme.ballHex
+            context.fill(Path(ellipseIn: ballRect), with: .color(Color(hex: hex)))
+            if !style.uniformBrush {
+                context.stroke(Path(ellipseIn: ballRect), with: .color(.black.opacity(0.35)),
+                               lineWidth: 1)
+            }
         case .cone:
             var triangle = Path()
             triangle.move(to: CGPoint(x: centre.x, y: centre.y - radius))
@@ -294,9 +386,14 @@ struct DiagramCanvasView: View {
                              width: radius * 2, height: radius * 0.56)
             context.fill(Path(bar), with: .color(Color(hex: model.theme.lineHex)))
         default:
-            context.fill(Path(ellipseIn: puck), with: .color(tint))
-            context.stroke(Path(ellipseIn: puck), with: .color(Color(hex: model.theme.lineHex).opacity(0.9)),
-                           lineWidth: 1.4)
+            // Presentation: flat filled discs, no strokes, no numbers.
+            let fill = style.uniformBrush ? Color(hex: style.playerFillHex) : tint
+            context.fill(Path(ellipseIn: puck), with: .color(fill))
+            if style.playerStroke {
+                context.stroke(Path(ellipseIn: puck),
+                               with: .color(Color(hex: model.theme.lineHex).opacity(0.9)),
+                               lineWidth: 1.4)
+            }
         }
 
         if model.selectedEntityId == entity.id {
@@ -317,7 +414,7 @@ struct DiagramCanvasView: View {
     /// no trail — the samples coincide and paint inside the puck.
     private func drawGhostTrails(_ projection: CourtProjection,
                                  into context: inout GraphicsContext) {
-        guard model.showGhostTrails else { return }
+        guard model.showGhostTrails, model.renderStyle.allowsGhostTrails else { return }
         let sampleCount = 8
         let sampleInterval = 0.12
         for entity in model.diagram.entities where !model.isHidden(entity.id) {
@@ -398,7 +495,8 @@ struct DiagramCanvasView: View {
     private func drawLabel(_ entity: DiagramEntity,
                            _ projection: CourtProjection,
                            into context: inout GraphicsContext) {
-        guard let label = entityLabel(entity), !label.isEmpty else { return }
+        guard model.renderStyle.showPlayerNumbers,
+              let label = entityLabel(entity), !label.isEmpty else { return }
         var context = context
         context.opacity = model.opacity(for: entity.id)
         let court = resolvedPosition(entity)
