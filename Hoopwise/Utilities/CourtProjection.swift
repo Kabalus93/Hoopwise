@@ -16,6 +16,42 @@ import CoreGraphics
 //        affine CourtTransform, exactly.
 //    0 = at floor level (degenerate; clamped well before this).
 
+/// Tunable look parameters for the oblique camera.
+///
+/// Deliberately NOT baked into CourtProjection. These are look decisions the
+/// coach iterates on while watching output, and each iteration should not be a
+/// code edit and a rebuild. Defaults are the values the projection shipped
+/// with; freeze them here once the numbers settle.
+struct CourtLookParameters: Codable, Hashable {
+    /// How much the far end converges at full tilt. Higher is more dramatic.
+    var maxConvergence: CGFloat
+    /// Depth compression at full tilt. Lower shrinks the far end more.
+    var minDepthScale: CGFloat
+    /// Lowest camera elevation allowed, in degrees. Below roughly 20 the
+    /// inverse degrades near the horizon and the diagram stops being usable
+    /// for placement.
+    var minElevationDegrees: Double
+    /// Labels never render smaller than this, in POINTS.
+    ///
+    /// Billboarding fixes orientation, not size. At 35° a far-baseline player
+    /// sits at 68% depth scale, so an unclamped 11pt number lands near 7pt and
+    /// is unreadable in a 1080p export — which you would only discover after
+    /// rendering a sequence.
+    var minLabelPointSize: CGFloat
+
+    init(maxConvergence: CGFloat = 0.55,
+         minDepthScale: CGFloat = 0.45,
+         minElevationDegrees: Double = 25,
+         minLabelPointSize: CGFloat = 9) {
+        self.maxConvergence = maxConvergence
+        self.minDepthScale = minDepthScale
+        self.minElevationDegrees = minElevationDegrees
+        self.minLabelPointSize = minLabelPointSize
+    }
+
+    static let `default` = CourtLookParameters()
+}
+
 /// Court feet ⇄ view points, with optional perspective tilt.
 ///
 /// Exactly invertible. Every drag, placement, and hit test in the editor goes
@@ -27,6 +63,8 @@ struct CourtProjection {
     let elevationDegrees: Double
     /// Court extent, needed to normalise before the homography.
     let space: CourtSpace
+    /// Tunable look parameters.
+    let look: CourtLookParameters
 
     /// How much the far end converges. 0 at plan view. Kept below 1 so the
     /// divisor `1 + k·v` never approaches zero and the inverse stays stable.
@@ -34,22 +72,21 @@ struct CourtProjection {
     /// Depth compression along the court's length.
     private let s: CGFloat
 
-    /// Maximum convergence at full tilt. Chosen for the oblique broadcast look
-    /// rather than physical accuracy — this is a diagram, not a simulation.
-    private static let maxConvergence: CGFloat = 0.55
-    /// Depth compression at full tilt.
-    private static let minDepthScale: CGFloat = 0.45
-
-    init(transform: CourtTransform, space: CourtSpace, elevationDegrees: Double) {
+    init(transform: CourtTransform,
+         space: CourtSpace,
+         elevationDegrees: Double,
+         look: CourtLookParameters = .default) {
         self.transform = transform
         self.space = space
-        // Clamp: below ~25° the projection is unusable for diagramming and the
-        // inverse gets numerically nasty near the horizon.
-        let clamped = min(max(elevationDegrees, 25), 90)
+        self.look = look
+        let floorAngle = min(max(look.minElevationDegrees, 5), 89)
+        let clamped = min(max(elevationDegrees, floorAngle), 90)
         self.elevationDegrees = clamped
-        let tilt = CGFloat((90 - clamped) / 65)   // 0 at plan view, 1 at 25°
-        self.k = tilt * Self.maxConvergence
-        self.s = 1 - tilt * (1 - Self.minDepthScale)
+        // 0 at plan view, 1 at the configured minimum elevation.
+        let span = max(90 - floorAngle, 1)
+        let tilt = CGFloat((90 - clamped) / span)
+        self.k = tilt * look.maxConvergence
+        self.s = 1 - tilt * (1 - look.minDepthScale)
     }
 
     /// True when the camera is at plan view and the mapping is purely affine.
@@ -98,6 +135,15 @@ struct CourtProjection {
         guard !isPlanView else { return 1 }
         let (_, v) = normalise(courtPoint)
         return 1 / (1 + k * v)
+    }
+
+    /// Rendered size for a label at this court point, floored for legibility.
+    ///
+    /// Pucks scale with depth; text stops shrinking at
+    /// `look.minLabelPointSize`. A far-side number that follows depth all the
+    /// way down is correct perspective and useless film.
+    func labelPointSize(base: CGFloat, at courtPoint: CGPoint) -> CGFloat {
+        max(look.minLabelPointSize, base * depthScale(at: courtPoint))
     }
 
     /// Painter's-algorithm ordering key: larger draws later (nearer the front).

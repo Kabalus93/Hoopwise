@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SidebarSection: String, CaseIterable, Identifiable {
-    case today, athletes, sessions, programs, drills, playbook, league, hub
+    case today, athletes, sessions, programs, drills, playbook, courtEditor, league, hub
     var id: String { rawValue }
 
     var title: String {
@@ -12,6 +12,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .programs: return "Programs"
         case .drills: return "Drills"
         case .playbook: return "Playbook"
+        case .courtEditor: return "Court Editor"
         case .league: return "League"
         case .hub: return "Hub"
         }
@@ -25,6 +26,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .programs: return "list.clipboard.fill"
         case .drills: return "figure.basketball"
         case .playbook: return "book.pages.fill"
+        case .courtEditor: return "sportscourt.fill"
         case .league: return "trophy.fill"
         case .hub: return "building.2.fill"
         }
@@ -60,6 +62,7 @@ struct RootView: View {
         case .programs: ProgramsView()
         case .drills:   DrillsView()
         case .playbook: PlaybookMacView()
+        case .courtEditor: PlayEditorView()
         case .league:   LeagueMacView()
         case .hub:      HubMacView()
         }

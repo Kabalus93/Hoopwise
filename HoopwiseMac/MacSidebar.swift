@@ -15,7 +15,7 @@ struct MacSidebar: View {
             }
 
             Section {
-                ForEach([SidebarSection.programs, .drills, .playbook], id: \.self) { s in
+                ForEach([SidebarSection.programs, .drills, .playbook, .courtEditor], id: \.self) { s in
                     sidebarRow(s)
                 }
             } header: {

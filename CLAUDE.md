@@ -225,6 +225,33 @@ it produces confident wrong numbers the coach reconciles books against.
   Exports must be flat 2D media, not 3D scene data. This constraint lives
   in the editing suite, not in this repo — it is not greppable here.
 
+## Court editor (step 5, in progress)
+- HoopwiseMac/Views/PlayEditor/: PlayEditorModel (authoring state, the only
+  place the diagram is mutated), DiagramCanvasView, TimelineView,
+  PlayEditorView. Reachable from the sidebar under Library > Court Editor.
+- Opens on an empty FIBA half-court diagram so there is always something
+  authorable. Playbook wiring comes with the read-tree navigator.
+- Authoring loop: scrub the timeline to a moment, drag an entity on the
+  court, a keyframe appears at the playhead. Everything is court-feet;
+  gestures convert via CourtProjection.unproject.
+- Hit testing is in COURT FEET with a feet tolerance, not a pixel radius —
+  a pixel tolerance changes meaning with zoom and tilt.
+- LOOK PARAMETERS ARE NOT BAKED. CourtLookParameters (maxConvergence,
+  minDepthScale, minElevationDegrees, minLabelPointSize) is tunable from
+  the editor's Look popover. These are look decisions to iterate against
+  real output, not constants to rebuild for. Freeze them only once the
+  coach has settled the numbers.
+- LEGIBILITY FLOOR: pucks scale with depth, labels do not shrink past
+  look.minLabelPointSize (default 9pt) via
+  CourtProjection.labelPointSize(base:at:). Billboarding fixes orientation,
+  not size — at 35 degrees the far baseline is 68% scale, so unclamped
+  numbers become unreadable in a 1080p export and it is only discovered
+  after rendering a sequence.
+- SwiftUI type-checker budget bites in this area. Two bezier expressions in
+  CourtProjection and a chained map/filter/min in DiagramCanvasView.hitTest
+  both had to be split into explicit statements. Write geometry as explicit
+  typed steps, not one expression.
+
 ## Export decisions
 - PDF: draw with CoreGraphics into CGPDFContext. NOT ImageRenderer —
   it silently rasterizes any view containing materials, blurs, or images,
