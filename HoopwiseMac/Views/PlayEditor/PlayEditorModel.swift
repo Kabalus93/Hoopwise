@@ -511,6 +511,196 @@ final class PlayEditorModel: ObservableObject {
         diagram.camera.isStatic ? cameraElevation : diagram.cameraAngle(at: playhead)
     }
 
+    // MARK: - Read Tree
+
+    /// Which root-to-leaf path is being previewed. nil means the first.
+    @Published var activeBranchIndex: Int = 0
+
+    var branches: [PlayDiagram.Branch] {
+        diagram.branches(limit: 64).branches
+    }
+
+    var activeBranch: PlayDiagram.Branch? {
+        let all = branches
+        guard !all.isEmpty else { return nil }
+        return all[min(activeBranchIndex, all.count - 1)]
+    }
+
+    /// Nodes on the active path, for highlighting the tree.
+    var activePathNodeIds: Set<UUID> {
+        Set(activeBranch?.nodes.map(\.id) ?? [])
+    }
+
+    func node(_ id: UUID) -> ReadNode? { diagram.node(id) }
+
+    /// One rendered line of the tree.
+    struct TreeRow: Identifiable {
+        enum Kind { case node(ReadNode), returnEdge(from: ReadNode, edge: ReadEdge) }
+        let id: UUID
+        var kind: Kind
+        var depth: Int
+        var incoming: ReadEdge?
+    }
+
+    /// The tree flattened depth-first.
+    ///
+    /// Flat rather than recursive views: a recursive @ViewBuilder cannot infer
+    /// its own opaque return type, and a flat list re-renders far more cheaply.
+    var treeRows: [TreeRow] {
+        var rows: [TreeRow] = []
+        var visited: Set<UUID> = []
+
+        func walk(_ nodeId: UUID, _ depth: Int, _ incoming: ReadEdge?) {
+            guard !visited.contains(nodeId), let node = diagram.node(nodeId) else { return }
+            visited.insert(nodeId)
+            rows.append(TreeRow(id: node.id, kind: .node(node), depth: depth, incoming: incoming))
+            for edge in node.branchEdges {
+                walk(edge.targetId, depth + 1, edge)
+            }
+            for edge in node.returnEdges {
+                rows.append(TreeRow(id: edge.id, kind: .returnEdge(from: node, edge: edge),
+                                    depth: depth + 1, incoming: nil))
+            }
+        }
+
+        walk(diagram.rootNodeId, 0, nil)
+        return rows
+    }
+
+    func parentOf(_ nodeId: UUID) -> ReadNode? {
+        diagram.nodes.first { $0.branchEdges.contains { $0.targetId == nodeId } }
+    }
+
+    func depth(of nodeId: UUID) -> Int {
+        var depth = 0
+        var current = nodeId
+        var guardCount = 0
+        while let parent = parentOf(current), guardCount < 64 {
+            depth += 1
+            current = parent.id
+            guardCount += 1
+        }
+        return depth
+    }
+
+    /// Adds an alternative read branching off `nodeId` at `time`.
+    ///
+    /// The child's tracks INHERIT the parent's entity positions at the
+    /// divergence as their first keyframe: a read diverges from a shared
+    /// position, it does not teleport. The child stays node-local starting at
+    /// 0; when the branch departed is recorded on the EDGE as branchTime.
+    @discardableResult
+    func addBranch(from nodeId: UUID, at time: Double, condition: String) -> UUID? {
+        guard let parent = diagram.node(nodeId) else { return nil }
+        registerUndo("Add Read")
+
+        var child = ReadNode(title: condition.isEmpty ? "New Read" : condition)
+        for track in parent.tracks {
+            guard let position = track.position(at: time) else { continue }
+            child.tracks.append(Track(entityId: track.entityId,
+                                      keyframes: [Keyframe(t: 0, position: position)]))
+        }
+        // Possession carries across the divergence too, otherwise the ball
+        // would drop the moment a read branches.
+        if let holding = parent.sortedPossessions.last(where: { $0.contains(time) }) {
+            child.possessions = [Possession(holderId: holding.holderId, start: 0)]
+        }
+
+        diagram.nodes.append(child)
+        if let index = diagram.nodes.firstIndex(where: { $0.id == nodeId }) {
+            diagram.nodes[index].edges.append(
+                ReadEdge(targetId: child.id, kind: .branch,
+                         condition: condition.isEmpty ? nil : condition,
+                         branchTime: time))
+        }
+        diagram.updatedAt = Date()
+        return child.id
+    }
+
+    /// Adds a return edge from `nodeId` back to `targetId`.
+    ///
+    /// No inheritance: a return does not create a node, it hands control back
+    /// to one that already has its own tracks from its own t=0.
+    func addReturn(from nodeId: UUID, to targetId: UUID,
+                   departingAt: Double, resumingAt: Double, condition: String) {
+        guard diagram.node(targetId) != nil,
+              let index = diagram.nodes.firstIndex(where: { $0.id == nodeId }) else { return }
+        registerUndo("Add Return")
+        diagram.nodes[index].edges.removeAll { $0.kind == .returns }
+        diagram.nodes[index].edges.append(
+            ReadEdge(targetId: targetId, kind: .returns,
+                     condition: condition.isEmpty ? nil : condition,
+                     branchTime: departingAt, returnToTime: resumingAt))
+        diagram.updatedAt = Date()
+    }
+
+    func removeEdge(from nodeId: UUID, edgeId: UUID) {
+        guard let index = diagram.nodes.firstIndex(where: { $0.id == nodeId }) else { return }
+        registerUndo("Remove Read")
+        diagram.nodes[index].edges.removeAll { $0.id == edgeId }
+        diagram.updatedAt = Date()
+    }
+
+    /// Deletes a read node and everything below it.
+    func deleteNode(_ nodeId: UUID) {
+        guard nodeId != diagram.rootNodeId else { return }
+        registerUndo("Delete Read")
+        var doomed: Set<UUID> = [nodeId]
+        var frontier = [nodeId]
+        while let current = frontier.popLast() {
+            for edge in diagram.node(current)?.branchEdges ?? [] where !doomed.contains(edge.targetId) {
+                doomed.insert(edge.targetId)
+                frontier.append(edge.targetId)
+            }
+        }
+        diagram.nodes.removeAll { doomed.contains($0.id) }
+        for index in diagram.nodes.indices {
+            diagram.nodes[index].edges.removeAll { doomed.contains($0.targetId) }
+        }
+        if doomed.contains(activeNodeId) { activeNodeId = diagram.rootNodeId }
+        diagram.updatedAt = Date()
+    }
+
+    func renameNode(_ nodeId: UUID, to title: String) {
+        guard let index = diagram.nodes.firstIndex(where: { $0.id == nodeId }) else { return }
+        registerUndo("Rename Read")
+        diagram.nodes[index].title = title
+    }
+
+    func updateEdge(from nodeId: UUID, edgeId: UUID,
+                    condition: String? = nil,
+                    branchTime: Double? = nil,
+                    returnToTime: Double? = nil) {
+        guard let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == nodeId }),
+              let edgeIndex = diagram.nodes[nodeIndex].edges.firstIndex(where: { $0.id == edgeId })
+        else { return }
+        registerUndo("Edit Read")
+        if let condition { diagram.nodes[nodeIndex].edges[edgeIndex].condition = condition }
+        if let branchTime { diagram.nodes[nodeIndex].edges[edgeIndex].branchTime = max(0, branchTime) }
+        if let returnToTime { diagram.nodes[nodeIndex].edges[edgeIndex].returnToTime = max(0, returnToTime) }
+    }
+
+    /// How far entity positions jump when a return edge closes the loop.
+    ///
+    /// A continuity offence returns to its starting alignment, so a large gap
+    /// means the play was mis-authored. Surfaced rather than silently
+    /// interpolated — smoothing it would hide the error.
+    func returnContinuityGap(for nodeId: UUID) -> Double? {
+        guard let node = diagram.node(nodeId),
+              let edge = node.returnEdges.first,
+              let target = diagram.node(edge.targetId) else { return nil }
+        let departAt = edge.branchTime
+        let resumeAt = edge.returnToTime ?? 0
+        var worst: Double = 0
+        for track in node.tracks {
+            guard let here = track.position(at: departAt),
+                  let there = target.tracks.first(where: { $0.entityId == track.entityId })?
+                    .position(at: resumeAt) else { continue }
+            worst = max(worst, Double(hypot(there.x - here.x, there.y - here.y)))
+        }
+        return worst
+    }
+
     // MARK: - Debug Readout
 
     @Published var showDebugPanel = false

@@ -429,14 +429,49 @@ struct ReadEdge: Identifiable, Codable, Hashable {
     /// "if the help digs".
     var condition: String?
 
+    /// When this edge DEPARTS, in the source node's local time.
+    ///
+    /// A branch diverges partway through its parent, so a clip runs from the
+    /// play's start to the end of that read — not through the parent's unused
+    /// tail. Branch duration is therefore the sum of branchTimes along the path
+    /// plus the leaf's own duration.
+    var branchTime: Double
+
+    /// Where in the TARGET the play resumes, in the target's local time.
+    /// Meaningful only for `.returns`.
+    ///
+    /// Departure and arrival are separate values. A Princeton chin returning to
+    /// its starting alignment resumes at the ancestor's t=0, not at whatever
+    /// point the branch originally split off — without this the loop cannot
+    /// close.
+    var returnToTime: Double?
+
     init(id: UUID = UUID(),
          targetId: UUID,
          kind: ReadEdgeKind = .branch,
-         condition: String? = nil) {
+         condition: String? = nil,
+         branchTime: Double = 0,
+         returnToTime: Double? = nil) {
         self.id = id
         self.targetId = targetId
         self.kind = kind
         self.condition = condition
+        self.branchTime = branchTime
+        self.returnToTime = kind == .returns ? (returnToTime ?? 0) : returnToTime
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, targetId, kind, condition, branchTime, returnToTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        targetId = try c.decode(UUID.self, forKey: .targetId)
+        kind = try c.decodeIfPresent(ReadEdgeKind.self, forKey: .kind) ?? .branch
+        condition = try c.decodeIfPresent(String.self, forKey: .condition)
+        branchTime = try c.decodeIfPresent(Double.self, forKey: .branchTime) ?? 0
+        returnToTime = try c.decodeIfPresent(Double.self, forKey: .returnToTime)
     }
 }
 
@@ -795,15 +830,37 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
 
     var canAddBall: Bool { ball == nil }
 
-    /// One complete way the play can unfold: the nodes walked, and the return
-    /// edge that closed it if it looped.
-    struct Branch {
-        var nodes: [ReadNode]
-        /// Set when the path ended on a `.returns` edge, for rendering
-        /// "returns to <node>" and for looping animation export.
-        var returnsTo: ReadNode?
+    /// One node in a branch, with when the play entered it.
+    struct BranchStep {
+        var node: ReadNode
+        /// Absolute play time at which this node's local t=0 begins.
+        var startsAt: Double
+    }
 
-        var duration: Double { nodes.reduce(0) { $0 + $1.duration } }
+    /// One complete way the play can unfold.
+    struct Branch {
+        var steps: [BranchStep]
+        /// Set when the path ended on a `.returns` edge.
+        var returnsTo: ReadNode?
+        /// Where in the target the loop resumes, in the target's local time.
+        var returnToTime: Double?
+
+        var nodes: [ReadNode] { steps.map(\.node) }
+
+        /// Sum of branchTimes along the path plus the leaf's own duration —
+        /// NOT the sum of full node durations. A clip runs to the end of this
+        /// read, not through each parent's unused tail.
+        var duration: Double {
+            guard let last = steps.last else { return 0 }
+            return last.startsAt + last.node.duration
+        }
+
+        /// Absolute time at which the loop departs, for looping export.
+        var loopsAt: Double? {
+            guard returnsTo != nil, let last = steps.last else { return nil }
+            let departure = last.node.returnEdges.first?.branchTime ?? last.node.duration
+            return last.startsAt + departure
+        }
     }
 
     /// Default ceiling on path enumeration. Three reads per node at depth five
@@ -824,25 +881,31 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
         var result: [Branch] = []
         var truncated = false
 
-        func walk(_ node: ReadNode, _ prefix: [ReadNode], _ visited: Set<UUID>) {
+        func walk(_ node: ReadNode, _ prefix: [BranchStep], _ offset: Double, _ visited: Set<UUID>) {
             guard result.count < limit else { truncated = true; return }
             // Corruption backstop only: a branch edge that loops.
             guard !visited.contains(node.id) else { return }
 
-            let path = prefix + [node]
-            let kids = children(of: node.id)
+            let path = prefix + [BranchStep(node: node, startsAt: offset)]
+            let branchEdges = node.branchEdges
 
-            if kids.isEmpty {
-                let target = node.returnEdges.first.flatMap { self.node($0.targetId) }
-                result.append(Branch(nodes: path, returnsTo: target))
+            if branchEdges.isEmpty {
+                let returnEdge = node.returnEdges.first
+                let target = returnEdge.flatMap { self.node($0.targetId) }
+                result.append(Branch(steps: path, returnsTo: target,
+                                     returnToTime: returnEdge?.returnToTime))
                 return
             }
 
             let seen = visited.union([node.id])
-            for kid in kids { walk(kid, path, seen) }
+            for edge in branchEdges {
+                guard let kid = self.node(edge.targetId) else { continue }
+                // The child's local t=0 begins where the branch departed.
+                walk(kid, path, offset + edge.branchTime, seen)
+            }
         }
 
-        walk(root, [], [])
+        walk(root, [], 0, [])
         return (result, truncated)
     }
 
@@ -855,10 +918,12 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
             if let cached = memo[nodeId] { return cached }
             guard !visited.contains(nodeId), let node = node(nodeId) else { return 0 }
             let seen = visited.union([nodeId])
+            // A branch departs partway through, so onward time is measured from
+            // the departure rather than from the end of this node.
             let onward = node.branchEdges
-                .map { longest($0.targetId, seen) }
+                .map { $0.branchTime + longest($0.targetId, seen) }
                 .max() ?? 0
-            let total = node.duration + onward
+            let total = max(node.duration, onward)
             // Only memoize when no cycle guard was in play on this path, so a
             // truncated result never poisons the cache.
             if node.branchEdges.allSatisfy({ !seen.contains($0.targetId) }) {

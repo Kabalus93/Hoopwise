@@ -54,11 +54,17 @@ struct PlayEditorView: View {
             }
             .frame(minHeight: 340)
 
-            TimelineView(model: model)
-                .frame(minHeight: 150, idealHeight: 190)
+            HStack(spacing: 0) {
+                ReadTreeView(model: model)
+                    .frame(width: 230)
+                Divider()
+                TimelineView(model: model)
+            }
+            .frame(minHeight: 170, idealHeight: 210)
         }
         .toolbar { toolbarContent }
         .navigationTitle(model.diagramName)
+        .navigationSubtitle(model.activeNode.map { "Read: \($0.title)" } ?? "")
         .onAppear {
             model.dataManager = dataManager
             model.undoManager = systemUndoManager
