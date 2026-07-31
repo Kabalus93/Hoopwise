@@ -461,12 +461,37 @@ final class PlayEditorModel: ObservableObject {
         activeNode?.isDribbling(entityId, at: time) ?? false
     }
 
-    /// A possession change worth showing on the timeline.
+    /// A possession change worth showing on the timeline. Fully editable —
+    /// select, retime, delete — with the same interactions as keyframes.
     struct PossessionEvent: Identifiable {
+        enum Kind { case attach, releasePass, releaseShot }
         let id: UUID
-        let time: Double
+        let nodeId: UUID
+        let possessionId: UUID
+        let kind: Kind
+        let time: Double        // absolute
         let label: String
         let color: Color
+
+        /// Distinct glyphs so meaning is visible, not colour-coded only.
+        var glyph: String {
+            switch kind {
+            case .attach:      return "smallcircle.filled.circle"
+            case .releasePass: return "paperplane.fill"
+            case .releaseShot: return "basketball.fill"
+            }
+        }
+    }
+
+    /// Session-stable ids for release events (attach events use the
+    /// possession's own id). Selection is transient, so session stability is
+    /// all identity needs.
+    private var releaseEventIds: [UUID: UUID] = [:]
+    private func releaseEventId(for possessionId: UUID) -> UUID {
+        if let existing = releaseEventIds[possessionId] { return existing }
+        let fresh = UUID()
+        releaseEventIds[possessionId] = fresh
+        return fresh
     }
 
     /// Possession start, pass departure, arrival, and shot release — across
@@ -483,20 +508,49 @@ final class PlayEditorModel: ObservableObject {
         var events: [PossessionEvent] = []
         for possession in node.sortedPossessions {
             let who = entityLabel(possession.holderId)
-            events.append(PossessionEvent(id: possession.id, time: offset + possession.start,
+            events.append(PossessionEvent(id: possession.id, nodeId: node.id,
+                                          possessionId: possession.id, kind: .attach,
+                                          time: offset + possession.start,
                                           label: "\(who) gains possession", color: .green))
             guard let end = possession.end, let release = possession.release else { continue }
             switch release {
             case .pass(let toId):
-                events.append(PossessionEvent(id: UUID(), time: offset + end,
+                events.append(PossessionEvent(id: releaseEventId(for: possession.id),
+                                              nodeId: node.id, possessionId: possession.id,
+                                              kind: .releasePass, time: offset + end,
                                               label: "\(who) passes to \(entityLabel(toId))",
                                               color: .orange))
             case .shot:
-                events.append(PossessionEvent(id: UUID(), time: offset + end,
+                events.append(PossessionEvent(id: releaseEventId(for: possession.id),
+                                              nodeId: node.id, possessionId: possession.id,
+                                              kind: .releaseShot, time: offset + end,
                                               label: "\(who) shoots", color: .red))
             }
         }
         return events
+    }
+
+    func possessionEvent(withId id: UUID) -> PossessionEvent? {
+        possessionEvents.first { $0.id == id }
+    }
+
+    /// Retime one possession event to a node-local time. Undo is registered by
+    /// the caller once per gesture, like keyframe drags.
+    func retimePossessionEvent(_ event: PossessionEvent, toLocal time: Double) {
+        guard let index = diagram.nodes.firstIndex(where: { $0.id == event.nodeId }) else { return }
+        switch event.kind {
+        case .attach:
+            diagram.nodes[index].retimeAttach(of: event.possessionId, to: max(0, time))
+        case .releasePass, .releaseShot:
+            let speed = look.passSpeedFeetPerSecond
+            let steps = activeSteps
+            let segment = steps.firstIndex { $0.node.id == event.nodeId } ?? 0
+            diagram.nodes[index].retimeRelease(of: event.possessionId, to: max(0, time),
+                                               passSpeed: speed) { [weak self] id, t in
+                self?.segmentPosition(of: id, segment: segment, localTime: t, steps: steps) ?? .zero
+            }
+        }
+        diagram.updatedAt = Date()
     }
 
     private func entityLabel(_ id: UUID) -> String {
@@ -1237,11 +1291,33 @@ final class PlayEditorModel: ObservableObject {
         }
     }
 
-    /// Deletes the selection wherever it lives along the path — not just the
-    /// active node.
+    /// Deletes the selection wherever it lives along the path — keyframes AND
+    /// possession events, one undoable action.
+    ///
+    /// Possession deletions run through the model's repair ops so no state is
+    /// ever orphaned: deleting a boundary merges adjacent ranges, deleting a
+    /// flight reverts the span to the previous holder. Releases are processed
+    /// before attaches because absorbing a follower can remove a possession
+    /// that an attach deletion would also have named.
     func deleteSelectedKeyframesEverywhere() {
         guard !selectedKeyframeIds.isEmpty else { return }
-        registerUndo("Delete Keyframes")
+        registerUndo("Delete Selection")
+
+        let events = possessionEvents.filter { selectedKeyframeIds.contains($0.id) }
+        let releases = events.filter { $0.kind != .attach }
+        let attaches = events.filter { $0.kind == .attach }
+        for event in releases {
+            if let index = diagram.nodes.firstIndex(where: { $0.id == event.nodeId }) {
+                diagram.nodes[index].deleteRelease(of: event.possessionId)
+            }
+        }
+        for event in attaches {
+            if let index = diagram.nodes.firstIndex(where: { $0.id == event.nodeId }),
+               diagram.nodes[index].possessions.contains(where: { $0.id == event.possessionId }) {
+                diagram.nodes[index].deleteAttach(of: event.possessionId)
+            }
+        }
+
         for nodeIndex in diagram.nodes.indices {
             for trackIndex in diagram.nodes[nodeIndex].tracks.indices {
                 diagram.nodes[nodeIndex].tracks[trackIndex].keyframes

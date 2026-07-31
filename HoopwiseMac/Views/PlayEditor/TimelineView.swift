@@ -175,14 +175,66 @@ struct TimelineView: View {
     private func possessionMarkers(width: CGFloat, duration: Double) -> some View {
         let events = model.possessionEvents
         ForEach(events, id: \.id) { event in
-            Circle()
-                .fill(event.color)
-                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1))
-                .frame(width: 9, height: 9)
+            let selected = model.selectedKeyframeIds.contains(event.id)
+            Image(systemName: event.glyph)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(selected ? Color.white : event.color)
+                .padding(2)
+                .background(selected ? event.color : Color.clear, in: Circle())
+                .scaleEffect(selected ? 1.35 : 1)
+                .shadow(color: selected ? event.color.opacity(0.6) : .clear, radius: selected ? 3 : 0)
                 .position(x: CGFloat(min(event.time, duration) / duration) * width,
                           y: laneHeight / 2)
                 .help(event.label)
+                .onTapGesture {
+                    if NSEvent.modifierFlags.contains(.shift) {
+                        if selected { model.selectedKeyframeIds.remove(event.id) }
+                        else { model.selectedKeyframeIds.insert(event.id) }
+                    } else {
+                        model.selectedKeyframeIds = [event.id]
+                    }
+                }
+                .gesture(possessionDrag(event: event, width: width, duration: duration))
+                .contextMenu {
+                    Button("Delete", role: .destructive) {
+                        model.selectedKeyframeIds = [event.id]
+                        model.deleteSelectedKeyframesEverywhere()
+                    }
+                }
         }
+    }
+
+    /// Retimes possession events with the same gesture grammar as keyframes:
+    /// one undo per drag, selection moves together preserving spacing.
+    private func possessionDrag(event: PlayEditorModel.PossessionEvent,
+                                width: CGFloat, duration: Double) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                if dragInitial == nil {
+                    model.registerUndo("Retime Possession")
+                    if !model.selectedKeyframeIds.contains(event.id) {
+                        model.selectedKeyframeIds = [event.id]
+                    }
+                    var initial: [UUID: (UUID, UUID, Double, Double)] = [:]
+                    for member in model.possessionEvents
+                    where model.selectedKeyframeIds.contains(member.id) {
+                        let step = model.activeSteps.first { $0.node.id == member.nodeId }
+                        let local = member.time - (step?.startsAt ?? 0)
+                        initial[member.id] = (member.nodeId, member.possessionId, local, member.time)
+                    }
+                    dragInitial = initial
+                }
+                guard let initial = dragInitial, let dragged = initial[event.id] else { return }
+                let absoluteNow = Double(value.location.x / width) * duration
+                let delta = absoluteNow - dragged.3
+                for member in model.possessionEvents
+                where model.selectedKeyframeIds.contains(member.id) {
+                    guard let info = initial[member.id] else { continue }
+                    model.retimePossessionEvent(member,
+                                                toLocal: model.snapped(info.2 + delta))
+                }
+            }
+            .onEnded { _ in dragInitial = nil }
     }
 
     private func entityLane(_ entity: DiagramEntity, width: CGFloat, duration: Double) -> some View {
@@ -423,6 +475,16 @@ struct TimelineView: View {
                                                 width: markerHalf * 2,
                                                 height: laneHeight)
                         if rect.intersects(markerRect) { hit.insert(lane.keyframe.id) }
+                    }
+                    // Possession events live on the ball's lane and box-select
+                    // exactly like keyframes.
+                    if case .ball = entity.kind, model.possessionEnabled {
+                        for event in model.possessionEvents {
+                            let x = labelWidth + 6 + CGFloat(min(event.time, duration) / duration) * width
+                            let markerRect = CGRect(x: x - markerHalf, y: rowRect.minY,
+                                                    width: markerHalf * 2, height: laneHeight)
+                            if rect.intersects(markerRect) { hit.insert(event.id) }
+                        }
                     }
                 }
                 model.selectedKeyframeIds = hit

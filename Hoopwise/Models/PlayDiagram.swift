@@ -708,6 +708,89 @@ struct ReadNode: Identifiable, Codable, Hashable {
         sortedPossessions.contains { $0.holderId == entityId && $0.contains(time) }
     }
 
+    // MARK: - Possession repair
+    //
+    // Deleting possession events must never orphan the ball. Two primitive
+    // repairs cover every case; both keep the invariant "possessions are
+    // non-overlapping, sorted, and every release names the next holder".
+
+    /// Deletes the ATTACH boundary of a possession: the previous possession
+    /// absorbs this one's span — the previous holder keeps the ball through —
+    /// inheriting its end and release. Deleting the first possession's attach
+    /// simply removes it; if nothing remains the ball rests at home, which is
+    /// a defined state, not an error.
+    mutating func deleteAttach(of possessionId: UUID) {
+        let sorted = sortedPossessions
+        guard let index = sorted.firstIndex(where: { $0.id == possessionId }) else { return }
+        let doomed = sorted[index]
+        if index > 0 {
+            let previousId = sorted[index - 1].id
+            if let previousIndex = possessions.firstIndex(where: { $0.id == previousId }) {
+                possessions[previousIndex].end = doomed.end
+                possessions[previousIndex].release = doomed.release
+            }
+        }
+        possessions.removeAll { $0.id == possessionId }
+    }
+
+    /// Deletes the RELEASE of a possession — which is also how deleting a
+    /// FLIGHT works, since a pass is one release plus the next attach as a
+    /// unit. The holder keeps the ball through the following possession's
+    /// span (absorbing its end and release); with no follower the holder
+    /// simply keeps the ball to the end of the read.
+    mutating func deleteRelease(of possessionId: UUID) {
+        let sorted = sortedPossessions
+        guard let index = sorted.firstIndex(where: { $0.id == possessionId }),
+              let holderIndex = possessions.firstIndex(where: { $0.id == possessionId })
+        else { return }
+        if index + 1 < sorted.count {
+            let next = sorted[index + 1]
+            possessions[holderIndex].end = next.end
+            possessions[holderIndex].release = next.release
+            possessions.removeAll { $0.id == next.id }
+        } else {
+            possessions[holderIndex].end = nil
+            possessions[holderIndex].release = nil
+        }
+    }
+
+    /// Retimes a possession's attach, clamped so ranges stay ordered.
+    mutating func retimeAttach(of possessionId: UUID, to time: Double) {
+        guard let index = possessions.firstIndex(where: { $0.id == possessionId }) else { return }
+        var lower = 0.0
+        let sorted = sortedPossessions
+        if let position = sorted.firstIndex(where: { $0.id == possessionId }), position > 0,
+           let previousEnd = sorted[position - 1].end {
+            lower = previousEnd
+        }
+        let upper = possessions[index].end ?? .greatestFiniteMagnitude
+        possessions[index].start = min(max(time, lower), upper - 0.01)
+    }
+
+    /// Retimes a possession's release; the receiving possession's attach moves
+    /// with it so the flight stays a coherent unit.
+    mutating func retimeRelease(of possessionId: UUID, to time: Double,
+                                passSpeed: Double,
+                                positionOf: (UUID, Double) -> CGPoint) {
+        guard let index = possessions.firstIndex(where: { $0.id == possessionId }),
+              possessions[index].end != nil else { return }
+        let newEnd = max(possessions[index].start + 0.01, time)
+        possessions[index].end = newEnd
+        if case .pass(let toId) = possessions[index].release {
+            let from = positionOf(possessions[index].holderId, newEnd)
+            let to = positionOf(toId, newEnd)
+            let distance = Double(hypot(to.x - from.x, to.y - from.y))
+            let arrival = newEnd + max(0.08, distance / max(passSpeed, 1))
+            let sorted = sortedPossessions
+            if let position = sorted.firstIndex(where: { $0.id == possessionId }),
+               position + 1 < sorted.count,
+               sorted[position + 1].holderId == toId,
+               let nextIndex = possessions.firstIndex(where: { $0.id == sorted[position + 1].id }) {
+                possessions[nextIndex].start = arrival
+            }
+        }
+    }
+
     /// Releases with their derived arrival, for drawing pass and shot lines.
     ///
     /// The line derives from possession rather than being drawn separately, so
