@@ -22,9 +22,17 @@ struct PlayEditorView: View {
     var body: some View {
         VSplitView {
             HStack(spacing: 0) {
-                PlayLibraryView(model: model)
-                    .frame(width: 210)
-                Divider()
+                if model.libraryVisible {
+                    PlayLibraryView(model: model)
+                        .frame(width: 210)
+                    Divider()
+                }
+                // Tool palette as a vertical strip on the canvas edge, the way
+                // drawing apps do it. Tools competing with playback, view, look
+                // and debug in one window toolbar only gets worse as tools are
+                // added.
+                toolStrip
+
                 // Sticky tool: placing does NOT clear the selection, so a
                 // whole lineup goes down without re-picking each time.
                 DiagramCanvasView(model: model, placementKind: placementKind) { }
@@ -118,19 +126,15 @@ struct PlayEditorView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .navigation) {
-            groupLabel("Tools")
-            toolButton("Select", "cursorarrow", "A", nil)
-            toolButton("Offense", "person.fill", "O",
-                       .player(team: .offense, number: nil, role: nil))
-            toolButton("Defense", "person.fill.badge.minus", "D",
-                       .player(team: .defense, number: nil, role: nil))
-            toolButton("Ball", "basketball.fill", "B", .ball)
-            toolButton("Screen", "rectangle.fill", "S", .screen)
-            toolButton("Cone", "triangle.fill", "C", .cone)
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { model.libraryVisible.toggle() }
+            } label: {
+                Label("Plays", systemImage: "sidebar.leading")
+            }
+            .help(model.libraryVisible ? "Hide play list" : "Show play list")
         }
 
         ToolbarItemGroup(placement: .principal) {
-            Divider()
             groupLabel("Playback")
             Button { model.togglePlayback() } label: {
                 Label(model.isPlaying ? "Pause" : "Play",
@@ -147,7 +151,6 @@ struct PlayEditorView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
-            Divider()
             groupLabel("View")
             Picker("Theme", selection: Binding(
                 get: { model.theme }, set: { model.setTheme($0) })) {
@@ -187,6 +190,45 @@ struct PlayEditorView: View {
             .toggleStyle(.button)
             .help("Show what the editor resolves at the playhead")
         }
+    }
+
+    private var toolStrip: some View {
+        VStack(spacing: 4) {
+            stripButton("Select", "cursorarrow", "A", nil)
+            Divider().frame(width: 22)
+            stripButton("Offense", "person.fill", "O",
+                        .player(team: .offense, number: nil, role: nil))
+            stripButton("Defense", "person.fill.badge.minus", "D",
+                        .player(team: .defense, number: nil, role: nil))
+            stripButton("Ball", "basketball.fill", "B", .ball)
+            Divider().frame(width: 22)
+            stripButton("Screen", "rectangle.fill", "S", .screen)
+            stripButton("Cone", "triangle.fill", "C", .cone)
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .frame(width: 40)
+        .background(.regularMaterial)
+    }
+
+    private func stripButton(_ title: String, _ icon: String,
+                             _ key: String, _ kind: DiagramEntityKind?) -> some View {
+        let isActive = placementKind == kind
+        let available = kind.map { model.canPlace($0) } ?? true
+        return Button {
+            placementKind = kind
+            model.activeToolName = title
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .frame(width: 28, height: 26)
+                .foregroundStyle(isActive ? Color.white : (available ? .primary : Color.secondary))
+                .background(isActive ? Color.accentColor : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .help(available ? "\(title) (\(key))" : "Only one ball per diagram")
     }
 
     private func groupLabel(_ text: String) -> some View {

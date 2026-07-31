@@ -480,6 +480,16 @@ struct ReadNode: Identifiable, Codable, Hashable {
 
     var sortedPossessions: [Possession] { possessions.sorted { $0.start < $1.start } }
 
+    /// Possessions whose holder still resolves to a real entity.
+    ///
+    /// A possession referencing a deleted or never-existing entity produced
+    /// "held by ?" and a position of (0,0) — the holder lookup fell back to
+    /// .zero and the ball teleported to the origin. Filtering here means no
+    /// downstream code can resolve against a phantom holder.
+    func validPossessions(resolving entityExists: (UUID) -> Bool) -> [Possession] {
+        sortedPossessions.filter { entityExists($0.holderId) }
+    }
+
     /// Ball state at `time`. Never returns nothing.
     ///
     /// The flight window runs from a release to the NEXT possession's start, so
@@ -492,6 +502,7 @@ struct ReadNode: Identifiable, Codable, Hashable {
                    shotSpeed: Double,
                    ballHome: CGPoint,
                    heldOffsetFeet: CGFloat = 0,
+                   entityExists: ((UUID) -> Bool)? = nil,
                    positionOf: (UUID, Double) -> CGPoint) -> BallState {
         // Flight endpoints use the SAME held offset as the held state, so the
         // ball does not pop sideways by the offset at release and again at the
@@ -503,7 +514,8 @@ struct ReadNode: Identifiable, Codable, Hashable {
             return CGPoint(x: centre.x + direction.dx * heldOffsetFeet,
                            y: centre.y + direction.dy * heldOffsetFeet)
         }
-        let sorted = sortedPossessions
+        // Phantom holders are dropped rather than resolved against.
+        let sorted = entityExists.map { validPossessions(resolving: $0) } ?? sortedPossessions
         guard !sorted.isEmpty else { return .atRest(ballHome) }
 
         // Before anything is authored, the ball waits where it was placed.
@@ -569,9 +581,11 @@ struct ReadNode: Identifiable, Codable, Hashable {
                       shotSpeed: Double,
                       ballHome: CGPoint,
                       heldOffsetFeet: CGFloat,
+                      entityExists: ((UUID) -> Bool)? = nil,
                       positionOf: (UUID, Double) -> CGPoint) -> CGPoint {
         switch ballState(at: time, passSpeed: passSpeed, shotSpeed: shotSpeed,
                          ballHome: ballHome, heldOffsetFeet: heldOffsetFeet,
+                         entityExists: entityExists,
                          positionOf: positionOf) {
         case .held(let holderId):
             let centre = positionOf(holderId, time)
@@ -580,11 +594,15 @@ struct ReadNode: Identifiable, Codable, Hashable {
             return CGPoint(x: centre.x + direction.dx * heldOffsetFeet,
                            y: centre.y + direction.dy * heldOffsetFeet)
         case .inFlight(let from, let to, let progress, let isShot):
-            let x = from.x + (to.x - from.x) * CGFloat(progress)
-            let y = from.y + (to.y - from.y) * CGFloat(progress)
+            // A PASS is linear. Constant velocity is the whole point of
+            // deriving duration from distance, and easing one would make the
+            // ball drift slowly out of the passer's hands.
+            // A SHOT decelerates, because that is how a shot behaves.
+            let eased = isShot ? Easing.easeOut.apply(progress) : progress
+            let x = from.x + (to.x - from.x) * CGFloat(eased)
+            let y = from.y + (to.y - from.y) * CGFloat(eased)
             guard isShot else { return CGPoint(x: x, y: y) }
-            // Shallow parabola toward the rim.
-            let arc = sin(progress * .pi) * 1.6
+            let arc = sin(eased * .pi) * 1.6
             return CGPoint(x: x, y: y - CGFloat(arc))
         case .atRest(let point):
             return point

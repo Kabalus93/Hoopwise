@@ -156,8 +156,25 @@ final class PlayEditorModel: ObservableObject {
         diagram.entities.removeAll { $0.id == id }
         mutateActiveNode { node in
             node.tracks.removeAll { $0.entityId == id }
+            // Deleting a holder must not leave a possession pointing at him.
+            node.possessions.removeAll { $0.holderId == id }
+            for index in node.possessions.indices {
+                if case .pass(let toId) = node.possessions[index].release, toId == id {
+                    node.possessions[index].release = nil
+                    node.possessions[index].end = nil
+                }
+            }
         }
         selectedEntityId = nil
+    }
+
+    /// Drops possessions whose holder no longer resolves. Called on load so a
+    /// diagram saved with a phantom holder repairs itself rather than
+    /// teleporting the ball forever.
+    func repairPossessions() {
+        for index in diagram.nodes.indices {
+            diagram.nodes[index].possessions.removeAll { diagram.entity($0.holderId) == nil }
+        }
     }
 
     func entity(_ id: UUID) -> DiagramEntity? { diagram.entity(id) }
@@ -304,7 +321,8 @@ final class PlayEditorModel: ObservableObject {
                               passSpeed: look.passSpeedFeetPerSecond,
                               shotSpeed: look.shotSpeedFeetPerSecond,
                               ballHome: ballHome,
-                              heldOffsetFeet: look.ballHeldOffsetFeet) { [weak self] id, t in
+                              heldOffsetFeet: look.ballHeldOffsetFeet,
+                              entityExists: { [weak self] in self?.diagram.entity($0) != nil }) { [weak self] id, t in
             self?.position(of: id, at: t) ?? .zero
         }
     }
@@ -355,6 +373,9 @@ final class PlayEditorModel: ObservableObject {
 
     /// Gives the ball to `holderId` starting at `time`. Used for the first drop.
     func beginPossession(_ holderId: UUID, at time: Double) {
+        // A possession must name a real entity. Creating one for a missing id
+        // is what produced "held by ?" and a (0,0) resolution.
+        guard diagram.entity(holderId) != nil else { return }
         registerUndo("Give Possession")
         mutateActiveNode { node in
             node.possessions.removeAll { $0.start >= time }
@@ -370,6 +391,7 @@ final class PlayEditorModel: ObservableObject {
     /// Authors a pass: the current holder releases at `time` and the receiver
     /// gains possession when the ball ARRIVES, derived from distance / speed.
     func authorPass(to receiverId: UUID, at time: Double) {
+        guard diagram.entity(receiverId) != nil else { return }
         // The holder is whoever has it at `time`, or failing that the most
         // recent possession starting at or before it. Requiring an exact
         // .held match meant a drop just after a release silently became a new
@@ -431,7 +453,8 @@ final class PlayEditorModel: ObservableObject {
                                  passSpeed: look.passSpeedFeetPerSecond,
                                  shotSpeed: look.shotSpeedFeetPerSecond,
                                  ballHome: ballHome,
-                                 heldOffsetFeet: look.ballHeldOffsetFeet) { [weak self] id, t in
+                                 heldOffsetFeet: look.ballHeldOffsetFeet,
+                                 entityExists: { [weak self] in self?.diagram.entity($0) != nil }) { [weak self] id, t in
             self?.position(of: id, at: t) ?? .zero
         }
     }
@@ -478,6 +501,7 @@ final class PlayEditorModel: ObservableObject {
         cursorEntityId = nil
         playhead = 0
         stop()
+        repairPossessions()
         look.theme = CourtTheme.all.first { $0.name == stored.themeName } ?? .video
     }
 
@@ -490,6 +514,11 @@ final class PlayEditorModel: ObservableObject {
     // MARK: - Debug Readout
 
     @Published var showDebugPanel = false
+    /// Play list visibility, remembered across launches so the canvas width
+    /// choice sticks.
+    @Published var libraryVisible: Bool = UserDefaults.standard.object(forKey: "editorLibraryVisible") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(libraryVisible, forKey: "editorLibraryVisible") }
+    }
     /// Court point under the cursor, published by the canvas.
     @Published var cursorCourtPoint: CGPoint?
     /// Entity the hit test finds under the cursor.
