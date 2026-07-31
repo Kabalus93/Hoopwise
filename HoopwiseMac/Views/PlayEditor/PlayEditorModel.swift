@@ -1212,6 +1212,16 @@ final class PlayEditorModel: ObservableObject {
         return nil
     }
 
+    /// Cmd-A: all keyframes on one layer when a layer is focused, otherwise
+    /// every keyframe in the active read.
+    func selectAllKeyframes() {
+        if let layer = selectedEntityId {
+            selectedKeyframeIds = Set(laneKeyframes(for: layer).map(\.keyframe.id))
+        } else if let node = activeNode {
+            selectedKeyframeIds = Set(node.tracks.flatMap { $0.keyframes.map(\.id) })
+        }
+    }
+
     /// Deletes the selection wherever it lives along the path — not just the
     /// active node.
     func deleteSelectedKeyframesEverywhere() {

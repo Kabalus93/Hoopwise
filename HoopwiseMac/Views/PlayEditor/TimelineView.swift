@@ -267,6 +267,9 @@ struct TimelineView: View {
             ZStack(alignment: .leading) {
                 Rectangle()
                     .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.05))
+                    // A plain click on empty track clears the selection; a
+                    // 4pt-threshold drag starts the marquee instead.
+                    .onTapGesture { model.selectedKeyframeIds.removeAll() }
 
                 if case .ball = entity.kind, model.possessionEnabled {
                     possessionMarkers(width: width, duration: duration)
@@ -391,7 +394,7 @@ struct TimelineView: View {
     }
 
     private func boxSelectGesture(width: CGFloat, duration: Double) -> some Gesture {
-        DragGesture(minimumDistance: 6, coordinateSpace: .named("lanes"))
+        DragGesture(minimumDistance: 4, coordinateSpace: .named("lanes"))
             .onChanged { value in
                 if boxStart == nil { boxStart = value.startLocation }
                 boxCurrent = value.location
@@ -405,13 +408,21 @@ struct TimelineView: View {
                                   height: abs(value.location.y - start.y))
                 var hit: Set<UUID> = NSEvent.modifierFlags.contains(.shift)
                     ? model.selectedKeyframeIds : []
-                // Lane 0 is the camera; entities start below it.
+                // INTERSECTION, not containment: a marquee touching any part of
+                // a marker or its lane row selects it.
+                let markerHalf: CGFloat = 6
                 for (row, entity) in model.diagram.entities.enumerated() {
-                    let laneY = CGFloat(row + 1) * laneHeight + laneHeight / 2
-                    guard rect.minY...rect.maxY ~= laneY else { continue }
+                    // Lane 0 is the camera; entities start below it.
+                    let rowRect = CGRect(x: rect.minX, y: CGFloat(row + 1) * laneHeight,
+                                         width: rect.width, height: laneHeight)
+                    guard rect.intersects(rowRect) else { continue }
                     for lane in model.laneKeyframes(for: entity.id) {
                         let x = labelWidth + 6 + CGFloat(lane.absoluteTime / duration) * width
-                        if rect.minX...rect.maxX ~= x { hit.insert(lane.keyframe.id) }
+                        let markerRect = CGRect(x: x - markerHalf,
+                                                y: rowRect.minY,
+                                                width: markerHalf * 2,
+                                                height: laneHeight)
+                        if rect.intersects(markerRect) { hit.insert(lane.keyframe.id) }
                     }
                 }
                 model.selectedKeyframeIds = hit
@@ -430,11 +441,15 @@ struct TimelineView: View {
         .help(help)
     }
 
+    /// Selected keyframes must be unmistakable: white fill, coloured stroke,
+    /// scaled up — not a subtle tint.
     private func marker(color: Color, selected: Bool) -> some View {
         Diamond()
-            .fill(color)
-            .overlay(Diamond().stroke(selected ? Color.white : .clear, lineWidth: 1.5))
+            .fill(selected ? Color.white : color)
+            .overlay(Diamond().stroke(selected ? color : .clear, lineWidth: 2))
             .frame(width: 11, height: 11)
+            .scaleEffect(selected ? 1.45 : 1)
+            .shadow(color: selected ? color.opacity(0.6) : .clear, radius: selected ? 3 : 0)
     }
 
     private func playhead(width: CGFloat, duration: Double, height: CGFloat) -> some View {

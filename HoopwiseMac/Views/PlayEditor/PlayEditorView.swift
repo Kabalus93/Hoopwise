@@ -112,19 +112,30 @@ struct PlayEditorView: View {
         .sheet(isPresented: $showingVariationSheet) { variationSheet }
         .focusable()
         .onKeyPress(.escape) {
-            // Mid ball-drag, Esc cancels the drag cleanly; otherwise it
-            // deselects the tool.
+            // Priority: cancel a live ball drag, then clear keyframe
+            // selection, then deselect the tool.
             if model.isBallDragging {
                 model.cancelBallDrag()
+            } else if !model.selectedKeyframeIds.isEmpty {
+                model.selectedKeyframeIds.removeAll()
             } else {
                 placementKind = nil
                 model.activeToolName = "Select"
             }
             return .handled
         }
+        // onDeleteCommand routes through the responder chain like the menu's
+        // Delete, so it fires regardless of which control last had focus —
+        // the onKeyPress-only version silently did nothing after clicking a
+        // timeline button, which is why multi-delete "didn't work".
+        .onDeleteCommand {
+            if !model.selectedKeyframeIds.isEmpty {
+                model.deleteSelectedKeyframesEverywhere()
+            } else if model.selectedEntityId != nil {
+                model.deleteSelectedEntity()
+            }
+        }
         .onKeyPress(.delete) {
-            // Selection can span segments; delete it wherever it lives, or
-            // fall back to the selected entity.
             if !model.selectedKeyframeIds.isEmpty {
                 model.deleteSelectedKeyframesEverywhere()
             } else if model.selectedEntityId != nil {
@@ -144,6 +155,14 @@ struct PlayEditorView: View {
         // naming a play must not place players.
         .onKeyPress(phases: .down) { press in
             guard !isTextFieldFocused else { return .ignored }
+            // Cmd-A selects keyframes; plain A is the Select tool.
+            if press.modifiers.contains(.command) {
+                if press.characters.lowercased() == "a" {
+                    model.selectAllKeyframes()
+                    return .handled
+                }
+                return .ignored
+            }
             switch press.characters.lowercased() {
             case "a": placementKind = nil; model.activeToolName = "Select"
             case "o": placementKind = .player(team: .offense, number: nil, role: nil)
