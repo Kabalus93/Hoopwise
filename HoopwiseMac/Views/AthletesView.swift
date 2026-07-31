@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - Athletes
 /// Mac-native roster screen. Sidebar = filter/sort/search + grouped athlete list.
@@ -729,7 +731,9 @@ private struct ContractsTab: View {
                 EmptyPanel(systemImage: "doc.text", text: "No contracts on file.")
             } else {
                 ForEach(contracts) { contract in
-                    ContractCard(contract: contract, currencyCode: dataManager.appSettings.currency.currencyCode)
+                    ContractCard(contract: contract,
+                                 currencyCode: dataManager.appSettings.currency.currencyCode,
+                                 studentId: student.id)
                 }
             }
         }
@@ -742,13 +746,17 @@ private struct ContractCard: View {
     /// leaf view with no dataManager, and the figures must match the coach's
     /// configured currency rather than a hardcoded USD.
     let currencyCode: String
+    let studentId: UUID
+    @EnvironmentObject private var dataManager: DataManager
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("Contract #\(contract.contractNumber)").font(.subheadline.weight(.semibold))
                 kindBadge
                 Spacer()
+                consentBadge
                 statusBadge
+                documentMenu
             }
             HStack(spacing: 18) {
                 metric("Enrolled", contract.enrollmentDate.formatted(.dateTime.month().day().year()))
@@ -793,6 +801,77 @@ private struct ContractCard: View {
             }
             let total = contract.travelFeeTotalForContract.formatted(.currency(code: currencyCode))
             return "\(amount)/session · \(total)"
+        }
+    }
+
+    /// Statement and agreement export. Save writes a file the coach keeps;
+    /// Share hands it to Mail/AirDrop/Messages.
+    private var documentMenu: some View {
+        Menu {
+            Button("Attendance Statement…") { save(.statement) }
+            Divider()
+            Button("Agreement — from contract…") { save(.agreementFromContract) }
+            Button("Agreement — blank for signing…") { save(.agreementBlank) }
+        } label: {
+            Label("Export", systemImage: "square.and.arrow.down")
+                .labelStyle(.iconOnly)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Export documents for this contract")
+    }
+
+    /// Guardian consent, surfaced where the contract is read so a declined
+    /// publication consent is visible before any clip is used.
+    @ViewBuilder
+    private var consentBadge: some View {
+        if contract.consentState(for: .publicPublication) == false {
+            Label("No publish consent", systemImage: "eye.slash.fill")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Color.red.opacity(0.15), in: .capsule)
+                .foregroundStyle(.red)
+                .help("The guardian declined consent for public publication.")
+        }
+    }
+
+    private enum DocumentKind { case statement, agreementFromContract, agreementBlank }
+
+    private func save(_ kind: DocumentKind) {
+        do {
+            let url: URL
+            let suggested: String
+            switch kind {
+            case .statement:
+                guard let input = AttendanceStatementDocument.makeInput(
+                    studentId: studentId, contract: contract, dataManager: dataManager) else { return }
+                suggested = AttendanceStatementDocument.filename(for: input) + ".pdf"
+                url = try AttendanceStatementDocument.render(input)
+            case .agreementFromContract, .agreementBlank:
+                var fields = TrainingAgreementDocument.makeFields(
+                    studentId: studentId, contract: contract, dataManager: dataManager)
+                if kind == .agreementBlank {
+                    // Never hand someone a pre-ticked consent form.
+                    fields.consentCoachingAnalysis = nil
+                    fields.consentPublicPublication = nil
+                }
+                suggested = TrainingAgreementDocument.filename(
+                    for: fields, contractNumber: contract.contractNumber) + ".pdf"
+                url = try TrainingAgreementDocument.render(
+                    fields, contractNumber: contract.contractNumber)
+            }
+
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = suggested
+            panel.allowedContentTypes = [.pdf]
+            panel.canCreateDirectories = true
+            guard panel.runModal() == .OK, let destination = panel.url else { return }
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.removeItem(at: destination)
+            }
+            try FileManager.default.copyItem(at: url, to: destination)
+        } catch {
+            debugLog("❌ Mac document export failed: \(error)")
         }
     }
 

@@ -24,6 +24,7 @@ struct AddEditContractSheet: View {
     @State private var travelFeeBasis: TravelFeeBasis
     @State private var newPaymentAmount: Double = 0
     @State private var newPaymentDate: Date = Date()
+    @State private var shareURL: URL?
 
     private var isChinese: Bool {
         LocalizationManager.shared.currentLanguage == .chinese
@@ -69,9 +70,14 @@ struct AddEditContractSheet: View {
                 if kind != .group {
                     paymentsSection
                     travelSection
+                    redeemedSection
                 }
+                documentsSection
                 notesSection
                 if existing != nil { dangerSection }
+            }
+            .sheet(item: $shareURL) { url in
+                DocumentShareSheet(url: url)
             }
             .navigationTitle(existing == nil
                              ? (isChinese ? "新合同" : "New Contract")
@@ -305,6 +311,106 @@ struct AddEditContractSheet: View {
     private var owedTotal: Double {
         let due = kind == .privateBundle ? pricePerSession * Double(bundleSize) : 0
         return max(0, due - paidTotal)
+    }
+
+    /// Sessions this bundle has consumed, each with an explicit refund.
+    /// The other place a mis-tap gets noticed is here, when the remaining count
+    /// looks wrong — so the correction lives here too, not only in the session.
+    @ViewBuilder
+    private var redeemedSection: some View {
+        if let existing, existing.kind == .privateBundle, !existing.bundleSessionIds.isEmpty {
+            Section {
+                ForEach(existing.bundleSessionIds, id: \.self) { sessionId in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sessionLabel(for: sessionId))
+                                .font(.subheadline)
+                            Text(isChinese ? "已扣除 1 课时" : "1 session deducted")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button {
+                            dataManager.refundSessionToBundle(sessionId: sessionId,
+                                                              studentId: studentId)
+                        } label: {
+                            Text(isChinese ? "退回" : "Refund")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            } header: {
+                Text(isChinese ? "已消课时" : "Sessions deducted")
+            } footer: {
+                Text(isChinese
+                     ? "如误扣课时，可在此退回。退回不会更改该节课的出席记录。"
+                     : "Return a session charged by mistake. Refunding does not change the session's attendance record.")
+            }
+        }
+    }
+
+    private func sessionLabel(for sessionId: UUID) -> String {
+        guard let event = dataManager.sessionEvents.first(where: { $0.id == sessionId }) else {
+            return isChinese ? "课程" : "Session"
+        }
+        return "\(event.date.formatted(date: .abbreviated, time: .omitted)) · \(event.title)"
+    }
+
+    /// Statement and agreement export. Placed on the contract because both
+    /// documents are per-contract.
+    @ViewBuilder
+    private var documentsSection: some View {
+        if let existing {
+            Section {
+                Button {
+                    exportStatement(existing)
+                } label: {
+                    Label(isChinese ? "出席与账户结算单" : "Attendance & Account Statement",
+                          systemImage: "doc.text")
+                }
+                Button {
+                    exportAgreement(existing, blank: false)
+                } label: {
+                    Label(isChinese ? "协议（含已存授权）" : "Agreement — from contract",
+                          systemImage: "doc.badge.gearshape")
+                }
+                Button {
+                    exportAgreement(existing, blank: true)
+                } label: {
+                    Label(isChinese ? "协议（空白待签）" : "Agreement — blank for signing",
+                          systemImage: "signature")
+                }
+            } header: {
+                Text(isChinese ? "文件" : "Documents")
+            } footer: {
+                Text(isChinese
+                     ? "「空白待签」的授权栏为空，供客户当面勾选；「含已存授权」会显示已记录的授权状态。"
+                     : "\"Blank for signing\" prints empty consent boxes for the client to tick. \"From contract\" renders the consent state already recorded.")
+            }
+        }
+    }
+
+    private func exportStatement(_ contract: Contract) {
+        guard let input = AttendanceStatementDocument.makeInput(
+            studentId: studentId, contract: contract, dataManager: dataManager) else { return }
+        do { shareURL = try AttendanceStatementDocument.render(input) }
+        catch { debugLog("❌ statement export failed: \(error)") }
+    }
+
+    private func exportAgreement(_ contract: Contract, blank: Bool) {
+        var fields = TrainingAgreementDocument.makeFields(
+            studentId: studentId, contract: contract, dataManager: dataManager)
+        if blank {
+            // Never hand someone a pre-ticked consent form.
+            fields.consentCoachingAnalysis = nil
+            fields.consentPublicPublication = nil
+        }
+        do {
+            shareURL = try TrainingAgreementDocument.render(
+                fields, contractNumber: contract.contractNumber)
+        } catch { debugLog("❌ agreement export failed: \(error)") }
     }
 
     private var notesSection: some View {

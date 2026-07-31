@@ -163,7 +163,8 @@ it produces confident wrong numbers the coach reconciles books against.
 - CloudKit sync works. Both apps see the same private-database data.
 - HoopwiseMac builds and runs; Settings has General / Profile / Sync /
   Data.
-- Roadmap: (1) DONE contracts — payments ledger + travel fee, (2) DONE
+- Roadmap: (0) DONE documents — PDF layer, attendance statement, training
+  agreement, export on both platforms; (1) DONE contracts — payments ledger + travel fee, (2) DONE
   persist Play, four new record types defined and registered,
   (3) deploy schema Dev→Production — only needed ahead of a released
   build; debug-to-debug authoring runs entirely in Development,
@@ -271,6 +272,71 @@ it produces confident wrong numbers the coach reconciles books against.
   does, so it earns a schema change for nothing, and "late" printed on a
   payment statement to a parent is not wanted. Behavioural detail goes in
   the session note.
+
+## Attendance UI — one control, deliberately
+- ONE shared control: `AttendanceMarkControl` / `AttendanceStudentRow` in
+  Hoopwise/Components/AttendanceMarkControl.swift, with the `AttendanceMark`
+  enum. Every iOS attendance surface uses it.
+- There used to be TWO surfaces with different capabilities: a binary
+  present/absent toggle in the Take Attendance sheet and a three-way
+  control in the session attendance tab. Which states could be recorded
+  depended on which screen was open, and the binary toggle could not
+  express "excused" at all — so a notified absence recorded there consumed
+  a session. Do not add a second attendance control.
+- Unmarked is visually distinct from absent: dashed border, muted fill.
+  Each row states the money consequence in words ("Deducts 1 session" /
+  "No session deducted") because two of the four states charge the client.
+- "Clear" means UNMARKED. It previously mapped to absent, which now
+  consumes a session — clearing must never charge.
+- refundSessionToBundle has UI in two places, chosen because they are
+  where a mistake is actually noticed: the session attendance row (swipe,
+  shown only when that session was really redeemed) and the contract
+  sheet's "Sessions deducted" section.
+
+## MAC DOES NOT MARK ATTENDANCE — do not build it
+The division is deliberate: phone for operations, Mac for authorship. The
+coach marks attendance courtside on iOS and the data syncs; a Mac-generated
+statement is verified against iOS-recorded data. Building Mac attendance
+marking adds a surface that will not be used and cuts against the
+architecture. Do not add it, and do not cite "you can't verify Mac
+statements" as a reason — that reasoning was raised and rejected.
+
+## Documents
+- PDFDocumentRenderer (Services/) is the shared vector layer: CoreGraphics +
+  CoreText only, A4, both targets. Everything else here builds on it,
+  including the future Part 3a play sheet via `draw(path:in:)`.
+- Checkboxes are DRAWN as stroked CGPaths via `inlineRow`, never glyphs.
+  U+25A1 and U+2611 are absent from PingFang SC and fell through the
+  cascade to Hiragino, whose availability differs between iOS and macOS —
+  that would break identical output for a signed document. Target font list
+  is Helvetica + PingFang SC only; re-audit if new characters are added.
+- AttendanceStatementDocument: ONE student, ONE contract, one file. Never
+  build a multi-student variant — it goes to a client's phone and would
+  leak other families' rates and balances. No images, ever: it keeps a
+  minor's photo out of a forwardable document and preserves the vector
+  property.
+- The statement's "deducted" column reads contract.bundleSessionIds, the
+  array the redemption authority writes. Never recompute it — a document
+  that contradicts the app's running total is worse than no document.
+- TrainingAgreementDocument: the coach's clause text is VERBATIM and must
+  not be edited, paraphrased, or "improved". Unknown fields print fill-in
+  rules, never plausible defaults. Two modes: blank-for-signing (empty
+  consent boxes) and from-contract (stored consent state). Never
+  pre-tick a consent form handed to a client.
+- Filenames: `Attendance_<name>_Contract<N>_<yyyy-MM-dd>.pdf` and
+  `Agreement_<name>_Contract<N>_<yyyy-MM-dd>.pdf`.
+- Export UI: iOS contract sheet (system share sheet, for WeChat), Mac
+  ContractCard menu (NSSavePanel).
+
+## Media consent
+- Stored as a LEDGER on SDContract (`consentsData`, `[MediaConsentEntry]`
+  of purpose/granted/date/note), not booleans — clause 8 allows withdrawal
+  at any time and a Bool loses the date and the fact of a withdrawal.
+  Append, never edit.
+- `mayPublishMedia(for:)` and `publicationConsent(for:)` on SwiftDataManager
+  answer the student-level question. Only an EXPLICIT grant permits
+  publication; unasked and declined both block. Surfaced in the iOS Media
+  Vault banner and as a badge on the Mac ContractCard.
 
 ## Contract decisions
 - Payments are a JSON ledger (paymentsData: Data? holding

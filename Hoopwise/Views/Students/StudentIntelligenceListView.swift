@@ -3254,6 +3254,37 @@ struct StudentIntelligenceProfileView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
     
+    /// Publication-consent state for this student.
+    @ViewBuilder
+    private func consentBanner(isChinese: Bool) -> some View {
+        let consent = dataManager.publicationConsent(for: student.id)
+        if consent != true {
+            let declined = (consent == false)
+            HStack(spacing: 8) {
+                Image(systemName: declined ? "eye.slash.fill" : "questionmark.circle.fill")
+                    .foregroundStyle(declined ? .red : .orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(declined
+                         ? (isChinese ? "监护人不同意公开发布" : "Guardian declined public publication")
+                         : (isChinese ? "尚未取得公开发布授权" : "No publication consent on file"))
+                        .font(.caption.weight(.semibold))
+                    Text(declined
+                         ? (isChinese ? "请勿将该学员的照片或视频用于社交媒体或教学内容。"
+                                      : "Do not use this student's photos or video for social media or instructional content.")
+                         : (isChinese ? "发布前请先在合同中记录授权。"
+                                      : "Record consent on the contract before publishing."))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background((declined ? Color.red : Color.orange).opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
     // MARK: - Media Assets
     private var mediaVaultSection: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
@@ -3261,6 +3292,11 @@ struct StudentIntelligenceProfileView: View {
         let hasVideos = !student.mediaAssets.videoUrls.isEmpty
         
         return VStack(alignment: .leading, spacing: 14) {
+            // Guardian consent for publication, shown where the media is —
+            // clause 8 of the training agreement. Unasked and declined both
+            // read as "do not publish"; only an explicit grant is silent.
+            consentBanner(isChinese: isChinese)
+
             HStack {
                 Text(isChinese ? "媒体库" : "MEDIA VAULT")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))

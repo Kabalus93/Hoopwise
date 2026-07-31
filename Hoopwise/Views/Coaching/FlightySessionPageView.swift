@@ -2270,12 +2270,10 @@ struct FlightySessionPageView: View {
         let isExcused = session.excusedAbsences.contains(student.id)
         let isExpected = session.attendeeIds.contains(student.id)
         
-        // Determine attendance state
-        let attendanceState: AttendanceState = {
-            if isPresent { return .present }
-            if isExcused { return .excused }
-            return .absent  // Forfeited if expected
-        }()
+        // Four states from three stores. The default is UNMARKED — it used to
+        // fall through to .absent, which now consumes a session.
+        let attendanceState: AttendanceMark = session.attendanceMark(for: student.id)
+        let isRedeemed = dataManager.isSessionRedeemed(sessionId: session.id, studentId: student.id)
         
         return HStack(spacing: 10) {
             // Main tappable area - opens Quick Peep
@@ -2287,7 +2285,7 @@ struct FlightySessionPageView: View {
                         
                         // Status indicator dot
                         Circle()
-                            .fill(attendanceState.color)
+                            .fill(attendanceState.tint)
                             .frame(width: 12, height: 12)
                             .overlay(
                                 Image(systemName: attendanceState.icon)
@@ -2320,19 +2318,11 @@ struct FlightySessionPageView: View {
             // unmarked student looks unmarked. The binding's get reads
             // `actualAttendeeIds` live (no captured snapshot), and set uses
             // the new value directly so taps always flip the intended way.
-            Toggle(isOn: Binding(
-                get: { session.actualAttendeeIds.contains(student.id) },
-                set: { newValue in
-                    setAttendanceState(for: student.id, state: newValue ? .present : .absent)
-                    HapticFeedback.impact(.light)
-                }
-            )) {
-                EmptyView()
+            // Same control as the Take Attendance sheet.
+            AttendanceMarkControl(mark: attendanceState) { newMark in
+                setAttendanceState(for: student.id, state: newMark)
             }
-            .labelsHidden()
-            .tint(.green)
             .disabled(!accessMode.canTakeAttendance)
-            .sensoryFeedback(.impact(weight: .light), trigger: isPresent)
         }
         .contentShape(Rectangle())
         .padding(.horizontal, 16)
@@ -2348,7 +2338,7 @@ struct FlightySessionPageView: View {
 
             if isExpected {
                 Button {
-                    setAttendanceState(for: student.id, state: isExcused ? .absent : .excused)
+                    setAttendanceState(for: student.id, state: isExcused ? .unmarked : .excused)
                 } label: {
                     Label(isChinese ? "请假" : "Excuse", systemImage: "calendar.badge.clock")
                 }
@@ -2356,41 +2346,31 @@ struct FlightySessionPageView: View {
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if isPresent || isExcused {
+            // "Clear" means UNMARKED. It used to map to .absent, which now
+            // consumes a session — clearing must never charge the client.
+            if attendanceState != .unmarked {
                 Button(role: .destructive) {
-                    setAttendanceState(for: student.id, state: .absent)
+                    setAttendanceState(for: student.id, state: .unmarked)
                 } label: {
                     Label(isChinese ? "清除" : "Clear", systemImage: "xmark.circle.fill")
                 }
+            }
+            if isRedeemed {
+                Button {
+                    dataManager.refundSessionToBundle(sessionId: session.id, studentId: student.id)
+                } label: {
+                    Label(isChinese ? "退回课时" : "Refund session",
+                          systemImage: "arrow.uturn.backward")
+                }
+                .tint(.blue)
             }
         }
         #endif
     }
     
     // MARK: - Attendance State
-    private enum AttendanceState {
-        case present   // Attended - session consumed
-        case absent    // Forfeited - session consumed (expected but no-show)
-        case excused   // Excused absence - session preserved
-        
-        var color: Color {
-            switch self {
-            case .present: return .green
-            case .absent: return Color.gray.opacity(0.4)
-            case .excused: return .orange
-            }
-        }
-        
-        var icon: String {
-            switch self {
-            case .present: return "checkmark"
-            case .absent: return "xmark"
-            case .excused: return "clock"
-            }
-        }
-    }
     
-    private func setAttendanceState(for studentId: UUID, state: AttendanceState) {
+    private func setAttendanceState(for studentId: UUID, state: AttendanceMark) {
         // Optimistic local update so the toggle animates immediately. The
         // canonical write goes through the field-level helper below so
         // siblings (games, photo) survive even if our @State is stale.
@@ -2398,18 +2378,13 @@ struct FlightySessionPageView: View {
         session.excusedAbsences.removeAll { $0 == studentId }
         session.unexcusedAbsences.removeAll { $0 == studentId }
 
-        let mappedState: AttendanceTriState
         switch state {
-        case .present:
-            session.actualAttendeeIds.append(studentId)
-            mappedState = .present
-        case .excused:
-            session.excusedAbsences.append(studentId)
-            mappedState = .excused
-        case .absent:
-            session.unexcusedAbsences.append(studentId)
-            mappedState = .absent
+        case .present:  session.actualAttendeeIds.append(studentId)
+        case .excused:  session.excusedAbsences.append(studentId)
+        case .absent:   session.unexcusedAbsences.append(studentId)
+        case .unmarked: break
         }
+        let mappedState = state.triState
 
         // Redemption is handled inside setStudentAttendanceState via the single
         // FIFO authority. Do not redeem here — a second call site is exactly
@@ -6094,6 +6069,28 @@ struct LiveAttendanceSheet: View {
     let students: [Student]
     let programColor: Color
     let onSave: () -> Void
+
+    private func currentMark(for studentId: UUID) -> AttendanceMark {
+        session.attendanceMark(for: studentId)
+    }
+
+    /// Optimistic local update so the control responds immediately, then the
+    /// canonical write. Redemption is handled inside
+    /// setStudentAttendanceState by the single FIFO authority — never here.
+    private func applyMark(_ mark: AttendanceMark, to studentId: UUID) {
+        session.actualAttendeeIds.removeAll { $0 == studentId }
+        session.excusedAbsences.removeAll { $0 == studentId }
+        session.unexcusedAbsences.removeAll { $0 == studentId }
+        switch mark {
+        case .present:  session.actualAttendeeIds.append(studentId)
+        case .excused:  session.excusedAbsences.append(studentId)
+        case .absent:   session.unexcusedAbsences.append(studentId)
+        case .unmarked: break
+        }
+        dataManager.setStudentAttendanceState(sessionId: session.id,
+                                              studentId: studentId,
+                                              state: mark.triState)
+    }
     
     var body: some View {
         NavigationStack {
@@ -6153,24 +6150,23 @@ struct LiveAttendanceSheet: View {
                     }
 
                     ForEach(students) { student in
-                        LiveAttendanceRow(student: student, isPresent: session.actualAttendeeIds.contains(student.id)) {
-                            let willBePresent = !session.actualAttendeeIds.contains(student.id)
-                            if willBePresent {
-                                session.actualAttendeeIds.append(student.id)
-                            } else {
-                                session.actualAttendeeIds.removeAll { $0 == student.id }
+                        // Same control as the session attendance tab. This
+                        // screen used to be a binary toggle that could not
+                        // express "excused" at all, so a notified absence
+                        // recorded here consumed a session.
+                        AttendanceStudentRow(
+                            student: student,
+                            mark: currentMark(for: student.id),
+                            isRedeemed: dataManager.isSessionRedeemed(sessionId: session.id,
+                                                                      studentId: student.id),
+                            onChange: { newMark in
+                                applyMark(newMark, to: student.id)
+                            },
+                            onRefund: {
+                                dataManager.refundSessionToBundle(sessionId: session.id,
+                                                                  studentId: student.id)
                             }
-                            // Un-tapping clears to UNMARKED, never to absent.
-                            // An unexcused absence consumes a bundle session
-                            // under clause 4, so it has to be chosen
-                            // deliberately in the session's attendance tab —
-                            // not fall out of toggling a row off.
-                            dataManager.setStudentAttendanceState(
-                                sessionId: session.id,
-                                studentId: student.id,
-                                state: willBePresent ? .present : .unmarked
-                            )
-                        }
+                        )
                     }
                 }
                 .padding(16)
@@ -6189,6 +6185,27 @@ struct LiveAttendanceSheet: View {
 }
 
 // MARK: - Live Attendance Row
+/// Shared mapping between the stored arrays and the four-state control.
+extension SessionEvent {
+    func attendanceMark(for studentId: UUID) -> AttendanceMark {
+        if actualAttendeeIds.contains(studentId) { return .present }
+        if excusedAbsences.contains(studentId) { return .excused }
+        if unexcusedAbsences.contains(studentId) { return .absent }
+        return .unmarked
+    }
+}
+
+extension AttendanceMark {
+    var triState: AttendanceTriState {
+        switch self {
+        case .unmarked: return .unmarked
+        case .present:  return .present
+        case .excused:  return .excused
+        case .absent:   return .absent
+        }
+    }
+}
+
 struct LiveAttendanceRow: View {
     let student: Student
     let isPresent: Bool

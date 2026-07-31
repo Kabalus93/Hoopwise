@@ -2854,6 +2854,36 @@ class SwiftDataManager: ObservableObject {
         updateContract(oldest)
     }
 
+    // MARK: - Media Consent (student-level)
+
+    /// Whether any of this student's contracts records an explicit grant for
+    /// public publication.
+    ///
+    /// Consent lives on the contract because that is the document that captures
+    /// it, but the question "may I publish this clip?" is asked about a
+    /// STUDENT. Nil means never asked; false means declined. Only an explicit
+    /// grant returns true, so unasked and declined both block publication.
+    func publicationConsent(for studentId: UUID) -> Bool? {
+        let states = cachedContracts
+            .filter { $0.studentId == studentId }
+            .sorted { $0.contractNumber > $1.contractNumber }
+            .compactMap { $0.consentState(for: .publicPublication) }
+        return states.first
+    }
+
+    /// Safe default: publication is allowed ONLY on an explicit grant.
+    func mayPublishMedia(for studentId: UUID) -> Bool {
+        publicationConsent(for: studentId) == true
+    }
+
+    /// Whether this session has already consumed one of the student's prepaid
+    /// sessions. Drives whether a refund action is worth offering.
+    func isSessionRedeemed(sessionId: UUID, studentId: UUID) -> Bool {
+        cachedContracts.contains {
+            $0.studentId == studentId && $0.bundleSessionIds.contains(sessionId)
+        }
+    }
+
     /// Explicitly return a consumed session to its bundle.
     ///
     /// This is a DELIBERATE undo, invoked by the coach when a session was
