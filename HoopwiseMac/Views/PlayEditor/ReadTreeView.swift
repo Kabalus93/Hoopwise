@@ -109,9 +109,9 @@ struct ReadTreeView: View {
                     : (onPath ? Color.accentColor.opacity(0.05) : Color.clear))
         .contentShape(Rectangle())
         .onTapGesture {
-            // Selecting a node scopes the timeline to it.
-            model.activeNodeId = node.id
-            model.playhead = 0
+            // Moves the playhead to where this read begins on the concatenated
+            // timeline, switching the active path if this read is not on it.
+            model.selectNode(node.id)
         }
         .contextMenu {
             Button("Add Alternative Read…") {

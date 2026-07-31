@@ -937,6 +937,54 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
 
     /// Cheap structural size, for list display and size budgeting.
     var nodeCount: Int { nodes.count }
+
+    // MARK: - Chained playback resolution
+
+    /// Index of the segment containing `time` along a path.
+    static func segmentIndex(at time: Double, steps: [BranchStep]) -> Int {
+        var index = 0
+        for (i, step) in steps.enumerated() where step.startsAt <= time { index = i }
+        return index
+    }
+
+    /// Entity position at ABSOLUTE path time.
+    ///
+    /// Continuous across segment boundaries by construction: a read without a
+    /// track for the entity resolves to where the entity stood at the moment
+    /// of branching, recursively. This is the single resolver behind editor
+    /// playback and, later, the frame exporter — they must agree, so it lives
+    /// here rather than in the view model.
+    static func resolvedPosition(of entityId: UUID,
+                                 at time: Double,
+                                 steps: [BranchStep],
+                                 entities: [DiagramEntity]) -> CGPoint {
+        guard !steps.isEmpty else {
+            return entities.first { $0.id == entityId }?.homePosition ?? .zero
+        }
+        let index = segmentIndex(at: time, steps: steps)
+        return segmentPosition(of: entityId, segment: index,
+                               localTime: time - steps[index].startsAt,
+                               steps: steps, entities: entities)
+    }
+
+    static func segmentPosition(of entityId: UUID,
+                                segment: Int,
+                                localTime: Double,
+                                steps: [BranchStep],
+                                entities: [DiagramEntity]) -> CGPoint {
+        let node = steps[segment].node
+        if let track = node.tracks.first(where: { $0.entityId == entityId }),
+           let point = track.position(at: localTime) {
+            return point
+        }
+        if segment > 0 {
+            let branchLocal = steps[segment].startsAt - steps[segment - 1].startsAt
+            return segmentPosition(of: entityId, segment: segment - 1,
+                                   localTime: branchLocal,
+                                   steps: steps, entities: entities)
+        }
+        return entities.first { $0.id == entityId }?.homePosition ?? .zero
+    }
 }
 
 // MARK: - Mirroring

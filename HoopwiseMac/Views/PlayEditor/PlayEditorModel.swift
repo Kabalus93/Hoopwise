@@ -14,8 +14,12 @@ final class PlayEditorModel: ObservableObject {
     /// until then this is always the root.
     @Published var activeNodeId: UUID
     @Published var selectedEntityId: UUID?
-    /// Seconds into the active node.
-    @Published var playhead: Double = 0
+    /// Seconds along the ACTIVE PLAYBACK PATH — absolute branch time, not
+    /// node-local. Segment boundaries are derived; scrubbing across one is
+    /// seamless because resolution is continuous by construction.
+    @Published var playhead: Double = 0 {
+        didSet { syncActiveNodeToPlayhead() }
+    }
     @Published var isPlaying = false
     @Published var look: CourtLookParameters = .default
     /// Camera elevation being authored at the playhead, in degrees.
@@ -108,8 +112,63 @@ final class PlayEditorModel: ObservableObject {
 
     var activeNode: ReadNode? { diagram.node(activeNodeId) }
 
+    /// The segments of the active playback path, in order. Never empty.
+    var activeSteps: [PlayDiagram.BranchStep] {
+        if let steps = activeBranch?.steps, !steps.isEmpty { return steps }
+        if let root = diagram.rootNode {
+            return [PlayDiagram.BranchStep(node: root, startsAt: 0)]
+        }
+        return []
+    }
+
+    /// Full concatenated duration of the active path.
+    var branchDuration: Double {
+        activeBranch?.duration ?? (activeNode?.duration ?? 0)
+    }
+
     var timelineDuration: Double {
-        max(Self.minimumTimelineDuration, (activeNode?.duration ?? 0) + 2)
+        max(Self.minimumTimelineDuration, branchDuration + 1)
+    }
+
+    /// Index of the segment the playhead is inside.
+    func segmentIndex(at time: Double) -> Int {
+        PlayDiagram.segmentIndex(at: time, steps: activeSteps)
+    }
+
+    var currentStep: PlayDiagram.BranchStep? {
+        let steps = activeSteps
+        guard !steps.isEmpty else { return nil }
+        return steps[segmentIndex(at: playhead)]
+    }
+
+    /// Playhead expressed in the current segment's node-local time.
+    var currentLocalTime: Double {
+        guard let step = currentStep else { return playhead }
+        return max(0, playhead - step.startsAt)
+    }
+
+    /// Keeps the authoring target on the segment under the playhead, so canvas
+    /// edits always land in the read being watched.
+    private func syncActiveNodeToPlayhead() {
+        guard let step = currentStep, step.node.id != activeNodeId else { return }
+        activeNodeId = step.node.id
+    }
+
+    /// Selects a read: switches the active path to one containing it if needed,
+    /// then moves the playhead to where that read begins.
+    func selectNode(_ nodeId: UUID) {
+        let all = branches
+        if !(activeBranch?.steps.contains { $0.node.id == nodeId } ?? false) {
+            if let index = all.firstIndex(where: { $0.steps.contains { $0.node.id == nodeId } }) {
+                activeBranchIndex = index
+            }
+        }
+        activeNodeId = nodeId
+        if let step = activeSteps.first(where: { $0.node.id == nodeId }) {
+            playhead = step.startsAt
+        } else {
+            playhead = 0
+        }
     }
 
     private func mutateActiveNode(_ body: (inout ReadNode) -> Void) {
@@ -179,20 +238,33 @@ final class PlayEditorModel: ObservableObject {
 
     func entity(_ id: UUID) -> DiagramEntity? { diagram.entity(id) }
 
-    /// THE position authority. Drawing, hit testing, the timeline and the
-    /// inspector all go through this.
+    /// THE position authority, in ABSOLUTE branch time. Drawing, hit testing,
+    /// the timeline and the inspector all go through this.
     ///
-    /// The ball is resolved by possession; everything else by its track. Hit
-    /// testing used to read `position(of:)` directly, which for a ball with no
-    /// track returned its home position — so after the first pass the ball was
-    /// drawn by the resolver but hit-tested somewhere else entirely, and became
-    /// unselectable. If it is drawn at a point it must be selectable there.
+    /// Segment boundaries are continuous by construction: a read without its
+    /// own track for an entity resolves to where that entity stood at the
+    /// moment of branching, recursively — so nothing snaps back to a start
+    /// position when playback crosses into a child read.
     func resolvedPosition(of entityId: UUID, at time: Double) -> CGPoint {
         if let ball = diagram.ball, ball.id == entityId,
            possessionEnabled, let derived = ballPosition(at: time) {
             return derived
         }
-        return position(of: entityId, at: time)
+        let steps = activeSteps
+        guard !steps.isEmpty else { return position(of: entityId, at: time) }
+        let index = segmentIndex(at: time)
+        return segmentPosition(of: entityId, segment: index,
+                               localTime: time - steps[index].startsAt, steps: steps)
+    }
+
+    private func segmentPosition(of entityId: UUID, segment: Int,
+                                 localTime: Double,
+                                 steps: [PlayDiagram.BranchStep]) -> CGPoint {
+        // Delegates to the shared resolver so editor playback and the frame
+        // exporter cannot disagree.
+        PlayDiagram.segmentPosition(of: entityId, segment: segment,
+                                    localTime: localTime,
+                                    steps: steps, entities: diagram.entities)
     }
 
     /// Raw track position. Prefer `resolvedPosition(of:at:)` unless you
@@ -225,6 +297,20 @@ final class PlayEditorModel: ObservableObject {
     func setKeyframe(for entityId: UUID, at time: Double, position: CGPoint) {
         let clamped = diagram.space.clamp(position)
         let defaultKind = defaultPathKind(for: entityId)
+        // Continuity pin: creating a fresh track mid-read in a non-first
+        // segment also writes the inherited position at t=0, so the read still
+        // starts where its parent left the entity rather than holding the new
+        // keyframe backwards to the boundary.
+        let steps = activeSteps
+        let segment = segmentIndex(at: playhead)
+        var boundaryPin: CGPoint?
+        if segment > 0, time > 0.02,
+           let node = activeNode,
+           node.tracks.first(where: { $0.entityId == entityId }) == nil {
+            let branchLocal = steps[segment].startsAt - steps[segment - 1].startsAt
+            boundaryPin = segmentPosition(of: entityId, segment: segment - 1,
+                                          localTime: branchLocal, steps: steps)
+        }
         mutateActiveNode { node in
             if let trackIndex = node.tracks.firstIndex(where: { $0.entityId == entityId }) {
                 if let frameIndex = node.tracks[trackIndex].keyframes
@@ -237,9 +323,12 @@ final class PlayEditorModel: ObservableObject {
                     node.tracks[trackIndex].keyframes.sort { $0.t < $1.t }
                 }
             } else {
-                node.tracks.append(Track(entityId: entityId,
-                                         keyframes: [Keyframe(t: time, position: clamped,
-                                                              pathKind: defaultKind)]))
+                var keyframes = [Keyframe(t: time, position: clamped, pathKind: defaultKind)]
+                if let boundaryPin {
+                    keyframes.insert(Keyframe(t: 0, position: boundaryPin,
+                                              pathKind: defaultKind), at: 0)
+                }
+                node.tracks.append(Track(entityId: entityId, keyframes: keyframes))
             }
         }
     }
@@ -284,9 +373,11 @@ final class PlayEditorModel: ObservableObject {
     }
 
     /// The keyframe at the playhead for the selected entity, if there is one.
+    /// Playhead is absolute; keyframes are node-local, so compare in local time.
     var selectedKeyframe: Keyframe? {
         guard let id = selectedEntityId, let track = track(for: id) else { return nil }
-        return track.keyframes.first { abs($0.t - playhead) < 0.02 }
+        let local = currentLocalTime
+        return track.keyframes.first { abs($0.t - local) < 0.02 }
     }
 
     /// Whether this is the last keyframe on its track — its pathKind governs no
@@ -315,15 +406,20 @@ final class PlayEditorModel: ObservableObject {
     /// Ball home, used before anything is authored.
     private var ballHome: CGPoint { diagram.ball?.homePosition ?? rimPosition }
 
+    /// Ball state at ABSOLUTE branch time, resolved in the segment under it.
     func ballState(at time: Double) -> BallState {
-        guard let node = activeNode else { return .atRest(ballHome) }
-        return node.ballState(at: time,
+        let steps = activeSteps
+        guard !steps.isEmpty else { return .atRest(ballHome) }
+        let index = segmentIndex(at: time)
+        let node = steps[index].node
+        let local = time - steps[index].startsAt
+        return node.ballState(at: local,
                               passSpeed: look.passSpeedFeetPerSecond,
                               shotSpeed: look.shotSpeedFeetPerSecond,
                               ballHome: ballHome,
                               heldOffsetFeet: look.ballHeldOffsetFeet,
                               entityExists: { [weak self] in self?.diagram.entity($0) != nil }) { [weak self] id, t in
-            self?.position(of: id, at: t) ?? .zero
+            self?.segmentPosition(of: id, segment: index, localTime: t, steps: steps) ?? .zero
         }
     }
 
@@ -341,22 +437,30 @@ final class PlayEditorModel: ObservableObject {
         let color: Color
     }
 
-    /// Possession start, pass departure, arrival, and shot release.
+    /// Possession start, pass departure, arrival, and shot release — across
+    /// every segment of the active path, in absolute time.
     var possessionEvents: [PossessionEvent] {
-        guard let node = activeNode else { return [] }
+        var events: [PossessionEvent] = []
+        for step in activeSteps {
+            events.append(contentsOf: possessionEvents(in: step.node, offset: step.startsAt))
+        }
+        return events
+    }
+
+    private func possessionEvents(in node: ReadNode, offset: Double) -> [PossessionEvent] {
         var events: [PossessionEvent] = []
         for possession in node.sortedPossessions {
             let who = entityLabel(possession.holderId)
-            events.append(PossessionEvent(id: possession.id, time: possession.start,
+            events.append(PossessionEvent(id: possession.id, time: offset + possession.start,
                                           label: "\(who) gains possession", color: .green))
             guard let end = possession.end, let release = possession.release else { continue }
             switch release {
             case .pass(let toId):
-                events.append(PossessionEvent(id: UUID(), time: end,
+                events.append(PossessionEvent(id: UUID(), time: offset + end,
                                               label: "\(who) passes to \(entityLabel(toId))",
                                               color: .orange))
             case .shot:
-                events.append(PossessionEvent(id: UUID(), time: end,
+                events.append(PossessionEvent(id: UUID(), time: offset + end,
                                               label: "\(who) shoots", color: .red))
             }
         }
@@ -446,17 +550,44 @@ final class PlayEditorModel: ObservableObject {
     /// Ball position honouring possession when enabled. NEVER nil.
     func ballPosition(at time: Double) -> CGPoint? {
         guard let ball = diagram.ball else { return nil }
-        guard possessionEnabled, let node = activeNode else {
-            return position(of: ball.id, at: time)
+        guard possessionEnabled else { return position(of: ball.id, at: time) }
+        let steps = activeSteps
+        guard !steps.isEmpty else { return position(of: ball.id, at: time) }
+        let index = segmentIndex(at: time)
+        let node = steps[index].node
+        let local = time - steps[index].startsAt
+        // A segment with no possessions of its own inherits the ball from the
+        // moment of branching, exactly like entity positions.
+        if node.sortedPossessions.isEmpty, index > 0 {
+            let branchLocal = steps[index].startsAt - steps[index - 1].startsAt
+            let previousSteps = Array(steps.prefix(index))
+            let previousNode = previousSteps[index - 1].node
+            return previousNode.ballPosition(at: branchLocal,
+                                             passSpeed: look.passSpeedFeetPerSecond,
+                                             shotSpeed: look.shotSpeedFeetPerSecond,
+                                             ballHome: ballHome,
+                                             heldOffsetFeet: look.ballHeldOffsetFeet,
+                                             entityExists: { [weak self] in self?.diagram.entity($0) != nil }) { [weak self] id, t in
+                self?.segmentPosition(of: id, segment: index - 1, localTime: t, steps: steps) ?? .zero
+            }
         }
-        return node.ballPosition(at: time,
+        return node.ballPosition(at: local,
                                  passSpeed: look.passSpeedFeetPerSecond,
                                  shotSpeed: look.shotSpeedFeetPerSecond,
                                  ballHome: ballHome,
                                  heldOffsetFeet: look.ballHeldOffsetFeet,
                                  entityExists: { [weak self] in self?.diagram.entity($0) != nil }) { [weak self] id, t in
-            self?.position(of: id, at: t) ?? .zero
+            self?.segmentPosition(of: id, segment: index, localTime: t, steps: steps) ?? .zero
         }
+    }
+
+    /// Whether `entityId` is dribbling at ABSOLUTE time — has possession and
+    /// the segment under the playhead says so.
+    func isDribblingAbsolute(_ entityId: UUID, at time: Double) -> Bool {
+        let steps = activeSteps
+        guard !steps.isEmpty else { return false }
+        let index = segmentIndex(at: time)
+        return steps[index].node.isDribbling(entityId, at: time - steps[index].startsAt)
     }
 
     // MARK: - Camera
@@ -714,6 +845,52 @@ final class PlayEditorModel: ObservableObject {
             worst = max(worst, Double(hypot(there.x - here.x, there.y - here.y)))
         }
         return worst
+    }
+
+    /// One keyframe as the timeline lane sees it: which node owns it, where it
+    /// sits in absolute time, and whether it is inside this path's window
+    /// (keyframes past a segment's branch point belong to other paths and
+    /// render dimmed).
+    struct LaneKeyframe: Identifiable {
+        var id: UUID { keyframe.id }
+        let nodeId: UUID
+        let keyframe: Keyframe
+        let absoluteTime: Double
+        let inWindow: Bool
+    }
+
+    func laneKeyframes(for entityId: UUID) -> [LaneKeyframe] {
+        let steps = activeSteps
+        var result: [LaneKeyframe] = []
+        for (index, step) in steps.enumerated() {
+            guard let track = step.node.tracks.first(where: { $0.entityId == entityId }) else { continue }
+            let window = index + 1 < steps.count
+                ? steps[index + 1].startsAt - step.startsAt
+                : Double.greatestFiniteMagnitude
+            for keyframe in track.sortedKeyframes {
+                result.append(LaneKeyframe(nodeId: step.node.id,
+                                           keyframe: keyframe,
+                                           absoluteTime: step.startsAt + keyframe.t,
+                                           inWindow: keyframe.t <= window + 0.001))
+            }
+        }
+        return result
+    }
+
+    /// Segment boundaries for the ruler: absolute time and read title.
+    var segmentBoundaries: [(time: Double, title: String)] {
+        activeSteps.dropFirst().map { ($0.startsAt, $0.node.title) }
+    }
+
+    /// Timeline variant of moveKeyframe that knows which node owns the frame.
+    func moveKeyframe(nodeId: UUID, entityId: UUID, keyframeId: UUID, toLocal time: Double) {
+        guard let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == nodeId }) else { return }
+        guard let trackIndex = diagram.nodes[nodeIndex].tracks.firstIndex(where: { $0.entityId == entityId }),
+              let frameIndex = diagram.nodes[nodeIndex].tracks[trackIndex].keyframes
+                .firstIndex(where: { $0.id == keyframeId }) else { return }
+        diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].t = max(0, time)
+        diagram.nodes[nodeIndex].tracks[trackIndex].keyframes.sort { $0.t < $1.t }
+        diagram.updatedAt = Date()
     }
 
     // MARK: - Debug Readout

@@ -54,6 +54,19 @@ struct TimelineView: View {
                         Text("\(second)s").font(.system(size: 9)).foregroundStyle(.secondary)),
                         at: CGPoint(x: x + 11, y: size.height - 13))
                 }
+                // Segment boundaries: where each read begins on the
+                // concatenated timeline.
+                for boundary in model.segmentBoundaries {
+                    let x = CGFloat(boundary.time / duration) * size.width
+                    var line = Path()
+                    line.move(to: CGPoint(x: x, y: 0))
+                    line.addLine(to: CGPoint(x: x, y: size.height))
+                    context.stroke(line, with: .color(.accentColor.opacity(0.7)), lineWidth: 1)
+                    context.draw(context.resolve(
+                        Text(boundary.title).font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)),
+                        at: CGPoint(x: x + 4, y: 6), anchor: .leading)
+                }
             }
             .frame(width: width, height: rulerHeight)
             .contentShape(Rectangle())
@@ -111,7 +124,6 @@ struct TimelineView: View {
     }
 
     private func entityLane(_ entity: DiagramEntity, width: CGFloat, duration: Double) -> some View {
-        let track = model.track(for: entity.id)
         let isSelected = model.selectedEntityId == entity.id
 
         return HStack(spacing: 0) {
@@ -139,30 +151,31 @@ struct TimelineView: View {
                     possessionMarkers(width: width, duration: duration)
                 }
 
-                if let track {
-                    ForEach(track.sortedKeyframes) { frame in
-                        marker(color: laneColor(entity),
-                               selected: isSelected && abs(frame.t - model.playhead) < 0.02)
-                            .position(x: CGFloat(frame.t / duration) * width, y: laneHeight / 2)
-                            .gesture(
-                                DragGesture(minimumDistance: 1)
-                                    .onChanged { value in
-                                        let t = Double(value.location.x / width) * duration
-                                        model.moveKeyframe(entityId: entity.id,
-                                                           keyframeId: frame.id,
-                                                           to: min(max(0, t), duration))
-                                    }
-                            )
-                            .onTapGesture {
-                                model.selectedEntityId = entity.id
-                                model.playhead = frame.t
-                            }
-                            .contextMenu {
-                                Button("Delete Keyframe", role: .destructive) {
-                                    model.deleteKeyframe(entityId: entity.id, keyframeId: frame.id)
+                ForEach(model.laneKeyframes(for: entity.id)) { lane in
+                    marker(color: laneColor(entity).opacity(lane.inWindow ? 1 : 0.35),
+                           selected: isSelected && abs(lane.absoluteTime - model.playhead) < 0.02)
+                        .position(x: CGFloat(lane.absoluteTime / duration) * width, y: laneHeight / 2)
+                        .gesture(
+                            DragGesture(minimumDistance: 1)
+                                .onChanged { value in
+                                    let absolute = Double(value.location.x / width) * duration
+                                    let start = lane.absoluteTime - lane.keyframe.t
+                                    model.moveKeyframe(nodeId: lane.nodeId,
+                                                       entityId: entity.id,
+                                                       keyframeId: lane.keyframe.id,
+                                                       toLocal: max(0, absolute - start))
                                 }
+                        )
+                        .onTapGesture {
+                            model.selectedEntityId = entity.id
+                            model.playhead = lane.absoluteTime
+                        }
+                        .contextMenu {
+                            Button("Delete Keyframe", role: .destructive) {
+                                model.deleteKeyframe(entityId: entity.id,
+                                                     keyframeId: lane.keyframe.id)
                             }
-                    }
+                        }
                 }
             }
             .frame(width: width, height: laneHeight)

@@ -97,8 +97,15 @@ struct DiagramCanvasView: View {
     /// labels are billboarded — build a head in view space and it floats above
     /// an oblique court.
     private func drawMotionPaths(_ projection: CourtProjection, into context: inout GraphicsContext) {
-        guard model.showMovementPaths, let node = model.activeNode else { return }
+        guard model.showMovementPaths else { return }
+        for step in model.activeSteps {
+            drawNodePaths(step.node, projection: projection, into: &context)
+        }
+    }
 
+    private func drawNodePaths(_ node: ReadNode,
+                               projection: CourtProjection,
+                               into context: inout GraphicsContext) {
         for track in node.tracks {
             let frames = track.sortedKeyframes
             guard frames.count > 1, let entity = model.entity(track.entityId) else { continue }
@@ -116,11 +123,15 @@ struct DiagramCanvasView: View {
                     if let point = track.position(at: t) { courtPoints.append(point) }
                 }
                 guard courtPoints.count > 1 else { continue }
-                // While the entity holds the ball its line IS the dribble,
-                // regardless of the authored path kind — and the ball draws
-                // nothing of its own.
+                // AUTO-DRIBBLE: line style is COMPUTED at render time from
+                // (movement AND possession overlap), never stored. The same
+                // path renders wavy while its player holds the ball and as a
+                // plain cut once possession is removed — no user action between.
+                // Evaluated at the segment midpoint so a possession starting
+                // mid-segment still reads correctly.
+                let midpoint = (from.t + to.t) / 2
                 let kind: PathKind = (model.possessionEnabled
-                                      && model.isDribbling(track.entityId, at: from.t))
+                                      && node.isDribbling(track.entityId, at: midpoint))
                     ? .dribble : from.pathKind
                 drawSegment(courtPoints, kind: kind, tint: tint,
                             projection: projection, into: &context)
@@ -132,7 +143,7 @@ struct DiagramCanvasView: View {
         if model.possessionEnabled {
             let releases = node.releases(passSpeed: model.look.passSpeedFeetPerSecond,
                                          shotSpeed: model.look.shotSpeedFeetPerSecond) { id, t in
-                model.position(of: id, at: t)
+                model.resolvedPosition(of: id, at: t)
             }
             for item in releases {
                 let tint = Color(hex: model.theme.ballHex)
@@ -416,7 +427,8 @@ struct DiagramCanvasView: View {
                 }
 
                 let court = projection.unproject(value.location)
-                model.setKeyframe(for: id, at: model.playhead, position: court)
+                // Keyframes are node-local; the playhead is absolute.
+                model.setKeyframe(for: id, at: model.currentLocalTime, position: court)
             }
             .onEnded { value in
                 defer {
@@ -429,12 +441,12 @@ struct DiagramCanvasView: View {
                 let drop = projection.unproject(value.location)
                 // Target decides: the rim is a shot, a player is a pass.
                 if model.isRimTarget(drop) {
-                    model.authorShot(at: model.playhead)
+                    model.authorShot(at: model.currentLocalTime)
                 } else if let target = hitTestPlayers(drop) {
                     // authorPass falls back to beginPossession itself when
                     // there is no prior holder, so the caller does not need to
                     // second-guess the state machine.
-                    model.authorPass(to: target, at: model.playhead)
+                    model.authorPass(to: target, at: model.currentLocalTime)
                 }
             }
     }
