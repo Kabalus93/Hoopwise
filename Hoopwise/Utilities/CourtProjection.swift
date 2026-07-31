@@ -161,6 +161,42 @@ struct CourtProjection {
 
     // MARK: - Forward
 
+    // MARK: - Projected fit
+    //
+    // The projected court is a TRAPEZOID shorter than the court itself: the far
+    // edge converges horizontally AND the whole quad compresses vertically,
+    // because we are looking along the plane. That vertical compression IS
+    // foreshortening and must survive to the screen.
+    //
+    // An earlier version renormalised v so the quad always spanned the full
+    // frame. That removed the dead band but also cancelled foreshortening,
+    // leaving horizontal convergence with no vertical compression — a flat
+    // trapezoid that narrows instead of tilting. The correct response to a quad
+    // that does not fill its frame is to FIT IT UNIFORMLY AND CENTRE IT.
+
+    /// Vertical extent of the projected quad, in normalised units (1 = the
+    /// court's full length). Always ≤ 1, and smaller as elevation drops.
+    private var projectedVExtent: CGFloat { s / (1 + k) }
+
+    /// Uniform points-per-court-foot for the PROJECTED quad.
+    private var fitScale: CGFloat {
+        let quadWidth = space.width
+        let quadHeight = space.length * projectedVExtent
+        guard quadWidth > 0, quadHeight > 0 else { return transform.scale }
+        return min(transform.availableSize.width / quadWidth,
+                   transform.availableSize.height / quadHeight)
+    }
+
+    private var fitSize: CGSize {
+        CGSize(width: space.width * fitScale,
+               height: space.length * projectedVExtent * fitScale)
+    }
+
+    private var fitOrigin: CGPoint {
+        CGPoint(x: transform.frame.minX + (transform.frame.width - fitSize.width) / 2,
+                y: transform.frame.minY + (transform.frame.height - fitSize.height) / 2)
+    }
+
     /// Court feet → view points.
     func project(_ courtPoint: CGPoint) -> CGPoint {
         guard !isPlanView else { return transform.point(courtPoint) }
@@ -168,12 +204,10 @@ struct CourtProjection {
         let (u, v) = normalise(courtPoint)
         let w = 1 + k * v
         let projectedU = u / w
-        // Renormalised so the far baseline still lands at v'=1 and the court
-        // FILLS its frame. Without this the projected court shrank into part of
-        // the view and left a dead band — visible immediately at 55 degrees,
-        // invisible at 90 where the projection is identity.
-        let projectedV = v * (1 + k) / w
-        return denormalise(u: projectedU, v: projectedV)
+        let projectedV = (v * s) / w        // foreshortened, NOT renormalised
+        return CGPoint(
+            x: fitOrigin.x + (projectedU + 0.5) * space.width * fitScale,
+            y: fitOrigin.y + fitSize.height - (projectedV / max(projectedVExtent, 0.0001)) * fitSize.height)
     }
 
     /// View points → court feet. The exact inverse of `project`.
@@ -183,9 +217,13 @@ struct CourtProjection {
     func unproject(_ viewPoint: CGPoint) -> CGPoint {
         guard !isPlanView else { return transform.inverse(viewPoint) }
 
-        let (projectedU, projectedV) = normaliseView(viewPoint)
-        // Inverse of v' = v(1+k)/(1+kv)  =>  v = v'/(1+k-v'k)
-        let denominator = (1 + k) - projectedV * k
+        // Undo the fit, then the homography.
+        let normalisedY = (fitOrigin.y + fitSize.height - viewPoint.y) / max(fitSize.height, 0.0001)
+        let projectedV = normalisedY * projectedVExtent
+        let projectedU = (viewPoint.x - fitOrigin.x) / max(space.width * fitScale, 0.0001) - 0.5
+
+        // Inverse of v' = vs/(1+kv)  =>  v = v'/(s - kv')
+        let denominator = s - k * projectedV
         guard abs(denominator) > 1e-6 else {
             return CGPoint(x: space.width / 2, y: space.length)
         }

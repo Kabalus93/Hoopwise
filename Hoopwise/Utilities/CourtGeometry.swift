@@ -270,6 +270,11 @@ struct CourtGeometry {
 struct CourtTransform {
     /// Points per court foot.
     let scale: CGFloat
+    /// The rect this transform was fitted into, for callers that need to
+    /// re-fit a projected quad rather than the raw court.
+    let frame: CGRect
+    /// Frame minus padding.
+    let availableSize: CGSize
     /// View-space origin of court (0, 0).
     let origin: CGPoint
     /// The court's drawn size in points.
@@ -281,6 +286,8 @@ struct CourtTransform {
         let fitScale = min(available.width / max(space.width, 1),
                            available.height / max(space.length, 1))
         self.scale = fitScale
+        self.frame = rect
+        self.availableSize = available
         self.courtSize = CGSize(width: space.width * fitScale,
                                 height: space.length * fitScale)
         self.origin = CGPoint(x: rect.minX + (rect.width - courtSize.width) / 2,

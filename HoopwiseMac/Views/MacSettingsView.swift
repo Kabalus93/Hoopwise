@@ -37,6 +37,16 @@ struct MacSettingsView: View {
     // iOS placebos. What this shows instead is the state that was previously invisible.
     private var syncTab: some View {
         Form {
+            if let failure = SwiftDataManager.startupFailure {
+                Section {
+                    Label(failure, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    Text("Store")
+                }
+            }
+
             Section {
                 LabeledContent("iCloud Account") {
                     HStack(spacing: 6) {

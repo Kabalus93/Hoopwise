@@ -11,8 +11,16 @@ struct PlayEditorView: View {
     /// Sticky: stays active until deselected or Escape.
     @State private var placementKind: DiagramEntityKind?
     @State private var showingLookPanel = false
-    /// True while a text field owns focus, so single-letter shortcuts stand down.
-    @FocusState private var isTextFieldFocused: Bool
+    /// True while a text field owns focus, so single-letter shortcuts stand
+    /// down. Queried from the responder chain rather than a @FocusState —
+    /// the @FocusState was never bound to any field, so it was permanently
+    /// false and typing a play name placed players.
+    private var isTextFieldFocused: Bool {
+        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
+        if responder is NSTextView { return true }
+        if let view = responder as? NSView, view is NSTextField { return true }
+        return false
+    }
 
     init(diagram: PlayDiagram? = nil) {
         _model = StateObject(wrappedValue:

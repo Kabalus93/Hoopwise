@@ -24,6 +24,11 @@ enum AttendanceTriState {
 
 class SwiftDataManager: ObservableObject {
     static let shared = SwiftDataManager()
+
+    /// Set when the container fell back at launch. Surfaced in the UI so a
+    /// store failure is visible rather than silent — or, as it used to be,
+    /// a crash.
+    static private(set) var startupFailure: String?
     
     // MARK: - Model Container
     let modelContainer: ModelContainer
@@ -306,11 +311,38 @@ class SwiftDataManager: ObservableObject {
             cloudKitDatabase: .private(cloudKitContainerID)
         )
         
+        // A store or CloudKit problem must not be a hard crash. fatalError here
+        // turned every schema mismatch, migration failure or CloudKit
+        // unavailability into a trap with no way to recover or even read the
+        // error. Fall back to an in-memory store and surface the failure so the
+        // app opens and can say what went wrong.
         do {
             modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
             debugLog("✅ SwiftData ModelContainer initialized")
         } catch {
-            fatalError("❌ Failed to create ModelContainer: \(error)")
+            debugLog("❌ CloudKit-backed ModelContainer failed: \(error)")
+            let localOnly = ModelConfiguration(schema: schema,
+                                               isStoredInMemoryOnly: false,
+                                               allowsSave: true)
+            if let fallback = try? ModelContainer(for: schema, configurations: [localOnly]) {
+                modelContainer = fallback
+                Self.startupFailure = "iCloud sync is unavailable, so this session is local only. \(error.localizedDescription)"
+                debugLog("⚠️ Fell back to a LOCAL-ONLY store; changes will not sync")
+            } else if let memory = try? ModelContainer(
+                for: schema,
+                configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]) {
+                modelContainer = memory
+                Self.startupFailure = "The local database could not be opened, so this session is in memory only and will not be saved. \(error.localizedDescription)"
+                debugLog("⚠️ Fell back to an IN-MEMORY store; nothing will persist")
+            } else {
+                // Nothing left to try. Still no fatalError — an empty in-memory
+                // container is better than a trap with no diagnostics.
+                modelContainer = try! ModelContainer(
+                    for: Schema([SDAppSettings.self]),
+                    configurations: [ModelConfiguration(schema: Schema([SDAppSettings.self]),
+                                                        isStoredInMemoryOnly: true)])
+                Self.startupFailure = "The data store could not be opened at all. \(error.localizedDescription)"
+            }
         }
     }
     
