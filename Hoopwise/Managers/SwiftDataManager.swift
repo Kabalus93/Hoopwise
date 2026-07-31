@@ -2301,6 +2301,68 @@ class SwiftDataManager: ObservableObject {
         upsertPlay(updated)
     }
 
+    // MARK: - Play Diagrams
+
+    /// Saves a diagram, creating the owning SDPlay if it does not exist yet.
+    ///
+    /// The editor can open on a loose diagram, so the play row is created
+    /// lazily on first save rather than requiring one up front.
+    func savePlayDiagram(_ diagram: PlayDiagram, name: String) {
+        do {
+            let playId = diagram.playId
+            let playDescriptor = FetchDescriptor<SDPlay>(predicate: #Predicate { $0.id == playId })
+            if try modelContext.fetch(playDescriptor).first == nil {
+                let play = SDPlay(id: playId, name: name, category: .setPlays)
+                modelContext.insert(play)
+            }
+
+            let diagramId = diagram.id
+            let descriptor = FetchDescriptor<SDPlayDiagram>(predicate: #Predicate { $0.id == diagramId })
+            if let existing = try modelContext.fetch(descriptor).first {
+                existing.name = name
+                existing.diagram = diagram
+            } else {
+                modelContext.insert(SDPlayDiagram(id: diagram.id, playId: playId,
+                                                  name: name, diagram: diagram))
+            }
+            try modelContext.save()
+            reloadPlays()
+        } catch {
+            debugLog("❌ Failed to save play diagram: \(error)")
+        }
+    }
+
+    /// All stored diagrams, most recently updated first.
+    func allPlayDiagrams() -> [(id: UUID, name: String, updatedAt: Date, diagram: PlayDiagram)] {
+        do {
+            return try modelContext.fetch(FetchDescriptor<SDPlayDiagram>())
+                .compactMap { row in
+                    guard let diagram = row.diagram else { return nil }
+                    return (row.id, row.name, row.updatedAt, diagram)
+                }
+                .sorted { $0.updatedAt > $1.updatedAt }
+        } catch {
+            debugLog("❌ Failed to load play diagrams: \(error)")
+            return []
+        }
+    }
+
+    func mostRecentPlayDiagram() -> PlayDiagram? {
+        allPlayDiagrams().first?.diagram
+    }
+
+    func deletePlayDiagram(id: UUID) {
+        do {
+            let descriptor = FetchDescriptor<SDPlayDiagram>(predicate: #Predicate { $0.id == id })
+            if let row = try modelContext.fetch(descriptor).first {
+                modelContext.delete(row)
+                try modelContext.save()
+            }
+        } catch {
+            debugLog("❌ Failed to delete play diagram: \(error)")
+        }
+    }
+
     /// Refreshes the `plays` cache from the store.
     func reloadPlays() {
         do {

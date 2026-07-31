@@ -51,61 +51,99 @@ struct DiagramCanvasView: View {
         }
 
         let solid = projection.project(path: paths.solid)
-        context.stroke(Path(solid), with: .color(.white.opacity(0.85)),
+        context.stroke(Path(solid), with: .color(lineColor.opacity(0.9)),
                        style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
 
         let dashed = projection.project(path: paths.dashed)
-        context.stroke(Path(dashed), with: .color(.white.opacity(0.55)),
+        context.stroke(Path(dashed), with: .color(lineColor.opacity(0.6)),
                        style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
     }
 
     private func fillColor(for role: CourtFillRole) -> Color {
+        let theme = model.theme
         switch role {
-        case .floor:          return Color(red: 0.16, green: 0.20, blue: 0.28)
-        case .paint:          return Color(red: 0.22, green: 0.30, blue: 0.44)
-        case .restrictedArea: return Color.white.opacity(0.06)
-        case .centerCircle:   return Color.white.opacity(0.05)
+        case .floor:          return Color(hex: theme.floorHex)
+        case .paint:          return Color(hex: theme.paintHex)
+        case .restrictedArea: return Color(hex: theme.lineHex).opacity(0.06)
+        case .centerCircle:   return Color(hex: theme.lineHex).opacity(0.05)
         }
     }
 
+    private var lineColor: Color { Color(hex: model.theme.lineHex) }
+
     // MARK: - Motion
 
-    /// One polyline per track, sampled through the interpolator so easing and
-    /// curvature show up exactly as they will animate.
+    /// Movement lines with heads, built in COURT FEET then projected.
+    ///
+    /// Lines, arrowheads and screen bars lie on the floor plane, so they go
+    /// through the homography exactly like court markings. Only pucks and
+    /// labels are billboarded — build a head in view space and it floats above
+    /// an oblique court.
     private func drawMotionPaths(_ projection: CourtProjection, into context: inout GraphicsContext) {
-        guard let node = model.activeNode else { return }
+        guard model.showMovementPaths, let node = model.activeNode else { return }
+
         for track in node.tracks {
             let frames = track.sortedKeyframes
-            guard frames.count > 1 else { continue }
-            guard let entity = model.entity(track.entityId) else { continue }
+            guard frames.count > 1, let entity = model.entity(track.entityId) else { continue }
+            // The ball's line comes from possession, not its track.
+            if case .ball = entity.kind, model.possessionEnabled { continue }
+            let tint = color(for: entity)
 
             for index in 0..<(frames.count - 1) {
                 let from = frames[index]
                 let to = frames[index + 1]
-                var path = Path()
-                let samples = 24
+                var courtPoints: [CGPoint] = []
+                let samples = 20
                 for step in 0...samples {
                     let t = from.t + (to.t - from.t) * Double(step) / Double(samples)
-                    guard let point = track.position(at: t) else { continue }
-                    let view = projection.project(point)
-                    if step == 0 { path.move(to: view) } else { path.addLine(to: view) }
+                    if let point = track.position(at: t) { courtPoints.append(point) }
                 }
-                // pathKind on the FROM keyframe governs this segment — the
-                // model's segment convention.
-                context.stroke(path,
-                               with: .color(color(for: entity).opacity(0.9)),
-                               style: strokeStyle(for: from.pathKind))
+                guard courtPoints.count > 1 else { continue }
+                // pathKind on the FROM keyframe governs this segment.
+                drawSegment(courtPoints, kind: from.pathKind, tint: tint,
+                            projection: projection, into: &context)
+            }
+        }
+
+        // Passes derive from possession gaps.
+        if model.possessionEnabled {
+            for pass in node.passes {
+                let a = model.position(of: pass.fromId, at: pass.departure)
+                let b = model.position(of: pass.toId, at: pass.arrival)
+                drawSegment([a, b], kind: .pass, tint: Color(hex: model.theme.ballHex),
+                            projection: projection, into: &context)
             }
         }
     }
 
+    private func drawSegment(_ courtPoints: [CGPoint],
+                             kind: PathKind,
+                             tint: Color,
+                             projection: CourtProjection,
+                             into context: inout GraphicsContext) {
+        let line = MovementGeometry.line(points: courtPoints, kind: kind)
+        context.stroke(Path(projection.project(path: line)),
+                       with: .color(tint.opacity(0.95)),
+                       style: strokeStyle(for: kind))
+
+        guard let head = MovementGeometry.head(points: courtPoints, kind: kind) else { return }
+        let projected = Path(projection.project(path: head))
+        if MovementGeometry.headIsFilled(kind) {
+            context.fill(projected, with: .color(tint))
+        } else {
+            context.stroke(projected, with: .color(tint),
+                           style: StrokeStyle(lineWidth: 3, lineCap: .butt))
+        }
+    }
+
+    /// Coaching convention. Dribble is a real WAVE built in MovementGeometry,
+    /// so it strokes solid here — a dash pattern would read as a pass.
     private func strokeStyle(for kind: PathKind) -> StrokeStyle {
         switch kind {
-        case .run:     return StrokeStyle(lineWidth: 2, lineCap: .round)
-        case .cut:     return StrokeStyle(lineWidth: 2, lineCap: .round, dash: [2, 3])
-        case .dribble: return StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 3])
-        case .pass:    return StrokeStyle(lineWidth: 1.8, lineCap: .round, dash: [7, 5])
-        case .screen:  return StrokeStyle(lineWidth: 3.4, lineCap: .butt)
+        case .run, .cut: return StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+        case .dribble:   return StrokeStyle(lineWidth: 2.0, lineCap: .round, lineJoin: .round)
+        case .pass:      return StrokeStyle(lineWidth: 1.9, lineCap: .round, dash: [7, 5])
+        case .screen:    return StrokeStyle(lineWidth: 2.6, lineCap: .round)
         }
     }
 
@@ -119,7 +157,13 @@ struct DiagramCanvasView: View {
         }
 
         for entity in ordered {
-            let court = model.position(of: entity.id, at: model.playhead)
+            // The ball derives from possession when it is enabled.
+            let court: CGPoint
+            if case .ball = entity.kind, let derived = model.ballPosition(at: model.playhead) {
+                court = derived
+            } else {
+                court = model.position(of: entity.id, at: model.playhead)
+            }
             let centre = projection.project(court)
             let depth = projection.depthScale(at: court)
             let radius = projection.transform.length(puckRadiusFeet) * depth
@@ -137,7 +181,7 @@ struct DiagramCanvasView: View {
 
             switch entity.kind {
             case .ball:
-                context.fill(Path(ellipseIn: puck), with: .color(.orange))
+                context.fill(Path(ellipseIn: puck), with: .color(Color(hex: model.theme.ballHex)))
             case .cone:
                 var triangle = Path()
                 triangle.move(to: CGPoint(x: centre.x, y: centre.y - radius))
@@ -166,7 +210,7 @@ struct DiagramCanvasView: View {
                 let size = projection.labelPointSize(base: baseLabelSize, at: court)
                 let text = Text(label)
                     .font(.system(size: size, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(hex: model.theme.labelHex))
                 context.draw(context.resolve(text), at: centre, anchor: .center)
             }
         }
@@ -179,12 +223,12 @@ struct DiagramCanvasView: View {
     }
 
     private func color(for entity: DiagramEntity) -> Color {
+        let theme = model.theme
         if case .player(let team, _, _) = entity.kind {
-            return team == .offense
-                ? Color(red: 0.20, green: 0.62, blue: 0.98)
-                : Color(red: 0.94, green: 0.36, blue: 0.32)
+            return Color(hex: team == .offense ? theme.offenseHex : theme.defenseHex)
         }
-        return .white
+        if case .ball = entity.kind { return Color(hex: theme.ballHex) }
+        return Color(hex: theme.lineHex)
     }
 
     // MARK: - Interaction
@@ -231,6 +275,24 @@ struct DiagramCanvasView: View {
         return best
     }
 
+    /// Nearest player to a court point, for possession drops.
+    private func hitTestPlayers(_ court: CGPoint) -> UUID? {
+        let tolerance: CGFloat = puckRadiusFeet * 2.2
+        var best: UUID?
+        var bestDistance: CGFloat = .greatestFiniteMagnitude
+        for entity in model.diagram.entities where entity.isPlayer {
+            let point = model.position(of: entity.id, at: model.playhead)
+            let dx: CGFloat = point.x - court.x
+            let dy: CGFloat = point.y - court.y
+            let distance: CGFloat = (dx * dx + dy * dy).squareRoot()
+            if distance <= tolerance && distance < bestDistance {
+                bestDistance = distance
+                best = entity.id
+            }
+        }
+        return best
+    }
+
     private func dragGesture(_ projection: CourtProjection) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
@@ -238,13 +300,30 @@ struct DiagramCanvasView: View {
                 if dragEntityId == nil {
                     let start = projection.unproject(value.startLocation)
                     dragEntityId = hitTest(start, projection: projection)
-                    if let id = dragEntityId { model.selectedEntityId = id }
+                    if let id = dragEntityId {
+                        model.selectedEntityId = id
+                        // ONE undo entry per gesture. Registering per mouse-move
+                        // is the usual mistake and makes undo useless.
+                        model.registerUndo("Move Entity")
+                    }
                 }
                 guard let id = dragEntityId else { return }
                 // Dragging writes a keyframe at the playhead. That is the whole
                 // authoring loop: scrub to a moment, move a player, keyframe.
                 model.setKeyframe(for: id, at: model.playhead, position: court)
             }
-            .onEnded { _ in dragEntityId = nil }
+            .onEnded { value in
+                defer { dragEntityId = nil }
+                guard let id = dragEntityId,
+                      let entity = model.entity(id),
+                      case .ball = entity.kind,
+                      model.possessionEnabled else { return }
+                // Dropping the ball on a player authors possession; dropping it
+                // on a second player later authors the pass between them.
+                let drop = projection.unproject(value.location)
+                if let target = hitTestPlayers(drop) {
+                    model.givePossession(to: target, at: model.playhead)
+                }
+            }
     }
 }

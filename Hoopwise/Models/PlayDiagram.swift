@@ -281,6 +281,50 @@ struct ScalarTrack: Codable, Hashable {
     }
 }
 
+// MARK: - Ball Possession
+
+/// Who holds the ball, over a time range.
+///
+/// This is the TIME-VARYING replacement for the static `hasBall` flag that was
+/// correctly dropped. A boolean was a second source of truth; a possession
+/// interval is not — the ball's position derives from it.
+///
+/// Deliberately NOT magnetic snapping to the nearest offensive player. Naive
+/// proximity grabs whichever player happens to be closest mid-pass and fights
+/// the author. Possession is explicit and authored.
+struct Possession: Identifiable, Codable, Hashable {
+    let id: UUID
+    /// The entity holding the ball.
+    var holderId: UUID
+    /// When possession begins, in node-local seconds.
+    var start: Double
+    /// When possession ends. Nil means "holds until the end of the node".
+    var end: Double?
+
+    init(id: UUID = UUID(), holderId: UUID, start: Double, end: Double? = nil) {
+        self.id = id
+        self.holderId = holderId
+        self.start = start
+        self.end = end
+    }
+
+    func contains(_ time: Double) -> Bool {
+        guard time >= start else { return false }
+        guard let end else { return true }
+        return time <= end
+    }
+}
+
+/// The ball's state at a moment.
+enum BallState: Equatable {
+    /// Held by an entity; position derives from the holder.
+    case held(holderId: UUID)
+    /// Travelling between two possessions.
+    case inFlight(fromId: UUID, toId: UUID, progress: Double)
+    /// No possession authored — the ball follows its own keyframes.
+    case free
+}
+
 // MARK: - Read Tree
 
 /// What an outgoing edge means.
@@ -345,17 +389,58 @@ struct ReadNode: Identifiable, Codable, Hashable {
     var tracks: [Track]
     /// Ordered outgoing edges. Order is the order they appear in the UI.
     var edges: [ReadEdge]
+    /// Who holds the ball, and when. Sorted by start time.
+    var possessions: [Possession]
 
     init(id: UUID = UUID(),
          title: String,
          teachingPoints: [String] = [],
          tracks: [Track] = [],
-         edges: [ReadEdge] = []) {
+         edges: [ReadEdge] = [],
+         possessions: [Possession] = []) {
         self.id = id
         self.title = title
         self.teachingPoints = teachingPoints
         self.tracks = tracks
         self.edges = edges
+        self.possessions = possessions
+    }
+
+    var sortedPossessions: [Possession] { possessions.sorted { $0.start < $1.start } }
+
+    /// Ball state at `time`.
+    ///
+    /// Held when a possession covers it; in flight in the gap between two
+    /// consecutive possessions — that gap IS the pass, and the dashed pass line
+    /// derives from it rather than being drawn separately.
+    func ballState(at time: Double) -> BallState {
+        let sorted = sortedPossessions
+        guard !sorted.isEmpty else { return .free }
+        if let holding = sorted.first(where: { $0.contains(time) }) {
+            return .held(holderId: holding.holderId)
+        }
+        for index in 0..<(sorted.count - 1) {
+            let from = sorted[index], to = sorted[index + 1]
+            guard let fromEnd = from.end, time > fromEnd, time < to.start else { continue }
+            let span = to.start - fromEnd
+            let progress = span > 0 ? (time - fromEnd) / span : 1
+            return .inFlight(fromId: from.holderId, toId: to.holderId, progress: progress)
+        }
+        return .free
+    }
+
+    /// Passes as (from, to, departure, arrival) — each gap between
+    /// consecutive possessions.
+    var passes: [(fromId: UUID, toId: UUID, departure: Double, arrival: Double)] {
+        let sorted = sortedPossessions
+        guard sorted.count > 1 else { return [] }
+        var result: [(UUID, UUID, Double, Double)] = []
+        for index in 0..<(sorted.count - 1) {
+            let from = sorted[index], to = sorted[index + 1]
+            guard let fromEnd = from.end, to.start > fromEnd else { continue }
+            result.append((from.holderId, to.holderId, fromEnd, to.start))
+        }
+        return result
     }
 
     var duration: Double { tracks.map(\.duration).max() ?? 0 }
@@ -397,6 +482,9 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
     /// over two seconds" is the shot, and a single angle cannot express it.
     /// It reuses the same easing machinery as entity motion.
     var camera: ScalarTrack
+    /// Selected colour theme, by name. Stored on the diagram so a play keeps
+    /// the look it was authored for; export can still override per output.
+    var themeName: String
 
     var createdAt: Date
     var updatedAt: Date
@@ -408,6 +496,7 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
          nodes: [ReadNode]? = nil,
          rootNodeId: UUID? = nil,
          camera: ScalarTrack = ScalarTrack(constant: 90),
+         themeName: String = CourtTheme.video.name,
          createdAt: Date = Date(),
          updatedAt: Date = Date()) {
         self.id = id
@@ -419,6 +508,7 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
         self.nodes = nodes ?? [root]
         self.rootNodeId = rootNodeId ?? nodes?.first?.id ?? root.id
         self.camera = camera
+        self.themeName = themeName
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -443,6 +533,38 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
 
     func entity(_ id: UUID) -> DiagramEntity? {
         entities.first { $0.id == id }
+    }
+
+    /// The ball, if one exists. There is at most one — enforced in the model by
+    /// `canAddBall`, not merely disabled in the UI, so no code path can create
+    /// a second and leave possession ambiguous.
+    var ball: DiagramEntity? {
+        entities.first { if case .ball = $0.kind { return true } else { return false } }
+    }
+
+    var canAddBall: Bool { ball == nil }
+
+    /// Where the ball renders at `time`.
+    ///
+    /// While held, it derives from the holder and needs no keyframes at all.
+    /// In flight, it interpolates between the two holders. Free, it follows its
+    /// own track like any other entity.
+    func ballPosition(at time: Double,
+                      in node: ReadNode,
+                      positionOf: (UUID, Double) -> CGPoint) -> CGPoint? {
+        guard let ball else { return nil }
+        switch node.ballState(at: time) {
+        case .held(let holderId):
+            return positionOf(holderId, time)
+        case .inFlight(let fromId, let toId, let progress):
+            let a = positionOf(fromId, time)
+            let b = positionOf(toId, time)
+            let eased = Easing.easeOut.apply(progress)
+            return CGPoint(x: a.x + (b.x - a.x) * eased,
+                           y: a.y + (b.y - a.y) * eased)
+        case .free:
+            return positionOf(ball.id, time)
+        }
     }
 
     /// One complete way the play can unfold: the nodes walked, and the return

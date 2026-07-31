@@ -20,6 +20,8 @@ final class PlayEditorModel: ObservableObject {
     @Published var look: CourtLookParameters = .default
     /// Camera elevation being authored at the playhead, in degrees.
     @Published var cameraElevation: Double = 90
+    /// Easing applied to the next camera keyframe.
+    @Published var cameraEasing: Easing = .easeInOut
 
     /// Minimum length of the scrubbable timeline, so an empty diagram still has
     /// somewhere to place the first keyframe.
@@ -27,6 +29,68 @@ final class PlayEditorModel: ObservableObject {
 
     private var playbackTimer: AnyCancellable?
     private var lastTick: Date?
+    private var autosave: AnyCancellable?
+
+    /// Set by the view so edits reach SwiftData.
+    weak var dataManager: SwiftDataManager?
+    /// Undo target, set by the view.
+    weak var undoManager: UndoManager?
+
+    @Published var diagramName: String = "Untitled Play"
+    @Published var showMovementPaths = true
+    @Published var snapEnabled = true
+    @Published var snapInterval: Double = 0.25
+    /// Keyframes selected in the timeline, as (entityId, keyframeId).
+    @Published var selectedKeyframeIds: Set<UUID> = []
+
+    var theme: CourtTheme {
+        CourtTheme.all.first { $0.name == diagram.themeName } ?? .video
+    }
+
+    func setTheme(_ theme: CourtTheme) {
+        registerUndo("Change Theme")
+        diagram.themeName = theme.name
+        look.theme = theme
+    }
+
+    /// Rounds a time to the snap grid when snapping is on.
+    func snapped(_ time: Double) -> Double {
+        guard snapEnabled, snapInterval > 0 else { return max(0, time) }
+        return max(0, (time / snapInterval).rounded() * snapInterval)
+    }
+
+    // MARK: - Undo
+
+    /// Registers the CURRENT diagram so undo restores it wholesale.
+    ///
+    /// Snapshotting the value tree is the right granularity here: the diagram
+    /// is a document, and a drag must produce ONE undo entry rather than one
+    /// per mouse-move. Callers register before mutating, and drags register
+    /// only on gesture start.
+    func registerUndo(_ name: String) {
+        guard let undoManager else { return }
+        let snapshot = diagram
+        undoManager.registerUndo(withTarget: self) { model in
+            // Re-register so redo works, and so repeated undo walks back.
+            model.registerUndo(name)
+            model.diagram = snapshot
+        }
+        undoManager.setActionName(name)
+    }
+
+    // MARK: - Persistence
+
+    /// Autosaves after edits settle. The Basketball Lab lost work at quit; a
+    /// diagram that only saves on an explicit command would do the same.
+    func startAutosave() {
+        autosave = $diagram
+            .debounce(for: .seconds(1.2), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.save() }
+    }
+
+    func save() {
+        dataManager?.savePlayDiagram(diagram, name: diagramName)
+    }
 
     init(diagram: PlayDiagram) {
         self.diagram = diagram
@@ -56,7 +120,17 @@ final class PlayEditorModel: ObservableObject {
 
     // MARK: - Entities
 
+    /// Whether this kind can still be placed. Only the ball is limited.
+    func canPlace(_ kind: DiagramEntityKind) -> Bool {
+        if case .ball = kind { return diagram.canAddBall }
+        return true
+    }
+
     func addEntity(kind: DiagramEntityKind, at courtPoint: CGPoint, label: String?) {
+        // Model-level guard, not just a disabled button: a second ball would
+        // make possession ambiguous and there is no correct way to resolve it.
+        guard canPlace(kind) else { return }
+        registerUndo("Place Entity")
         let entity = DiagramEntity(kind: kind,
                                    label: label,
                                    homePosition: diagram.space.clamp(courtPoint))
@@ -69,6 +143,7 @@ final class PlayEditorModel: ObservableObject {
 
     func deleteSelectedEntity() {
         guard let id = selectedEntityId else { return }
+        registerUndo("Delete Entity")
         diagram.entities.removeAll { $0.id == id }
         mutateActiveNode { node in
             node.tracks.removeAll { $0.entityId == id }
@@ -117,6 +192,7 @@ final class PlayEditorModel: ObservableObject {
     }
 
     func deleteKeyframe(entityId: UUID, keyframeId: UUID) {
+        registerUndo("Delete Keyframe")
         mutateActiveNode { node in
             guard let trackIndex = node.tracks.firstIndex(where: { $0.entityId == entityId })
             else { return }
@@ -141,6 +217,7 @@ final class PlayEditorModel: ObservableObject {
                         keyframeId: UUID,
                         easing: Easing? = nil,
                         pathKind: PathKind? = nil) {
+        registerUndo(easing != nil ? "Change Easing" : "Change Path Kind")
         mutateActiveNode { node in
             guard let trackIndex = node.tracks.firstIndex(where: { $0.entityId == entityId }),
                   let frameIndex = node.tracks[trackIndex].keyframes
@@ -163,19 +240,83 @@ final class PlayEditorModel: ObservableObject {
         return track.sortedKeyframes.last?.id == keyframe.id
     }
 
+    // MARK: - Possession
+
+    /// Whether the ball follows possession or its own keyframes.
+    @Published var possessionEnabled = true
+
+    var possessions: [Possession] { activeNode?.sortedPossessions ?? [] }
+
+    /// Gives the ball to `holderId` from the playhead onward.
+    ///
+    /// Closes any possession still open, which is what authors a pass: A's
+    /// possession ends at t1 and B's begins at t2, and the dashed pass line
+    /// derives from that gap.
+    func givePossession(to holderId: UUID, at time: Double, flightTime: Double = 0.4) {
+        mutateActiveNode { node in
+            for index in node.possessions.indices where node.possessions[index].end == nil {
+                node.possessions[index].end = max(node.possessions[index].start, time)
+            }
+            let start = node.possessions.isEmpty ? time : time + flightTime
+            node.possessions.append(Possession(holderId: holderId, start: start))
+            node.possessions.sort { $0.start < $1.start }
+        }
+    }
+
+    func clearPossessions() {
+        mutateActiveNode { $0.possessions.removeAll() }
+    }
+
+    func ballState(at time: Double) -> BallState {
+        activeNode?.ballState(at: time) ?? .free
+    }
+
+    /// Ball position honouring possession when enabled.
+    func ballPosition(at time: Double) -> CGPoint? {
+        guard let node = activeNode, let ball = diagram.ball else { return nil }
+        guard possessionEnabled else { return position(of: ball.id, at: time) }
+        return diagram.ballPosition(at: time, in: node) { [weak self] id, t in
+            self?.position(of: id, at: t) ?? .zero
+        }
+    }
+
     // MARK: - Camera
 
     /// Records the current elevation as a camera keyframe at the playhead.
     func setCameraKeyframe() {
+        registerUndo("Set Camera Keyframe")
         var frames = diagram.camera.keyframes
         if let index = frames.firstIndex(where: { abs($0.t - playhead) < 0.02 }) {
             frames[index].value = cameraElevation
+            frames[index].easing = cameraEasing
         } else {
-            frames.append(ScalarKeyframe(t: playhead, value: cameraElevation))
+            frames.append(ScalarKeyframe(t: playhead, value: cameraElevation, easing: cameraEasing))
             frames.sort { $0.t < $1.t }
         }
         diagram.camera.keyframes = frames
         diagram.updatedAt = Date()
+    }
+
+    func clearCameraTrack() {
+        registerUndo("Clear Camera Track")
+        diagram.camera.keyframes = []
+    }
+
+    /// Updates one camera keyframe's easing from the timeline.
+    func updateCameraKeyframe(id: UUID, easing: Easing) {
+        registerUndo("Change Camera Easing")
+        guard let index = diagram.camera.keyframes.firstIndex(where: { $0.id == id }) else { return }
+        diagram.camera.keyframes[index].easing = easing
+    }
+
+    /// Replaces the whole diagram, e.g. when reopening stored work.
+    func load(_ stored: PlayDiagram) {
+        diagram = stored
+        activeNodeId = stored.rootNodeId
+        selectedEntityId = nil
+        selectedKeyframeIds = []
+        playhead = 0
+        look.theme = CourtTheme.all.first { $0.name == stored.themeName } ?? .video
     }
 
     /// Elevation to render at the playhead. While scrubbing, the authored track
@@ -226,7 +367,37 @@ final class PlayEditorModel: ObservableObject {
     // MARK: - Whole-diagram operations
 
     func mirror() {
+        registerUndo("Mirror Play")
         diagram = diagram.mirroredHorizontally()
+    }
+
+    /// Deletes every selected keyframe.
+    func deleteSelectedKeyframes() {
+        guard !selectedKeyframeIds.isEmpty else { return }
+        registerUndo("Delete Keyframes")
+        mutateActiveNode { node in
+            for index in node.tracks.indices {
+                node.tracks[index].keyframes.removeAll { selectedKeyframeIds.contains($0.id) }
+            }
+            node.tracks.removeAll { $0.keyframes.isEmpty }
+        }
+        selectedKeyframeIds.removeAll()
+    }
+
+    /// Nudges every selected keyframe in time — arrow keys.
+    func nudgeSelectedKeyframes(by delta: Double) {
+        guard !selectedKeyframeIds.isEmpty else { return }
+        registerUndo("Nudge Keyframes")
+        mutateActiveNode { node in
+            for trackIndex in node.tracks.indices {
+                for frameIndex in node.tracks[trackIndex].keyframes.indices
+                where selectedKeyframeIds.contains(node.tracks[trackIndex].keyframes[frameIndex].id) {
+                    let current = node.tracks[trackIndex].keyframes[frameIndex].t
+                    node.tracks[trackIndex].keyframes[frameIndex].t = max(0, current + delta)
+                }
+                node.tracks[trackIndex].keyframes.sort { $0.t < $1.t }
+            }
+        }
     }
 
     func setCourt(standard: CourtStandard? = nil, mode: CourtMode? = nil) {

@@ -5,7 +5,10 @@ import SwiftUI
 /// Opens on an empty diagram so there is always something authorable. Wiring to
 /// the playbook arrives with the read-tree navigator.
 struct PlayEditorView: View {
+    @EnvironmentObject private var dataManager: DataManager
+    @Environment(\.undoManager) private var systemUndoManager
     @StateObject private var model: PlayEditorModel
+    /// Sticky: stays active until deselected or Escape.
     @State private var placementKind: DiagramEntityKind?
     @State private var showingLookPanel = false
 
@@ -17,9 +20,9 @@ struct PlayEditorView: View {
     var body: some View {
         VSplitView {
             HStack(spacing: 0) {
-                DiagramCanvasView(model: model, placementKind: placementKind) {
-                    placementKind = nil
-                }
+                // Sticky tool: placing does NOT clear the selection, so a
+                // whole lineup goes down without re-picking each time.
+                DiagramCanvasView(model: model, placementKind: placementKind) { }
                 .frame(minWidth: 420, minHeight: 320)
 
                 Divider()
@@ -31,7 +34,35 @@ struct PlayEditorView: View {
                 .frame(minHeight: 150, idealHeight: 190)
         }
         .toolbar { toolbarContent }
-        .navigationTitle("Play Editor")
+        .navigationTitle(model.diagramName)
+        .onAppear {
+            model.dataManager = dataManager
+            model.undoManager = systemUndoManager
+            // Reopen the most recent diagram so quitting does not lose work.
+            if let stored = dataManager.mostRecentPlayDiagram() {
+                model.load(stored)
+            }
+            model.startAutosave()
+        }
+        .onChange(of: systemUndoManager) { _, manager in model.undoManager = manager }
+        .onDisappear { model.save() }
+        .focusable()
+        .onKeyPress(.escape) {
+            placementKind = nil
+            return .handled
+        }
+        .onKeyPress(.delete) {
+            model.deleteSelectedKeyframes()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            model.nudgeSelectedKeyframes(by: -(model.snapEnabled ? model.snapInterval : 0.05))
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            model.nudgeSelectedKeyframes(by: model.snapEnabled ? model.snapInterval : 0.05)
+            return .handled
+        }
     }
 
     // MARK: - Toolbar
@@ -64,6 +95,26 @@ struct PlayEditorView: View {
             }
             .help("Flip the play across the court, swapping left/right in teaching points")
 
+            Toggle(isOn: $model.showMovementPaths) {
+                Label("Paths", systemImage: "scribble")
+            }
+            .toggleStyle(.button)
+            .help("Show or hide movement paths — off gives a clean court for stills")
+
+            Toggle(isOn: $model.possessionEnabled) {
+                Label("Possession", systemImage: "hand.raised.fill")
+            }
+            .toggleStyle(.button)
+            .help("Ball follows possession. Off lets you keyframe it freehand.")
+
+            Picker("Theme", selection: Binding(
+                get: { model.theme },
+                set: { model.setTheme($0) })) {
+                ForEach(CourtTheme.all) { Text($0.name).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+
             Button { showingLookPanel.toggle() } label: {
                 Label("Look", systemImage: "slider.horizontal.3")
             }
@@ -85,14 +136,22 @@ struct PlayEditorView: View {
 
     private func paletteButton(_ title: String, _ icon: String,
                                _ tint: Color, _ kind: DiagramEntityKind) -> some View {
-        Button {
-            placementKind = (placementKind == kind) ? nil : kind
+        let isActive = placementKind == kind
+        let available = model.canPlace(kind)
+        return Button {
+            placementKind = isActive ? nil : kind
         } label: {
             Label(title, systemImage: icon)
                 .labelStyle(.iconOnly)
-                .foregroundStyle(placementKind == kind ? Color.accentColor : tint)
+                .foregroundStyle(isActive ? Color.white : (available ? tint : Color.secondary))
+                .padding(.horizontal, 5).padding(.vertical, 3)
+                .background(isActive ? Color.accentColor : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 5))
         }
-        .help(placementKind == kind ? "Click the court to place — click again to cancel" : "Place \(title)")
+        .disabled(!available)
+        .help(available
+              ? (isActive ? "\(title) tool active — keeps placing until Escape" : "Place \(title)")
+              : "Only one ball per diagram")
     }
 
     // MARK: - Inspector
@@ -121,9 +180,16 @@ struct PlayEditorView: View {
                 }
                 Slider(value: $model.cameraElevation,
                        in: model.look.minElevationDegrees...90)
+                Picker("Ease", selection: $model.cameraEasing) {
+                    ForEach(Easing.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
                 Button("Set Camera Keyframe") { model.setCameraKeyframe() }
                     .controlSize(.small)
-                Text("90° is plan view. Keyframe two values to author the oblique-to-top-down move.")
+                if !model.diagram.camera.isStatic {
+                    Button("Clear Camera Track", role: .destructive) { model.clearCameraTrack() }
+                        .controlSize(.small)
+                }
+                Text("90° is plan view. Keyframe two values to author the oblique-to-top-down move — the ease is what stops it reading as mechanical.")
                     .font(.caption2).foregroundStyle(.secondary)
             }
 
@@ -195,6 +261,17 @@ struct PlayEditorView: View {
                 Slider(value: $model.look.minLabelPointSize, in: 5...16, step: 0.5)
                 Text("Labels stop shrinking here. Billboarding fixes orientation, not size — far-side numbers go unreadable in a 1080p export without a floor.")
                     .font(.caption2).foregroundStyle(.secondary)
+            }
+            Section("Timeline") {
+                Toggle("Snap to grid", isOn: $model.snapEnabled)
+                Picker("Grid", selection: $model.snapInterval) {
+                    Text("1/20s").tag(0.05)
+                    Text("1/10s").tag(0.1)
+                    Text("1/4s").tag(0.25)
+                    Text("1/2s").tag(0.5)
+                    Text("1s").tag(1.0)
+                }
+                .disabled(!model.snapEnabled)
             }
             Section {
                 Button("Reset to Defaults") { model.look = .default }

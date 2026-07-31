@@ -16,6 +16,40 @@ import CoreGraphics
 //        affine CourtTransform, exactly.
 //    0 = at floor level (degenerate; clamped well before this).
 
+/// A named colour scheme. Print and video want opposite palettes: a sheet
+/// handed to a team on white paper wants a light floor with dark lines; video
+/// wants white line work on a dark floor. Stored on the diagram and selectable
+/// per export.
+struct CourtTheme: Codable, Hashable, Identifiable {
+    var id: String { name }
+    var name: String
+    /// Hex strings so the theme survives in the Codable JSON blob without
+    /// dragging a UI colour type into the model layer.
+    var floorHex: String
+    var paintHex: String
+    var lineHex: String
+    var offenseHex: String
+    var defenseHex: String
+    var ballHex: String
+    var labelHex: String
+
+    /// White line work on a dark floor.
+    static let video = CourtTheme(
+        name: "Video",
+        floorHex: "#232B3A", paintHex: "#33445F", lineHex: "#FFFFFF",
+        offenseHex: "#34A0F7", defenseHex: "#F05C4F", ballHex: "#FF9F0A",
+        labelHex: "#FFFFFF")
+
+    /// Dark line work on a light floor, for paper.
+    static let print = CourtTheme(
+        name: "Print",
+        floorHex: "#FFFFFF", paintHex: "#ECEFF4", lineHex: "#1C1C1E",
+        offenseHex: "#1B4F9C", defenseHex: "#A32820", ballHex: "#C05600",
+        labelHex: "#FFFFFF")
+
+    static let all: [CourtTheme] = [.video, .print]
+}
+
 /// Tunable look parameters for the oblique camera.
 ///
 /// Deliberately NOT baked into CourtProjection. These are look decisions the
@@ -31,6 +65,8 @@ struct CourtLookParameters: Codable, Hashable {
     /// inverse degrades near the horizon and the diagram stops being usable
     /// for placement.
     var minElevationDegrees: Double
+    /// Colour scheme.
+    var theme: CourtTheme
     /// Labels never render smaller than this, in POINTS.
     ///
     /// Billboarding fixes orientation, not size. At 35° a far-baseline player
@@ -42,11 +78,13 @@ struct CourtLookParameters: Codable, Hashable {
     init(maxConvergence: CGFloat = 0.55,
          minDepthScale: CGFloat = 0.45,
          minElevationDegrees: Double = 25,
-         minLabelPointSize: CGFloat = 9) {
+         minLabelPointSize: CGFloat = 9,
+         theme: CourtTheme = .video) {
         self.maxConvergence = maxConvergence
         self.minDepthScale = minDepthScale
         self.minElevationDegrees = minElevationDegrees
         self.minLabelPointSize = minLabelPointSize
+        self.theme = theme
     }
 
     static let `default` = CourtLookParameters()
