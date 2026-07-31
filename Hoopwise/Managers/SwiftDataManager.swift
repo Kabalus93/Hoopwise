@@ -2364,6 +2364,51 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// Writes playbook metadata onto the play that owns a diagram.
+    ///
+    /// Family lives in `formation` (the field the iOS UI already displays),
+    /// the note in `playDescription`, and the thumbnail PATH in the legacy
+    /// `diagramUrl` — bytes stay on disk, never in CloudKit.
+    func updatePlayMetadata(playId: UUID,
+                            name: String,
+                            family: String,
+                            tags: [String],
+                            note: String,
+                            thumbnailPath: String?) {
+        do {
+            let descriptor = FetchDescriptor<SDPlay>(predicate: #Predicate { $0.id == playId })
+            guard let play = try modelContext.fetch(descriptor).first else { return }
+            play.name = name
+            play.formation = family
+            play.tags = tags
+            play.playDescription = note
+            if let thumbnailPath { play.diagramUrl = thumbnailPath }
+            // Family implies the closest category so iOS grouping stays sane.
+            switch family {
+            case "SLOB", "BLOB":   play.category = .outOfBounds
+            case "Press Break":    play.category = .pressBreak
+            default:               play.category = .setPlays
+            }
+            play.updatedAt = Date()
+            try modelContext.save()
+            reloadPlays()
+        } catch {
+            debugLog("❌ Failed to update play metadata: \(error)")
+        }
+    }
+
+    /// Records a diagram as a variation of another.
+    func setVariant(diagramId: UUID, variant: PlayVariant) {
+        do {
+            let descriptor = FetchDescriptor<SDPlayDiagram>(predicate: #Predicate { $0.id == diagramId })
+            guard let row = try modelContext.fetch(descriptor).first else { return }
+            row.variant = variant
+            try modelContext.save()
+        } catch {
+            debugLog("❌ Failed to set variant: \(error)")
+        }
+    }
+
     /// All stored diagrams, most recently updated first.
     func allPlayDiagrams() -> [(id: UUID, name: String, updatedAt: Date, diagram: PlayDiagram)] {
         do {

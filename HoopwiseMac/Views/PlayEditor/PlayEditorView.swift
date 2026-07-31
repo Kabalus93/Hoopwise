@@ -11,6 +11,9 @@ struct PlayEditorView: View {
     /// Sticky: stays active until deselected or Escape.
     @State private var placementKind: DiagramEntityKind?
     @State private var showingLookPanel = false
+    @State private var showingSaveSheet = false
+    @State private var showingVariationSheet = false
+    @State private var variationName = ""
     /// True while a text field owns focus, so single-letter shortcuts stand
     /// down. Queried from the responder chain rather than a @FocusState —
     /// the @FocusState was never bound to any field, so it was permanently
@@ -96,6 +99,23 @@ struct PlayEditorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macEditorToggleSticky)) { _ in
             model.possessionEnabled.toggle()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorSave)) { _ in
+            if model.savedToPlaybook { model.saveToPlaybook() }
+            else { showingSaveSheet = true }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macOpenPlayInEditor)) { note in
+            if let id = note.object as? UUID,
+               let stored = dataManager.allPlayDiagrams().first(where: { $0.id == id }) {
+                model.save()
+                model.load(stored.diagram, name: stored.name)
+            }
+        }
+        .onChange(of: model.isDirty) { _, dirty in
+            // Standard macOS edited dot in the window proxy.
+            NSApp.keyWindow?.isDocumentEdited = dirty
+        }
+        .sheet(isPresented: $showingSaveSheet) { saveSheet }
+        .sheet(isPresented: $showingVariationSheet) { variationSheet }
         .focusable()
         .onKeyPress(.escape) {
             // Mid ball-drag, Esc cancels the drag cleanly; otherwise it
@@ -224,6 +244,17 @@ struct PlayEditorView: View {
             }
             .toggleStyle(.button)
             .help("Show what the editor resolves at the playhead")
+
+            Divider()
+
+            Button {
+                // First save collects metadata; later saves update in place.
+                if model.savedToPlaybook { model.saveToPlaybook() }
+                else { showingSaveSheet = true }
+            } label: {
+                Label("Save to Playbook", systemImage: "books.vertical")
+            }
+            .help("Save to Playbook (⌘S)")
         }
     }
 
@@ -405,6 +436,60 @@ struct PlayEditorView: View {
                     .controlSize(.small)
             }
         }
+    }
+
+    // MARK: - Save Sheet
+
+    private var saveSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Save to Playbook").font(.headline)
+            TextField("Play name", text: $model.diagramName)
+            Picker("Set family", selection: $model.playFamily) {
+                ForEach(PlayEditorModel.setFamilies, id: \.self) { Text($0).tag($0) }
+            }
+            TextField("Tags (comma separated)", text: $model.playTags)
+            TextField("Note (optional)", text: $model.playNote)
+            HStack {
+                Button("Cancel") { showingSaveSheet = false }
+                Spacer()
+                Button("Save As Variation…") {
+                    showingSaveSheet = false
+                    variationName = model.diagramName + " variation"
+                    showingVariationSheet = true
+                }
+                .disabled(!model.savedToPlaybook)
+                Button("Save") {
+                    model.saveToPlaybook()
+                    showingSaveSheet = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.diagramName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(18)
+        .frame(width: 360)
+    }
+
+    private var variationSheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Save As Variation").font(.headline)
+            Text("Creates a linked copy that records this play as its parent, so the family stays connected in the Playbook.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextField("Variation name", text: $variationName)
+            HStack {
+                Button("Cancel") { showingVariationSheet = false }
+                Spacer()
+                Button("Create") {
+                    model.saveAsVariation(named: variationName)
+                    showingVariationSheet = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(variationName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(18)
+        .frame(width: 380)
     }
 
     // MARK: - Debug Panel

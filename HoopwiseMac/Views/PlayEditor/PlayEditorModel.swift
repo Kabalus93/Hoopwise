@@ -72,6 +72,7 @@ final class PlayEditorModel: ObservableObject {
     /// per mouse-move. Callers register before mutating, and drags register
     /// only on gesture start.
     func registerUndo(_ name: String) {
+        isDirty = true
         guard let undoManager else { return }
         let snapshot = diagram
         undoManager.registerUndo(withTarget: self) { model in
@@ -639,6 +640,20 @@ final class PlayEditorModel: ObservableObject {
         stop()
         repairPossessions()
         look.theme = CourtTheme.all.first { $0.name == stored.themeName } ?? .video
+        // Restore playbook metadata from the owning play.
+        if let play = dataManager?.plays.first(where: { $0.id == stored.playId }) {
+            savedToPlaybook = !play.formation.isEmpty
+            playFamily = play.formation.isEmpty
+                ? (UserDefaults.standard.string(forKey: "lastPlayFamily") ?? "Horns")
+                : play.formation
+            playTags = play.tags.joined(separator: ", ")
+            playNote = play.description
+        } else {
+            savedToPlaybook = false
+            playTags = ""
+            playNote = ""
+        }
+        isDirty = false
     }
 
     /// Elevation to render at the playhead. While scrubbing, the authored track
@@ -891,6 +906,71 @@ final class PlayEditorModel: ObservableObject {
         diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].t = max(0, time)
         diagram.nodes[nodeIndex].tracks[trackIndex].keyframes.sort { $0.t < $1.t }
         diagram.updatedAt = Date()
+    }
+
+    // MARK: - Save to Playbook
+
+    static let setFamilies = ["Horns", "1-4 High", "SLOB", "BLOB", "Press Break", "Custom"]
+
+    @Published var playFamily: String =
+        UserDefaults.standard.string(forKey: "lastPlayFamily") ?? "Horns"
+    @Published var playTags: String = ""
+    @Published var playNote: String = ""
+    /// Whether this play has been through the Save to Playbook sheet once.
+    @Published var savedToPlaybook = false
+    /// Changes since the last playbook save — drives the window's edited dot.
+    /// The DIAGRAM itself is still autosaved continuously; this tracks the
+    /// coach-facing "have I published my latest edits" state only.
+    @Published var isDirty = false
+
+    func saveToPlaybook() {
+        save()
+        let tags = playTags.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let thumbnail = PlayThumbnailRenderer.renderAndSave(diagram: diagram,
+                                                            theme: theme,
+                                                            playId: diagram.playId)
+        dataManager?.updatePlayMetadata(playId: diagram.playId,
+                                        name: diagramName,
+                                        family: playFamily,
+                                        tags: tags,
+                                        note: playNote,
+                                        thumbnailPath: thumbnail)
+        UserDefaults.standard.set(playFamily, forKey: "lastPlayFamily")
+        savedToPlaybook = true
+        isDirty = false
+    }
+
+    /// Creates a linked variation: a full copy whose PlayVariant records the
+    /// parent, so play families stay connected in the Playbook.
+    func saveAsVariation(named name: String) {
+        save()
+        let copy = PlayDiagram(playId: UUID(),
+                               space: diagram.space,
+                               entities: diagram.entities,
+                               nodes: diagram.nodes,
+                               rootNodeId: diagram.rootNodeId,
+                               camera: diagram.camera,
+                               themeName: diagram.themeName)
+        dataManager?.savePlayDiagram(copy, name: name)
+        if let row = dataManager?.allPlayDiagrams().first(where: { $0.id == copy.id }) {
+            _ = row
+        }
+        dataManager?.setVariant(diagramId: copy.id,
+                                variant: PlayVariant(name: name,
+                                                     baseDiagramId: diagram.id,
+                                                     diagramId: copy.id))
+        let thumbnail = PlayThumbnailRenderer.renderAndSave(diagram: copy,
+                                                            theme: theme,
+                                                            playId: copy.playId)
+        dataManager?.updatePlayMetadata(playId: copy.playId, name: name,
+                                        family: playFamily,
+                                        tags: [], note: "",
+                                        thumbnailPath: thumbnail)
+        load(copy, name: name)
+        savedToPlaybook = true
+        isDirty = false
     }
 
     // MARK: - AE-style keyframe interaction

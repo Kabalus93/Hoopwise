@@ -32,6 +32,11 @@ struct HoopwiseMacApp: App {
             // Court editor commands, so every shortcut is discoverable rather
             // than only living in a tooltip.
             CommandMenu("Play") {
+                Button("Save to Playbook") {
+                    NotificationCenter.default.post(name: .macEditorSave, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                Divider()
                 Button("Play / Pause") {
                     NotificationCenter.default.post(name: .macEditorTogglePlay, object: nil)
                 }
@@ -83,6 +88,8 @@ extension Notification.Name {
     static let macEditorMirror = Notification.Name("MacEditorMirror")
     static let macEditorTogglePaths = Notification.Name("MacEditorTogglePaths")
     static let macEditorToggleSticky = Notification.Name("MacEditorToggleSticky")
+    static let macEditorSave = Notification.Name("MacEditorSave")
+    static let macOpenPlayInEditor = Notification.Name("MacOpenPlayInEditor")
 }
 
 struct MacSplashView: View {

@@ -19,8 +19,79 @@ struct PlaybookMacView: View {
         }
     }
 
+    /// Saved court plays, thumbnail-first — the editor's output surfaced where
+    /// the playbook lives. Clicking one opens it back in the Court Editor.
+    @ViewBuilder
+    private var courtPlaysSection: some View {
+        let rows = dataManager.allPlayDiagrams()
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("COURT PLAYS")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(rows, id: \.id) { row in
+                            courtPlayCard(row)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func courtPlayCard(_ row: (id: UUID, name: String, updatedAt: Date, diagram: PlayDiagram)) -> some View {
+        let play = dataManager.plays.first { $0.id == row.diagram.playId }
+        return Button {
+            NotificationCenter.default.post(name: .macOpenPlayInEditor, object: row.id)
+            // RootView's listener expects the rawValue string.
+            NotificationCenter.default.post(name: .macSidebarSelection,
+                                            object: SidebarSection.courtEditor.rawValue)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Group {
+                    if let path = play?.diagramUrl, let image = NSImage(contentsOfFile: path) {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        ZStack {
+                            Rectangle().fill(.quaternary)
+                            Image(systemName: "sportscourt").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(width: 132, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+
+                Text(row.name).font(.caption.weight(.medium)).lineLimit(1)
+                HStack(spacing: 4) {
+                    if let family = play?.formation, !family.isEmpty {
+                        Text(family)
+                            .font(.system(size: 8, weight: .semibold))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(.quaternary, in: .capsule)
+                    }
+                    Text("\(row.diagram.nodeCount) read\(row.diagram.nodeCount == 1 ? "" : "s")")
+                        .font(.system(size: 8)).foregroundStyle(.secondary)
+                    Text(String(format: "%.1fs", row.diagram.totalDuration))
+                        .font(.system(size: 8)).foregroundStyle(.secondary)
+                }
+                if let tags = play?.tags, !tags.isEmpty {
+                    Text(tags.prefix(3).joined(separator: " · "))
+                        .font(.system(size: 8)).foregroundStyle(.tertiary).lineLimit(1)
+                }
+            }
+            .frame(width: 132)
+        }
+        .buttonStyle(.plain)
+    }
+
     private var sidebar: some View {
         VStack(spacing: 0) {
+            courtPlaysSection
+            Divider()
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField("Search plays", text: $search).textFieldStyle(.plain)
