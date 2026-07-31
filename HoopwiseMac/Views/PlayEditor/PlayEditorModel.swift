@@ -908,6 +908,13 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - Ghost trails
+
+    /// Show each moving entity's recent positions at decaying opacity during
+    /// playback and scrub — reads as motion in a still frame, which is what
+    /// the video explainers need.
+    @Published var showGhostTrails = false
+
     // MARK: - Save to Playbook
 
     static let setFamilies = ["Horns", "1-4 High", "SLOB", "BLOB", "Press Break", "Custom"]

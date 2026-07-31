@@ -28,6 +28,7 @@ struct DiagramCanvasView: View {
             Canvas { context, _ in
                 draw(court: projection, into: &context)
                 drawMotionPaths(projection, into: &context)
+                drawGhostTrails(projection, into: &context)
                 drawEntities(projection, into: &context)
                 drawBallDragPreview(projection, into: &context)
             }
@@ -309,6 +310,39 @@ struct DiagramCanvasView: View {
     private func markRadius(for entity: DiagramEntity, puckRadius: CGFloat) -> CGFloat {
         if case .ball = entity.kind { return puckRadius * 0.68 }
         return puckRadius
+    }
+
+    /// Trailing positions at decaying opacity. Drawn beneath the entities so
+    /// the live puck always reads on top. Entities that have not moved leave
+    /// no trail — the samples coincide and paint inside the puck.
+    private func drawGhostTrails(_ projection: CourtProjection,
+                                 into context: inout GraphicsContext) {
+        guard model.showGhostTrails else { return }
+        let sampleCount = 8
+        let sampleInterval = 0.12
+        for entity in model.diagram.entities where !model.isHidden(entity.id) {
+            guard entity.isPlayer || { if case .ball = entity.kind { return true }; return false }() else { continue }
+            let tint = color(for: entity)
+            let baseOpacity = model.opacity(for: entity.id)
+            for index in 1...sampleCount {
+                let t = model.playhead - Double(index) * sampleInterval
+                guard t >= 0 else { break }
+                let court: CGPoint
+                if case .ball = entity.kind, let derived = model.ballPosition(at: t) {
+                    court = derived
+                } else {
+                    court = model.resolvedPosition(of: entity.id, at: t)
+                }
+                let centre = projection.project(court)
+                let depth = projection.depthScale(at: court)
+                let radius = projection.transform.length(puckRadiusFeet) * depth
+                    * (0.85 - CGFloat(index) * 0.05)
+                let fade = baseOpacity * 0.38 * (1 - Double(index) / Double(sampleCount + 1))
+                context.fill(Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius,
+                                                    width: radius * 2, height: radius * 2)),
+                             with: .color(tint.opacity(fade)))
+            }
+        }
     }
 
     /// Live feedback while dragging the ball: enlarged glowing glyph under the

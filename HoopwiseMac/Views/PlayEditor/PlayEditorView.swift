@@ -226,6 +226,12 @@ struct PlayEditorView: View {
             .toggleStyle(.button)
             .help("Ball follows possession (S). Off lets you keyframe it freehand.")
 
+            Toggle(isOn: $model.showGhostTrails) {
+                Label("Trails", systemImage: "circle.dotted.and.circle")
+            }
+            .toggleStyle(.button)
+            .help("Ghost trails — recent positions at decaying opacity")
+
             Button { model.mirror() } label: {
                 Label("Mirror", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
             }
