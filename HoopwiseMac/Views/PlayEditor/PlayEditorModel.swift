@@ -1376,6 +1376,178 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    // MARK: - Inspector plumbing
+
+    /// Camera keyframe selection, from the timeline's camera lane.
+    @Published var selectedCameraKeyframeId: UUID?
+
+    struct KeyframeInfo {
+        let nodeId: UUID
+        let entityId: UUID
+        let keyframe: Keyframe
+        let absoluteTime: Double
+    }
+
+    func keyframeInfo(for keyframeId: UUID) -> KeyframeInfo? {
+        for step in activeSteps {
+            for track in step.node.tracks {
+                if let frame = track.keyframes.first(where: { $0.id == keyframeId }) {
+                    return KeyframeInfo(nodeId: step.node.id, entityId: track.entityId,
+                                        keyframe: frame, absoluteTime: step.startsAt + frame.t)
+                }
+            }
+        }
+        return nil
+    }
+
+    /// The selected KEYFRAMES (possession events filtered out).
+    var selectedKeyframeInfos: [KeyframeInfo] {
+        selectedKeyframeIds.compactMap { keyframeInfo(for: $0) }
+    }
+
+    var selectedPossessionEvents: [PossessionEvent] {
+        possessionEvents.filter { selectedKeyframeIds.contains($0.id) }
+    }
+
+    /// Shared value across the keyframe selection, nil when mixed ("—").
+    func sharedEasing() -> Easing? {
+        let values = Set(selectedKeyframeInfos.map(\.keyframe.easing))
+        return values.count == 1 ? values.first : nil
+    }
+    func sharedPathKind() -> PathKind? {
+        let values = Set(selectedKeyframeInfos.map(\.keyframe.pathKind))
+        return values.count == 1 ? values.first : nil
+    }
+    func sharedPathStyle() -> PathStyle? {
+        let values = Set(selectedKeyframeInfos.map(\.keyframe.pathStyle))
+        return values.count == 1 ? values.first : nil
+    }
+
+    /// Multi-selection edits: mixed values display as em dash; editing applies
+    /// to ALL, one undoable action.
+    func applyEasingToSelection(_ easing: Easing) {
+        registerUndo("Change Easing")
+        for info in selectedKeyframeInfos {
+            updateKeyframeNoUndo(nodeId: info.nodeId, entityId: info.entityId,
+                                 keyframeId: info.keyframe.id, easing: easing)
+        }
+    }
+    func applyPathKindToSelection(_ kind: PathKind) {
+        registerUndo("Change Path Type")
+        for info in selectedKeyframeInfos {
+            updateKeyframeNoUndo(nodeId: info.nodeId, entityId: info.entityId,
+                                 keyframeId: info.keyframe.id, pathKind: kind)
+        }
+    }
+    func applyPathStyleToSelection(_ style: PathStyle) {
+        registerUndo("Change Path Shape")
+        for info in selectedKeyframeInfos {
+            updateKeyframeNoUndo(nodeId: info.nodeId, entityId: info.entityId,
+                                 keyframeId: info.keyframe.id, pathStyle: style)
+        }
+    }
+
+    private func updateKeyframeNoUndo(nodeId: UUID, entityId: UUID, keyframeId: UUID,
+                                      easing: Easing? = nil,
+                                      pathKind: PathKind? = nil,
+                                      pathStyle: PathStyle? = nil) {
+        guard let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == nodeId }),
+              let trackIndex = diagram.nodes[nodeIndex].tracks.firstIndex(where: { $0.entityId == entityId }),
+              let frameIndex = diagram.nodes[nodeIndex].tracks[trackIndex].keyframes
+                .firstIndex(where: { $0.id == keyframeId }) else { return }
+        if let easing { diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].easing = easing }
+        if let pathKind { diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].pathKind = pathKind }
+        if let pathStyle { diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].pathStyle = pathStyle }
+        diagram.updatedAt = Date()
+    }
+
+    /// Type-to-edit keyframe time (absolute). One undo.
+    func setKeyframeAbsoluteTime(_ keyframeId: UUID, to absolute: Double) {
+        guard let info = keyframeInfo(for: keyframeId),
+              let step = activeSteps.first(where: { $0.node.id == info.nodeId }) else { return }
+        registerUndo("Set Keyframe Time")
+        moveKeyframe(nodeId: info.nodeId, entityId: info.entityId,
+                     keyframeId: keyframeId, toLocal: max(0, absolute - step.startsAt))
+    }
+
+    /// Numeric position edit for a keyframe. One undo.
+    func setKeyframePosition(_ keyframeId: UUID, to position: CGPoint) {
+        guard let info = keyframeInfo(for: keyframeId),
+              let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == info.nodeId }),
+              let trackIndex = diagram.nodes[nodeIndex].tracks.firstIndex(where: { $0.entityId == info.entityId }),
+              let frameIndex = diagram.nodes[nodeIndex].tracks[trackIndex].keyframes
+                .firstIndex(where: { $0.id == keyframeId }) else { return }
+        registerUndo("Move Keyframe")
+        diagram.nodes[nodeIndex].tracks[trackIndex].keyframes[frameIndex].position =
+            diagram.space.clamp(position)
+        diagram.updatedAt = Date()
+    }
+
+    func setEntityColor(_ entityId: UUID, hex: String?) {
+        guard let index = diagram.entities.firstIndex(where: { $0.id == entityId }) else { return }
+        registerUndo("Change Color")
+        diagram.entities[index].colorHex = hex
+        diagram.updatedAt = Date()
+    }
+
+    func setEntitySize(_ entityId: UUID, scale: CGFloat) {
+        guard let index = diagram.entities.firstIndex(where: { $0.id == entityId }) else { return }
+        registerUndo("Change Size")
+        diagram.entities[index].sizeScale = abs(scale - 1) < 0.001 ? nil : scale
+        diagram.updatedAt = Date()
+    }
+
+    /// Inspector edit of a possession event's time; registers its own undo
+    /// (unlike drag retiming, where the gesture registers once).
+    func setPossessionEventTime(_ event: PossessionEvent, absolute: Double) {
+        guard let step = activeSteps.first(where: { $0.node.id == event.nodeId }) else { return }
+        registerUndo("Set Event Time")
+        retimePossessionEvent(event, toLocal: max(0, absolute - step.startsAt))
+    }
+
+    /// Flight duration for a pass release: receiver's attach minus the release.
+    func flightDuration(of event: PossessionEvent) -> Double? {
+        guard event.kind == .releasePass,
+              let node = diagram.node(event.nodeId),
+              let possession = node.sortedPossessions.first(where: { $0.id == event.possessionId }),
+              let end = possession.end,
+              case .pass(let toId) = possession.release,
+              let receiver = node.sortedPossessions.first(where: { $0.holderId == toId && $0.start >= end })
+        else { return nil }
+        return receiver.start - end
+    }
+
+    func holderLabel(of event: PossessionEvent) -> String {
+        guard let node = diagram.node(event.nodeId),
+              let possession = node.sortedPossessions.first(where: { $0.id == event.possessionId })
+        else { return "?" }
+        return entityLabel(possession.holderId)
+    }
+
+    func updateCameraKeyframe(id: UUID, t: Double? = nil, value: Double? = nil,
+                              easing: Easing? = nil) {
+        guard let index = diagram.camera.keyframes.firstIndex(where: { $0.id == id }) else { return }
+        registerUndo("Edit Camera Keyframe")
+        if let t { diagram.camera.keyframes[index].t = max(0, t) }
+        if let value { diagram.camera.keyframes[index].value = min(90, max(look.minElevationDegrees, value)) }
+        if let easing { diagram.camera.keyframes[index].easing = easing }
+        diagram.camera.keyframes.sort { $0.t < $1.t }
+        diagram.updatedAt = Date()
+    }
+
+    /// The keyframe at the playhead for a specific entity.
+    func selectedKeyframeAt(entityId: UUID) -> Keyframe? {
+        let local = currentLocalTime
+        return track(for: entityId)?.keyframes.first { abs($0.t - local) < 0.02 }
+    }
+
+    func setHomePosition(_ entityId: UUID, to point: CGPoint) {
+        guard let index = diagram.entities.firstIndex(where: { $0.id == entityId }) else { return }
+        registerUndo("Move")
+        diagram.entities[index].homePosition = diagram.space.clamp(point)
+        diagram.updatedAt = Date()
+    }
+
     // MARK: - Live Ball Drag
 
     /// View-space cursor location while the ball is being dragged, or nil.

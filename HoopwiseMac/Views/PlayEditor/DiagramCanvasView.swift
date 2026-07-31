@@ -350,7 +350,7 @@ struct DiagramCanvasView: View {
         let court = resolvedPosition(entity)
         let centre = projection.project(court)
         let depth = projection.depthScale(at: court)
-        let radius = projection.transform.length(puckRadiusFeet) * depth
+        let radius = projection.transform.length(puckRadiusFeet) * depth * entity.effectiveSize
         let tint = color(for: entity)
 
         // Puck: BILLBOARDED — upright and depth-scaled, never pushed through
@@ -546,6 +546,13 @@ struct DiagramCanvasView: View {
             onPlaced()
         } else {
             model.selectedEntityId = hitTest(court, projection: projection)
+            // Selecting on the court retargets the inspector: keyframe and
+            // camera selections would otherwise shadow it. Empty court clears
+            // everything, returning the inspector to Court/Camera.
+            model.selectedCameraKeyframeId = nil
+            if model.selectedEntityId == nil {
+                model.selectedKeyframeIds.removeAll()
+            }
         }
     }
 

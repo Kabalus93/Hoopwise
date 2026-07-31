@@ -6,7 +6,7 @@ import SwiftUI
 struct TimelineView: View {
     @ObservedObject var model: PlayEditorModel
 
-    private let laneHeight: CGFloat = 26
+    private let laneHeight: CGFloat = 30
     private let labelWidth: CGFloat = 196
     private let rulerHeight: CGFloat = 22
 
@@ -19,6 +19,11 @@ struct TimelineView: View {
     @State private var boxCurrent: CGPoint?
     @State private var renamingEntity: DiagramEntity?
     @State private var renameDraft = ""
+    /// Hover-revealed controls: rows stay calm at rest (Finder/Notes idiom).
+    @State private var hoveredLaneId: UUID?
+    /// Inline rename on double-click.
+    @State private var inlineRenameId: UUID?
+    @State private var inlineRenameDraft = ""
 
     var body: some View {
         GeometryReader { geo in
@@ -154,9 +159,14 @@ struct TimelineView: View {
             ZStack(alignment: .leading) {
                 Rectangle().fill(Color.secondary.opacity(0.06))
                 ForEach(model.diagram.camera.keyframes) { frame in
-                    marker(color: .purple, selected: false)
+                    marker(color: .purple,
+                           selected: model.selectedCameraKeyframeId == frame.id)
                         .position(x: CGFloat(frame.t / duration) * width, y: laneHeight / 2)
                         .help("\(Int(frame.value))° at \(String(format: "%.2f", frame.t))s")
+                        .onTapGesture {
+                            model.selectedCameraKeyframeId = frame.id
+                            model.selectedKeyframeIds.removeAll()
+                        }
                 }
             }
             .frame(width: width, height: laneHeight)
@@ -240,22 +250,42 @@ struct TimelineView: View {
     private func entityLane(_ entity: DiagramEntity, width: CGFloat, duration: Double) -> some View {
         let isSelected = model.selectedEntityId == entity.id
 
+        let hovered = hoveredLaneId == entity.id
         return HStack(spacing: 0) {
-            HStack(spacing: 3) {
+            // Progressive disclosure: at rest the row is colour dot + name +
+            // keyframes. Controls appear on hover — except ACTIVE states
+            // (hidden, locked, soloed), which stay visible so state is never
+            // invisible.
+            HStack(spacing: 4) {
                 Button {
                     model.selectedEntityId = entity.id
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 5) {
                         Circle().fill(laneColor(entity)).frame(width: 8, height: 8)
-                        Text(laneTitle(entity))
+                        if inlineRenameId == entity.id {
+                            TextField("", text: $inlineRenameDraft, onCommit: {
+                                model.renameEntity(entity.id, to: inlineRenameDraft)
+                                inlineRenameId = nil
+                            })
+                            .textFieldStyle(.plain)
                             .font(.caption)
-                            .lineLimit(1)
+                            .frame(width: 52)
+                        } else {
+                            Text(laneTitle(entity))
+                                .font(.caption)
+                                .lineLimit(1)
+                        }
                     }
-                    .frame(width: 52, alignment: .leading)
+                    .frame(width: 64, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                .simultaneousGesture(TapGesture(count: 2).onEnded {
+                    guard entity.isPlayer else { return }
+                    inlineRenameDraft = entity.label ?? ""
+                    inlineRenameId = entity.id
+                })
                 .contextMenu {
                     if entity.isPlayer {
                         Button("Rename…") {
@@ -274,47 +304,54 @@ struct TimelineView: View {
                     }
                 }
 
-                // Visibility / lock / solo — transient editor state, no undo.
-                layerToggle("eye", active: !model.isHidden(entity.id),
-                            help: "Show / hide on the court") {
-                    if model.isHidden(entity.id) { model.hiddenEntityIds.remove(entity.id) }
-                    else { model.hiddenEntityIds.insert(entity.id) }
+                // State toggles: visible on hover, or whenever ACTIVE.
+                if hovered || model.isHidden(entity.id) {
+                    layerToggle(model.isHidden(entity.id) ? "eye.slash" : "eye",
+                                active: model.isHidden(entity.id),
+                                help: "Show / hide on the court") {
+                        if model.isHidden(entity.id) { model.hiddenEntityIds.remove(entity.id) }
+                        else { model.hiddenEntityIds.insert(entity.id) }
+                    }
                 }
-                layerToggle("lock.fill", active: model.isLocked(entity.id),
-                            help: "Lock — canvas clicks pass through") {
-                    if model.isLocked(entity.id) { model.lockedEntityIds.remove(entity.id) }
-                    else { model.lockedEntityIds.insert(entity.id) }
+                if hovered || model.isLocked(entity.id) {
+                    layerToggle(model.isLocked(entity.id) ? "lock.fill" : "lock.open",
+                                active: model.isLocked(entity.id),
+                                help: "Lock — canvas clicks pass through") {
+                        if model.isLocked(entity.id) { model.lockedEntityIds.remove(entity.id) }
+                        else { model.lockedEntityIds.insert(entity.id) }
+                    }
                 }
-                layerToggle("scope", active: model.soloEntityId == entity.id,
-                            help: "Solo — dim everything else to 25%") {
-                    model.soloEntityId = model.soloEntityId == entity.id ? nil : entity.id
+                if hovered || model.soloEntityId == entity.id {
+                    layerToggle("scope", active: model.soloEntityId == entity.id,
+                                help: "Solo — dim everything else to 25%") {
+                        model.soloEntityId = model.soloEntityId == entity.id ? nil : entity.id
+                    }
                 }
 
-                // AE keyframe cluster: prev · add/remove in place · next.
-                Button { model.jumpToKeyframe(entity.id, direction: -1) } label: {
-                    Image(systemName: "arrowtriangle.left.fill").font(.system(size: 7))
+                // Keyframe nav cluster as ONE grouped control on hover.
+                if hovered {
+                    HStack(spacing: 1) {
+                        clusterButton("arrowtriangle.left.fill", help: "Previous keyframe (J)") {
+                            model.jumpToKeyframe(entity.id, direction: -1)
+                        }
+                        clusterButton(model.hasKeyframeAtPlayhead(entity.id)
+                                      ? "diamond.fill" : "diamond",
+                                      tint: model.hasKeyframeAtPlayhead(entity.id)
+                                      ? laneColor(entity) : nil,
+                                      help: "Keyframe in place (K)") {
+                            model.toggleKeyframeInPlace(entity.id)
+                        }
+                        clusterButton("arrowtriangle.right.fill", help: "Next keyframe (L)") {
+                            model.jumpToKeyframe(entity.id, direction: 1)
+                        }
+                    }
+                    .padding(.horizontal, 3)
+                    .background(.quaternary, in: Capsule())
                 }
-                .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help("Previous keyframe (J)")
-
-                Button { model.toggleKeyframeInPlace(entity.id) } label: {
-                    Image(systemName: model.hasKeyframeAtPlayhead(entity.id)
-                          ? "diamond.fill" : "diamond")
-                        .font(.system(size: 9))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(model.hasKeyframeAtPlayhead(entity.id)
-                                 ? laneColor(entity) : .secondary)
-                .help("Add or remove a keyframe here, pinning the current position (K)")
-
-                Button { model.jumpToKeyframe(entity.id, direction: 1) } label: {
-                    Image(systemName: "arrowtriangle.right.fill").font(.system(size: 7))
-                }
-                .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help("Next keyframe (L)")
+                Spacer(minLength: 0)
             }
             .frame(width: labelWidth, alignment: .leading)
-            .padding(.leading, 6)
+            .padding(.leading, 8)
 
             ZStack(alignment: .leading) {
                 Rectangle()
@@ -495,9 +532,23 @@ struct TimelineView: View {
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 8))
-                .foregroundStyle(active ? Color.accentColor : Color.secondary.opacity(0.5))
-                .frame(width: 14, height: 14)
+                .font(.system(size: 10))
+                .foregroundStyle(active ? Color.accentColor : .secondary)
+                .frame(width: 20, height: 20)      // real hit target
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private func clusterButton(_ icon: String, tint: Color? = nil, help: String,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundStyle(tint ?? .secondary)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(help)

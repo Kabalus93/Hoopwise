@@ -376,97 +376,8 @@ struct PlayEditorView: View {
     // MARK: - Inspector
 
     private var inspector: some View {
-        Form {
-            Section("Court") {
-                Picker("Standard", selection: Binding(
-                    get: { model.diagram.space.standard },
-                    set: { model.setCourt(standard: $0) })) {
-                    ForEach(CourtStandard.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                Picker("Extent", selection: Binding(
-                    get: { model.diagram.space.mode },
-                    set: { model.setCourt(mode: $0) })) {
-                    ForEach(CourtMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-            }
-
-            Section("Camera") {
-                HStack {
-                    Text("Elevation")
-                    Spacer()
-                    Text("\(Int(model.renderElevation))°").monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
-                Slider(value: $model.cameraElevation,
-                       in: model.look.minElevationDegrees...90)
-                Picker("Ease", selection: $model.cameraEasing) {
-                    ForEach(Easing.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                Button("Set Camera Keyframe") { model.setCameraKeyframe() }
-                    .controlSize(.small)
-                if !model.diagram.camera.isStatic {
-                    Button("Clear Camera Track", role: .destructive) { model.clearCameraTrack() }
-                        .controlSize(.small)
-                }
-                Text("90° is plan view. Keyframe two values to author the oblique-to-top-down move — the ease is what stops it reading as mechanical.")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
-
-            keyframeSection
-        }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-    }
-
-    @ViewBuilder
-    private var keyframeSection: some View {
-        if let entityId = model.selectedEntityId, let keyframe = model.selectedKeyframe {
-            Section("Keyframe at \(String(format: "%.2f", keyframe.t))s") {
-                Picker("Easing", selection: Binding(
-                    get: { keyframe.easing },
-                    set: { model.updateKeyframe(entityId: entityId,
-                                                keyframeId: keyframe.id, easing: $0) })) {
-                    ForEach(Easing.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-
-                let isFinal = model.isFinalKeyframe(keyframe, entityId: entityId)
-                Picker("Path", selection: Binding(
-                    get: { keyframe.pathKind },
-                    set: { model.updateKeyframe(entityId: entityId,
-                                                keyframeId: keyframe.id, pathKind: $0) })) {
-                    ForEach(PathKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .disabled(isFinal)
-
-                Picker("Shape", selection: Binding(
-                    get: { keyframe.pathStyle },
-                    set: { model.updateKeyframe(entityId: entityId,
-                                                keyframeId: keyframe.id, pathStyle: $0) })) {
-                    ForEach(PathStyle.allCases, id: \.self) { Text($0.displayName).tag($0) }
-                }
-                .disabled(isFinal)
-                .help("Sharp runs straight to the next keyframe; curved arcs through its neighbours")
-
-                if isFinal {
-                    // Segment convention: pathKind governs the segment LEAVING a
-                    // keyframe, so the last one governs nothing.
-                    Text("Last keyframe — path kind governs the segment that follows, so it has no effect here.")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-
-                Button("Delete Keyframe", role: .destructive) {
-                    model.deleteKeyframe(entityId: entityId, keyframeId: keyframe.id)
-                }
-                .controlSize(.small)
-            }
-        } else if model.selectedEntityId != nil {
-            Section("Keyframe") {
-                Text("No keyframe at the playhead. Drag the entity on the court to create one.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button("Delete Entity", role: .destructive) { model.deleteSelectedEntity() }
-                    .controlSize(.small)
-            }
-        }
+        // Context-sensitive: about whatever is selected. See EditorInspector.
+        EditorInspector(model: model)
     }
 
     /// Notification plumbing, hoisted out of `body` — the inline chain pushed
@@ -475,28 +386,28 @@ struct PlayEditorView: View {
     private var notificationHandlers: some View {
         Color.clear
             .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePlay)) { _ in
-            model.togglePlayback()
-        }
-            .onReceive(NotificationCenter.default.publisher(for: .macEditorMirror)) { _ in
-            model.mirror()
-        }
-            .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePaths)) { _ in
-            model.showMovementPaths.toggle()
-        }
-            .onReceive(NotificationCenter.default.publisher(for: .macEditorToggleSticky)) { _ in
-            model.possessionEnabled.toggle()
-        }
-            .onReceive(NotificationCenter.default.publisher(for: .macEditorSave)) { _ in
-            if model.savedToPlaybook { model.saveToPlaybook() }
-            else { showingSaveSheet = true }
-        }
-            .onReceive(NotificationCenter.default.publisher(for: .macOpenPlayInEditor)) { note in
-            if let id = note.object as? UUID,
-               let stored = dataManager.allPlayDiagrams().first(where: { $0.id == id }) {
-                model.save()
-                model.load(stored.diagram, name: stored.name)
+                model.togglePlayback()
             }
-        }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorMirror)) { _ in
+                model.mirror()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorTogglePaths)) { _ in
+                model.showMovementPaths.toggle()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorToggleSticky)) { _ in
+                model.possessionEnabled.toggle()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .macEditorSave)) { _ in
+                if model.savedToPlaybook { model.saveToPlaybook() }
+                else { showingSaveSheet = true }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .macOpenPlayInEditor)) { note in
+                if let id = note.object as? UUID,
+                   let stored = dataManager.allPlayDiagrams().first(where: { $0.id == id }) {
+                    model.save()
+                    model.load(stored.diagram, name: stored.name)
+                }
+            }
     }
 
     // MARK: - Export stubs

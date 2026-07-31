@@ -58,17 +58,23 @@ struct DiagramEntity: Identifiable, Codable, Hashable {
     var colorHex: String?
     /// Where the entity sits before its first keyframe, and after its last.
     var homePosition: CGPoint
+    /// Puck size multiplier, 1.0 default. Optional so old blobs decode.
+    var sizeScale: CGFloat?
+
+    var effectiveSize: CGFloat { sizeScale ?? 1 }
 
     init(id: UUID = UUID(),
          kind: DiagramEntityKind,
          label: String? = nil,
          colorHex: String? = nil,
-         homePosition: CGPoint) {
+         homePosition: CGPoint,
+         sizeScale: CGFloat? = nil) {
         self.id = id
         self.kind = kind
         self.label = label
         self.colorHex = colorHex
         self.homePosition = homePosition
+        self.sizeScale = sizeScale
     }
 
     var isPlayer: Bool {
