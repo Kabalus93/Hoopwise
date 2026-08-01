@@ -1182,6 +1182,25 @@ final class PlayEditorModel: ObservableObject {
         setKeyframe(for: entityId, at: local, position: pinned)
     }
 
+    /// Master keyframe: pins EVERY entity layer in place at the playhead in
+    /// one undoable action. Camera is excluded — it has its own control — and
+    /// so is the ball while possession drives it (it has no position track to
+    /// pin). Layers already keyed exactly at the playhead are skipped, not
+    /// duplicated.
+    func keyframeAllLayersInPlace() {
+        let local = currentLocalTime
+        let candidates = diagram.entities.filter { entity in
+            if case .ball = entity.kind, possessionEnabled { return false }
+            return !hasKeyframeAtPlayhead(entity.id)
+        }
+        guard !candidates.isEmpty else { return }
+        registerUndo("Keyframe All Layers")
+        for entity in candidates {
+            let pinned = resolvedPosition(of: entity.id, at: playhead)
+            setKeyframe(for: entity.id, at: local, position: pinned)
+        }
+    }
+
     /// Whether a keyframe sits at the playhead on this layer — drives the
     /// diamond's filled state.
     func hasKeyframeAtPlayhead(_ entityId: UUID) -> Bool {

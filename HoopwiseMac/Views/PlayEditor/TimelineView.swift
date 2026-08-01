@@ -81,11 +81,25 @@ struct TimelineView: View {
 
     private func ruler(width: CGFloat, duration: Double) -> some View {
         HStack(spacing: 0) {
-            Text("Time")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: labelWidth, alignment: .leading)
-                .padding(.leading, 8)
+            HStack(spacing: 4) {
+                Text("Time")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 2)
+                // Master keyframe, aligned over the per-layer diamond column:
+                // pins every layer at the playhead, one undo.
+                Button { model.keyframeAllLayersInPlace() } label: {
+                    Image(systemName: "diamond.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Keyframe all layers in place (⇧K)")
+            }
+            .frame(width: labelWidth, alignment: .leading)
+            .padding(.leading, 8)
 
             Canvas { context, size in
                 for second in 0...Int(duration.rounded(.up)) {

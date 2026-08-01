@@ -175,6 +175,11 @@ struct PlayEditorView: View {
             case "s": model.possessionEnabled.toggle()
             case "p": model.showMovementPaths.toggle()
             case "k":
+                // Shift-K keys every layer; plain K the selected one.
+                if press.modifiers.contains(.shift) {
+                    model.keyframeAllLayersInPlace()
+                    return .handled
+                }
                 guard let id = model.selectedEntityId else { return .ignored }
                 model.toggleKeyframeInPlace(id)
             case "j":
