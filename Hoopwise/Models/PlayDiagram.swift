@@ -824,6 +824,111 @@ struct ReadNode: Identifiable, Codable, Hashable {
 
     var duration: Double { tracks.map(\.duration).max() ?? 0 }
 
+    /// One homogeneous span of ball behaviour, for the timeline's state bar.
+    /// Times are NODE-LOCAL, like everything else on a read.
+    struct BallSpan: Hashable {
+        enum Kind: Hashable {
+            /// Held, holder stationary.
+            case rest
+            /// Held, holder travelling — the movement ∧ possession overlap
+            /// that also drives auto-dribble.
+            case dribble
+            case flightPass
+            case flightShot
+            /// Nobody holds it: before the first possession, or resting at
+            /// the rim after a shot.
+            case loose
+        }
+        var kind: Kind
+        var start: Double
+        var end: Double
+        /// The holder (held spans) or the releasing player (flights).
+        var holderId: UUID?
+    }
+
+    /// Partitions [0, windowEnd] into ball-state spans. TOTAL and gap-free by
+    /// construction: breakpoints come from the possession events, derived
+    /// arrivals, and the holder's keyframes; each interval is then CLASSIFIED
+    /// THROUGH `ballState` itself, so the bar cannot disagree with what the
+    /// canvas renders. Dribble-vs-rest applies the same movement ∧ possession
+    /// rule as auto-dribble, at span granularity.
+    func ballSpans(windowEnd: Double,
+                   passSpeed: Double,
+                   shotSpeed: Double,
+                   moveThresholdFeet: CGFloat = 0.3,
+                   entityExists: ((UUID) -> Bool)? = nil,
+                   positionOf: (UUID, Double) -> CGPoint) -> [BallSpan] {
+        guard windowEnd > 0.001 else { return [] }
+        let sorted = entityExists.map { validPossessions(resolving: $0) } ?? sortedPossessions
+
+        // Every moment the ball's state (or its holder's motion) can change.
+        var cuts: Set<Double> = [0, windowEnd]
+        for possession in sorted {
+            cuts.insert(possession.start)
+            if let end = possession.end { cuts.insert(end) }
+            if let arrival = arrivalTime(of: possession, passSpeed: passSpeed,
+                                         shotSpeed: shotSpeed, positionOf: positionOf) {
+                cuts.insert(arrival)
+            }
+            if let track = tracks.first(where: { $0.entityId == possession.holderId }) {
+                let upper = possession.end ?? windowEnd
+                for frame in track.keyframes
+                where frame.t > possession.start && frame.t < upper {
+                    cuts.insert(frame.t)
+                }
+            }
+        }
+        let ordered = cuts.filter { $0 >= 0 && $0 <= windowEnd }.sorted()
+
+        var spans: [BallSpan] = []
+        for index in 0..<(ordered.count - 1) {
+            let a = ordered[index], b = ordered[index + 1]
+            guard b - a > 0.0001 else { continue }
+            let mid = (a + b) / 2
+            let state = ballState(at: mid, passSpeed: passSpeed, shotSpeed: shotSpeed,
+                                  ballHome: .zero, entityExists: entityExists,
+                                  positionOf: positionOf)
+            let kind: BallSpan.Kind
+            var holder: UUID?
+            switch state {
+            case .held(let holderId):
+                holder = holderId
+                kind = holderTravels(holderId, from: a, to: b, positionOf: positionOf,
+                                     threshold: moveThresholdFeet) ? .dribble : .rest
+            case .inFlight(_, _, _, let isShot):
+                kind = isShot ? .flightShot : .flightPass
+                holder = sorted.last { ($0.end ?? .infinity) <= mid }?.holderId
+            case .atRest:
+                kind = .loose
+                holder = nil
+            }
+            if var last = spans.last, last.kind == kind, last.holderId == holder {
+                last.end = b
+                spans[spans.count - 1] = last
+            } else {
+                spans.append(BallSpan(kind: kind, start: a, end: b, holderId: holder))
+            }
+        }
+        return spans
+    }
+
+    /// Whether the holder covers real ground in [a, b] — sampled arc length,
+    /// so a curved path that wanders and returns still counts its travel.
+    private func holderTravels(_ entityId: UUID, from a: Double, to b: Double,
+                               positionOf: (UUID, Double) -> CGPoint,
+                               threshold: CGFloat) -> Bool {
+        var length: CGFloat = 0
+        var previous = positionOf(entityId, a)
+        for step in 1...6 {
+            let t = a + (b - a) * Double(step) / 6
+            let point = positionOf(entityId, t)
+            length += hypot(point.x - previous.x, point.y - previous.y)
+            previous = point
+            if length >= threshold { return true }
+        }
+        return false
+    }
+
     /// Edges that continue into new action.
     var branchEdges: [ReadEdge] { edges.filter { $0.kind == .branch } }
 

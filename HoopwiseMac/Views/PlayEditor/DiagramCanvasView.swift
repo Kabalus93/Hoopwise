@@ -492,9 +492,21 @@ struct DiagramCanvasView: View {
             fromCourt = from
         }
         let fromView = projection.project(fromCourt)
-        // Snapped: the line goes to the receiver, not the raw cursor.
+        // Snapped: the line goes to the rim or the receiver, not the raw
+        // cursor — the same ring affordance either way, so what highlights is
+        // what the drop creates.
         let toView: CGPoint
-        if let target = model.ballDragSnapTarget {
+        if model.ballDragOverRim {
+            let rimCourt = model.rimPosition
+            toView = projection.project(rimCourt)
+            let depth = projection.depthScale(at: rimCourt)
+            let radius = projection.transform.length(model.renderStyle.rimSnapFeet)
+                * depth + 4
+            let ring = CGRect(x: toView.x - radius, y: toView.y - radius,
+                              width: radius * 2, height: radius * 2)
+            context.stroke(Path(ellipseIn: ring), with: .color(ballColor),
+                           style: StrokeStyle(lineWidth: 2.5))
+        } else if let target = model.ballDragSnapTarget {
             let targetCourt = model.resolvedPosition(of: target, at: model.playhead)
             toView = projection.project(targetCourt)
             // Highlight ring on the receiver.
@@ -568,6 +580,7 @@ struct DiagramCanvasView: View {
             // camera selections would otherwise shadow it. Empty court clears
             // everything, returning the inspector to Court/Camera.
             model.selectedCameraKeyframeId = nil
+            model.selectedBallSpanId = nil
             if model.selectedEntityId == nil {
                 model.selectedKeyframeIds.removeAll()
             }
@@ -739,7 +752,11 @@ struct DiagramCanvasView: View {
                     guard !model.ballDragCancelled else { return }   // Esc: stop previewing
                     model.ballDragLocation = value.location
                     let court = projection.unproject(value.location)
-                    model.ballDragSnapTarget = hitTestPlayers(court)
+                    // Rim wins over receiver snap: a player camped under the
+                    // basket must not steal a shot drop.
+                    model.ballDragOverRim = model.isRimTarget(court)
+                    model.ballDragSnapTarget = model.ballDragOverRim
+                        ? nil : hitTestPlayers(court)
                     return
                 }
 
@@ -753,6 +770,7 @@ struct DiagramCanvasView: View {
                     bendTarget = nil
                     model.ballDragLocation = nil
                     model.ballDragSnapTarget = nil
+                    model.ballDragOverRim = false
                     model.ballDragCancelled = false
                 }
                 // Esc during the drag: revert with no state mutation.
@@ -764,7 +782,7 @@ struct DiagramCanvasView: View {
                 // point, so what the preview showed is what happens.
                 let drop = projection.unproject(value.location)
                 // Target decides: the rim is a shot, a player is a pass.
-                if model.isRimTarget(drop) {
+                if model.ballDragOverRim || model.isRimTarget(drop) {
                     model.authorShot(at: model.currentLocalTime)
                 } else if let target = model.ballDragSnapTarget ?? hitTestPlayers(drop) {
                     // authorPass falls back to beginPossession itself when

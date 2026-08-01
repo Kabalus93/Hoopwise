@@ -32,6 +32,9 @@ enum DemoScenario {
 
         buildBranchedPlay(model)
 
+        if env["HOOPWISE_DEMO_BALL"] == "1" {
+            authorBallStory(model)
+        }
         if let raw = env["HOOPWISE_DEMO_PLAYHEAD"], let t = Double(raw) {
             model.playhead = t
         }
@@ -96,6 +99,26 @@ enum DemoScenario {
         model.playhead = 0
         model.selectedEntityId = nil
         demoLog("DEMO: branched play ready — boundary at 3.0s, branch duration \(model.branchDuration)")
+    }
+
+    /// Ball story for the state-bar and shot verification, authored through
+    /// the same model calls the drag gestures make: P1 rests, dribbles,
+    /// passes to P2; P2 dribbles, then the drop-on-rim path (authorShot).
+    private static func authorBallStory(_ model: PlayEditorModel) {
+        guard let p1 = model.diagram.entities.first(where: { $0.label == "1" })?.id,
+              let p2 = model.diagram.entities.first(where: { $0.label == "2" })?.id
+        else { return }
+        // A stationary stretch first, so the bar shows REST before DRIBBLE.
+        model.setKeyframe(for: p1, at: 0.5, position: CGPoint(x: 10, y: 40))
+        model.addEntity(kind: .ball, at: CGPoint(x: 11, y: 41), label: nil)
+        model.beginPossession(p1, at: 0)
+        model.authorPass(to: p2, at: 1.0)
+        model.authorShot(at: 2.2)
+        model.selectedEntityId = nil
+        let spans = model.ballStateSpans.map { span in
+            String(format: "%@ %.2f-%.2f", "\(span.kind)", span.start, span.end)
+        }.joined(separator: "  ")
+        demoLog("DEMO[ball]: \(spans)")
     }
 
     /// Exactly the calls the canvas drag gesture makes: stop, one undo

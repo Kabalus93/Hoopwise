@@ -242,6 +242,51 @@ struct TimelineView: View {
         .frame(height: laneHeight)
     }
 
+    /// The Ball lane's continuous state bar: rest, dribble, and flight spans
+    /// derived from the possession model plus holder-movement overlap — the
+    /// same movement ∧ possession rule as auto-dribble, computed in the model.
+    /// Clicking a segment selects the SPAN (inspector shows state, holder,
+    /// duration); the event glyphs drawn on top remain the editable handles.
+    @ViewBuilder
+    private func ballStateBar(width: CGFloat, duration: Double) -> some View {
+        ForEach(model.ballStateSpans) { span in
+            let x0 = tickX(span.start, width: width, duration: duration)
+            let x1 = tickX(min(span.end, duration), width: width, duration: duration)
+            let selected = model.selectedBallSpanId == span.id
+            RoundedRectangle(cornerRadius: 3)
+                .fill(spanFill(span))
+                .overlay {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.accentColor, lineWidth: 1.5)
+                    }
+                }
+                .frame(width: max(2, x1 - x0 - 1), height: laneHeight - 10)
+                .position(x: (x0 + x1) / 2, y: laneHeight / 2)
+                .help(model.describeBallSpan(span))
+                .onTapGesture { model.selectBallSpan(span) }
+        }
+    }
+
+    /// Span fills: quiet neutral for held-at-rest, the holder's tint for
+    /// travel, high-contrast orange/red for flights, near-nothing for loose.
+    private func spanFill(_ span: PlayEditorModel.BallBarSpan) -> Color {
+        switch span.kind {
+        case .rest:
+            return Color.secondary.opacity(0.22)
+        case .dribble:
+            let holder = span.holderId.flatMap { model.entity($0) }
+            let tint = holder.map(laneColor) ?? .orange
+            return tint.opacity(0.55)
+        case .flightPass:
+            return Color.orange.opacity(0.85)
+        case .flightShot:
+            return Color.red.opacity(0.8)
+        case .loose:
+            return Color.secondary.opacity(0.08)
+        }
+    }
+
     /// Possession events on the Ball row.
     ///
     /// Zero position keyframes there is CORRECT — the ball has no position
@@ -265,6 +310,7 @@ struct TimelineView: View {
                           y: laneHeight / 2)
                 .help(event.label)
                 .onTapGesture {
+                    model.selectedBallSpanId = nil
                     if NSEvent.modifierFlags.contains(.shift) {
                         if selected { model.selectedKeyframeIds.remove(event.id) }
                         else { model.selectedKeyframeIds.insert(event.id) }
@@ -419,9 +465,15 @@ struct TimelineView: View {
                     .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.05))
                     // A plain click on empty track clears the selection; a
                     // 4pt-threshold drag starts the marquee instead.
-                    .onTapGesture { model.selectedKeyframeIds.removeAll() }
+                    .onTapGesture {
+                        model.selectedKeyframeIds.removeAll()
+                        model.selectedBallSpanId = nil
+                    }
 
                 if case .ball = entity.kind, model.possessionEnabled {
+                    // Continuous state bar first, event glyphs ON TOP — the
+                    // bar is display, the glyphs stay the editable handles.
+                    ballStateBar(width: width, duration: duration)
                     possessionMarkers(width: width, duration: duration)
                 }
 
@@ -433,6 +485,7 @@ struct TimelineView: View {
                         .gesture(keyframeDrag(lane: lane, entity: entity,
                                               width: width, duration: duration))
                         .onTapGesture {
+                            model.selectedBallSpanId = nil
                             model.selectedEntityId = entity.id
                             // Click selects; shift-click adds. Playhead stays
                             // put — selection and scrubbing are separate acts.

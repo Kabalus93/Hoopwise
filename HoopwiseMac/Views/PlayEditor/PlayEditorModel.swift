@@ -469,15 +469,93 @@ final class PlayEditorModel: ObservableObject {
     /// Whether the ball follows possession or its own keyframes.
     @Published var possessionEnabled = true
 
+    /// The armed placement tool. Lives on the MODEL, not view @State, so the
+    /// keyboard dispatch layer can drive it — view state was only reachable
+    /// from handlers with the focus fragility this iteration removes.
+    @Published var placementKind: DiagramEntityKind?
+
     var possessions: [Possession] { activeNode?.sortedPossessions ?? [] }
+
+    // MARK: - Ball state bar
+
+    /// One bar segment on the Ball lane, in ABSOLUTE branch time.
+    struct BallBarSpan: Identifiable {
+        let kind: ReadNode.BallSpan.Kind
+        let start: Double
+        let end: Double
+        let holderId: UUID?
+        let nodeId: UUID
+        var id: String { "\(nodeId)-\(kind)-\(start)" }
+        var duration: Double { end - start }
+    }
+
+    /// The Ball lane's continuous state bar: every read on the active path
+    /// partitioned into rest / dribble / flight / loose spans, read-scoped
+    /// and clipped to each read's window like everything else.
+    var ballStateSpans: [BallBarSpan] {
+        guard diagram.ball != nil, possessionEnabled else { return [] }
+        let steps = activeSteps
+        var result: [BallBarSpan] = []
+        for (index, step) in steps.enumerated() {
+            let window = PlayDiagram.localWindowEnd(segment: index, steps: steps)
+            let localEnd = min(window, max(0, branchDuration - step.startsAt))
+            let spans = step.node.ballSpans(
+                windowEnd: localEnd,
+                passSpeed: look.passSpeedFeetPerSecond,
+                shotSpeed: look.shotSpeedFeetPerSecond,
+                entityExists: { [weak self] in self?.diagram.entity($0) != nil }) { [weak self] id, t in
+                self?.segmentPosition(of: id, segment: index, localTime: t, steps: steps) ?? .zero
+            }
+            for span in spans {
+                result.append(BallBarSpan(kind: span.kind,
+                                          start: step.startsAt + span.start,
+                                          end: step.startsAt + span.end,
+                                          holderId: span.holderId,
+                                          nodeId: step.node.id))
+            }
+        }
+        return result
+    }
+
+    /// Bar-segment selection — display state routed to the inspector. The bar
+    /// is display; the glyphs on top stay the editable handles.
+    @Published var selectedBallSpanId: String?
+
+    var selectedBallSpan: BallBarSpan? {
+        guard let id = selectedBallSpanId else { return nil }
+        return ballStateSpans.first { $0.id == id }
+    }
+
+    func selectBallSpan(_ span: BallBarSpan) {
+        selectedBallSpanId = span.id
+        selectedKeyframeIds.removeAll()
+        selectedCameraKeyframeId = nil
+    }
+
+    /// Human description for a span — tooltip and inspector share it.
+    func describeBallSpan(_ span: BallBarSpan) -> String {
+        let who = span.holderId.map { entityLabel($0) } ?? "—"
+        let what: String
+        switch span.kind {
+        case .rest:       what = "Held by \(who), stationary"
+        case .dribble:    what = "\(who) moving with the ball"
+        case .flightPass: what = "Pass in flight from \(who)"
+        case .flightShot: what = "Shot in flight by \(who)"
+        case .loose:      what = "Ball at rest"
+        }
+        return String(format: "%@ · %.2f–%.2fs (%.2fs)", what, span.start, span.end,
+                      span.duration)
+    }
 
     /// Rim position for the near basket, in court feet — the shot target.
     var rimPosition: CGPoint { diagram.space.metrics.nearBasket }
 
     /// Whether a court point is close enough to the rim to count as a shot.
+    /// The radius is a look parameter (RenderStyle.rimSnapFeet), tunable
+    /// without touching drop logic.
     func isRimTarget(_ court: CGPoint) -> Bool {
         let rim = rimPosition
-        return hypot(court.x - rim.x, court.y - rim.y) <= 3.5
+        return hypot(court.x - rim.x, court.y - rim.y) <= renderStyle.rimSnapFeet
     }
 
     /// Ball home, used before anything is authored.
@@ -762,6 +840,7 @@ final class PlayEditorModel: ObservableObject {
         activeNodeId = stored.rootNodeId
         selectedEntityId = nil
         selectedKeyframeIds = []
+        selectedBallSpanId = nil
         cursorEntityId = nil
         playhead = 0
         // Two reasons to purge here, not just at teardown: stale actions from
@@ -1596,16 +1675,81 @@ final class PlayEditorModel: ObservableObject {
         retimePossessionEvent(event, toLocal: max(0, absolute - step.startsAt))
     }
 
-    /// Flight duration for a pass release: receiver's attach minus the release.
+    /// Flight duration for a release: a pass reads the receiver's attach; a
+    /// shot derives from distance ÷ shot speed, same as rendering.
     func flightDuration(of event: PossessionEvent) -> Double? {
-        guard event.kind == .releasePass,
-              let node = diagram.node(event.nodeId),
+        guard let node = diagram.node(event.nodeId),
               let possession = node.sortedPossessions.first(where: { $0.id == event.possessionId }),
+              let end = possession.end else { return nil }
+        switch (event.kind, possession.release) {
+        case (.releasePass, .pass(let toId)):
+            guard let receiver = node.sortedPossessions
+                .first(where: { $0.holderId == toId && $0.start >= end }) else { return nil }
+            return receiver.start - end
+        case (.releaseShot, .shot):
+            let steps = activeSteps
+            let segment = steps.firstIndex { $0.node.id == event.nodeId } ?? 0
+            guard let arrival = node.arrivalTime(of: possession,
+                                                 passSpeed: look.passSpeedFeetPerSecond,
+                                                 shotSpeed: look.shotSpeedFeetPerSecond,
+                                                 positionOf: { [weak self] id, t in
+                self?.segmentPosition(of: id, segment: segment, localTime: t, steps: steps) ?? .zero
+            }) else { return nil }
+            return arrival - end
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - Shot ↔ pass conversion
+
+    /// A misdrop must not require redoing the gesture. Converting a shot to a
+    /// pass gives the flight a receiver: the release becomes .pass and the
+    /// receiver gains possession at the derived arrival — exactly what
+    /// authoring the pass would have written.
+    func convertShotToPass(event: PossessionEvent, receiverId: UUID) {
+        guard event.kind == .releaseShot,
+              diagram.entity(receiverId) != nil,
+              let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == event.nodeId }),
+              let possession = diagram.nodes[nodeIndex].possessions
+                .first(where: { $0.id == event.possessionId }),
+              case .shot = possession.release,
               let end = possession.end,
-              case .pass(let toId) = possession.release,
-              let receiver = node.sortedPossessions.first(where: { $0.holderId == toId && $0.start >= end })
-        else { return nil }
-        return receiver.start - end
+              possession.holderId != receiverId else { return }
+        registerUndo("Convert to Pass")
+        let steps = activeSteps
+        let segment = steps.firstIndex { $0.node.id == event.nodeId } ?? 0
+        let from = segmentPosition(of: possession.holderId, segment: segment,
+                                   localTime: end, steps: steps)
+        let to = segmentPosition(of: receiverId, segment: segment,
+                                 localTime: end, steps: steps)
+        let distance = Double(hypot(to.x - from.x, to.y - from.y))
+        let arrival = end + max(0.08, distance / max(look.passSpeedFeetPerSecond, 1))
+        guard let index = diagram.nodes[nodeIndex].possessions
+            .firstIndex(where: { $0.id == event.possessionId }) else { return }
+        diagram.nodes[nodeIndex].possessions[index].release = .pass(toId: receiverId)
+        diagram.nodes[nodeIndex].possessions.append(
+            Possession(holderId: receiverId, start: arrival))
+        diagram.nodes[nodeIndex].possessions.sort { $0.start < $1.start }
+        diagram.updatedAt = Date()
+    }
+
+    /// Converting a pass to a shot ends possession at the rim: the release
+    /// retargets, and the receiver's chain is removed — the same trailing
+    /// cleanup authoring a shot performs, because action after a shot is
+    /// meaningless within the read.
+    func convertPassToShot(event: PossessionEvent) {
+        guard event.kind == .releasePass,
+              let nodeIndex = diagram.nodes.firstIndex(where: { $0.id == event.nodeId }),
+              let index = diagram.nodes[nodeIndex].possessions
+                .firstIndex(where: { $0.id == event.possessionId }),
+              case .pass = diagram.nodes[nodeIndex].possessions[index].release,
+              let end = diagram.nodes[nodeIndex].possessions[index].end else { return }
+        registerUndo("Convert to Shot")
+        diagram.nodes[nodeIndex].possessions[index].release = .shot(target: rimPosition)
+        let keepId = diagram.nodes[nodeIndex].possessions[index].id
+        diagram.nodes[nodeIndex].possessions.removeAll { $0.start > end && $0.id != keepId }
+        diagram.updatedAt = Date()
     }
 
     func holderLabel(of event: PossessionEvent) -> String {
@@ -1647,6 +1791,10 @@ final class PlayEditorModel: ObservableObject {
     @Published var ballDragLocation: CGPoint?
     /// Receiver currently within snap radius, for the highlight ring.
     @Published var ballDragSnapTarget: UUID?
+    /// Cursor within rimSnapFeet of the hoop — the drop will be a SHOT. Takes
+    /// priority over receiver snap so a player camped under the rim cannot
+    /// steal the drop.
+    @Published var ballDragOverRim = false
     /// Set by Esc. The gesture observes it, stops previewing, and its drop
     /// mutates nothing.
     @Published var ballDragCancelled = false
@@ -1657,6 +1805,7 @@ final class PlayEditorModel: ObservableObject {
         ballDragCancelled = true
         ballDragLocation = nil
         ballDragSnapTarget = nil
+        ballDragOverRim = false
     }
 
     // MARK: - Debug Readout

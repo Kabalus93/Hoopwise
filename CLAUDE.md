@@ -310,6 +310,29 @@ it produces confident wrong numbers the coach reconciles books against.
   flattening, hitTest chain, drillDetailColumn, and the editor's body
   modifier chain. Write geometry and long modifier chains as explicit
   statements / hoisted subviews.
+- KEYBOARD: every editor shortcut routes through EditorKeyDispatcher (one
+  local NSEvent key-down monitor). Never add onKeyPress/focusable/
+  onDeleteCommand handlers to editor subviews — per-view handlers are the
+  focus-fragility class that made Delete and the tool letters fire
+  inconsistently. The dispatcher gates on the editor's own window, stands
+  down while a text field is first responder (responder chain, not
+  @FocusState), consumes handled keys so Space can never hit a default
+  button, and DEBUG-logs every decision to subsystem "hoopwise.keys".
+- BALL LANE is a continuous state bar (rest / dribble / pass flight / shot
+  flight / loose) computed by ReadNode.ballSpans — breakpoints from
+  possession events + derived arrivals + holder keyframes, each interval
+  classified THROUGH ballState so the bar cannot contradict the canvas.
+  The bar is display; the event glyphs on top remain the editable handles.
+- SHOTS: dropping the ball within RenderStyle.rimSnapFeet (2.5 ft) of the
+  hoop authors a shot; rim beats receiver snap so a player under the
+  basket cannot steal the drop. Shot↔pass conversion lives in the
+  inspector (convertShotToPass / convertPassToShot) — a misdrop never
+  requires redoing the gesture. Post-shot the ball rests at the rim.
+- DemoScenario (DEBUG, env-gated) drives the real editor for agent
+  verification runs — no Accessibility on this Mac, so synthetic input is
+  impossible; screenshots via screencapture, results via unified log
+  subsystem "hoopwise.demo". It disables persistence so scratch plays
+  never reach the library.
 
 ## Export decisions
 - PDF: draw with CoreGraphics into CGPDFContext. NOT ImageRenderer —

@@ -13,23 +13,14 @@ struct PlayEditorView: View {
     /// and it also discarded transient editor state (look tweaks, work area,
     /// layer locks) on every navigation.
     @ObservedObject var model: PlayEditorModel
-    /// Sticky: stays active until deselected or Escape.
-    @State private var placementKind: DiagramEntityKind?
+    /// THE keyboard layer: one local monitor for the editor window. All
+    /// shortcut routing lives in EditorKeyDispatcher — never add an
+    /// onKeyPress/focusable handler to a subview again.
+    @State private var keyDispatcher = EditorKeyDispatcher()
     @State private var showingLookPanel = false
     @State private var showingSaveSheet = false
     @State private var showingVariationSheet = false
     @State private var variationName = ""
-    /// True while a text field owns focus, so single-letter shortcuts stand
-    /// down. Queried from the responder chain rather than a @FocusState —
-    /// the @FocusState was never bound to any field, so it was permanently
-    /// false and typing a play name placed players.
-    private var isTextFieldFocused: Bool {
-        guard let responder = NSApp.keyWindow?.firstResponder else { return false }
-        if responder is NSTextView { return true }
-        if let view = responder as? NSView, view is NSTextField { return true }
-        return false
-    }
-
     var body: some View {
         VSplitView {
             HStack(spacing: 0) {
@@ -46,7 +37,7 @@ struct PlayEditorView: View {
 
                 // Sticky tool: placing does NOT clear the selection, so a
                 // whole lineup goes down without re-picking each time.
-                DiagramCanvasView(model: model, placementKind: placementKind) { }
+                DiagramCanvasView(model: model, placementKind: model.placementKind) { }
                 .frame(minWidth: 420, minHeight: 320)
 
                 Divider()
@@ -79,6 +70,9 @@ struct PlayEditorView: View {
         .onAppear {
             model.dataManager = dataManager
             model.undoManager = systemUndoManager
+            // The keyboard layer lives exactly as long as the editor is on
+            // screen; install is idempotent.
+            keyDispatcher.install(model: model)
             // One-time setup: the model now outlives sidebar visits, so
             // re-running this on every appearance would reload over live edits.
             guard !model.hasAttached else { return }
@@ -95,6 +89,7 @@ struct PlayEditorView: View {
         }
         .onChange(of: systemUndoManager) { _, manager in model.undoManager = manager }
         .onDisappear {
+            keyDispatcher.uninstall()
             model.save()
             // The window's undo manager survives this view; the model may not.
             // Purge here as well as in deinit so no dangling target exists even
@@ -114,88 +109,9 @@ struct PlayEditorView: View {
         }
         .sheet(isPresented: $showingSaveSheet) { saveSheet }
         .sheet(isPresented: $showingVariationSheet) { variationSheet }
-        .focusable()
-        .onKeyPress(.escape) {
-            // Priority: cancel a live ball drag, then clear keyframe
-            // selection, then deselect the tool.
-            if model.isBallDragging {
-                model.cancelBallDrag()
-            } else if !model.selectedKeyframeIds.isEmpty {
-                model.selectedKeyframeIds.removeAll()
-            } else {
-                placementKind = nil
-                model.activeToolName = "Select"
-            }
-            return .handled
-        }
-        // onDeleteCommand routes through the responder chain like the menu's
-        // Delete, so it fires regardless of which control last had focus —
-        // the onKeyPress-only version silently did nothing after clicking a
-        // timeline button, which is why multi-delete "didn't work".
-        .onDeleteCommand {
-            if !model.selectedKeyframeIds.isEmpty {
-                model.deleteSelectedKeyframesEverywhere()
-            } else if model.selectedEntityId != nil {
-                model.deleteSelectedEntity()
-            }
-        }
-        .onKeyPress(.delete) {
-            if !model.selectedKeyframeIds.isEmpty {
-                model.deleteSelectedKeyframesEverywhere()
-            } else if model.selectedEntityId != nil {
-                model.deleteSelectedEntity()
-            }
-            return .handled
-        }
-        .onKeyPress(.leftArrow) {
-            model.nudgeSelectedKeyframes(by: -(model.snapEnabled ? model.snapInterval : 0.05))
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            model.nudgeSelectedKeyframes(by: model.snapEnabled ? model.snapInterval : 0.05)
-            return .handled
-        }
-        // Single-letter tool keys, GATED on no text field having focus —
-        // naming a play must not place players.
-        .onKeyPress(phases: .down) { press in
-            guard !isTextFieldFocused else { return .ignored }
-            // Cmd-A selects keyframes; plain A is the Select tool.
-            if press.modifiers.contains(.command) {
-                if press.characters.lowercased() == "a" {
-                    model.selectAllKeyframes()
-                    return .handled
-                }
-                return .ignored
-            }
-            switch press.characters.lowercased() {
-            case "a": placementKind = nil; model.activeToolName = "Select"
-            case "o": placementKind = .player(team: .offense, number: nil, role: nil)
-                      model.activeToolName = "Offense"
-            case "d": placementKind = .player(team: .defense, number: nil, role: nil)
-                      model.activeToolName = "Defense"
-            case "b": guard model.canPlace(.ball) else { return .ignored }
-                      placementKind = .ball; model.activeToolName = "Ball"
-            case "c": placementKind = .cone; model.activeToolName = "Cone"
-            case "s": model.possessionEnabled.toggle()
-            case "p": model.showMovementPaths.toggle()
-            case "k":
-                // Shift-K keys every layer; plain K the selected one.
-                if press.modifiers.contains(.shift) {
-                    model.keyframeAllLayersInPlace()
-                    return .handled
-                }
-                guard let id = model.selectedEntityId else { return .ignored }
-                model.toggleKeyframeInPlace(id)
-            case "j":
-                guard let id = model.selectedEntityId else { return .ignored }
-                model.jumpToKeyframe(id, direction: -1)
-            case "l":
-                guard let id = model.selectedEntityId else { return .ignored }
-                model.jumpToKeyframe(id, direction: 1)
-            default:  return .ignored
-            }
-            return .handled
-        }
+        // NO key handling here — Space, Delete, Escape, arrows and the tool
+        // letters all live in EditorKeyDispatcher. Handlers on focusable
+        // subviews are the focus-fragility class this replaced.
     }
 
     // MARK: - Toolbar
@@ -319,10 +235,10 @@ struct PlayEditorView: View {
 
     private func stripButton(_ title: String, _ icon: String,
                              _ key: String, _ kind: DiagramEntityKind?) -> some View {
-        let isActive = placementKind == kind
+        let isActive = model.placementKind == kind
         let available = kind.map { model.canPlace($0) } ?? true
         return Button {
-            placementKind = kind
+            model.placementKind = kind
             model.activeToolName = title
         } label: {
             Image(systemName: icon)
@@ -365,10 +281,10 @@ struct PlayEditorView: View {
     /// tool at all and no way to tell which tool was live.
     private func toolButton(_ title: String, _ icon: String,
                             _ key: String, _ kind: DiagramEntityKind?) -> some View {
-        let isActive = placementKind == kind
+        let isActive = model.placementKind == kind
         let available = kind.map { model.canPlace($0) } ?? true
         return Button {
-            placementKind = kind
+            model.placementKind = kind
             model.activeToolName = title
         } label: {
             Label(title, systemImage: icon)

@@ -24,6 +24,8 @@ struct EditorInspector: View {
         let keyframes = model.selectedKeyframeInfos
         if events.count == 1, keyframes.isEmpty {
             possessionSection(events[0])
+        } else if let span = model.selectedBallSpan, events.isEmpty, keyframes.isEmpty {
+            ballSpanSection(span)
         } else if !keyframes.isEmpty {
             keyframeSection(keyframes)
         } else if let cameraId = model.selectedCameraKeyframeId,
@@ -61,6 +63,59 @@ struct EditorInspector: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            // Misdrop escape hatch: a shot near a receiver, or a pass meant
+            // for the rim, converts in place — no redoing the gesture.
+            if event.kind == .releaseShot {
+                row("Convert") {
+                    Menu("To Pass…") {
+                        ForEach(model.diagram.entities.filter(\.isPlayer)) { player in
+                            Button(player.label ?? "Player") {
+                                model.convertShotToPass(event: event, receiverId: player.id)
+                            }
+                        }
+                    }
+                    .fixedSize()
+                }
+            } else if event.kind == .releasePass {
+                row("Convert") {
+                    Button("To Shot") { model.convertPassToShot(event: event) }
+                        .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    // MARK: - Ball state span
+
+    /// A bar-segment selection: display-only facts about the span. The
+    /// editable handles remain the event glyphs.
+    private func ballSpanSection(_ span: PlayEditorModel.BallBarSpan) -> some View {
+        InspectorSection("Ball State", key: "ballspan") {
+            row("State") {
+                Text(spanName(span.kind))
+                    .foregroundStyle(.secondary)
+            }
+            if let holderId = span.holderId, let holder = model.entity(holderId) {
+                row(span.kind == .flightPass || span.kind == .flightShot
+                    ? "Released by" : "Holder") {
+                    Text(holder.label ?? "—").foregroundStyle(.secondary)
+                }
+            }
+            row("From") { Text(String(format: "%.2f s", span.start)).foregroundStyle(.secondary) }
+            row("To") { Text(String(format: "%.2f s", span.end)).foregroundStyle(.secondary) }
+            row("Duration") {
+                Text(String(format: "%.2f s", span.duration)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func spanName(_ kind: ReadNode.BallSpan.Kind) -> String {
+        switch kind {
+        case .rest:       return "Held, stationary"
+        case .dribble:    return "Moving with player"
+        case .flightPass: return "Pass in flight"
+        case .flightShot: return "Shot in flight"
+        case .loose:      return "At rest"
         }
     }
 

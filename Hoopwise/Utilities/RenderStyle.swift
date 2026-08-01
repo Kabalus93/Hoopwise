@@ -74,6 +74,11 @@ struct RenderStyle: Equatable {
     /// presentation rule that nothing renders behind motion.
     var allowsGhostTrails: Bool
 
+    /// Ball-drag drop radius around the hoop centre, in court feet: inside it
+    /// the drop is a SHOT, outside it a pass (or revert). Deliberately tight —
+    /// a corner-three drop near the baseline must not become a shot.
+    var rimSnapFeet: CGFloat = 2.5
+
     static let edit = RenderStyle(
         name: "Edit",
         pathStrokeHex: "",              // edit paths use entity colours
