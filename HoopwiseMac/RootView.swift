@@ -35,7 +35,15 @@ enum SidebarSection: String, CaseIterable, Identifiable {
 
 struct RootView: View {
     @EnvironmentObject var dataManager: DataManager
+    #if DEBUG
+    // Agent verification runs open straight on the editor — synthetic input
+    // is unavailable, so the demo scenario cannot click the sidebar itself.
+    @State private var selection: SidebarSection? =
+        ProcessInfo.processInfo.environment["HOOPWISE_DEMO_SCENARIO"] != nil
+        ? .courtEditor : .today
+    #else
     @State private var selection: SidebarSection? = .today
+    #endif
     /// The court editor's model lives with the WINDOW. NSUndoManager holds its
     /// targets unowned(unsafe); a per-visit model left dangling actions in the
     /// window's undo stack, and Cmd-Z after navigation dereferenced freed

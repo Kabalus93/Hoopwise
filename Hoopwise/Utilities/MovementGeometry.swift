@@ -91,7 +91,10 @@ enum MovementGeometry {
         return path
     }
 
-    private static func arrowHead(at tip: CGPoint, angle: CGFloat) -> CGPath {
+    /// Filled arrow for the edit overlay. Public so the unified one-head-per-
+    /// track rule (PathConsumption.visibleTrackPaths) can place it directly
+    /// from (tip, angle) without synthesizing a fake two-point polyline.
+    static func arrowHead(at tip: CGPoint, angle: CGFloat) -> CGPath {
         let path = CGMutablePath()
         let backX: CGFloat = tip.x - cos(angle) * arrowLengthFeet
         let backY: CGFloat = tip.y - sin(angle) * arrowLengthFeet

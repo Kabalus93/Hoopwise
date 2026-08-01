@@ -7,20 +7,35 @@ struct TimelineView: View {
     @ObservedObject var model: PlayEditorModel
 
     private let laneHeight: CGFloat = 30
+    /// Fixed-width layer-header column: name, eye/lock/solo, nav capsule.
+    /// Terminated by a full-height hairline divider and a background tint;
+    /// nothing of the track area — ticks, labels, markers — renders inside it.
     private let labelWidth: CGFloat = 214
     private let rulerHeight: CGFloat = 22
-    /// The label column's leading pad. Part of ONE time→x transform: the
-    /// playhead used labelWidth alone (8pt behind everything), box-select used
-    /// labelWidth+6, and trackWidth ignored the pad so the track overflowed
-    /// the geometry. Every consumer now goes through trackOriginX/xFor.
-    private let trackInset: CGFloat = 8
+    /// Leading pad INSIDE the track area before the 0s tick, so first
+    /// keyframes sit clear of the hairline instead of straddling it.
+    private let trackLeadPad: CGFloat = 12
+    private let trackTrailPad: CGFloat = 8
 
-    /// Where t=0 sits in the timeline's own coordinates.
-    private var trackOriginX: CGFloat { labelWidth + trackInset }
+    /// Where t=0 sits in the timeline's own coordinates: header column,
+    /// hairline, lead pad. Part of ONE time→x transform — playhead and
+    /// box-select use this; in-track views use `tickX`.
+    private var trackOriginX: CGFloat { labelWidth + 1 + trackLeadPad }
 
-    /// The single time→x mapping (track-local).
+    /// The single time→x mapping (track-local, pad excluded).
     private func xFor(_ time: Double, width: CGFloat, duration: Double) -> CGFloat {
         CGFloat(time / duration) * width
+    }
+
+    /// Track-AREA-local x for a time: lead pad plus the time mapping. Every
+    /// tick, marker and label inside the track area goes through this.
+    private func tickX(_ time: Double, width: CGFloat, duration: Double) -> CGFloat {
+        trackLeadPad + xFor(time, width: width, duration: duration)
+    }
+
+    /// Inverse of `tickX` for gestures in track-area coordinates.
+    private func timeAt(_ x: CGFloat, width: CGFloat, duration: Double) -> Double {
+        min(max(0, Double((x - trackLeadPad) / width) * duration), duration)
     }
 
     // Multi-drag: initial local times captured on gesture start so relative
@@ -38,7 +53,8 @@ struct TimelineView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let trackWidth = max(80, geo.size.width - labelWidth - trackInset)
+            let trackWidth = max(80, geo.size.width - labelWidth - 1
+                                 - trackLeadPad - trackTrailPad)
             let duration = model.timelineDuration
 
             VStack(alignment: .leading, spacing: 0) {
@@ -84,6 +100,17 @@ struct TimelineView: View {
                     }
                 }
             }
+            .background(alignment: .topLeading) {
+                // Structural column divide: header tint, then the full-height
+                // hairline. Painted once behind everything so the divide can
+                // never disagree between the ruler and the lanes.
+                HStack(spacing: 0) {
+                    Rectangle().fill(Color.primary.opacity(0.045))
+                        .frame(width: labelWidth)
+                    Rectangle().fill(Color(NSColor.separatorColor))
+                        .frame(width: 1)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 playhead(width: trackWidth, duration: duration, height: geo.size.height)
             }
@@ -111,12 +138,17 @@ struct TimelineView: View {
                 .buttonStyle(.plain)
                 .help("Keyframe all layers in place (⇧K)")
             }
-            .frame(width: labelWidth, alignment: .leading)
             .padding(.leading, 8)
+            .padding(.trailing, 4)
+            .frame(width: labelWidth, alignment: .leading)
+            Spacer().frame(width: 1)
 
+            // Everything here draws in the TRACK AREA's coordinate space via
+            // tickX — the canvas starts after the hairline, so no tick, time
+            // label or boundary label can reach the header column.
             Canvas { context, size in
                 for second in 0...Int(duration.rounded(.up)) {
-                    let x = CGFloat(Double(second) / duration) * size.width
+                    let x = tickX(Double(second), width: width, duration: duration)
                     var tick = Path()
                     tick.move(to: CGPoint(x: x, y: size.height - 7))
                     tick.addLine(to: CGPoint(x: x, y: size.height))
@@ -126,26 +158,31 @@ struct TimelineView: View {
                         at: CGPoint(x: x + 11, y: size.height - 13))
                 }
                 // Segment boundaries: where each read begins on the
-                // concatenated timeline.
+                // concatenated timeline. The label is ANCHORED to its tick —
+                // flipped to the left side near the right edge so it stays in
+                // the track area rather than floating or clipping.
                 for boundary in model.segmentBoundaries {
-                    let x = CGFloat(boundary.time / duration) * size.width
+                    let x = tickX(boundary.time, width: width, duration: duration)
                     var line = Path()
                     line.move(to: CGPoint(x: x, y: 0))
                     line.addLine(to: CGPoint(x: x, y: size.height))
                     context.stroke(line, with: .color(.accentColor.opacity(0.7)), lineWidth: 1)
-                    context.draw(context.resolve(
+                    let label = context.resolve(
                         Text(boundary.title).font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)),
-                        at: CGPoint(x: x + 4, y: 6), anchor: .leading)
+                            .foregroundStyle(Color.accentColor))
+                    let flip = x > size.width - 56
+                    context.draw(label,
+                                 at: CGPoint(x: flip ? x - 4 : x + 4, y: 2),
+                                 anchor: flip ? .topTrailing : .topLeading)
                 }
             }
-            .frame(width: width, height: rulerHeight)
+            .frame(width: width + trackLeadPad + trackTrailPad, height: rulerHeight)
             .contentShape(Rectangle())
             .overlay(alignment: .leading) {
                 // Work-area band.
                 if let area = model.workArea {
-                    let x0 = CGFloat(area.lowerBound / duration) * width
-                    let x1 = CGFloat(area.upperBound / duration) * width
+                    let x0 = tickX(area.lowerBound, width: width, duration: duration)
+                    let x1 = tickX(area.upperBound, width: width, duration: duration)
                     Rectangle()
                         .fill(Color.accentColor.opacity(0.18))
                         .overlay(Rectangle().stroke(Color.accentColor.opacity(0.5), lineWidth: 1))
@@ -156,10 +193,10 @@ struct TimelineView: View {
             }
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
-                    let raw = min(max(0, Double(value.location.x / width) * duration), duration)
+                    let raw = timeAt(value.location.x, width: width, duration: duration)
                     // Shift-drag sets the work area; a plain drag scrubs.
                     if NSEvent.modifierFlags.contains(.shift) {
-                        let start = min(max(0, Double(value.startLocation.x / width) * duration), duration)
+                        let start = timeAt(value.startLocation.x, width: width, duration: duration)
                         model.setWorkArea(from: start, to: raw)
                     } else {
                         model.stop()
@@ -182,15 +219,17 @@ struct TimelineView: View {
         HStack(spacing: 0) {
             Label("Camera", systemImage: "video")
                 .font(.caption.weight(.medium))
-                .frame(width: labelWidth, alignment: .leading)
                 .padding(.leading, 8)
+                .frame(width: labelWidth, alignment: .leading)
+            Spacer().frame(width: 1)
 
             ZStack(alignment: .leading) {
                 Rectangle().fill(Color.secondary.opacity(0.06))
                 ForEach(model.diagram.camera.keyframes) { frame in
                     marker(color: .purple,
                            selected: model.selectedCameraKeyframeId == frame.id)
-                        .position(x: CGFloat(frame.t / duration) * width, y: laneHeight / 2)
+                        .position(x: tickX(frame.t, width: width, duration: duration),
+                                  y: laneHeight / 2)
                         .help("\(Int(frame.value))° at \(String(format: "%.2f", frame.t))s")
                         .onTapGesture {
                             model.selectedCameraKeyframeId = frame.id
@@ -198,7 +237,7 @@ struct TimelineView: View {
                         }
                 }
             }
-            .frame(width: width, height: laneHeight)
+            .frame(width: width + trackLeadPad + trackTrailPad, height: laneHeight)
         }
         .frame(height: laneHeight)
     }
@@ -222,7 +261,7 @@ struct TimelineView: View {
                 .background(selected ? event.color : Color.clear, in: Circle())
                 .scaleEffect(selected ? 1.35 : 1)
                 .shadow(color: selected ? event.color.opacity(0.6) : .clear, radius: selected ? 3 : 0)
-                .position(x: CGFloat(min(event.time, duration) / duration) * width,
+                .position(x: tickX(min(event.time, duration), width: width, duration: duration),
                           y: laneHeight / 2)
                 .help(event.label)
                 .onTapGesture {
@@ -264,7 +303,7 @@ struct TimelineView: View {
                     dragInitial = initial
                 }
                 guard let initial = dragInitial, let dragged = initial[event.id] else { return }
-                let absoluteNow = Double(value.location.x / width) * duration
+                let absoluteNow = timeAt(value.location.x, width: width, duration: duration)
                 let delta = absoluteNow - dragged.3
                 for member in model.possessionEvents
                 where model.selectedKeyframeIds.contains(member.id) {
@@ -370,8 +409,10 @@ struct TimelineView: View {
                 .padding(.horizontal, 2)
                 .background(.quaternary.opacity(0.6), in: Capsule())
             }
-            .frame(width: labelWidth, alignment: .leading)
             .padding(.leading, 8)
+            .padding(.trailing, 4)
+            .frame(width: labelWidth, alignment: .leading)
+            Spacer().frame(width: 1)
 
             ZStack(alignment: .leading) {
                 Rectangle()
@@ -387,7 +428,8 @@ struct TimelineView: View {
                 ForEach(model.laneKeyframes(for: entity.id)) { lane in
                     marker(color: laneColor(entity).opacity(lane.inWindow ? 1 : 0.35),
                            selected: model.selectedKeyframeIds.contains(lane.keyframe.id))
-                        .position(x: CGFloat(lane.absoluteTime / duration) * width, y: laneHeight / 2)
+                        .position(x: tickX(lane.absoluteTime, width: width, duration: duration),
+                                  y: laneHeight / 2)
                         .gesture(keyframeDrag(lane: lane, entity: entity,
                                               width: width, duration: duration))
                         .onTapGesture {
@@ -436,7 +478,7 @@ struct TimelineView: View {
                         }
                 }
             }
-            .frame(width: width, height: laneHeight)
+            .frame(width: width + trackLeadPad + trackTrailPad, height: laneHeight)
         }
         .frame(height: laneHeight)
     }
@@ -470,7 +512,7 @@ struct TimelineView: View {
                 }
                 guard let initial = dragInitial,
                       let dragged = initial[lane.keyframe.id] else { return }
-                let absoluteNow = Double(value.location.x / width) * duration
+                let absoluteNow = timeAt(value.location.x, width: width, duration: duration)
                 let scaling = NSEvent.modifierFlags.contains(.option)
                     && lane.keyframe.id == initial.max { $0.value.3 < $1.value.3 }?.key
 

@@ -11,6 +11,10 @@ struct DiagramCanvasView: View {
     var onPlaced: () -> Void
 
     @State private var dragEntityId: UUID?
+    /// Live drag-to-bend target: which track, and the FIXED node-local time
+    /// the grab point mapped to. Position changes during the drag; this never
+    /// does.
+    @State private var bendTarget: (entityId: UUID, time: Double)?
 
     // Court-feet radii, so markers stay the right size relative to the floor.
     private let puckRadiusFeet: CGFloat = 1.6
@@ -108,19 +112,27 @@ struct DiagramCanvasView: View {
     /// an oblique court.
     private func drawMotionPaths(_ projection: CourtProjection, into context: inout GraphicsContext) {
         guard model.showMovementPaths else { return }
-        if model.renderStyle.consumeBehindMotion {
-            drawPresentationPaths(projection, into: &context)
+        let style = model.renderStyle
+        let steps = model.activeSteps
+        // BOTH modes consume the shared path layer — the read-boundary gate
+        // and the one-arrowhead rule are enforced inside visibleTrackPaths,
+        // not here. Edit mode additionally restricts to the selected read
+        // (clean swap on read switch); presentation renders the whole chain,
+        // each read gated to its own window.
+        let visible = PathConsumption.visibleTrackPaths(
+            steps: steps,
+            at: model.playhead,
+            style: style,
+            onlyNodeId: style.consumeBehindMotion ? nil : model.activeNodeId,
+            includeTrack: { id in
+                guard let entity = model.entity(id), !model.isHidden(id) else { return false }
+                if case .ball = entity.kind, model.possessionEnabled { return false }
+                return true
+            })
+        if style.consumeBehindMotion {
+            drawPresentationPaths(visible, projection, into: &context)
         } else {
-            // Read boundary = path reset, edit mode: ONLY the selected read's
-            // paths draw. Selecting a different read is a clean swap — no
-            // parent or sibling paths, draw-ons, or chevrons left behind.
-            let steps = model.activeSteps
-            if let step = steps.first(where: { $0.node.id == model.activeNodeId }) {
-                drawNodePaths(step.node, offset: step.startsAt,
-                              projection: projection, into: &context)
-            } else if let node = model.activeNode {
-                drawNodePaths(node, offset: 0, projection: projection, into: &context)
-            }
+            drawEditPaths(visible, steps: steps, projection: projection, into: &context)
         }
     }
 
@@ -128,7 +140,9 @@ struct DiagramCanvasView: View {
     /// motion only. Everything paints into one blurred layer — blur applied
     /// AFTER trimming so the consumed edge stays soft — while players, ball
     /// and court lines stay sharp outside it.
-    private func drawPresentationPaths(_ projection: CourtProjection,
+    private func drawPresentationPaths(_ visible: (pieces: [PathConsumption.TrackPathPiece],
+                                                   heads: [PathConsumption.TrackArrowhead]),
+                                       _ projection: CourtProjection,
                                        into context: inout GraphicsContext) {
         let style = model.renderStyle
         let stroke = Color(hex: style.pathStrokeHex)
@@ -147,56 +161,33 @@ struct DiagramCanvasView: View {
         headBrush.addFilter(.blur(radius: blurRadius * 0.5))
         let brushStyle = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
 
-        let steps = model.activeSteps
-        for (stepIndex, step) in steps.enumerated() {
-            let node = step.node
-            let localT = model.playhead - step.startsAt
-            // Read boundary = path reset: PathConsumption renders nothing from
-            // this read once another read's window is active.
-            let readEnd = PlayDiagram.localWindowEnd(segment: stepIndex, steps: steps)
-            for track in node.tracks {
-                guard let entity = model.entity(track.entityId), !model.isHidden(entity.id)
-                else { continue }
-                if case .ball = entity.kind, model.possessionEnabled { continue }
-                let frames = track.sortedKeyframes
-                guard frames.count > 1 else { continue }
-                for index in 0..<(frames.count - 1) {
-                    guard let visible = PathConsumption.visibleSegment(
-                        track: track, from: frames[index], to: frames[index + 1],
-                        at: localT, style: style, readEnd: readEnd) else { continue }
-
-                    let line = MovementGeometry.line(points: visible.points, kind: .run)
-                    brush.stroke(Path(projection.project(path: line)),
+        for piece in visible.pieces {
+            let line = MovementGeometry.line(points: piece.points, kind: .run)
+            brush.stroke(Path(projection.project(path: line)),
+                         with: .color(stroke), style: brushStyle)
+            // Screens keep their T-bar at the screen point.
+            if piece.kind == .screen {
+                let bar = MovementGeometry.brushScreenBar(
+                    at: piece.endPoint, angle: piece.endAngle,
+                    halfWidthFeet: projection.transform.courtFeet(width))
+                headBrush.stroke(Path(projection.project(path: bar)),
                                  with: .color(stroke), style: brushStyle)
-
-                    // Screens keep their T-bar at the screen point.
-                    if frames[index].pathKind == .screen {
-                        let bar = MovementGeometry.brushScreenBar(
-                            at: visible.headAt, angle: visible.headAngle,
-                            halfWidthFeet: projection.transform.courtFeet(width))
-                        headBrush.stroke(Path(projection.project(path: bar)),
-                                         with: .color(stroke), style: brushStyle)
-                    }
-                }
-
-                // ONE chevron per track, at the destination, visible whenever
-                // any part of the path is. A solid filled shape survives blur;
-                // fill + round-join stroke rounds the corners.
-                if track.sortedKeyframes.last?.pathKind != .screen,
-                   let head = PathConsumption.trackHead(track: track, at: localT,
-                                                        style: style, readEnd: readEnd) {
-                    let chevron = MovementGeometry.filledChevronHead(
-                        at: head.at, angle: head.angle,
-                        strokeWidthFeet: projection.transform.courtFeet(width))
-                    let projected = Path(projection.project(path: chevron))
-                    headBrush.fill(projected, with: .color(stroke))
-                    headBrush.stroke(projected, with: .color(stroke),
-                                     style: StrokeStyle(lineWidth: width * 0.4,
-                                                        lineCap: .round,
-                                                        lineJoin: .round))
-                }
             }
+        }
 
+        // THE arrowhead — one per track, placed by the shared layer at the
+        // end of the final visible segment. A solid filled chevron survives
+        // blur; fill + round-join stroke rounds the corners.
+        for head in visible.heads {
+            let chevron = MovementGeometry.filledChevronHead(
+                at: head.at, angle: head.angle,
+                strokeWidthFeet: projection.transform.courtFeet(width))
+            let projected = Path(projection.project(path: chevron))
+            headBrush.fill(projected, with: .color(stroke))
+            headBrush.stroke(projected, with: .color(stroke),
+                             style: StrokeStyle(lineWidth: width * 0.4,
+                                                lineCap: .round,
+                                                lineJoin: .round))
         }
 
         // Pass: the ball's REMAINING flight arc, consumed behind it. No
@@ -217,94 +208,99 @@ struct DiagramCanvasView: View {
         }
     }
 
-    /// `offset` is where this read begins in absolute branch time, so
-    /// node-local possession times resolve through the branch-aware resolver.
-    private func drawNodePaths(_ node: ReadNode,
-                               offset: Double,
+    /// Edit overlay: semantic per-segment strokes from the shared path layer,
+    /// plus the possession-derived pass/shot lines of the selected read.
+    /// Heads are NOT drawn per segment — the one-arrowhead rule lives in the
+    /// shared layer, so a direction change never sprouts a head here either.
+    private func drawEditPaths(_ visible: (pieces: [PathConsumption.TrackPathPiece],
+                                           heads: [PathConsumption.TrackArrowhead]),
+                               steps: [PlayDiagram.BranchStep],
                                projection: CourtProjection,
                                into context: inout GraphicsContext) {
-        for track in node.tracks {
-            let frames = track.sortedKeyframes
-            guard frames.count > 1, let entity = model.entity(track.entityId),
-                  !model.isHidden(entity.id) else { continue }
-            // The ball's line comes from possession, not its track.
-            if case .ball = entity.kind, model.possessionEnabled { continue }
+        for piece in visible.pieces {
+            guard piece.stepIndex < steps.count,
+                  let entity = model.entity(piece.entityId) else { continue }
+            let node = steps[piece.stepIndex].node
             let tint = color(for: entity)
-
-            for index in 0..<(frames.count - 1) {
-                let from = frames[index]
-                let to = frames[index + 1]
-                var courtPoints: [CGPoint] = []
-                let samples = 20
-                for step in 0...samples {
-                    let t = from.t + (to.t - from.t) * Double(step) / Double(samples)
-                    if let point = track.position(at: t) { courtPoints.append(point) }
-                }
-                guard courtPoints.count > 1 else { continue }
-                // AUTO-DRIBBLE: line style is COMPUTED at render time from
-                // (movement AND possession overlap), never stored. The same
-                // path renders wavy while its player holds the ball and as a
-                // plain cut once possession is removed — no user action between.
-                // Evaluated at the segment midpoint so a possession starting
-                // mid-segment still reads correctly.
-                let midpoint = (from.t + to.t) / 2
-                let kind: PathKind = (model.possessionEnabled
-                                      && node.isDribbling(track.entityId, at: midpoint))
-                    ? .dribble : from.pathKind
-                drawSegment(courtPoints, kind: kind, tint: tint,
-                            projection: projection, into: &context)
+            // AUTO-DRIBBLE: line style is COMPUTED at render time from
+            // (movement AND possession overlap), never stored. Evaluated at
+            // the segment midpoint so a possession starting mid-segment still
+            // reads correctly.
+            let midpoint = (piece.fromT + piece.toT) / 2
+            let kind: PathKind = (model.possessionEnabled
+                                  && node.isDribbling(piece.entityId, at: midpoint))
+                ? .dribble : piece.kind
+            let line = MovementGeometry.line(points: piece.points, kind: kind)
+            context.stroke(Path(projection.project(path: line)),
+                           with: .color(tint.opacity(0.95)),
+                           style: strokeStyle(for: kind))
+            // Screens keep their T-bar at the segment end — an ornament of
+            // the screen segment, distinct from the track's one arrowhead.
+            if piece.kind == .screen {
+                let bar = MovementGeometry.brushScreenBar(
+                    at: piece.endPoint, angle: piece.endAngle,
+                    halfWidthFeet: MovementGeometry.screenBarHalfWidthFeet)
+                context.stroke(Path(projection.project(path: bar)),
+                               with: .color(tint),
+                               style: StrokeStyle(lineWidth: 3, lineCap: .butt))
             }
         }
 
-        // Pass and shot lines DERIVE from possession — one source of truth for
-        // "the ball went from here to there".
-        if model.possessionEnabled {
-            let releases = node.releases(passSpeed: model.look.passSpeedFeetPerSecond,
-                                         shotSpeed: model.look.shotSpeedFeetPerSecond) { id, t in
-                model.resolvedPosition(of: id, at: offset + t)
-            }
-            for item in releases {
-                let tint = Color(hex: model.theme.ballHex)
-                switch item.release {
-                case .pass:
-                    drawSegment([item.from, item.to], kind: .pass, tint: tint,
+        // THE arrowhead — one per track, at the end of the final visible
+        // segment, placed by the shared layer.
+        for head in visible.heads {
+            guard let entity = model.entity(head.entityId) else { continue }
+            let arrow = MovementGeometry.arrowHead(at: head.at, angle: head.angle)
+            context.fill(Path(projection.project(path: arrow)),
+                         with: .color(color(for: entity)))
+        }
+
+        // Pass and shot lines DERIVE from possession — one source of truth
+        // for "the ball went from here to there". Selected read only, like
+        // everything else in edit mode; node-local possession times resolve
+        // through the branch-aware resolver via the step offset.
+        guard model.possessionEnabled,
+              let step = steps.first(where: { $0.node.id == model.activeNodeId })
+        else { return }
+        let releases = step.node.releases(passSpeed: model.look.passSpeedFeetPerSecond,
+                                          shotSpeed: model.look.shotSpeedFeetPerSecond) { id, t in
+            model.resolvedPosition(of: id, at: step.startsAt + t)
+        }
+        for item in releases {
+            let tint = Color(hex: model.theme.ballHex)
+            switch item.release {
+            case .pass:
+                drawReleaseLine([item.from, item.to], tint: tint,
                                 projection: projection, into: &context)
-                case .shot:
-                    // Shallow parabola toward the rim, sampled in court feet so
-                    // it projects with the floor.
-                    var points: [CGPoint] = []
-                    for step in 0...20 {
-                        let f = CGFloat(step) / 20
-                        let x = item.from.x + (item.to.x - item.from.x) * f
-                        let y = item.from.y + (item.to.y - item.from.y) * f
-                        let arc = sin(Double(f) * .pi) * 1.6
-                        points.append(CGPoint(x: x, y: y - CGFloat(arc)))
-                    }
-                    drawSegment(points, kind: .pass, tint: tint,
-                                projection: projection, into: &context)
+            case .shot:
+                // Shallow parabola toward the rim, sampled in court feet so
+                // it projects with the floor.
+                var points: [CGPoint] = []
+                for sample in 0...20 {
+                    let f = CGFloat(sample) / 20
+                    let x = item.from.x + (item.to.x - item.from.x) * f
+                    let y = item.from.y + (item.to.y - item.from.y) * f
+                    let arc = sin(Double(f) * .pi) * 1.6
+                    points.append(CGPoint(x: x, y: y - CGFloat(arc)))
                 }
+                drawReleaseLine(points, tint: tint,
+                                projection: projection, into: &context)
             }
         }
     }
 
-    private func drawSegment(_ courtPoints: [CGPoint],
-                             kind: PathKind,
-                             tint: Color,
-                             projection: CourtProjection,
-                             into context: inout GraphicsContext) {
-        let line = MovementGeometry.line(points: courtPoints, kind: kind)
+    /// A possession-derived pass/shot line: dashed, with its own single head —
+    /// "passes keep their own single head" is this, not the track rule.
+    private func drawReleaseLine(_ courtPoints: [CGPoint],
+                                 tint: Color,
+                                 projection: CourtProjection,
+                                 into context: inout GraphicsContext) {
+        let line = MovementGeometry.line(points: courtPoints, kind: .pass)
         context.stroke(Path(projection.project(path: line)),
                        with: .color(tint.opacity(0.95)),
-                       style: strokeStyle(for: kind))
-
-        guard let head = MovementGeometry.head(points: courtPoints, kind: kind) else { return }
-        let projected = Path(projection.project(path: head))
-        if MovementGeometry.headIsFilled(kind) {
-            context.fill(projected, with: .color(tint))
-        } else {
-            context.stroke(projected, with: .color(tint),
-                           style: StrokeStyle(lineWidth: 3, lineCap: .butt))
-        }
+                       style: strokeStyle(for: .pass))
+        guard let head = MovementGeometry.head(points: courtPoints, kind: .pass) else { return }
+        context.fill(Path(projection.project(path: head)), with: .color(tint))
     }
 
     /// Coaching convention. Dribble is a real WAVE built in MovementGeometry,
@@ -616,6 +612,70 @@ struct DiagramCanvasView: View {
         return best
     }
 
+    /// Where along a visible path a grab landed: the track's entity and the
+    /// node-local time of the grab point. Time comes from the sampled
+    /// polyline — samples are uniform in segment time, so the nearest point
+    /// on the polyline maps straight back to t (the arc-length → t mapping).
+    ///
+    /// Runs in VIEW space with a ±7pt corridor (a ≥14pt widened stroke): the
+    /// visible line is ~2pt, far too thin to hit directly, and a court-feet
+    /// tolerance would change meaning with zoom and tilt — the opposite of
+    /// entity hit-testing, where the puck has a real court size.
+    private func pathGrab(at viewPoint: CGPoint,
+                          projection: CourtProjection) -> (entityId: UUID, time: Double)? {
+        let visible = PathConsumption.visibleTrackPaths(
+            steps: model.activeSteps,
+            at: model.playhead,
+            style: model.renderStyle,
+            onlyNodeId: model.activeNodeId,
+            includeTrack: { id in
+                guard let entity = model.entity(id),
+                      !model.isHidden(id), !model.isLocked(id) else { return false }
+                if case .ball = entity.kind, model.possessionEnabled { return false }
+                return true
+            })
+        let tolerance: CGFloat = 7
+        var best: (entityId: UUID, time: Double)?
+        var bestDistance: CGFloat = tolerance
+        for piece in visible.pieces {
+            guard piece.points.count > 1 else { continue }
+            var projected: [CGPoint] = []
+            for point in piece.points { projected.append(projection.project(point)) }
+            let lastIndex = projected.count - 1
+            for index in 0..<lastIndex {
+                let hit = distanceToSegment(viewPoint, projected[index], projected[index + 1])
+                if hit.distance < bestDistance {
+                    bestDistance = hit.distance
+                    let f = (CGFloat(index) + hit.fraction) / CGFloat(lastIndex)
+                    let time = piece.fromT + (piece.toT - piece.fromT) * Double(f)
+                    best = (piece.entityId, time)
+                }
+            }
+        }
+        return best
+    }
+
+    /// Distance from a point to a segment, plus where along it the closest
+    /// point sits. Written as explicit typed steps — the type-checker budget.
+    private func distanceToSegment(_ p: CGPoint, _ a: CGPoint,
+                                   _ b: CGPoint) -> (distance: CGFloat, fraction: CGFloat) {
+        let abx: CGFloat = b.x - a.x
+        let aby: CGFloat = b.y - a.y
+        let lengthSquared: CGFloat = abx * abx + aby * aby
+        if lengthSquared < 0.0001 {
+            let dx: CGFloat = p.x - a.x
+            let dy: CGFloat = p.y - a.y
+            return ((dx * dx + dy * dy).squareRoot(), 0)
+        }
+        var f: CGFloat = ((p.x - a.x) * abx + (p.y - a.y) * aby) / lengthSquared
+        f = max(0, min(1, f))
+        let cx: CGFloat = a.x + abx * f
+        let cy: CGFloat = a.y + aby * f
+        let dx: CGFloat = p.x - cx
+        let dy: CGFloat = p.y - cy
+        return ((dx * dx + dy * dy).squareRoot(), f)
+    }
+
     /// Nearest player to a court point, for possession drops.
     private func hitTestPlayers(_ court: CGPoint) -> UUID? {
         let tolerance: CGFloat = puckRadiusFeet * 2.2
@@ -637,7 +697,7 @@ struct DiagramCanvasView: View {
     private func dragGesture(_ projection: CourtProjection) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
-                if dragEntityId == nil {
+                if dragEntityId == nil, bendTarget == nil {
                     let start = projection.unproject(value.startLocation)
                     dragEntityId = hitTest(start, projection: projection)
                     if let id = dragEntityId {
@@ -651,7 +711,25 @@ struct DiagramCanvasView: View {
                         // ONE undo entry per gesture. Registering per mouse-move
                         // is the usual mistake and makes undo useless.
                         model.registerUndo("Move Entity")
+                    } else if placementKind == nil,
+                              !model.renderStyle.consumeBehindMotion,
+                              let grab = pathGrab(at: value.startLocation,
+                                                  projection: projection) {
+                        // Drag-to-bend, edit mode only: grabbing the middle of
+                        // a path fixes a time (arc length → t); the drag moves
+                        // the keyframe at that time — inserting it first if
+                        // none is nearby. Same rules as entity drags: pause
+                        // playback, one undo per gesture.
+                        model.stop()
+                        model.selectedEntityId = grab.entityId
+                        model.registerUndo("Bend Path")
+                        bendTarget = grab
                     }
+                }
+                if let grab = bendTarget {
+                    let court = model.maybeSnap(projection.unproject(value.location))
+                    model.bendTrack(entityId: grab.entityId, atLocal: grab.time, to: court)
+                    return
                 }
                 guard let id = dragEntityId, let entity = model.entity(id) else { return }
 
@@ -672,6 +750,7 @@ struct DiagramCanvasView: View {
             .onEnded { value in
                 defer {
                     dragEntityId = nil
+                    bendTarget = nil
                     model.ballDragLocation = nil
                     model.ballDragSnapTarget = nil
                     model.ballDragCancelled = false

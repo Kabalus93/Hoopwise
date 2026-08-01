@@ -88,6 +88,10 @@ struct PlayEditorView: View {
                 model.load(stored.diagram, name: stored.name)
             }
             model.startAutosave()
+            #if DEBUG
+            // Agent verification runs: env-gated, never fires in normal use.
+            DemoScenario.applyIfRequested(to: model)
+            #endif
         }
         .onChange(of: systemUndoManager) { _, manager in model.undoManager = manager }
         .onDisappear {

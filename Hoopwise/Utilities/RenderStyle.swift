@@ -222,32 +222,6 @@ enum PathConsumption {
                               headAngle: atan2(last.y - previous.y, last.x - previous.x))
     }
 
-    /// The head belongs to the TRACK, not a segment: it sits at the
-    /// destination, oriented to the final tangent, and is visible whenever any
-    /// portion of the path is — disappearing with the last consumed piece.
-    /// Gating it to the final segment's own window left mid-path frames with
-    /// no direction cue at all.
-    static func trackHead(track: Track, at t: Double,
-                          style: RenderStyle,
-                          readEnd: Double = .infinity) -> (at: CGPoint, angle: CGFloat)? {
-        let frames = track.sortedKeyframes
-        guard frames.count > 1, let last = frames.last else { return nil }
-        // Any segment visible? The read-boundary gate flows through, so the
-        // chevron dies with the last piece of path — never after it.
-        var anyVisible = false
-        for index in 0..<(frames.count - 1) {
-            if visibleSegment(track: track, from: frames[index], to: frames[index + 1],
-                              at: t, style: style, readEnd: readEnd, samples: 4) != nil {
-                anyVisible = true
-                break
-            }
-        }
-        guard anyVisible else { return nil }
-        let beforeEnd = track.position(at: last.t - 0.06) ?? last.position
-        let angle = atan2(last.position.y - beforeEnd.y, last.position.x - beforeEnd.x)
-        return (last.position, angle)
-    }
-
     private static func fullSegment(track: Track, from: Keyframe, to: Keyframe,
                                     samples: Int) -> VisibleSegment? {
         var points: [CGPoint] = []
@@ -261,5 +235,100 @@ enum PathConsumption {
         return VisibleSegment(points: points,
                               headAt: last,
                               headAngle: atan2(last.y - previous.y, last.x - previous.x))
+    }
+
+    // MARK: - The single path-layer entry point
+
+    /// One drawable piece of one track's path, in court feet.
+    struct TrackPathPiece {
+        var entityId: UUID
+        var stepIndex: Int
+        /// Index into the track's sorted keyframe pairs.
+        var segmentIndex: Int
+        var points: [CGPoint]
+        /// The departure keyframe's semantic kind. Callers may override at
+        /// render time (auto-dribble) — the override never reaches storage.
+        var kind: PathKind
+        /// Node-local time span of the underlying segment, for midpoint
+        /// evaluations like auto-dribble.
+        var fromT: Double
+        var toT: Double
+        /// End of this piece with its tangent — where a screen's T-bar sits.
+        var endPoint: CGPoint
+        var endAngle: CGFloat
+    }
+
+    /// THE arrowhead. A movement track owns exactly one, at the final endpoint
+    /// of its final visible segment, oriented along the end tangent.
+    struct TrackArrowhead {
+        var entityId: UUID
+        var stepIndex: Int
+        var at: CGPoint
+        var angle: CGFloat
+    }
+
+    /// Everything the path layer may draw at absolute time `time` along
+    /// `steps` — the single entry point behind canvas edit mode, canvas
+    /// presentation mode, and the frame exporter. The read-boundary gate and
+    /// the one-arrowhead rule live HERE; a renderer that consumes this cannot
+    /// bypass either, and the fuzz harness exercises exactly this call.
+    ///
+    /// Rules enforced:
+    ///   - READ BOUNDARY = PATH RESET: each step is gated to its own window
+    ///     ([startsAt, next startsAt) in absolute time); nothing from a read
+    ///     renders while another read's window is active.
+    ///   - ONE ARROWHEAD PER TRACK: at the final endpoint of the final visible
+    ///     segment, along the end tangent — during draw-on that is the leading
+    ///     tip, during motion the segment destination. Direction changes never
+    ///     sprout heads. A track whose final visible segment is a screen ends
+    ///     in its T-bar and gets no arrow.
+    ///
+    /// `onlyNodeId` restricts output to one read — edit mode shows just the
+    /// selected read. `includeTrack` filters tracks (hidden layers, the
+    /// possession-driven ball).
+    static func visibleTrackPaths(steps: [PlayDiagram.BranchStep],
+                                  at time: Double,
+                                  style: RenderStyle,
+                                  onlyNodeId: UUID? = nil,
+                                  includeTrack: (UUID) -> Bool = { _ in true })
+        -> (pieces: [TrackPathPiece], heads: [TrackArrowhead]) {
+        var pieces: [TrackPathPiece] = []
+        var heads: [TrackArrowhead] = []
+        for (stepIndex, step) in steps.enumerated() {
+            if let onlyNodeId, step.node.id != onlyNodeId { continue }
+            let localT = time - step.startsAt
+            let readEnd = PlayDiagram.localWindowEnd(segment: stepIndex, steps: steps)
+            for track in step.node.tracks {
+                guard includeTrack(track.entityId) else { continue }
+                let frames = track.sortedKeyframes
+                guard frames.count > 1 else { continue }
+                var finalVisible: (kind: PathKind, segment: VisibleSegment)?
+                for index in 0..<(frames.count - 1) {
+                    guard let visible = visibleSegment(track: track,
+                                                       from: frames[index],
+                                                       to: frames[index + 1],
+                                                       at: localT, style: style,
+                                                       readEnd: readEnd)
+                    else { continue }
+                    pieces.append(TrackPathPiece(entityId: track.entityId,
+                                                 stepIndex: stepIndex,
+                                                 segmentIndex: index,
+                                                 points: visible.points,
+                                                 kind: frames[index].pathKind,
+                                                 fromT: frames[index].t,
+                                                 toT: frames[index + 1].t,
+                                                 endPoint: visible.headAt,
+                                                 endAngle: visible.headAngle))
+                    finalVisible = (frames[index].pathKind, visible)
+                }
+                if let last = finalVisible, last.kind != .screen {
+                    heads.append(TrackArrowhead(entityId: track.entityId,
+                                                stepIndex: stepIndex,
+                                                at: last.segment.headAt,
+                                                angle: last.segment.headAngle))
+                }
+            }
+        }
+        return (pieces, heads)
     }
 }

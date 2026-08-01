@@ -124,7 +124,18 @@ final class PlayEditorModel: ObservableObject {
             .sink { [weak self] _ in self?.save() }
     }
 
+    /// Set by the DEBUG demo-scenario driver so an agent verification run
+    /// never writes its scratch play into the coach's library.
+    var persistenceDisabled = false
+
+    /// Cancels the autosave pipeline. DEBUG demo scenarios only.
+    func disableAutosave() {
+        autosave?.cancel()
+        autosave = nil
+    }
+
     func save() {
+        guard !persistenceDisabled else { return }
         dataManager?.savePlayDiagram(diagram, name: diagramName)
     }
 
@@ -361,6 +372,40 @@ final class PlayEditorModel: ObservableObject {
                                               pathKind: defaultKind), at: 0)
                 }
                 node.tracks.append(Track(entityId: entityId, keyframes: keyframes))
+            }
+        }
+    }
+
+    /// Drag-to-bend: moves — or inserts, then keeps moving — the intermediate
+    /// keyframe at a FIXED node-local time. The grab point on the path set
+    /// the time (arc length → t); dragging changes position ONLY. Nothing is
+    /// ever retimed here, and the gesture registers one undo for the whole
+    /// bend, like every other drag.
+    ///
+    /// First call inserts (unless a keyframe already sits within the epsilon —
+    /// then it is the one being bent); subsequent calls find that keyframe at
+    /// the same fixed time and move it, which is what makes the preview live.
+    func bendTrack(entityId: UUID, atLocal time: Double, to position: CGPoint) {
+        let clamped = diagram.space.clamp(position)
+        mutateActiveNode { node in
+            guard let trackIndex = node.tracks.firstIndex(where: { $0.entityId == entityId })
+            else { return }
+            let frames = node.tracks[trackIndex].keyframes
+            if let frameIndex = frames.firstIndex(where: { abs($0.t - time) < 0.1 }) {
+                node.tracks[trackIndex].keyframes[frameIndex].position = clamped
+            } else {
+                // The new keyframe splits its segment without changing the
+                // look: kind from the departure keyframe (it now governs the
+                // second half too), easing from the arriving keyframe so both
+                // halves keep the segment's original feel.
+                let sorted = frames.sorted { $0.t < $1.t }
+                let departure = sorted.last { $0.t <= time }
+                let arriving = sorted.first { $0.t > time }
+                node.tracks[trackIndex].keyframes.append(
+                    Keyframe(t: time, position: clamped,
+                             easing: arriving?.easing ?? .easeInOut,
+                             pathKind: departure?.pathKind ?? .run))
+                node.tracks[trackIndex].keyframes.sort { $0.t < $1.t }
             }
         }
     }

@@ -81,34 +81,40 @@ enum PlayFrameExporter {
                            at: time, style: style, projection: projection,
                            transform: transform, size: size, look: look)
         } else {
-            for step in steps {
-                for track in step.node.tracks {
-                    let frames = track.sortedKeyframes
-                    guard frames.count > 1, let entity = diagram.entity(track.entityId) else { continue }
-                    var points: [CGPoint] = []
-                    for sample in 0...32 {
-                        let t = frames.first!.t + (frames.last!.t - frames.first!.t)
-                            * Double(sample) / 32
-                        if let point = track.position(at: t) { points.append(point) }
-                    }
-                    guard points.count > 1 else { continue }
-                    let midpoint = (frames.first!.t + frames.last!.t) / 2
-                    let kind: PathKind = step.node.isDribbling(track.entityId, at: midpoint)
-                        ? .dribble : frames[0].pathKind
-                    let tint = entityColor(entity, theme: theme, style: style)
-                    context.setStrokeColor(tint)
-                    context.setLineWidth(3)
-                    if kind == .pass { context.setLineDash(phase: 0, lengths: [10, 7]) }
-                    context.addPath(projection.project(path: MovementGeometry.line(points: points, kind: kind)))
+            // Edit-style export goes through the SAME shared path layer as the
+            // canvas: per-segment semantic strokes, read-boundary gate, one
+            // arrowhead per track at the end of its final visible segment.
+            let visible = PathConsumption.visibleTrackPaths(
+                steps: steps, at: time, style: style,
+                includeTrack: { id in diagram.entity(id) != nil })
+            for piece in visible.pieces {
+                guard piece.stepIndex < steps.count,
+                      let entity = diagram.entity(piece.entityId) else { continue }
+                let midpoint = (piece.fromT + piece.toT) / 2
+                let kind: PathKind = steps[piece.stepIndex].node
+                    .isDribbling(piece.entityId, at: midpoint) ? .dribble : piece.kind
+                let tint = entityColor(entity, theme: theme, style: style)
+                context.setStrokeColor(tint)
+                context.setLineWidth(3)
+                if kind == .pass { context.setLineDash(phase: 0, lengths: [10, 7]) }
+                context.addPath(projection.project(
+                    path: MovementGeometry.line(points: piece.points, kind: kind)))
+                context.strokePath()
+                context.setLineDash(phase: 0, lengths: [])
+                if piece.kind == .screen {
+                    context.setLineWidth(4)
+                    context.addPath(projection.project(path: MovementGeometry.brushScreenBar(
+                        at: piece.endPoint, angle: piece.endAngle,
+                        halfWidthFeet: MovementGeometry.screenBarHalfWidthFeet)))
                     context.strokePath()
-                    context.setLineDash(phase: 0, lengths: [])
-                    if let head = MovementGeometry.head(points: points, kind: kind) {
-                        context.addPath(projection.project(path: head))
-                        if MovementGeometry.headIsFilled(kind) {
-                            context.setFillColor(tint); context.fillPath()
-                        } else { context.setLineWidth(4); context.strokePath() }
-                    }
                 }
+            }
+            for head in visible.heads {
+                guard let entity = diagram.entity(head.entityId) else { continue }
+                context.setFillColor(entityColor(entity, theme: theme, style: style))
+                context.addPath(projection.project(
+                    path: MovementGeometry.arrowHead(at: head.at, angle: head.angle)))
+                context.fillPath()
             }
         }
 
@@ -243,82 +249,72 @@ enum PlayFrameExporter {
         layer.setLineCap(.round)
         layer.setLineJoin(.round)
 
-        let currentIndex = PlayDiagram.segmentIndex(at: time, steps: steps)
-        for (stepIndex, step) in steps.enumerated() {
-            let localT = time - step.startsAt
-            // Read boundary = path reset — same gate as the canvas, through
-            // the same PathConsumption, so playback and export cannot disagree.
-            let readEnd = PlayDiagram.localWindowEnd(segment: stepIndex, steps: steps)
-            for track in step.node.tracks {
-                guard let entity = diagram.entity(track.entityId) else { continue }
-                if case .ball = entity.kind { continue }
-                let frames = track.sortedKeyframes
-                guard frames.count > 1 else { continue }
-                for index in 0..<(frames.count - 1) {
-                    guard let visible = PathConsumption.visibleSegment(
-                        track: track, from: frames[index], to: frames[index + 1],
-                        at: localT, style: style, readEnd: readEnd) else { continue }
-                    layer.addPath(projection.project(
-                        path: MovementGeometry.line(points: visible.points, kind: .run)))
-                    layer.strokePath()
-                    // Screens keep their T-bar at the screen point.
-                    if frames[index].pathKind == .screen {
-                        headLayer.setStrokeColor(cgColor(style.pathStrokeHex))
-                        headLayer.setLineCap(.round)
-                        headLayer.setLineJoin(.round)
-                        headLayer.setLineWidth(width)
-                        headLayer.addPath(projection.project(
-                            path: MovementGeometry.brushScreenBar(
-                                at: visible.headAt, angle: visible.headAngle,
-                                halfWidthFeet: transform.courtFeet(width))))
-                        headLayer.strokePath()
-                    }
-                }
-
-                // ONE chevron per track at the destination, visible whenever
-                // any part of the path is.
-                if track.sortedKeyframes.last?.pathKind != .screen,
-                   let head = PathConsumption.trackHead(track: track, at: localT,
-                                                       style: style, readEnd: readEnd) {
-                    let chevron = projection.project(
-                        path: MovementGeometry.filledChevronHead(
-                            at: head.at, angle: head.angle,
-                            strokeWidthFeet: transform.courtFeet(width)))
-                    headLayer.setStrokeColor(cgColor(style.pathStrokeHex))
-                    headLayer.setFillColor(cgColor(style.pathStrokeHex))
-                    headLayer.setLineCap(.round)
-                    headLayer.setLineJoin(.round)
-                    headLayer.addPath(chevron)
-                    headLayer.fillPath()
-                    headLayer.setLineWidth(width * 0.4)
-                    headLayer.addPath(chevron)
-                    headLayer.strokePath()
-                }
+        // The shared path layer supplies everything drawable: read-boundary
+        // gate and the one-arrowhead-per-track rule are enforced inside it,
+        // identically for the canvas and this exporter.
+        let visible = PathConsumption.visibleTrackPaths(
+            steps: steps, at: time, style: style,
+            includeTrack: { id in
+                guard let entity = diagram.entity(id) else { return false }
+                if case .ball = entity.kind { return false }
+                return true
+            })
+        for piece in visible.pieces {
+            layer.addPath(projection.project(
+                path: MovementGeometry.line(points: piece.points, kind: .run)))
+            layer.strokePath()
+            // Screens keep their T-bar at the screen point.
+            if piece.kind == .screen {
+                headLayer.setStrokeColor(cgColor(style.pathStrokeHex))
+                headLayer.setLineCap(.round)
+                headLayer.setLineJoin(.round)
+                headLayer.setLineWidth(width)
+                headLayer.addPath(projection.project(
+                    path: MovementGeometry.brushScreenBar(
+                        at: piece.endPoint, angle: piece.endAngle,
+                        halfWidthFeet: transform.courtFeet(width))))
+                headLayer.strokePath()
             }
-            // Remaining pass flight ahead of the ball, same brush. Only the
-            // segment under the playhead — flight cannot cross a boundary.
-            let node = step.node
-            let segmentSteps = steps
-            if stepIndex == currentIndex,
-               let ball = diagram.ball {
-                let state = node.ballState(at: localT,
-                                           passSpeed: look.passSpeedFeetPerSecond,
-                                           shotSpeed: look.shotSpeedFeetPerSecond,
-                                           ballHome: ball.homePosition,
-                                           heldOffsetFeet: look.ballHeldOffsetFeet,
-                                           entityExists: { diagram.entity($0) != nil }) { id, t in
-                    PlayDiagram.segmentPosition(of: id, segment: currentIndex, localTime: t,
-                                                steps: segmentSteps, entities: diagram.entities)
-                }
-                if case .inFlight(let from, let to, let progress, _) = state {
-                    let at = CGPoint(x: from.x + (to.x - from.x) * CGFloat(progress),
-                                     y: from.y + (to.y - from.y) * CGFloat(progress))
-                    layer.setLineWidth(width * 0.7)
-                    layer.move(to: projection.project(at))
-                    layer.addLine(to: projection.project(to))
-                    layer.strokePath()
-                    layer.setLineWidth(width)
-                }
+        }
+        for head in visible.heads {
+            let chevron = projection.project(
+                path: MovementGeometry.filledChevronHead(
+                    at: head.at, angle: head.angle,
+                    strokeWidthFeet: transform.courtFeet(width)))
+            headLayer.setStrokeColor(cgColor(style.pathStrokeHex))
+            headLayer.setFillColor(cgColor(style.pathStrokeHex))
+            headLayer.setLineCap(.round)
+            headLayer.setLineJoin(.round)
+            headLayer.addPath(chevron)
+            headLayer.fillPath()
+            headLayer.setLineWidth(width * 0.4)
+            headLayer.addPath(chevron)
+            headLayer.strokePath()
+        }
+
+        // Remaining pass flight ahead of the ball, same brush. Only the
+        // segment under the playhead — flight cannot cross a boundary.
+        let currentIndex = PlayDiagram.segmentIndex(at: time, steps: steps)
+        if currentIndex < steps.count, let ball = diagram.ball {
+            let node = steps[currentIndex].node
+            let localT = time - steps[currentIndex].startsAt
+            let state = node.ballState(at: localT,
+                                       passSpeed: look.passSpeedFeetPerSecond,
+                                       shotSpeed: look.shotSpeedFeetPerSecond,
+                                       ballHome: ball.homePosition,
+                                       heldOffsetFeet: look.ballHeldOffsetFeet,
+                                       entityExists: { diagram.entity($0) != nil }) { id, t in
+                PlayDiagram.segmentPosition(of: id, segment: currentIndex, localTime: t,
+                                            steps: steps, entities: diagram.entities)
+            }
+            if case .inFlight(let from, let to, let progress, _) = state {
+                let at = CGPoint(x: from.x + (to.x - from.x) * CGFloat(progress),
+                                 y: from.y + (to.y - from.y) * CGFloat(progress))
+                layer.setLineWidth(width * 0.7)
+                layer.move(to: projection.project(at))
+                layer.addLine(to: projection.project(to))
+                layer.strokePath()
+                layer.setLineWidth(width)
             }
         }
 
