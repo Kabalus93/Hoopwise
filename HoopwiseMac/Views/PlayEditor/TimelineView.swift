@@ -7,7 +7,7 @@ struct TimelineView: View {
     @ObservedObject var model: PlayEditorModel
 
     private let laneHeight: CGFloat = 30
-    private let labelWidth: CGFloat = 196
+    private let labelWidth: CGFloat = 214
     private let rulerHeight: CGFloat = 22
 
     // Multi-drag: initial local times captured on gesture start so relative
@@ -19,8 +19,6 @@ struct TimelineView: View {
     @State private var boxCurrent: CGPoint?
     @State private var renamingEntity: DiagramEntity?
     @State private var renameDraft = ""
-    /// Hover-revealed controls: rows stay calm at rest (Finder/Notes idiom).
-    @State private var hoveredLaneId: UUID?
     /// Inline rename on double-click.
     @State private var inlineRenameId: UUID?
     @State private var inlineRenameDraft = ""
@@ -250,13 +248,10 @@ struct TimelineView: View {
     private func entityLane(_ entity: DiagramEntity, width: CGFloat, duration: Double) -> some View {
         let isSelected = model.selectedEntityId == entity.id
 
-        let hovered = hoveredLaneId == entity.id
         return HStack(spacing: 0) {
-            // Progressive disclosure: at rest the row is colour dot + name +
-            // keyframes. Controls appear on hover — except ACTIVE states
-            // (hidden, locked, soloed), which stay visible so state is never
-            // invisible.
-            HStack(spacing: 4) {
+            // ALL controls, always visible, laid out once. The hover reveal
+            // did not work in practice — no half-dead states left behind.
+            HStack(spacing: 2) {
                 Button {
                     model.selectedEntityId = entity.id
                 } label: {
@@ -269,14 +264,15 @@ struct TimelineView: View {
                             })
                             .textFieldStyle(.plain)
                             .font(.caption)
-                            .frame(width: 52)
+                            .frame(width: 46)
                         } else {
                             Text(laneTitle(entity))
                                 .font(.caption)
                                 .lineLimit(1)
+                                .fixedSize()
                         }
                     }
-                    .frame(width: 64, alignment: .leading)
+                    .frame(width: 54, alignment: .leading)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -304,51 +300,44 @@ struct TimelineView: View {
                     }
                 }
 
-                // State toggles: visible on hover, or whenever ACTIVE.
-                if hovered || model.isHidden(entity.id) {
-                    layerToggle(model.isHidden(entity.id) ? "eye.slash" : "eye",
-                                active: model.isHidden(entity.id),
-                                help: "Show / hide on the court") {
-                        if model.isHidden(entity.id) { model.hiddenEntityIds.remove(entity.id) }
-                        else { model.hiddenEntityIds.insert(entity.id) }
-                    }
+                layerToggle(model.isHidden(entity.id) ? "eye.slash" : "eye",
+                            active: model.isHidden(entity.id),
+                            help: "Show / hide on the court") {
+                    if model.isHidden(entity.id) { model.hiddenEntityIds.remove(entity.id) }
+                    else { model.hiddenEntityIds.insert(entity.id) }
                 }
-                if hovered || model.isLocked(entity.id) {
-                    layerToggle(model.isLocked(entity.id) ? "lock.fill" : "lock.open",
-                                active: model.isLocked(entity.id),
-                                help: "Lock — canvas clicks pass through") {
-                        if model.isLocked(entity.id) { model.lockedEntityIds.remove(entity.id) }
-                        else { model.lockedEntityIds.insert(entity.id) }
-                    }
+                layerToggle(model.isLocked(entity.id) ? "lock.fill" : "lock.open",
+                            active: model.isLocked(entity.id),
+                            help: "Lock — canvas clicks pass through") {
+                    if model.isLocked(entity.id) { model.lockedEntityIds.remove(entity.id) }
+                    else { model.lockedEntityIds.insert(entity.id) }
                 }
-                if hovered || model.soloEntityId == entity.id {
-                    layerToggle("scope", active: model.soloEntityId == entity.id,
-                                help: "Solo — dim everything else to 25%") {
-                        model.soloEntityId = model.soloEntityId == entity.id ? nil : entity.id
-                    }
+                layerToggle("scope", active: model.soloEntityId == entity.id,
+                            help: "Solo — dim everything else to 25%") {
+                    model.soloEntityId = model.soloEntityId == entity.id ? nil : entity.id
                 }
 
-                // Keyframe nav cluster as ONE grouped control on hover.
-                if hovered {
-                    HStack(spacing: 1) {
-                        clusterButton("arrowtriangle.left.fill", help: "Previous keyframe (J)") {
-                            model.jumpToKeyframe(entity.id, direction: -1)
-                        }
-                        clusterButton(model.hasKeyframeAtPlayhead(entity.id)
-                                      ? "diamond.fill" : "diamond",
-                                      tint: model.hasKeyframeAtPlayhead(entity.id)
-                                      ? laneColor(entity) : nil,
-                                      help: "Keyframe in place (K)") {
-                            model.toggleKeyframeInPlace(entity.id)
-                        }
-                        clusterButton("arrowtriangle.right.fill", help: "Next keyframe (L)") {
-                            model.jumpToKeyframe(entity.id, direction: 1)
-                        }
+                Spacer(minLength: 2)
+
+                // Keyframe cluster: grouped tight at the trailing edge,
+                // reading as one control.
+                HStack(spacing: 0) {
+                    clusterButton("arrowtriangle.left.fill", help: "Previous keyframe (J)") {
+                        model.jumpToKeyframe(entity.id, direction: -1)
                     }
-                    .padding(.horizontal, 3)
-                    .background(.quaternary, in: Capsule())
+                    clusterButton(model.hasKeyframeAtPlayhead(entity.id)
+                                  ? "diamond.fill" : "diamond",
+                                  tint: model.hasKeyframeAtPlayhead(entity.id)
+                                  ? laneColor(entity) : nil,
+                                  help: "Keyframe in place (K)") {
+                        model.toggleKeyframeInPlace(entity.id)
+                    }
+                    clusterButton("arrowtriangle.right.fill", help: "Next keyframe (L)") {
+                        model.jumpToKeyframe(entity.id, direction: 1)
+                    }
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, 2)
+                .background(.quaternary.opacity(0.6), in: Capsule())
             }
             .frame(width: labelWidth, alignment: .leading)
             .padding(.leading, 8)
