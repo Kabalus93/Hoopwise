@@ -140,7 +140,15 @@ enum PathConsumption {
                                at t: Double,
                                style: RenderStyle,
                                readStart: Double = 0,
+                               readEnd: Double = .infinity,
                                samples: Int = 26) -> VisibleSegment? {
+        // READ BOUNDARY = PATH RESET. A path is scoped to its read and cannot
+        // render while another read's window is active. The boundary instant
+        // belongs to the ARRIVING read (segmentIndex resolves the tie
+        // forward), so the gate is strict — at t == readEnd nothing from this
+        // read survives, in either render style. If motion runs right up to
+        // the boundary, consumption end and boundary coincide by construction.
+        guard t < readEnd else { return nil }
         guard style.consumeBehindMotion else {
             return fullSegment(track: track, from: from, to: to, samples: samples)
         }
@@ -220,14 +228,16 @@ enum PathConsumption {
     /// Gating it to the final segment's own window left mid-path frames with
     /// no direction cue at all.
     static func trackHead(track: Track, at t: Double,
-                          style: RenderStyle) -> (at: CGPoint, angle: CGFloat)? {
+                          style: RenderStyle,
+                          readEnd: Double = .infinity) -> (at: CGPoint, angle: CGFloat)? {
         let frames = track.sortedKeyframes
         guard frames.count > 1, let last = frames.last else { return nil }
-        // Any segment visible?
+        // Any segment visible? The read-boundary gate flows through, so the
+        // chevron dies with the last piece of path — never after it.
         var anyVisible = false
         for index in 0..<(frames.count - 1) {
             if visibleSegment(track: track, from: frames[index], to: frames[index + 1],
-                              at: t, style: style, samples: 4) != nil {
+                              at: t, style: style, readEnd: readEnd, samples: 4) != nil {
                 anyVisible = true
                 break
             }

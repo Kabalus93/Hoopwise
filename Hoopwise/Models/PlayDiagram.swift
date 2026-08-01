@@ -1040,6 +1040,18 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
         return index
     }
 
+    /// Node-local time at which this segment's window ends — the read
+    /// boundary. Unbounded for the last segment, which owns the tail.
+    ///
+    /// Lives beside `segmentIndex` so renderers and the resolver agree about
+    /// who owns the boundary instant: `segmentIndex` resolves the tie forward,
+    /// so at exactly `readEnd` the ARRIVING read is active and the ending
+    /// read's paths must already be gone.
+    static func localWindowEnd(segment: Int, steps: [BranchStep]) -> Double {
+        guard segment + 1 < steps.count else { return .infinity }
+        return steps[segment + 1].startsAt - steps[segment].startsAt
+    }
+
     /// Entity position at ABSOLUTE path time.
     ///
     /// Continuous across segment boundaries by construction: a read without a

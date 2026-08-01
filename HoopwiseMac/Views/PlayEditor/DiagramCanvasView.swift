@@ -111,8 +111,15 @@ struct DiagramCanvasView: View {
         if model.renderStyle.consumeBehindMotion {
             drawPresentationPaths(projection, into: &context)
         } else {
-            for step in model.activeSteps {
-                drawNodePaths(step.node, projection: projection, into: &context)
+            // Read boundary = path reset, edit mode: ONLY the selected read's
+            // paths draw. Selecting a different read is a clean swap — no
+            // parent or sibling paths, draw-ons, or chevrons left behind.
+            let steps = model.activeSteps
+            if let step = steps.first(where: { $0.node.id == model.activeNodeId }) {
+                drawNodePaths(step.node, offset: step.startsAt,
+                              projection: projection, into: &context)
+            } else if let node = model.activeNode {
+                drawNodePaths(node, offset: 0, projection: projection, into: &context)
             }
         }
     }
@@ -140,9 +147,13 @@ struct DiagramCanvasView: View {
         headBrush.addFilter(.blur(radius: blurRadius * 0.5))
         let brushStyle = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
 
-        for step in model.activeSteps {
+        let steps = model.activeSteps
+        for (stepIndex, step) in steps.enumerated() {
             let node = step.node
             let localT = model.playhead - step.startsAt
+            // Read boundary = path reset: PathConsumption renders nothing from
+            // this read once another read's window is active.
+            let readEnd = PlayDiagram.localWindowEnd(segment: stepIndex, steps: steps)
             for track in node.tracks {
                 guard let entity = model.entity(track.entityId), !model.isHidden(entity.id)
                 else { continue }
@@ -152,7 +163,7 @@ struct DiagramCanvasView: View {
                 for index in 0..<(frames.count - 1) {
                     guard let visible = PathConsumption.visibleSegment(
                         track: track, from: frames[index], to: frames[index + 1],
-                        at: localT, style: style) else { continue }
+                        at: localT, style: style, readEnd: readEnd) else { continue }
 
                     let line = MovementGeometry.line(points: visible.points, kind: .run)
                     brush.stroke(Path(projection.project(path: line)),
@@ -172,7 +183,8 @@ struct DiagramCanvasView: View {
                 // any part of the path is. A solid filled shape survives blur;
                 // fill + round-join stroke rounds the corners.
                 if track.sortedKeyframes.last?.pathKind != .screen,
-                   let head = PathConsumption.trackHead(track: track, at: localT, style: style) {
+                   let head = PathConsumption.trackHead(track: track, at: localT,
+                                                        style: style, readEnd: readEnd) {
                     let chevron = MovementGeometry.filledChevronHead(
                         at: head.at, angle: head.angle,
                         strokeWidthFeet: projection.transform.courtFeet(width))
@@ -185,28 +197,36 @@ struct DiagramCanvasView: View {
                 }
             }
 
-            // Pass: the ball's REMAINING flight arc, consumed behind it. No
-            // dashed line — the travelling ball is what reads as the pass.
-            if model.possessionEnabled {
-                if case .inFlight(_, let to, _, _) = model.ballState(at: model.playhead),
-                   let ballAt = model.ballPosition(at: model.playhead) {
-                    var flight = Path()
-                    flight.move(to: projection.project(ballAt))
-                    flight.addLine(to: projection.project(to))
-                    brush.stroke(flight, with: .color(stroke),
-                                 style: StrokeStyle(lineWidth: width * 0.7,
-                                                    lineCap: .round))
-                }
+        }
+
+        // Pass: the ball's REMAINING flight arc, consumed behind it. No
+        // dashed line — the travelling ball is what reads as the pass. Drawn
+        // ONCE, outside the step loop: ballState already resolves in the
+        // segment under the playhead, so there is one flight, and stroking it
+        // per step compounded through the blur into a darker line.
+        if model.possessionEnabled {
+            if case .inFlight(_, let to, _, _) = model.ballState(at: model.playhead),
+               let ballAt = model.ballPosition(at: model.playhead) {
+                var flight = Path()
+                flight.move(to: projection.project(ballAt))
+                flight.addLine(to: projection.project(to))
+                brush.stroke(flight, with: .color(stroke),
+                             style: StrokeStyle(lineWidth: width * 0.7,
+                                                lineCap: .round))
             }
         }
     }
 
+    /// `offset` is where this read begins in absolute branch time, so
+    /// node-local possession times resolve through the branch-aware resolver.
     private func drawNodePaths(_ node: ReadNode,
+                               offset: Double,
                                projection: CourtProjection,
                                into context: inout GraphicsContext) {
         for track in node.tracks {
             let frames = track.sortedKeyframes
-            guard frames.count > 1, let entity = model.entity(track.entityId) else { continue }
+            guard frames.count > 1, let entity = model.entity(track.entityId),
+                  !model.isHidden(entity.id) else { continue }
             // The ball's line comes from possession, not its track.
             if case .ball = entity.kind, model.possessionEnabled { continue }
             let tint = color(for: entity)
@@ -241,7 +261,7 @@ struct DiagramCanvasView: View {
         if model.possessionEnabled {
             let releases = node.releases(passSpeed: model.look.passSpeedFeetPerSecond,
                                          shotSpeed: model.look.shotSpeedFeetPerSecond) { id, t in
-                model.resolvedPosition(of: id, at: t)
+                model.resolvedPosition(of: id, at: offset + t)
             }
             for item in releases {
                 let tint = Color(hex: model.theme.ballHex)

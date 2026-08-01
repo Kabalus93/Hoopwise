@@ -243,8 +243,12 @@ enum PlayFrameExporter {
         layer.setLineCap(.round)
         layer.setLineJoin(.round)
 
-        for step in steps {
+        let currentIndex = PlayDiagram.segmentIndex(at: time, steps: steps)
+        for (stepIndex, step) in steps.enumerated() {
             let localT = time - step.startsAt
+            // Read boundary = path reset — same gate as the canvas, through
+            // the same PathConsumption, so playback and export cannot disagree.
+            let readEnd = PlayDiagram.localWindowEnd(segment: stepIndex, steps: steps)
             for track in step.node.tracks {
                 guard let entity = diagram.entity(track.entityId) else { continue }
                 if case .ball = entity.kind { continue }
@@ -253,7 +257,7 @@ enum PlayFrameExporter {
                 for index in 0..<(frames.count - 1) {
                     guard let visible = PathConsumption.visibleSegment(
                         track: track, from: frames[index], to: frames[index + 1],
-                        at: localT, style: style) else { continue }
+                        at: localT, style: style, readEnd: readEnd) else { continue }
                     layer.addPath(projection.project(
                         path: MovementGeometry.line(points: visible.points, kind: .run)))
                     layer.strokePath()
@@ -274,7 +278,8 @@ enum PlayFrameExporter {
                 // ONE chevron per track at the destination, visible whenever
                 // any part of the path is.
                 if track.sortedKeyframes.last?.pathKind != .screen,
-                   let head = PathConsumption.trackHead(track: track, at: localT, style: style) {
+                   let head = PathConsumption.trackHead(track: track, at: localT,
+                                                       style: style, readEnd: readEnd) {
                     let chevron = projection.project(
                         path: MovementGeometry.filledChevronHead(
                             at: head.at, angle: head.angle,
@@ -290,11 +295,11 @@ enum PlayFrameExporter {
                     headLayer.strokePath()
                 }
             }
-            // Remaining pass flight ahead of the ball, same brush.
+            // Remaining pass flight ahead of the ball, same brush. Only the
+            // segment under the playhead — flight cannot cross a boundary.
             let node = step.node
             let segmentSteps = steps
-            let index = PlayDiagram.segmentIndex(at: time, steps: steps)
-            if steps[index].node.id == node.id,
+            if stepIndex == currentIndex,
                let ball = diagram.ball {
                 let state = node.ballState(at: localT,
                                            passSpeed: look.passSpeedFeetPerSecond,
@@ -302,7 +307,7 @@ enum PlayFrameExporter {
                                            ballHome: ball.homePosition,
                                            heldOffsetFeet: look.ballHeldOffsetFeet,
                                            entityExists: { diagram.entity($0) != nil }) { id, t in
-                    PlayDiagram.segmentPosition(of: id, segment: index, localTime: t,
+                    PlayDiagram.segmentPosition(of: id, segment: currentIndex, localTime: t,
                                                 steps: segmentSteps, entities: diagram.entities)
                 }
                 if case .inFlight(let from, let to, let progress, _) = state {
