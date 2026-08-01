@@ -100,6 +100,7 @@ extension Notification.Name {
     static let macEditorToggleSticky = Notification.Name("MacEditorToggleSticky")
     static let macEditorSave = Notification.Name("MacEditorSave")
     static let macOpenPlayInEditor = Notification.Name("MacOpenPlayInEditor")
+    static let macOpenSession = Notification.Name("MacOpenSession")
     static let macEditorExportFrame = Notification.Name("MacEditorExportFrame")
     static let macEditorExportSheet = Notification.Name("MacEditorExportSheet")
 }

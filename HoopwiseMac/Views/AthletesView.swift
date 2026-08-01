@@ -371,10 +371,10 @@ struct AthleteDetailView: View {
                 Group {
                     switch tab {
                     case .overview:    OverviewTab(student: student)
-                    case .performance: PerformanceTab(student: student)
-                    case .contracts:   ContractsTab(student: student)
-                    case .notes:       NotesTab(student: student)
-                    case .history:     HistoryTab(student: student)
+                    case .performance: AthletePerformanceTab(student: student)
+                    case .contracts:   AthleteContractsTab(student: student)
+                    case .notes:       AthleteNotesTab(student: student)
+                    case .history:     AthleteHistoryTab(student: student)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -624,7 +624,7 @@ private struct OverviewTab: View {
 
 // MARK: - Performance tab
 
-private struct PerformanceTab: View {
+struct AthletePerformanceTab: View {
     let student: Student
     @EnvironmentObject var dataManager: DataManager
     @State private var override: PerformanceGrade?
@@ -715,7 +715,7 @@ private struct PerformanceTab: View {
 
 // MARK: - Contracts tab
 
-private struct ContractsTab: View {
+struct AthleteContractsTab: View {
     let student: Student
     @EnvironmentObject var dataManager: DataManager
 
@@ -911,7 +911,7 @@ private struct ContractCard: View {
 
 // MARK: - Notes tab
 
-private struct NotesTab: View {
+struct AthleteNotesTab: View {
     let student: Student
     @EnvironmentObject var dataManager: DataManager
     @State private var newNote: String = ""
@@ -986,7 +986,7 @@ private struct NotesTab: View {
 
 // MARK: - History tab
 
-private struct HistoryTab: View {
+struct AthleteHistoryTab: View {
     let student: Student
     @EnvironmentObject var dataManager: DataManager
 

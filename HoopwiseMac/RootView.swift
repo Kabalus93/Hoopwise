@@ -38,9 +38,15 @@ struct RootView: View {
     #if DEBUG
     // Agent verification runs open straight on the editor — synthetic input
     // is unavailable, so the demo scenario cannot click the sidebar itself.
-    @State private var selection: SidebarSection? =
-        ProcessInfo.processInfo.environment["HOOPWISE_DEMO_SCENARIO"] != nil
-        ? .courtEditor : .today
+    @State private var selection: SidebarSection? = {
+        let env = ProcessInfo.processInfo.environment
+        if env["HOOPWISE_DEMO_SCENARIO"] != nil { return .courtEditor }
+        if env["HOOPWISE_DEMO_DIR_LOG"] != nil || env["HOOPWISE_DEMO_DIR_SEARCH"] != nil {
+            return .athletes
+        }
+        if env["HOOPWISE_DEMO_SESSIONS"] != nil { return .sessions }
+        return .today
+    }()
     #else
     @State private var selection: SidebarSection? = .today
     #endif
@@ -70,8 +76,8 @@ struct RootView: View {
     private var detailView: some View {
         switch selection ?? .today {
         case .today:    TodayView()
-        case .athletes: AthletesView()
-        case .sessions: SessionsView()
+        case .athletes: AthletesDirectoryView()
+        case .sessions: SessionsDirectoryView()
         case .programs: ProgramsView()
         case .drills:   DrillsView()
         case .playbook: PlaybookMacView()

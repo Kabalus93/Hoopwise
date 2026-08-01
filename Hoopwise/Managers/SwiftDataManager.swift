@@ -292,7 +292,11 @@ class SwiftDataManager: ObservableObject {
             SDPlay.self,
             SDPlayDiagram.self,
             SDConceptNode.self,
-            SDConceptLink.self
+            SDConceptLink.self,
+            // Directory groups (Contacts-style custom groups on the Mac).
+            // Same deploy-once rule as the play types above: registered now so
+            // the next CloudKit schema deploy carries it.
+            SDDirectoryGroup.self
         ])
         
         // Use platform-specific local storage
@@ -2470,7 +2474,74 @@ class SwiftDataManager: ObservableObject {
 
     /// Legacy alias for the new revenue accessor.
     var monthlyRevenue: Double { currentMonthCoachRevenue }
-    
+
+    // MARK: - Directory groups (Mac Contacts-style groups)
+
+    /// Custom directory groups for one directory page, sorted for display.
+    /// Fetched on demand rather than cached: the Mac directory is the only
+    /// consumer and group counts are tiny.
+    func directoryGroups(kind: String) -> [DirectoryGroupItem] {
+        let descriptor = FetchDescriptor<SDDirectoryGroup>(
+            predicate: #Predicate { $0.entityKind == kind },
+            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.createdAt)])
+        let rows = (try? modelContext.fetch(descriptor)) ?? []
+        return rows.map {
+            DirectoryGroupItem(id: $0.id, name: $0.name, entityKind: $0.entityKind,
+                               isSmart: $0.kindRaw == "smart",
+                               memberIds: $0.memberIds, sortOrder: $0.sortOrder)
+        }
+    }
+
+    @discardableResult
+    func createDirectoryGroup(kind: String, name: String) -> UUID {
+        let group = SDDirectoryGroup(name: name, entityKind: kind)
+        modelContext.insert(group)
+        try? modelContext.save()
+        objectWillChange.send()
+        return group.id
+    }
+
+    func renameDirectoryGroup(id: UUID, to name: String) {
+        mutateDirectoryGroup(id: id) { $0.name = name }
+    }
+
+    func deleteDirectoryGroup(id: UUID) {
+        let descriptor = FetchDescriptor<SDDirectoryGroup>(
+            predicate: #Predicate { $0.id == id })
+        if let group = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(group)
+            try? modelContext.save()
+            objectWillChange.send()
+        }
+    }
+
+    /// Adds members (drag-in). Duplicates are ignored, order preserved.
+    func addToDirectoryGroup(id: UUID, memberIds newMembers: [UUID]) {
+        mutateDirectoryGroup(id: id) { group in
+            var members = group.memberIds
+            for member in newMembers where !members.contains(member) {
+                members.append(member)
+            }
+            group.memberIds = members
+        }
+    }
+
+    func removeFromDirectoryGroup(id: UUID, memberId: UUID) {
+        mutateDirectoryGroup(id: id) { group in
+            group.memberIds = group.memberIds.filter { $0 != memberId }
+        }
+    }
+
+    private func mutateDirectoryGroup(id: UUID, _ body: (SDDirectoryGroup) -> Void) {
+        let descriptor = FetchDescriptor<SDDirectoryGroup>(
+            predicate: #Predicate { $0.id == id })
+        guard let group = try? modelContext.fetch(descriptor).first else { return }
+        body(group)
+        group.updatedAt = Date()
+        try? modelContext.save()
+        objectWillChange.send()
+    }
+
     func currentContract(for studentId: UUID) -> Contract? {
         cachedContracts
             .filter { $0.studentId == studentId }

@@ -1,38 +1,50 @@
 import AppKit
+import Combine
 import os
 
-/// THE keyboard dispatch layer for the court editor window.
-///
-/// Every editor shortcut routes through one local NSEvent key-down monitor —
-/// no `.focusable()` views, no per-subview `onKeyPress`, no `onDeleteCommand`.
-/// Those were the focus-fragility class: whether Delete or O fired depended on
-/// which pane last owned focus, and each dead key got its own patch.
-///
-/// Rules, in order:
-///   1. Only key-downs addressed to the editor's own window are considered —
-///      sheets, Settings, and popovers are separate NSWindows and pass
-///      through untouched.
-///   2. Suppressed while an actual text field is first responder (the field
-///      editor is an NSTextView — the responder chain is queried, never a
-///      bound-nowhere @FocusState).
-///   3. ⌘-shortcuts pass through to the menu bar (⌘A excepted — select all
-///      keyframes is an editor concern).
-///   4. A handled key is CONSUMED (return nil), so Space can never reach a
-///      default button and the Play menu's key equivalent cannot double-fire.
-///
-/// DEBUG builds log every decision to subsystem "hoopwise.keys": a dead
-/// keypress tells you who swallowed it instead of demanding a reproduction.
+// MARK: - The keyboard dispatch layer
+//
+// ONE local NSEvent key-down monitor per visible page context — no
+// `.focusable()` views, no per-subview `onKeyPress`, no `onDeleteCommand`.
+// Those were the focus-fragility class: whether Delete or O fired depended on
+// which pane last owned focus, and each dead key got its own patch.
+//
+// `KeyDispatchCore` owns the mechanics every context shares:
+//   1. Only key-downs addressed to the app's MAIN window are considered —
+//      sheets, Settings, and popovers are separate NSWindows and pass
+//      through untouched.
+//   2. Suppressed while an actual text field is first responder (the field
+//      editor is an NSTextView — the responder chain is queried, never a
+//      bound-nowhere @FocusState).
+//   3. A handled key is CONSUMED (returned nil), so Space can never reach a
+//      default button and menu key equivalents cannot double-fire.
+//   4. DEBUG builds log every decision to subsystem "hoopwise.keys": a dead
+//      keypress tells you who swallowed it.
+//
+// Page contexts (editor, directory) supply only their key map. Exactly one
+// is installed at a time — pages install on appear, uninstall on disappear.
 @MainActor
-final class EditorKeyDispatcher {
+final class KeyDispatchCore {
 
-    private weak var model: PlayEditorModel?
+    /// What a context's key map decided.
+    enum Verdict {
+        case consumed(String)   // action name, for the log
+        case pass(String)       // reason, for the log
+    }
+
     private var monitor: Any?
+    private let contextName: String
+    private let keyMap: (NSEvent) -> Verdict
     #if DEBUG
     private let log = Logger(subsystem: "hoopwise.keys", category: "dispatch")
     #endif
 
-    func install(model: PlayEditorModel) {
-        self.model = model
+    init(contextName: String, keyMap: @escaping (NSEvent) -> Verdict) {
+        self.contextName = contextName
+        self.keyMap = keyMap
+    }
+
+    func install() {
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
@@ -46,55 +58,93 @@ final class EditorKeyDispatcher {
     }
 
     deinit {
-        // Monitor removal must not outlive the dispatcher; NSEvent holds the
+        // Monitor removal must not outlive the core; NSEvent holds the
         // closure, not us, so a leaked monitor keeps firing forever.
         if let monitor { NSEvent.removeMonitor(monitor) }
     }
 
-    // MARK: - Dispatch
-
     private func dispatch(_ event: NSEvent) -> NSEvent? {
-        guard let model else { return event }
-
-        // Rule 1: our window only. Sheets, Settings, popovers, panels are
-        // their own windows and keep native behaviour.
         guard let window = event.window, window === NSApp.mainWindow else {
             return pass(event, "other-window")
         }
-
-        // Rule 2: typing wins. The field editor for any focused text control
-        // is an NSTextView; NSTextField covers direct cases.
         if let responder = window.firstResponder,
            responder is NSTextView || responder is NSTextField {
             return pass(event, "text-field")
         }
+        switch keyMap(event) {
+        case .consumed(let action):
+            #if DEBUG
+            log.debug("[\(self.contextName, privacy: .public)] handled key=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "", privacy: .public) action=\(action, privacy: .public)")
+            #endif
+            return nil
+        case .pass(let reason):
+            return pass(event, reason)
+        }
+    }
+
+    private func pass(_ event: NSEvent, _ reason: String) -> NSEvent {
+        #if DEBUG
+        let responder = event.window?.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
+        log.debug("[\(self.contextName, privacy: .public)] passed key=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "", privacy: .public) reason=\(reason, privacy: .public) responder=\(responder, privacy: .public)")
+        #endif
+        return event
+    }
+}
+
+// MARK: - Editor context
+
+/// The court editor's key map, riding KeyDispatchCore. All editor shortcuts
+/// live HERE — never add key handling to an editor subview.
+@MainActor
+final class EditorKeyDispatcher {
+
+    private weak var model: PlayEditorModel?
+    private var core: KeyDispatchCore?
+
+    func install(model: PlayEditorModel) {
+        self.model = model
+        guard core == nil else { return }
+        let core = KeyDispatchCore(contextName: "editor") { [weak self] event in
+            self?.verdict(for: event) ?? .pass("no-dispatcher")
+        }
+        core.install()
+        self.core = core
+    }
+
+    func uninstall() {
+        core?.uninstall()
+        core = nil
+    }
+
+    private func verdict(for event: NSEvent) -> KeyDispatchCore.Verdict {
+        guard let model else { return .pass("no-model") }
 
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let characters = event.charactersIgnoringModifiers?.lowercased() ?? ""
 
-        // Rule 3: the menu bar owns ⌘, except ⌘A.
+        // The menu bar owns ⌘, except ⌘A.
         if flags.contains(.command) {
             if characters == "a", flags.subtracting([.command]).isEmpty {
                 model.selectAllKeyframes()
-                return consume(event, "select-all-keyframes")
+                return .consumed("select-all-keyframes")
             }
-            return pass(event, "command-menu")
+            return .pass("command-menu")
         }
 
         switch event.keyCode {
         case 49:    // Space — never a default-button press, never a scroll.
             model.togglePlayback()
-            return consume(event, "play-pause")
+            return .consumed("play-pause")
         case 51, 117:   // Delete / forward delete
             if !model.selectedKeyframeIds.isEmpty {
                 model.deleteSelectedKeyframesEverywhere()
-                return consume(event, "delete-selection")
+                return .consumed("delete-selection")
             }
             if model.selectedEntityId != nil {
                 model.deleteSelectedEntity()
-                return consume(event, "delete-entity")
+                return .consumed("delete-entity")
             }
-            return pass(event, "delete-nothing-selected")
+            return .pass("delete-nothing-selected")
         case 53:    // Escape: ball drag, then selection, then tool.
             if model.isBallDragging {
                 model.cancelBallDrag()
@@ -105,15 +155,15 @@ final class EditorKeyDispatcher {
                 model.placementKind = nil
                 model.activeToolName = "Select"
             }
-            return consume(event, "escape")
+            return .consumed("escape")
         case 123:   // ←
-            guard !model.selectedKeyframeIds.isEmpty else { return pass(event, "arrow-no-selection") }
+            guard !model.selectedKeyframeIds.isEmpty else { return .pass("arrow-no-selection") }
             model.nudgeSelectedKeyframes(by: -(model.snapEnabled ? model.snapInterval : 0.05))
-            return consume(event, "nudge-left")
+            return .consumed("nudge-left")
         case 124:   // →
-            guard !model.selectedKeyframeIds.isEmpty else { return pass(event, "arrow-no-selection") }
+            guard !model.selectedKeyframeIds.isEmpty else { return .pass("arrow-no-selection") }
             model.nudgeSelectedKeyframes(by: model.snapEnabled ? model.snapInterval : 0.05)
-            return consume(event, "nudge-right")
+            return .consumed("nudge-right")
         default:
             break
         }
@@ -123,65 +173,140 @@ final class EditorKeyDispatcher {
         case "a":
             model.placementKind = nil
             model.activeToolName = "Select"
-            return consume(event, "tool-select")
+            return .consumed("tool-select")
         case "o":
             model.placementKind = .player(team: .offense, number: nil, role: nil)
             model.activeToolName = "Offense"
-            return consume(event, "tool-offense")
+            return .consumed("tool-offense")
         case "d":
             model.placementKind = .player(team: .defense, number: nil, role: nil)
             model.activeToolName = "Defense"
-            return consume(event, "tool-defense")
+            return .consumed("tool-defense")
         case "b":
-            guard model.canPlace(.ball) else { return pass(event, "ball-already-placed") }
+            guard model.canPlace(.ball) else { return .pass("ball-already-placed") }
             model.placementKind = .ball
             model.activeToolName = "Ball"
-            return consume(event, "tool-ball")
+            return .consumed("tool-ball")
         case "c":
             model.placementKind = .cone
             model.activeToolName = "Cone"
-            return consume(event, "tool-cone")
+            return .consumed("tool-cone")
         case "s":
             model.possessionEnabled.toggle()
-            return consume(event, "toggle-sticky")
+            return .consumed("toggle-sticky")
         case "p":
             model.showMovementPaths.toggle()
-            return consume(event, "toggle-paths")
+            return .consumed("toggle-paths")
         case "k":
             if flags.contains(.shift) {
                 model.keyframeAllLayersInPlace()
-                return consume(event, "keyframe-all")
+                return .consumed("keyframe-all")
             }
-            guard let id = model.selectedEntityId else { return pass(event, "k-no-entity") }
+            guard let id = model.selectedEntityId else { return .pass("k-no-entity") }
             model.toggleKeyframeInPlace(id)
-            return consume(event, "keyframe-toggle")
+            return .consumed("keyframe-toggle")
         case "j":
-            guard let id = model.selectedEntityId else { return pass(event, "j-no-entity") }
+            guard let id = model.selectedEntityId else { return .pass("j-no-entity") }
             model.jumpToKeyframe(id, direction: -1)
-            return consume(event, "jump-previous")
+            return .consumed("jump-previous")
         case "l":
-            guard let id = model.selectedEntityId else { return pass(event, "l-no-entity") }
+            guard let id = model.selectedEntityId else { return .pass("l-no-entity") }
             model.jumpToKeyframe(id, direction: 1)
-            return consume(event, "jump-next")
+            return .consumed("jump-next")
         default:
-            return pass(event, "unmapped")
+            return .pass("unmapped")
         }
     }
+}
 
-    // MARK: - Outcome plumbing
+// MARK: - Directory context
 
-    private func consume(_ event: NSEvent, _ action: String) -> NSEvent? {
-        #if DEBUG
-        log.debug("handled key=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "", privacy: .public) action=\(action, privacy: .public)")
-        #endif
-        return nil
+/// Directory pages' bridge to the dispatch layer. The page owns one router,
+/// wires closures, and the dispatcher maps keys through it: ↑↓ selection,
+/// ⌘F search focus, ⌘N new item, Esc, and Contacts-style type-to-select.
+@MainActor
+final class DirectoryKeyRouter: ObservableObject {
+    /// Bumps to ask the view to focus the search field (⌘F).
+    @Published var searchFocusToken = 0
+    var moveSelection: ((Int) -> Void)?
+    var typeToSelect: ((String) -> Void)?
+    /// Return true when Esc did something (cleared search/selection).
+    var escape: (() -> Bool)?
+    var newItem: (() -> Void)?
+
+    // Type-to-select buffer with the standard timeout.
+    fileprivate var buffer = ""
+    fileprivate var lastKeyAt = Date.distantPast
+}
+
+@MainActor
+final class DirectoryKeyDispatcher {
+
+    private weak var router: DirectoryKeyRouter?
+    private var core: KeyDispatchCore?
+
+    func install(router: DirectoryKeyRouter) {
+        self.router = router
+        guard core == nil else { return }
+        let core = KeyDispatchCore(contextName: "directory") { [weak self] event in
+            self?.verdict(for: event) ?? .pass("no-dispatcher")
+        }
+        core.install()
+        self.core = core
     }
 
-    private func pass(_ event: NSEvent, _ reason: String) -> NSEvent {
-        #if DEBUG
-        let responder = event.window?.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
-        log.debug("passed key=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "", privacy: .public) reason=\(reason, privacy: .public) responder=\(responder, privacy: .public)")
-        #endif
-        return event
+    func uninstall() {
+        core?.uninstall()
+        core = nil
+    }
+
+    private func verdict(for event: NSEvent) -> KeyDispatchCore.Verdict {
+        guard let router else { return .pass("no-router") }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let characters = event.charactersIgnoringModifiers?.lowercased() ?? ""
+
+        if flags.contains(.command) {
+            if characters == "f", flags.subtracting([.command]).isEmpty {
+                router.searchFocusToken += 1
+                return .consumed("focus-search")
+            }
+            if characters == "n", flags.subtracting([.command]).isEmpty,
+               let newItem = router.newItem {
+                newItem()
+                return .consumed("new-item")
+            }
+            return .pass("command-menu")
+        }
+
+        switch event.keyCode {
+        case 126:   // ↑
+            router.moveSelection?(-1)
+            return .consumed("selection-up")
+        case 125:   // ↓
+            router.moveSelection?(1)
+            return .consumed("selection-down")
+        case 53:    // Esc
+            if router.escape?() == true { return .consumed("escape") }
+            return .pass("escape-nothing")
+        default:
+            break
+        }
+
+        // Type-to-select: printable characters accumulate in a short window
+        // and jump the selection — the Contacts/Finder behaviour.
+        if flags.subtracting([.shift]).isEmpty,
+           characters.count == 1,
+           let scalar = characters.unicodeScalars.first,
+           CharacterSet.alphanumerics.contains(scalar) {
+            let now = Date()
+            if now.timeIntervalSince(router.lastKeyAt) > 1.0 { router.buffer = "" }
+            router.lastKeyAt = now
+            router.buffer += characters
+            router.typeToSelect?(router.buffer)
+            return .consumed("type-to-select:\(router.buffer)")
+        }
+
+        return .pass("unmapped")
     }
 }

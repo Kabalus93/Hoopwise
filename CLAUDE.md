@@ -189,6 +189,35 @@ it produces confident wrong numbers the coach reconciles books against.
   type-check this expression in reasonable time") — decompose it during
   the port rather than working around it.
 
+## Mac directory pattern (August 2026)
+- DirectoryView (HoopwiseMac/Views/Directory/) is the Contacts skeleton:
+  groups column → indexed list → detail card, three columns inside the
+  page. Instances: AthletesDirectoryView, SessionsDirectoryView. Pages own
+  DATA logic (membership, collation, search, selection coherence); the
+  skeleton owns layout, rail, drag-to-group. Generalize only what a second
+  page exercises — the index rail became optional because Sessions
+  sections by month, not letter.
+- COLLATION is NameIndex (Utilities, both targets): one derivation feeds
+  sort key, A–Z section, and search blob — pinyin for hanzi, diacritics
+  stripped (roster latin names carry tone marks). 蔡一铭 sorts under C and
+  is findable by "cai" or initials "cym". Verified against the real 133.
+- Directory keyboard rides KeyDispatchCore (the editor's dispatch layer):
+  DirectoryKeyDispatcher maps ↑↓, ⌘F, ⌘N, Esc, type-to-select. Never add
+  onKeyPress handlers to directory subviews.
+- Card editing is EXPLICIT: Edit → draft → Done commits student+guardian
+  in ONE undo step, Esc cancels. Contact fields live on Player.parentInfo,
+  not SDStudent. No always-live editing in read mode.
+- SDDirectoryGroup is the ONE record type for custom groups across all
+  directory pages (entityKind field) — registered in the schema now so the
+  next Dev→Production deploy (roadmap step 3) carries it. Run the iOS app
+  once in Debug before relying on group sync (rule 7c/7e). The smart
+  group ("Attendance < X%") is VIRTUAL — only its threshold persists, in
+  AppStorage — so no auto-created records can duplicate across devices.
+- AthletesView.swift / SessionsView.swift keep the tab content the new
+  cards embed (Athlete*Tab, SessionDetailView); their old page structs are
+  unwired. Old Sessions had a graphical calendar the directory dropped —
+  flagged for reassessment, restore point intact.
+
 ## Court / play authoring decisions (July 2026)
 - Coordinate space is COURT-FEET, not normalized 0-1. The legacy
   CourtPlayer.position was 0-1; nothing was persisted, so it converted for

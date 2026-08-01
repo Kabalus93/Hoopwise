@@ -51,6 +51,15 @@ struct SessionsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macNewSession)) { _ in
             showingNew = true
         }
+        // Deep link from the Athletes card's Recent Sessions rows.
+        .onReceive(NotificationCenter.default.publisher(for: .macOpenSession)) { note in
+            guard let id = note.object as? UUID,
+                  let session = dataManager.sessionEvents.first(where: { $0.id == id })
+            else { return }
+            filter = .all
+            selectedDate = session.date
+            selectedID = id
+        }
         .sheet(isPresented: $showingNew) { NewSessionSheet() }
     }
 
