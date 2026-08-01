@@ -45,6 +45,11 @@ struct RenderStyle: Equatable {
     var drawOnLead: Double
     /// …and takes this long, tip-first.
     var drawOnDuration: Double
+    /// Segments shorter than this (court feet of ARC LENGTH) are HOLDS:
+    /// no path, no draw-on, no chevron. A keyframe-in-place creates a
+    /// zero-length segment, and without this guard presentation mode grew
+    /// phantom arrowheads floating at stationary players.
+    var minMovementFeet: CGFloat
     /// The trailing edge tucks this many FEET behind the player — about half a
     /// puck radius — so the stroke appears to be consumed by the puck. Feet,
     /// not seconds: a time-based tuck stretches with velocity, and at an
@@ -77,7 +82,7 @@ struct RenderStyle: Equatable {
         uniformBrush: false,
         hookedArrowhead: false,
         consumeBehindMotion: false,
-        drawOnLead: 0, drawOnDuration: 0, trailingTuckFeet: 0,
+        drawOnLead: 0, drawOnDuration: 0, minMovementFeet: 0, trailingTuckFeet: 0,
         playerFillHex: "",              // team colours from the theme
         showPlayerNumbers: true,
         playerStroke: true,
@@ -95,7 +100,7 @@ struct RenderStyle: Equatable {
         uniformBrush: true,
         hookedArrowhead: true,
         consumeBehindMotion: true,
-        drawOnLead: 0.3, drawOnDuration: 0.25, trailingTuckFeet: 0.8,
+        drawOnLead: 0.3, drawOnDuration: 0.25, minMovementFeet: 1.0, trailingTuckFeet: 0.8,
         playerFillHex: "#FFFF70",
         showPlayerNumbers: false,
         playerStroke: false,
@@ -142,6 +147,24 @@ enum PathConsumption {
         let segStart = from.t
         let segEnd = to.t
         guard segEnd > segStart else { return nil }
+        // HOLD guard: a segment that barely moves is a pin, not a path.
+        // Arc length is sampled along the actual trajectory, so a curved
+        // segment that wanders and returns still counts its travel; identical
+        // consecutive keyframes measure zero and are held everywhere —
+        // consumption math included — with no zero-length parameterisation to
+        // divide by.
+        if style.minMovementFeet > 0 {
+            var length: CGFloat = 0
+            var previous = from.position
+            for step in 1...8 {
+                let time = segStart + (segEnd - segStart) * Double(step) / 8
+                if let point = track.position(at: time) {
+                    length += hypot(point.x - previous.x, point.y - previous.y)
+                    previous = point
+                }
+            }
+            if length < style.minMovementFeet { return nil }
+        }
         let appearStart = max(readStart, segStart - style.drawOnLead)
         guard t >= appearStart, t < segEnd else { return nil }
 
