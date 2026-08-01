@@ -409,7 +409,9 @@ struct DiagramCanvasView: View {
             }
         }
 
-        if model.selectedEntityId == entity.id {
+        // The selection ring is editing chrome; presentation must show only
+        // the play, so switching mid-play leaves no residue.
+        if model.selectedEntityId == entity.id, !model.renderStyle.uniformBrush {
             let ring = puck.insetBy(dx: -4, dy: -4)
             context.stroke(Path(ellipseIn: ring), with: .color(.accentColor),
                            style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
@@ -619,6 +621,12 @@ struct DiagramCanvasView: View {
                     let start = projection.unproject(value.startLocation)
                     dragEntityId = hitTest(start, projection: projection)
                     if let id = dragEntityId {
+                        // THE editing-while-playing rule: direct-manipulation
+                        // gestures pause playback. A drag during playback would
+                        // write a keyframe at every mouse-move as the playhead
+                        // advanced — a smear of keyframes across the timeline.
+                        // Discrete edits (K, inspector, delete) land live.
+                        model.stop()
                         model.selectedEntityId = id
                         // ONE undo entry per gesture. Registering per mouse-move
                         // is the usual mistake and makes undo useless.

@@ -696,6 +696,8 @@ final class PlayEditorModel: ObservableObject {
     func clearCameraTrack() {
         registerUndo("Clear Camera Track")
         diagram.camera.keyframes = []
+        // The inspector must not keep showing a keyframe that no longer exists.
+        selectedCameraKeyframeId = nil
     }
 
     /// Updates one camera keyframe's easing from the timeline.
@@ -910,6 +912,10 @@ final class PlayEditorModel: ObservableObject {
     func clampBranchIndex() {
         let count = branches.count
         activeBranchIndex = max(0, min(activeBranchIndex, max(0, count - 1)))
+        // Deleting a read on the active path can shorten it under the
+        // playhead; a playhead beyond the new duration resolves everything to
+        // its final pose forever, which reads as a hang.
+        playhead = min(playhead, branchDuration)
     }
 
     /// Duplicates a read as a sibling branch. Fresh ids throughout — keyframes,
