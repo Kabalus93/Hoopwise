@@ -9,6 +9,19 @@ struct TimelineView: View {
     private let laneHeight: CGFloat = 30
     private let labelWidth: CGFloat = 214
     private let rulerHeight: CGFloat = 22
+    /// The label column's leading pad. Part of ONE time→x transform: the
+    /// playhead used labelWidth alone (8pt behind everything), box-select used
+    /// labelWidth+6, and trackWidth ignored the pad so the track overflowed
+    /// the geometry. Every consumer now goes through trackOriginX/xFor.
+    private let trackInset: CGFloat = 8
+
+    /// Where t=0 sits in the timeline's own coordinates.
+    private var trackOriginX: CGFloat { labelWidth + trackInset }
+
+    /// The single time→x mapping (track-local).
+    private func xFor(_ time: Double, width: CGFloat, duration: Double) -> CGFloat {
+        CGFloat(time / duration) * width
+    }
 
     // Multi-drag: initial local times captured on gesture start so relative
     // spacing is preserved (and option-scale has a fixed reference).
@@ -25,7 +38,7 @@ struct TimelineView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let trackWidth = max(80, geo.size.width - labelWidth)
+            let trackWidth = max(80, geo.size.width - labelWidth - trackInset)
             let duration = model.timelineDuration
 
             VStack(alignment: .leading, spacing: 0) {
@@ -143,14 +156,18 @@ struct TimelineView: View {
             }
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
-                    let t = min(max(0, Double(value.location.x / width) * duration), duration)
+                    let raw = min(max(0, Double(value.location.x / width) * duration), duration)
                     // Shift-drag sets the work area; a plain drag scrubs.
                     if NSEvent.modifierFlags.contains(.shift) {
                         let start = min(max(0, Double(value.startLocation.x / width) * duration), duration)
-                        model.setWorkArea(from: start, to: t)
+                        model.setWorkArea(from: start, to: raw)
                     } else {
                         model.stop()
-                        model.playhead = t
+                        // Magnetic: landing within ~4px of a diamond resolves
+                        // to EXACTLY that keyframe's time, so the canvas shows
+                        // exactly that pose.
+                        let threshold = Double(4 / width) * duration
+                        model.playhead = model.snapScrubTime(raw, within: threshold)
                     }
                 }
             )
@@ -509,7 +526,7 @@ struct TimelineView: View {
                                          width: rect.width, height: laneHeight)
                     guard rect.intersects(rowRect) else { continue }
                     for lane in model.laneKeyframes(for: entity.id) {
-                        let x = labelWidth + 6 + CGFloat(lane.absoluteTime / duration) * width
+                        let x = trackOriginX + xFor(lane.absoluteTime, width: width, duration: duration)
                         let markerRect = CGRect(x: x - markerHalf,
                                                 y: rowRect.minY,
                                                 width: markerHalf * 2,
@@ -520,7 +537,7 @@ struct TimelineView: View {
                     // exactly like keyframes.
                     if case .ball = entity.kind, model.possessionEnabled {
                         for event in model.possessionEvents {
-                            let x = labelWidth + 6 + CGFloat(min(event.time, duration) / duration) * width
+                            let x = trackOriginX + xFor(min(event.time, duration), width: width, duration: duration)
                             let markerRect = CGRect(x: x - markerHalf, y: rowRect.minY,
                                                     width: markerHalf * 2, height: laneHeight)
                             if rect.intersects(markerRect) { hit.insert(event.id) }
@@ -572,7 +589,7 @@ struct TimelineView: View {
         Rectangle()
             .fill(Color.accentColor)
             .frame(width: 1.5, height: height)
-            .offset(x: labelWidth + CGFloat(model.playhead / duration) * width)
+            .offset(x: trackOriginX + xFor(model.playhead, width: width, duration: duration))
             .allowsHitTesting(false)
     }
 

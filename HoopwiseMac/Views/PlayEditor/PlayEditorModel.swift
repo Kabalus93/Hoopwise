@@ -1395,6 +1395,27 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    /// Scrub magnetism: snaps to the nearest keyframe, possession event, or
+    /// segment boundary within `threshold`, else returns the raw time. Exact
+    /// times mean exact poses.
+    func snapScrubTime(_ raw: Double, within threshold: Double) -> Double {
+        var best = raw
+        var bestDistance = threshold
+        var candidates: [Double] = segmentBoundaries.map(\.time)
+        for entity in diagram.entities {
+            candidates.append(contentsOf: laneKeyframes(for: entity.id).map(\.absoluteTime))
+        }
+        candidates.append(contentsOf: possessionEvents.map(\.time))
+        for candidate in candidates {
+            let distance = abs(candidate - raw)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = candidate
+            }
+        }
+        return best
+    }
+
     // MARK: - Inspector plumbing
 
     /// Camera keyframe selection, from the timeline's camera lane.
