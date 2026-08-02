@@ -148,7 +148,10 @@ final class PlayEditorModel: ObservableObject {
     /// A new empty half-court FIBA diagram, so the editor always opens on
     /// something authorable.
     static func newDiagram() -> PlayDiagram {
-        PlayDiagram(playId: UUID(), space: CourtSpace(standard: .fiba, mode: .half))
+        let defaults = UserDefaults.standard
+        let standard = CourtStandard(rawValue: defaults.string(forKey: "settings.defaultCourtStandard") ?? "fiba") ?? .fiba
+        let mode = CourtMode(rawValue: defaults.string(forKey: "settings.defaultCourtMode") ?? "half") ?? .half
+        return PlayDiagram(playId: UUID(), space: CourtSpace(standard: standard, mode: mode))
     }
 
     // MARK: - Active Node
@@ -1187,7 +1190,7 @@ final class PlayEditorModel: ObservableObject {
     /// What the style was before playback auto-switched, so stop restores it.
     private var stylePresentationBeforePlayback: Bool?
 
-    var renderStyle: RenderStyle { isPresentation ? .presentation : .edit }
+    var renderStyle: RenderStyle { isPresentation ? .presentationUser : .edit }
 
     // MARK: - Landmark snapping
 

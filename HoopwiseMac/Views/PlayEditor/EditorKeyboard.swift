@@ -104,6 +104,16 @@ final class KeyDispatchCore {
     }
 }
 
+// MARK: - Shortcut reference (Settings reads these)
+
+/// One row of the read-only Shortcuts reference. Declared IN this file,
+/// beside the key maps they describe, so an edit to either is a one-file
+/// diff — the closest thing to generation without table-driven dispatch.
+struct KeyShortcutDescriptor {
+    let keys: String
+    let action: String
+}
+
 // MARK: - Presentation context (Esc closes any sheet, app-wide)
 
 /// The anti-trap rule, in ONE place: Esc dismisses whatever sheet is up,
@@ -360,4 +370,42 @@ final class DirectoryKeyDispatcher {
 
         return .pass("unmapped")
     }
+}
+
+
+// MARK: - Shortcut tables
+
+extension PresentationKeyDispatcher {
+    static let shortcuts: [KeyShortcutDescriptor] = [
+        .init(keys: "esc", action: "Close the open sheet"),
+    ]
+}
+
+extension DirectoryKeyDispatcher {
+    static let shortcuts: [KeyShortcutDescriptor] = [
+        .init(keys: "\u{2191} \u{2193}", action: "Move selection"),
+        .init(keys: "a\u{2026}z", action: "Type-to-select"),
+        .init(keys: "\u{2318}F", action: "Focus search"),
+        .init(keys: "\u{2318}N", action: "New item / new athlete"),
+        .init(keys: "esc", action: "Clear search / cancel edit"),
+    ]
+}
+
+extension EditorKeyDispatcher {
+    static let shortcuts: [KeyShortcutDescriptor] = [
+        .init(keys: "space", action: "Play / pause"),
+        .init(keys: "\u{232B}", action: "Delete selection / entity"),
+        .init(keys: "esc", action: "Cancel drag / clear selection / select tool"),
+        .init(keys: "\u{2190} \u{2192}", action: "Nudge selected keyframes"),
+        .init(keys: "A", action: "Select tool"),
+        .init(keys: "O / D", action: "Place offense / defense"),
+        .init(keys: "B", action: "Place ball"),
+        .init(keys: "C", action: "Place cone"),
+        .init(keys: "S", action: "Toggle sticky ball"),
+        .init(keys: "P", action: "Toggle movement paths"),
+        .init(keys: "K", action: "Keyframe in place"),
+        .init(keys: "\u{21E7}K", action: "Keyframe all layers"),
+        .init(keys: "J / L", action: "Previous / next keyframe"),
+        .init(keys: "\u{2318}A", action: "Select all keyframes"),
+    ]
 }

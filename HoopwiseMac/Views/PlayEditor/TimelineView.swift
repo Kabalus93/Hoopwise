@@ -6,7 +6,8 @@ import SwiftUI
 struct TimelineView: View {
     @ObservedObject var model: PlayEditorModel
 
-    private let laneHeight: CGFloat = 30
+    @AppStorage("settings.listDensity") private var listDensity = "comfortable"
+    private var laneHeight: CGFloat { listDensity == "compact" ? 24 : 30 }
     /// Fixed-width layer-header column: name, eye/lock/solo, nav capsule.
     /// Terminated by a full-height hairline divider and a background tint;
     /// nothing of the track area — ticks, labels, markers — renders inside it.

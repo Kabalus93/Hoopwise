@@ -18,6 +18,7 @@ struct HoopwiseMacApp: App {
                 }
             }
             .frame(minWidth: 1100, minHeight: 700)
+            .modifier(AppearanceSettingsModifier())
             .task { await initialize() }
         }
         .windowStyle(.hiddenTitleBar)
@@ -79,6 +80,7 @@ struct HoopwiseMacApp: App {
         Settings {
             MacSettingsView()
                 .environmentObject(dataManager)
+                .modifier(AppearanceSettingsModifier())
         }
     }
 

@@ -199,6 +199,7 @@ struct SessionsDirectoryView: View {
 
 private struct SessionDirectoryRow: View {
     let session: SessionEvent
+    @AppStorage("settings.listDensity") private var listDensity = "comfortable"
 
     var body: some View {
         HStack(spacing: 9) {
@@ -219,6 +220,6 @@ private struct SessionDirectoryRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, listDensity == "compact" ? -2 : 1)
     }
 }

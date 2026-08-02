@@ -349,7 +349,8 @@ struct PlayEditorView: View {
             steps: model.activeSteps,
             at: model.playhead,
             elevationDegrees: model.renderElevation,
-            look: model.look) else { return }
+            look: model.look,
+            style: .presentationUser) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = "\(model.diagramName)-frame.png"

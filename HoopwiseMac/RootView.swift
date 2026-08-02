@@ -48,11 +48,20 @@ struct RootView: View {
         if env["HOOPWISE_DEMO_PAGE"] != nil {
             return SidebarSection(rawValue: env["HOOPWISE_DEMO_PAGE"]!) ?? .today
         }
-        return .today
+        return Self.startupSelection()
     }()
     #else
-    @State private var selection: SidebarSection? = .today
+    @State private var selection: SidebarSection? = RootView.startupSelection()
     #endif
+
+    /// Settings: open at launch on Today, or reopen the last used page.
+    private static func startupSelection() -> SidebarSection {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: "settings.startupPage") == "last",
+              let raw = defaults.string(forKey: "settings.lastPage"),
+              let section = SidebarSection(rawValue: raw) else { return .today }
+        return section
+    }
     /// The court editor's model lives with the WINDOW. NSUndoManager holds its
     /// targets unowned(unsafe); a per-visit model left dangling actions in the
     /// window's undo stack, and Cmd-Z after navigation dereferenced freed
@@ -78,8 +87,29 @@ struct RootView: View {
                 selection = s
             }
         }
+        .onChange(of: selection) { _, newValue in
+            if let newValue {
+                UserDefaults.standard.set(newValue.rawValue, forKey: "settings.lastPage")
+            }
+        }
         .onAppear {
             presentationKeys.install()
+            #if DEBUG
+            // Agent settings: "key=value,key=value" applied to UserDefaults
+            // ("key=" removes), so Settings behaviour is testable from
+            // outside the sandbox. AppStorage views react immediately.
+            if let pairs = ProcessInfo.processInfo.environment["HOOPWISE_DEMO_DEFAULTS"] {
+                for pair in pairs.split(separator: ",") {
+                    let kv = pair.split(separator: "=", maxSplits: 1,
+                                        omittingEmptySubsequences: false)
+                    guard kv.count == 2 else { continue }
+                    let key = String(kv[0])
+                    let value = String(kv[1])
+                    if value.isEmpty { UserDefaults.standard.removeObject(forKey: key) }
+                    else { UserDefaults.standard.set(value, forKey: key) }
+                }
+            }
+            #endif
             #if DEBUG
             // Agent window sizing: constraint-exception sweeps at min size.
             if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_WINDOW"] == "min" {

@@ -545,13 +545,16 @@ struct AthletesDirectoryView: View {
 private struct AthleteDirectoryRow: View {
     let student: Student
     let index: NameIndex
+    @AppStorage("settings.listDensity") private var listDensity = "comfortable"
+
+    private var compact: Bool { listDensity == "compact" }
 
     var body: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: compact ? 7 : 9) {
             DirectoryAvatar(imageData: student.thumbnailImageData ?? student.profileImageData,
                             initials: student.initials,
                             color: Color.avatarColor(student.avatarColor),
-                            size: 30)
+                            size: compact ? 22 : 30)
             HStack(spacing: 6) {
                 Text(student.displayName)
                     .font(.body)
@@ -572,7 +575,7 @@ private struct AthleteDirectoryRow: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, compact ? -2 : 1)
     }
 
     private var secondaryName: String? {

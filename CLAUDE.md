@@ -440,13 +440,32 @@ it produces confident wrong numbers the coach reconciles books against.
   shown only when that session was really redeemed) and the contract
   sheet's "Sessions deducted" section.
 
-## MAC DOES NOT MARK ATTENDANCE — do not build it
-The division is deliberate: phone for operations, Mac for authorship. The
-coach marks attendance courtside on iOS and the data syncs; a Mac-generated
-statement is verified against iOS-recorded data. Building Mac attendance
-marking adds a surface that will not be used and cuts against the
-architecture. Do not add it, and do not cite "you can't verify Mac
-statements" as a reason — that reasoning was raised and rejected.
+## Mac attendance marking (decision REVERSED August 2026)
+The earlier rule was "Mac does not mark attendance — phone for operations,
+Mac for authorship." Luther reversed it in the full-editability phase: Mac
+roll call now exists and MUST be exact parity — the four-state model
+(unmarked is NOT absent), every write through setStudentAttendanceState
+(which keeps contracts in lockstep via the one redemption authority),
+money consequences stated in words on each row. The previous Mac
+RollCallTab was a three-state cycle writing arrays wholesale and never
+deducting — that class of divergence is what to grep for when touching
+any attendance surface.
+
+## Shared editing rules (August 2026, full-editability phase)
+- SessionLifecycle (Models/, both targets) is THE session state machine:
+  isAllowed + apply, extracted verbatim from the iOS coaching flow, which
+  now calls it. Mac transition buttons gate on isAllowed. Skip appends
+  "Skipped: reason" to notes; resetToScheduled preserves attendance.
+  Platform effects (Live Activity, haptics) stay per-platform.
+- setStudentEnrollment is THE enrollment writer: one relation stored in
+  two fields (student.programId and program.enrolledStudentIds) that
+  drift when written separately — always go through the writer.
+- Edit sheets commit small transactions on Done (CloudKit is
+  last-write-wins per record; no long-lived drafts), one undo step each.
+- Contract edits append a minimal timestamped old→new line to the
+  contract's existing notes field — the history mechanism available
+  without inventing schema. Bundle-size floor = sessions consumed, so
+  remaining can never go negative.
 
 ## Documents
 - PDFDocumentRenderer (Services/) is the shared vector layer: CoreGraphics +
