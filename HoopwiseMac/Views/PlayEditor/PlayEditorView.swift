@@ -107,8 +107,12 @@ struct PlayEditorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macEditorExportSheet)) { _ in
             exportSheet()
         }
-        .sheet(isPresented: $showingSaveSheet) { saveSheet }
-        .sheet(isPresented: $showingVariationSheet) { variationSheet }
+        .sheet(isPresented: $showingSaveSheet) {
+            saveSheet.dismissesOnPresentationEscape { showingSaveSheet = false }
+        }
+        .sheet(isPresented: $showingVariationSheet) {
+            variationSheet.dismissesOnPresentationEscape { showingVariationSheet = false }
+        }
         // NO key handling here — Space, Delete, Escape, arrows and the tool
         // letters all live in EditorKeyDispatcher. Handlers on focusable
         // subviews are the focus-fragility class this replaced.

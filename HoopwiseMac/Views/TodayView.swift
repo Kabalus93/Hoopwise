@@ -11,7 +11,6 @@ struct TodayView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var currentTime = Date()
     @State private var selectedSession: SessionEvent?
-    @State private var selectedStudent: Student?
 
     private let tick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -52,13 +51,41 @@ struct TodayView: View {
             }
         }
         .onReceive(tick) { _ in currentTime = Date() }
-        .sheet(item: $selectedSession) { session in
-            SessionDetailView(session: session)
-                .frame(minWidth: 720, minHeight: 540)
+        #if DEBUG
+        .onAppear {
+            // Agent hook: open the session sheet so Esc-dismissal is testable.
+            if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_OPEN_SHEET"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    selectedSession = todaysSessions.first ?? dataManager.sessionEvents.first
+                }
+            }
+            // Agent hook: simulate tapping the first athlete chip.
+            if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_TAP_STUDENT"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    if let student = todaysPlayers.first ?? dataManager.students.first {
+                        openAthlete(student)
+                    }
+                }
+            }
         }
-        .sheet(item: $selectedStudent) { student in
-            AthleteDetailView(student: student)
-                .frame(minWidth: 720, minHeight: 540)
+        #endif
+        .sheet(item: $selectedSession) { session in
+            MacSheetChrome(title: session.title) { selectedSession = nil } content: {
+                SessionDetailView(session: session)
+            }
+            .frame(minWidth: 720, minHeight: 560)
+        }
+    }
+
+    /// A student tap NAVIGATES — the card belongs to the Athletes directory,
+    /// not a modal. (The old sheet embedded a page-level detail view whose
+    /// toolbar never renders inside a sheet: no close control, no Esc — a
+    /// trap.)
+    private func openAthlete(_ student: Student) {
+        NotificationCenter.default.post(name: .macSidebarSelection,
+                                        object: SidebarSection.athletes.rawValue)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(name: .macOpenAthlete, object: student.id)
         }
     }
 
@@ -118,7 +145,7 @@ struct TodayView: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                         ForEach(todaysPlayers) { student in
                             AthleteChip(student: student, contract: dataManager.currentContract(for: student.id))
-                                .onTapGesture { selectedStudent = student }
+                                .onTapGesture { openAthlete(student) }
                         }
                     }
                 }
@@ -155,7 +182,7 @@ struct TodayView: View {
                             ForEach(expiringContracts.prefix(4), id: \.contract.id) { item in
                                 ExpiringContractRow(contract: item.contract, student: item.student)
                                     .contentShape(Rectangle())
-                                    .onTapGesture { selectedStudent = item.student }
+                                    .onTapGesture { openAthlete(item.student) }
                             }
                         }
                     }

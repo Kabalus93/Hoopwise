@@ -499,21 +499,10 @@ private struct AthleteAvatar: View {
     let size: CGFloat
 
     var body: some View {
-        Group {
-            if let data = student.profileImageData, let img = NSImage(data: data) {
-                Image(nsImage: img).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    Circle().fill(Color.avatarColor(student.avatarColor))
-                    Text(student.initials)
-                        .font(.system(size: size * 0.36, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+        AthletePhoto(imageData: student.profileImageData,
+                     initials: student.initials,
+                     color: Color.avatarColor(student.avatarColor),
+                     size: size)
     }
 }
 

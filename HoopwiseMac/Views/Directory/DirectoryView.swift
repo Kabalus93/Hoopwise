@@ -109,15 +109,23 @@ where Item.ID == UUID {
     }
 
     var body: some View {
-        HSplitView {
-            if groupsVisible {
-                groupsColumn
-                    .frame(minWidth: 150, idealWidth: 185, maxWidth: 260)
+        // The resize contract, Contacts-style: detail gives space first
+        // (flexible), the list compresses to its min, then the GROUPS column
+        // collapses. Collapse derives from the page width the parent hands us
+        // — a stable input, so no size→state→size feedback — and the user's
+        // groupsVisible preference is never overwritten by the auto-collapse.
+        GeometryReader { geo in
+            let groupsFit = geo.size.width >= 880
+            HSplitView {
+                if groupsVisible && groupsFit {
+                    groupsColumn
+                        .frame(minWidth: 150, idealWidth: 185, maxWidth: 260)
+                }
+                listColumn
+                    .frame(minWidth: 250, idealWidth: 310, maxWidth: 420)
+                detail()
+                    .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
             }
-            listColumn
-                .frame(minWidth: 250, idealWidth: 310, maxWidth: 420)
-            detail()
-                .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -303,6 +311,12 @@ where Item.ID == UUID {
                     }
                     .listStyle(.inset)
                     .scrollContentBackground(.hidden)
+                    // Deep links select rows far from the current scroll
+                    // position; the list follows the selection.
+                    .onChange(of: selection) { _, id in
+                        guard let id else { return }
+                        proxy.scrollTo(id, anchor: .center)
+                    }
 
                     if showsIndexRail {
                         indexRail(proxy: proxy)

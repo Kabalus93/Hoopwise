@@ -101,7 +101,17 @@ struct AthletesDirectoryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macNewAthlete)) { _ in
             beginNewAthlete()
         }
-        .sheet(isPresented: $editingSmartRule) { smartRuleSheet }
+        // Deep link from Today: land with the athlete's row selected. Filters
+        // reset to All so the target can never be hidden by a stale group.
+        .onReceive(NotificationCenter.default.publisher(for: .macOpenAthlete)) { note in
+            guard let id = note.object as? UUID else { return }
+            selectedGroups = [Self.allGroupId]
+            search = ""
+            selection = id
+        }
+        .sheet(isPresented: $editingSmartRule) {
+            smartRuleSheet.dismissesOnPresentationEscape { editingSmartRule = false }
+        }
     }
 
     // MARK: - Detail slot
@@ -562,7 +572,7 @@ private struct AthleteDirectoryRow: View {
     }
 }
 
-/// Shared monogram/photo avatar for directory rows and cards.
+/// Thin alias over AthletePhoto — kept so existing call sites read the same.
 struct DirectoryAvatar: View {
     let imageData: Data?
     let initials: String
@@ -570,20 +580,7 @@ struct DirectoryAvatar: View {
     let size: CGFloat
 
     var body: some View {
-        Group {
-            if let data = imageData, let image = NSImage(data: data) {
-                Image(nsImage: image).resizable().scaledToFill()
-            } else {
-                ZStack {
-                    Circle().fill(color)
-                    Text(initials)
-                        .font(.system(size: size * 0.36, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+        AthletePhoto(imageData: imageData, initials: initials,
+                     color: color, size: size)
     }
 }

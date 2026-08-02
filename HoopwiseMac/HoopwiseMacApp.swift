@@ -101,6 +101,8 @@ extension Notification.Name {
     static let macEditorSave = Notification.Name("MacEditorSave")
     static let macOpenPlayInEditor = Notification.Name("MacOpenPlayInEditor")
     static let macOpenSession = Notification.Name("MacOpenSession")
+    static let macOpenAthlete = Notification.Name("MacOpenAthlete")
+    static let macDismissPresentedSurface = Notification.Name("MacDismissPresentedSurface")
     static let macEditorExportFrame = Notification.Name("MacEditorExportFrame")
     static let macEditorExportSheet = Notification.Name("MacEditorExportSheet")
 }

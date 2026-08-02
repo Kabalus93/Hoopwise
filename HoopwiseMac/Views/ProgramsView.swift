@@ -36,7 +36,10 @@ struct ProgramsView: View {
         }
         .onAppear { autoSelect() }
         .onChange(of: filter) { _, _ in autoSelect() }
-        .sheet(isPresented: $showingNew) { NewProgramSheet() }
+        .sheet(isPresented: $showingNew) {
+            NewProgramSheet()
+                .dismissesOnPresentationEscape { showingNew = false }
+        }
     }
 
     private var sidebar: some View {

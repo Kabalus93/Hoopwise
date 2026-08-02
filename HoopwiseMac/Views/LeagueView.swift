@@ -38,8 +38,12 @@ struct LeagueMacView: View {
             }
             .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .sheet(isPresented: $showingNewTeam) { NewTeamSheet() }
-        .sheet(isPresented: $showingNewGame) { NewGameSheet() }
+        .sheet(isPresented: $showingNewTeam) {
+            NewTeamSheet().dismissesOnPresentationEscape { showingNewTeam = false }
+        }
+        .sheet(isPresented: $showingNewGame) {
+            NewGameSheet().dismissesOnPresentationEscape { showingNewGame = false }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -368,7 +372,10 @@ private struct GameDetailView: View {
         }
         .background(Color(NSColor.windowBackgroundColor))
         .navigationTitle(matchTitle)
-        .sheet(isPresented: $showingScoring) { LiveScoringSheet(game: game) }
+        .sheet(isPresented: $showingScoring) {
+            LiveScoringSheet(game: game)
+                .dismissesOnPresentationEscape { showingScoring = false }
+        }
     }
 
     private var actionBar: some View {

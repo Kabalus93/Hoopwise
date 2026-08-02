@@ -47,6 +47,7 @@ struct ReadTreeView: View {
             get: { returningFrom.map { IdentifiedUUID(id: $0) } },
             set: { if $0 == nil { returningFrom = nil } })) { wrapper in
             returnSheet(from: wrapper.id)
+                .dismissesOnPresentationEscape { returningFrom = nil }
         }
     }
 

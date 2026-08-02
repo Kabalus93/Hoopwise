@@ -219,6 +219,8 @@ struct AthleteCardView: View {
     private func chip(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(.caption.weight(.medium))
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(.quaternary, in: .capsule)
             .foregroundStyle(.secondary)

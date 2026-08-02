@@ -1,5 +1,52 @@
 import SwiftUI
 
+// MARK: - Sheet chrome
+//
+// The anti-trap contract for presented surfaces: every sheet shows an
+// explicit close affordance top-right; Esc dismisses through the
+// PresentationKeyDispatcher (dispatch layer), not per-sheet handlers;
+// popover-like surfaces use real popovers, which click-out natively.
+struct MacSheetChrome<Content: View>: View {
+    let title: String
+    let onClose: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close (Esc)")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            Divider()
+            content()
+        }
+        .dismissesOnPresentationEscape(onClose)
+    }
+}
+
+extension View {
+    /// Opts a presented sheet into the app-wide Esc rule: the dispatch layer
+    /// posts when Esc lands on a sheet window; the presenting binding clears
+    /// here. Only one sheet is ever up, so the broadcast is unambiguous.
+    func dismissesOnPresentationEscape(_ close: @escaping () -> Void) -> some View {
+        onReceive(NotificationCenter.default
+            .publisher(for: .macDismissPresentedSurface)) { _ in close() }
+    }
+}
+
 // MARK: - New Athlete Sheet
 /// Creates a Student + paired Player. Save is disabled until name is non-empty.
 /// Trims whitespace, prevents duplicate names (case-insensitive) within the

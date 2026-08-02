@@ -65,7 +65,9 @@ struct SessionsDirectoryView: View {
             search = ""
             selection = id
         }
-        .sheet(isPresented: $showingNew) { NewSessionSheet() }
+        .sheet(isPresented: $showingNew) {
+            NewSessionSheet().dismissesOnPresentationEscape { showingNew = false }
+        }
     }
 
     @ViewBuilder

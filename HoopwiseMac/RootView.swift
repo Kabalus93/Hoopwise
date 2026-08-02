@@ -59,14 +59,19 @@ struct RootView: View {
     /// memory. Window lifetime plus purge-on-teardown removes the class.
     @StateObject private var editorModel = PlayEditorModel(diagram: PlayEditorModel.newDiagram())
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// App-wide Esc-dismisses-sheets rule; lives as long as the window.
+    @State private var presentationKeys = PresentationKeyDispatcher()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             MacSidebar(selection: $selection)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
         } detail: {
+            // No column-width IDEAL here: an ideal wider than the window minus
+            // the sidebar makes AppKit break the SIDEBAR's min constraint and
+            // crop it. The detail takes whatever remains; pages own their
+            // interior minimums and collapse their own columns first.
             detailView
-                .navigationSplitViewColumnWidth(min: 700, ideal: 1000)
         }
         .onReceive(NotificationCenter.default.publisher(for: .macSidebarSelection)) { note in
             if let raw = note.object as? String, let s = SidebarSection(rawValue: raw) {
@@ -74,6 +79,7 @@ struct RootView: View {
             }
         }
         .onAppear {
+            presentationKeys.install()
             #if DEBUG
             // Agent window sizing: constraint-exception sweeps at min size.
             if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_WINDOW"] == "min" {
@@ -90,6 +96,23 @@ struct RootView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + Double(index + 1) * 2.5) {
                         NotificationCenter.default.post(name: .macSidebarSelection, object: page)
                     }
+                }
+            }
+            // Agent keys: post a real Esc key-down through the event stream at
+            // +N seconds, so the dispatch-layer dismissal is testable without
+            // Accessibility. In-process NSApp.postEvent reaches local monitors.
+            if let raw = ProcessInfo.processInfo.environment["HOOPWISE_DEMO_PRESS_ESC_AT"],
+               let delay = Double(raw) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    let target = NSApp.keyWindow ?? NSApp.mainWindow
+                    guard let window = target,
+                          let esc = NSEvent.keyEvent(
+                            with: .keyDown, location: .zero, modifierFlags: [],
+                            timestamp: ProcessInfo.processInfo.systemUptime,
+                            windowNumber: window.windowNumber, context: nil,
+                            characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                            isARepeat: false, keyCode: 53) else { return }
+                    NSApp.postEvent(esc, atStart: false)
                 }
             }
             #endif

@@ -81,13 +81,8 @@ struct EditAvatarButton: View {
             }
         } label: {
             ZStack {
-                if let data = currentData, let img = NSImage(data: data) {
-                    Image(nsImage: img).resizable().scaledToFill()
-                } else {
-                    Circle().fill(Color.avatarColor(avatarColor))
-                    Text(initials).font(.system(size: size * 0.36, weight: .bold)).foregroundStyle(.white)
-                }
-                Circle().strokeBorder(.separator.opacity(0.5), lineWidth: 0.5)
+                AthletePhoto(imageData: currentData, initials: initials,
+                             color: Color.avatarColor(avatarColor), size: size)
                 Circle().fill(.black.opacity(0.001))
                 VStack {
                     Spacer()

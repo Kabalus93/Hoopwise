@@ -63,9 +63,22 @@ final class KeyDispatchCore {
         if let monitor { NSEvent.removeMonitor(monitor) }
     }
 
+    /// Which windows a context receives events for.
+    enum WindowScope {
+        /// The document window only — sheets/popovers/Settings pass through.
+        case mainWindow
+        /// Attached sheets only — the presentation-dismissal context.
+        case sheets
+    }
+    var windowScope: WindowScope = .mainWindow
+
     private func dispatch(_ event: NSEvent) -> NSEvent? {
-        guard let window = event.window, window === NSApp.mainWindow else {
-            return pass(event, "other-window")
+        guard let window = event.window else { return pass(event, "no-window") }
+        switch windowScope {
+        case .mainWindow:
+            guard window === NSApp.mainWindow else { return pass(event, "other-window") }
+        case .sheets:
+            guard window.isSheet else { return pass(event, "not-a-sheet") }
         }
         if let responder = window.firstResponder,
            responder is NSTextView || responder is NSTextField {
@@ -88,6 +101,44 @@ final class KeyDispatchCore {
         log.debug("[\(self.contextName, privacy: .public)] passed key=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "", privacy: .public) reason=\(reason, privacy: .public) responder=\(responder, privacy: .public)")
         #endif
         return event
+    }
+}
+
+// MARK: - Presentation context (Esc closes any sheet, app-wide)
+
+/// The anti-trap rule, in ONE place: Esc dismisses whatever sheet is up,
+/// through the dispatch layer rather than per-sheet handlers. Installed by
+/// RootView for the window's whole lifetime. SwiftUI observes the window
+/// closing and clears the presenting binding, so no per-sheet wiring exists
+/// to forget. (Popovers already dismiss on Esc and click-out natively.)
+@MainActor
+final class PresentationKeyDispatcher {
+
+    private var core: KeyDispatchCore?
+
+    func install() {
+        guard core == nil else { return }
+        let core = KeyDispatchCore(contextName: "presentation") { event in
+            guard event.keyCode == 53,
+                  event.window?.isSheet == true else {
+                return .pass("unmapped")
+            }
+            // AppKit's endSheet does not clear SwiftUI's presentation
+            // binding — the dismissal must flow through SwiftUI state. One
+            // notification; MacSheetChrome (and the opt-in modifier for
+            // chrome-less form sheets) clears the presenting binding.
+            NotificationCenter.default.post(name: .macDismissPresentedSurface,
+                                            object: nil)
+            return .consumed("dismiss-sheet")
+        }
+        core.windowScope = .sheets
+        core.install()
+        self.core = core
+    }
+
+    func uninstall() {
+        core?.uninstall()
+        core = nil
     }
 }
 

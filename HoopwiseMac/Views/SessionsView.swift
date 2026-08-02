@@ -500,7 +500,10 @@ private struct PlanTab: View {
                 }
             }
         }
-        .sheet(isPresented: $showingPicker) { DrillPickerSheet(session: session) }
+        .sheet(isPresented: $showingPicker) {
+            DrillPickerSheet(session: session)
+                .dismissesOnPresentationEscape { showingPicker = false }
+        }
     }
 
     private var durationBar: some View {
