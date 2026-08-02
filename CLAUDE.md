@@ -217,6 +217,15 @@ it produces confident wrong numbers the coach reconciles books against.
   cards embed (Athlete*Tab, SessionDetailView); their old page structs are
   unwired. Old Sessions had a graphical calendar the directory dropped —
   flagged for reassessment, restore point intact.
+- NEVER nest a NavigationSplitView inside RootView's on a Mac page. A
+  second split-view controller re-bridges its own toolbar during sidebar
+  page switches, and with concurrent layout invalidation (avatar preloads
+  finishing mid-transition) AppKit's update-constraints pass livelocks —
+  NSGenericException "more Update Constraints in Window passes than there
+  are views", SIGABRT. It is a RACE: it can pass ten times and kill the
+  eleventh. Two-pane pages use HSplitView (Drills, Programs, League,
+  Playbook were converted August 2026; the directory pattern was already
+  HSplitView).
 
 ## Court / play authoring decisions (July 2026)
 - Coordinate space is COURT-FEET, not normalized 0-1. The legacy

@@ -45,6 +45,9 @@ struct RootView: View {
             return .athletes
         }
         if env["HOOPWISE_DEMO_SESSIONS"] != nil { return .sessions }
+        if env["HOOPWISE_DEMO_PAGE"] != nil {
+            return SidebarSection(rawValue: env["HOOPWISE_DEMO_PAGE"]!) ?? .today
+        }
         return .today
     }()
     #else
@@ -69,6 +72,27 @@ struct RootView: View {
             if let raw = note.object as? String, let s = SidebarSection(rawValue: raw) {
                 selection = s
             }
+        }
+        .onAppear {
+            #if DEBUG
+            // Agent window sizing: constraint-exception sweeps at min size.
+            if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_WINDOW"] == "min" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    NSApp.windows.first { $0.isVisible }?
+                        .setFrame(NSRect(x: 60, y: 60, width: 1100, height: 700),
+                                  display: true)
+                }
+            }
+            // Agent navigation: simulate sidebar clicks in sequence.
+            if let sequence = ProcessInfo.processInfo.environment["HOOPWISE_DEMO_PAGE_SEQUENCE"] {
+                let pages = sequence.split(separator: ",").map(String.init)
+                for (index, page) in pages.enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(index + 1) * 2.5) {
+                        NotificationCenter.default.post(name: .macSidebarSelection, object: page)
+                    }
+                }
+            }
+            #endif
         }
     }
 

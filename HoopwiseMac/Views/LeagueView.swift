@@ -23,10 +23,20 @@ struct LeagueMacView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            sidebar.frame(minWidth: 320, idealWidth: 360)
-        } detail: {
-            detailView
+        // HSplitView, not a nested NavigationSplitView: a second split-view
+        // controller inside RootView's re-bridges its own toolbar during page
+        // switches, and with concurrent invalidation (e.g. avatar preloads
+        // landing mid-transition) AppKit's update-constraints pass livelocks
+        // — the "more Update Constraints in Window passes than there are
+        // views" crash. Same two-pane layout, no second NSSplitViewController.
+        HSplitView {
+            sidebar
+                .frame(minWidth: 320, idealWidth: 360, maxWidth: 460)
+                .frame(maxHeight: .infinity)
+            Group {
+                detailView
+            }
+            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
         .sheet(isPresented: $showingNewTeam) { NewTeamSheet() }
         .sheet(isPresented: $showingNewGame) { NewGameSheet() }
