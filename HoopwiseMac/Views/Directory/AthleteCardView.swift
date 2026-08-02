@@ -87,6 +87,8 @@ struct AthleteCardView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var tab: AthleteDetailView.DetailTab = .overview
     @FocusState private var nameFieldFocused: Bool
+    @State private var confirmingDelete = false
+    @AppStorage("settings.confirmBeforeDelete") private var confirmBeforeDelete = true
 
     private var isEditing: Bool { draft != nil }
 
@@ -199,11 +201,24 @@ struct AthleteCardView: View {
                 HStack(spacing: 8) {
                     Menu {
                         Button("Delete Athlete", systemImage: "trash",
-                               role: .destructive) { onDelete() }
+                               role: .destructive) {
+                            // iOS convention checked: deleteStudent is a HARD
+                            // delete cascading contracts and player. Confirm
+                            // unless the preference says otherwise.
+                            if confirmBeforeDelete { confirmingDelete = true }
+                            else { onDelete() }
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
                     .menuStyle(.borderlessButton)
+                    .confirmationDialog(
+                        "Delete \(student.displayName)?",
+                        isPresented: $confirmingDelete) {
+                        Button("Delete Athlete", role: .destructive) { onDelete() }
+                    } message: {
+                        Text("Deletes the athlete with their contracts and player profile. This cannot be undone.")
+                    }
                     Button("Edit") {
                         draft = AthleteDraft(student: student,
                                              player: dataManager.players.first {

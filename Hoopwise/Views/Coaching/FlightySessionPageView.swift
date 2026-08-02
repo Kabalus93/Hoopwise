@@ -3493,7 +3493,7 @@ struct FlightySessionPageView: View {
     }
     
     private func startSession() {
-        session.status = .inProgress
+        SessionLifecycle.apply(.start, to: &session)
         saveSession()
 
         let programName = parentProgram?.name ?? "Training Session"
@@ -3548,14 +3548,13 @@ struct FlightySessionPageView: View {
     }
     
     private func skipSession(reason: SkipReason) {
-        session.status = .skipped
-        session.notes = (session.notes ?? "") + (session.notes?.isEmpty == false ? "\n" : "") + "Skipped: \(reason.displayName)"
+        SessionLifecycle.apply(.skip(reason), to: &session)
         saveSession()
         HapticFeedback.notification(.warning)
     }
 
     private func cancelSession() {
-        session.status = .cancelled
+        SessionLifecycle.apply(.cancel, to: &session)
         saveSession()
         HapticFeedback.notification(.warning)
     }
@@ -3578,13 +3577,13 @@ struct FlightySessionPageView: View {
         }
         #endif
 
-        session.status = .scheduled
+        SessionLifecycle.apply(.resetToScheduled, to: &session)
         saveSession()
         HapticFeedback.notification(.success)
     }
     
     private func completeSession() {
-        session.status = .completed
+        SessionLifecycle.apply(.complete, to: &session)
         saveSession()
         
         // Session consumption is now derived from SessionEvent records
@@ -3764,39 +3763,7 @@ private struct QuickCreateDrillSheet: View {
 }
 
 // MARK: - Skip Reason
-enum SkipReason: String, CaseIterable, Identifiable {
-    case holiday = "holiday"
-    case internalReason = "internal"
-    case weather = "weather"
-    case venueUnavailable = "venue"
-    case coachUnavailable = "coach"
-    case other = "other"
-    
-    var id: String { rawValue }
-    
-    var displayName: String {
-        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        switch self {
-        case .holiday: return isChinese ? "假期" : "Holiday"
-        case .internalReason: return isChinese ? "内部原因" : "Internal Reason"
-        case .weather: return isChinese ? "天气原因" : "Weather"
-        case .venueUnavailable: return isChinese ? "场地不可用" : "Venue Unavailable"
-        case .coachUnavailable: return isChinese ? "教练不可用" : "Coach Unavailable"
-        case .other: return isChinese ? "其他" : "Other"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .holiday: return "gift.fill"
-        case .internalReason: return "building.2.fill"
-        case .weather: return "cloud.rain.fill"
-        case .venueUnavailable: return "mappin.slash"
-        case .coachUnavailable: return "person.fill.xmark"
-        case .other: return "ellipsis.circle.fill"
-        }
-    }
-}
+// SkipReason moved to Models/SessionLifecycle.swift (shared with Mac).
 
 // MARK: - Skip Session Sheet
 struct SkipSessionSheet: View {

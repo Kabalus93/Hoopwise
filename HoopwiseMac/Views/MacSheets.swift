@@ -750,3 +750,79 @@ private struct ColorSwatchPicker: View {
         }
     }
 }
+
+
+// MARK: - Session edit (reschedule / retitle / relocate)
+
+/// Small transaction, committed on Done — never a long-lived draft that
+/// could clobber a record edited elsewhere mid-session (CloudKit is
+/// last-write-wins per record). One undo step per commit.
+struct SessionEditSheet: View {
+    let session: SessionEvent
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.undoManager) private var undoManager
+
+    @State private var title = ""
+    @State private var date = Date()
+    @State private var durationMinutes = 90
+    @State private var location = ""
+    @State private var programId: UUID?
+    @State private var loaded = false
+
+    var body: some View {
+        MacSheetChrome(title: "Edit Session") { dismiss() } content: {
+            Form {
+                TextField("Title", text: $title)
+                DatePicker("Starts", selection: $date)
+                Stepper("Duration: \(durationMinutes) min",
+                        value: $durationMinutes, in: 15...240, step: 15)
+                TextField("Location", text: $location)
+                Picker("Program", selection: $programId) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(dataManager.programs.filter { $0.status != .archived }) { program in
+                        Text(program.name).tag(Optional(program.id))
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { dismiss() }
+                    Button("Done") { commit() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .formStyle(.grouped)
+            .frame(minWidth: 440, minHeight: 320)
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            title = session.title
+            date = session.startTime
+            durationMinutes = max(15, session.durationMinutes)
+            location = session.location ?? ""
+            programId = session.programId
+        }
+    }
+
+    private func commit() {
+        let old = session
+        var copy = session
+        copy.title = title.trimmingCharacters(in: .whitespaces)
+        copy.date = date
+        copy.startTime = date
+        copy.endTime = Calendar.current.date(byAdding: .minute,
+                                             value: durationMinutes, to: date) ?? date
+        let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
+        copy.location = trimmedLocation.isEmpty ? nil : trimmedLocation
+        copy.programId = programId
+        copy.updatedAt = Date()
+        dataManager.updateSessionEvent(copy)
+        undoManager?.registerUndo(withTarget: dataManager) { manager in
+            manager.updateSessionEvent(old)
+        }
+        undoManager?.setActionName("Edit Session")
+        dismiss()
+    }
+}

@@ -444,6 +444,10 @@ struct AthletesDirectoryView: View {
             let student = committed.makeStudent()
             let player = committed.makePlayer(studentId: student.id)
             dataManager.addStudent(student, player: player)
+            if let programId = committed.programId {
+                dataManager.setStudentEnrollment(studentId: student.id,
+                                                 programId: programId)
+            }
             let created = student
             undoManager?.registerUndo(withTarget: dataManager) { manager in
                 manager.deleteStudent(created)
@@ -455,6 +459,12 @@ struct AthletesDirectoryView: View {
             let oldPlayer = dataManager.players.first(where: { $0.studentId == id })
             let updated = committed.apply(to: old)
             dataManager.updateStudent(updated)
+            // Enrollment is ONE relation written from both ends — the shared
+            // writer keeps program.enrolledStudentIds in lockstep.
+            if old.programId != committed.programId {
+                dataManager.setStudentEnrollment(studentId: id,
+                                                 programId: committed.programId)
+            }
             if var player = oldPlayer {
                 let previous = player
                 player.parentInfo = committed.parentInfo(existing: player.parentInfo)

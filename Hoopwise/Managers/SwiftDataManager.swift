@@ -2532,6 +2532,44 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    // MARK: - Enrollment (ONE relation, both link fields in lockstep)
+
+    /// Enrollment is stored twice — student.programId and
+    /// program.enrolledStudentIds — and the two demonstrably drift in legacy
+    /// data. This is THE enrollment writer: it sets the student's pointer,
+    /// adds them to the target program's list, and removes them from every
+    /// other program's list, so program→athletes and athlete→program can
+    /// never disagree going forward. Pass nil to unenroll.
+    func setStudentEnrollment(studentId: UUID, programId: UUID?) {
+        do {
+            let studentDescriptor = FetchDescriptor<SDStudent>(
+                predicate: #Predicate { $0.id == studentId })
+            guard let sdStudent = try modelContext.fetch(studentDescriptor).first else { return }
+            recordStudentRevision(sdStudent, reason: .manualEdit)
+            sdStudent.programId = programId
+            sdStudent.updatedAt = Date()
+
+            let programs = try modelContext.fetch(FetchDescriptor<SDProgram>())
+            for sdProgram in programs {
+                var enrolled = sdProgram.enrolledStudentIds
+                let isTarget = sdProgram.id == programId
+                let contains = enrolled.contains(studentId)
+                if isTarget, !contains {
+                    enrolled.append(studentId)
+                } else if !isTarget, contains {
+                    enrolled.removeAll { $0 == studentId }
+                } else {
+                    continue
+                }
+                sdProgram.enrolledStudentIds = enrolled
+                sdProgram.updatedAt = Date()
+            }
+            saveAndRefresh()
+        } catch {
+            debugLog("❌ setStudentEnrollment failed: \(error)")
+        }
+    }
+
     private func mutateDirectoryGroup(id: UUID, _ body: (SDDirectoryGroup) -> Void) {
         let descriptor = FetchDescriptor<SDDirectoryGroup>(
             predicate: #Predicate { $0.id == id })

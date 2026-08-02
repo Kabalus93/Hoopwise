@@ -737,6 +737,8 @@ private struct ContractCard: View {
     let currencyCode: String
     let studentId: UUID
     @EnvironmentObject private var dataManager: DataManager
+    @State private var showingEdit = false
+    @State private var confirmingRenew = false
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -797,6 +799,9 @@ private struct ContractCard: View {
     /// Share hands it to Mail/AirDrop/Messages.
     private var documentMenu: some View {
         Menu {
+            Button("Edit Contract…") { showingEdit = true }
+            Button("Renew — new contract…") { confirmingRenew = true }
+            Divider()
             Button("Attendance Statement…") { save(.statement) }
             Divider()
             Button("Agreement — from contract…") { save(.agreementFromContract) }
@@ -807,7 +812,38 @@ private struct ContractCard: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Export documents for this contract")
+        .help("Edit, renew, or export documents for this contract")
+        .sheet(isPresented: $showingEdit) {
+            ContractEditSheet(contract: contract)
+                .dismissesOnPresentationEscape { showingEdit = false }
+        }
+        .confirmationDialog("Renew contract #\(contract.contractNumber)?",
+                            isPresented: $confirmingRenew) {
+            Button("Create Renewal") { renew() }
+        } message: {
+            Text("Creates a new active contract for this athlete with the same kind, price and bundle size — the structure iOS uses for renewals. The current contract is untouched.")
+        }
+    }
+
+    /// Renewal = a NEW contract record linked to the athlete, next number in
+    /// line, same commercial terms, starting now. The old record is left
+    /// exactly as it stands — history is the ledger.
+    private func renew() {
+        let nextNumber = (dataManager.cachedContracts
+            .filter { $0.studentId == studentId }
+            .map(\.contractNumber).max() ?? 0) + 1
+        var renewal = Contract(id: UUID(),
+                               studentId: studentId,
+                               contractNumber: nextNumber,
+                               kind: contract.kind,
+                               enrollmentDate: Date(),
+                               pricePerSession: contract.pricePerSession,
+                               bundleSize: contract.bundleSize)
+        renewal.programId = contract.programId
+        renewal.travelFeeAmount = contract.travelFeeAmount
+        renewal.travelFeeBasis = contract.travelFeeBasis
+        renewal.notes = "Renewal of contract #\(contract.contractNumber)"
+        dataManager.addContract(renewal)
     }
 
     /// Guardian consent, surfaced where the contract is read so a declined
@@ -1067,5 +1103,110 @@ fileprivate func gradeTint(_ g: PerformanceGrade) -> Color {
     case .B: return .blue
     case .C: return .orange
     case .ungraded: return .gray
+    }
+}
+
+
+// MARK: - Contract editing (smallest surface, strictest validation)
+
+/// The most sensitive record in the app. Small transaction per Done, one
+/// undo step, and every mutation appends a minimal old→new line to the
+/// contract's existing notes field — the history mechanism available
+/// without inventing schema.
+struct ContractEditSheet: View {
+    let contract: Contract
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.undoManager) private var undoManager
+
+    @State private var manualStatus: ContractStatus?
+    @State private var enrollmentDate = Date()
+    @State private var bundleSize = 10
+    @State private var loaded = false
+
+    private var consumed: Int { contract.bundleSessionIds.count }
+
+    var body: some View {
+        MacSheetChrome(title: "Contract #\(contract.contractNumber)") { dismiss() } content: {
+            Form {
+                Section("Status") {
+                    Picker("Status", selection: $manualStatus) {
+                        Text("Automatic (derived)").tag(ContractStatus?.none)
+                        ForEach(ContractStatus.allCases, id: \.self) { status in
+                            Text(status.rawValue).tag(Optional(status))
+                        }
+                    }
+                    Text("Automatic derives from bundle exhaustion; a manual status overrides it — the same rule iOS applies.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Dates") {
+                    DatePicker("Enrolled", selection: $enrollmentDate,
+                               displayedComponents: .date)
+                }
+                if contract.kind == .privateBundle {
+                    Section("Bundle") {
+                        Stepper("Bundle size: \(bundleSize) sessions",
+                                value: $bundleSize,
+                                in: max(1, consumed)...100)
+                        LabeledContent("Consumed",
+                                       value: "\(consumed) (owned by roll call)")
+                        LabeledContent("Remaining",
+                                       value: "\(max(0, bundleSize - consumed))")
+                        if bundleSize != contract.bundleSize {
+                            Label("Resizing the bundle changes sessions remaining. Roll call normally owns this number — only override to correct a booking error.",
+                                  systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                        Text("Remaining can never go below zero: the floor of the size stepper is the sessions already consumed (\(consumed)).")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { dismiss() }
+                    Button("Done") { commit() }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .formStyle(.grouped)
+            .frame(minWidth: 460, minHeight: 420)
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            manualStatus = contract.manualStatus
+            enrollmentDate = contract.enrollmentDate
+            bundleSize = max(contract.bundleSize, 1)
+        }
+    }
+
+    private func commit() {
+        let old = contract
+        var copy = contract
+        var changes: [String] = []
+        if copy.manualStatus != manualStatus {
+            changes.append("status \(copy.manualStatus?.rawValue ?? "auto")→\(manualStatus?.rawValue ?? "auto")")
+            copy.manualStatus = manualStatus
+        }
+        if copy.enrollmentDate != enrollmentDate {
+            changes.append("enrolled \(copy.enrollmentDate.formatted(date: .numeric, time: .omitted))→\(enrollmentDate.formatted(date: .numeric, time: .omitted))")
+            copy.enrollmentDate = enrollmentDate
+        }
+        if contract.kind == .privateBundle, copy.bundleSize != bundleSize {
+            changes.append("bundle \(copy.bundleSize)→\(bundleSize)")
+            copy.bundleSize = max(bundleSize, consumed)
+        }
+        guard !changes.isEmpty else { dismiss(); return }
+        // Minimal mutation log in the EXISTING notes field — no new schema.
+        let stamp = Date().formatted(date: .abbreviated, time: .shortened)
+        let line = "[\(stamp)] Mac edit: \(changes.joined(separator: ", "))"
+        copy.notes = ((copy.notes ?? "").isEmpty ? line : (copy.notes! + "\n" + line))
+        dataManager.updateContract(copy)
+        undoManager?.registerUndo(withTarget: dataManager) { manager in
+            manager.updateContract(old)
+        }
+        undoManager?.setActionName("Edit Contract")
+        dismiss()
     }
 }

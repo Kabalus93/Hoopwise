@@ -158,6 +158,12 @@ private struct ProgramDetailView: View {
     let program: Program
     @EnvironmentObject var dataManager: DataManager
     @State private var tab: Tab = .overview
+    @State private var showingEdit = false
+    @State private var showingRoster = false
+    @State private var confirmingDelete = false
+    @State private var renamingPhase: MicroCycle?
+    @State private var phaseNameDraft = ""
+    @AppStorage("settings.confirmBeforeDelete") private var confirmBeforeDelete = true
 
     enum Tab: String, CaseIterable, Identifiable {
         case overview, phases, athletes, sessions
@@ -187,6 +193,7 @@ private struct ProgramDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 hero
+                programActionBar
                 statRow
 
                 Picker("Section", selection: $tab) {
@@ -211,6 +218,74 @@ private struct ProgramDetailView: View {
         }
         .background(Color(NSColor.windowBackgroundColor))
         .navigationTitle(program.name)
+    }
+
+    /// Sessions referencing the program block deletion — archive instead,
+    /// so history stays intact. The same rule iOS's data model implies:
+    /// sessions carry programId and orphaning them corrupts attendance
+    /// context.
+    private var referencedBySessions: Bool {
+        dataManager.sessionEvents.contains { $0.programId == program.id }
+    }
+
+    private var programActionBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                showingEdit = true
+            } label: {
+                Label("Edit…", systemImage: "square.and.pencil")
+            }
+            Button {
+                showingRoster = true
+            } label: {
+                Label("Roster…", systemImage: "person.badge.plus")
+            }
+            if program.status != .archived {
+                Button {
+                    var copy = program
+                    copy.status = .archived
+                    copy.updatedAt = Date()
+                    dataManager.updateProgram(copy)
+                } label: {
+                    Label("Archive", systemImage: "archivebox")
+                }
+            } else {
+                Button {
+                    var copy = program
+                    copy.status = .active
+                    copy.updatedAt = Date()
+                    dataManager.updateProgram(copy)
+                } label: {
+                    Label("Unarchive", systemImage: "arrow.up.bin")
+                }
+            }
+            Spacer()
+            Button(role: .destructive) {
+                if confirmBeforeDelete { confirmingDelete = true }
+                else { dataManager.deleteProgram(program) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(referencedBySessions)
+            .help(referencedBySessions
+                  ? "Sessions reference this program — archive it instead."
+                  : "Delete program")
+            .confirmationDialog("Delete \"\(program.name)\"?",
+                                isPresented: $confirmingDelete) {
+                Button("Delete Program", role: .destructive) {
+                    dataManager.deleteProgram(program)
+                }
+            }
+        }
+        .controlSize(.large)
+        .sheet(isPresented: $showingEdit) {
+            ProgramEditSheet(program: program)
+                .dismissesOnPresentationEscape { showingEdit = false }
+        }
+        .sheet(isPresented: $showingRoster) {
+            ProgramRosterSheet(program: program)
+                .dismissesOnPresentationEscape { showingRoster = false }
+        }
     }
 
     private var hero: some View {
@@ -300,10 +375,23 @@ private struct ProgramDetailView: View {
 
     @ViewBuilder
     private var phasesTab: some View {
-        if phases.isEmpty {
-            EmptyPanel(systemImage: "rectangle.stack", text: "No phases yet. Create phases on iOS to plan training cycles.")
-        } else {
-            VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Spacer()
+                Button {
+                    // Same MicroCycle records iOS creates; next number in line.
+                    let next = (phases.map(\.phaseNumber).max() ?? 0) + 1
+                    dataManager.addMicroCycle(MicroCycle(programId: program.id,
+                                                         phaseNumber: next,
+                                                         title: "Phase \(next)"))
+                } label: {
+                    Label("Add Phase", systemImage: "plus")
+                }
+                .controlSize(.small)
+            }
+            if phases.isEmpty {
+                EmptyPanel(systemImage: "rectangle.stack", text: "No phases yet.")
+            } else {
                 ForEach(phases) { phase in
                     HStack(alignment: .top, spacing: 14) {
                         Text("\(phase.phaseNumber)")
@@ -334,9 +422,50 @@ private struct ProgramDetailView: View {
                     .padding(14)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contextMenu {
+                        Button("Rename…") {
+                            renamingPhase = phase
+                            phaseNameDraft = phase.title
+                        }
+                        Button("Move Up") { movePhase(phase, direction: -1) }
+                            .disabled(phase.id == phases.first?.id)
+                        Button("Move Down") { movePhase(phase, direction: 1) }
+                            .disabled(phase.id == phases.last?.id)
+                        Divider()
+                        Button("Delete Phase", role: .destructive) {
+                            dataManager.deleteMicroCycle(phase)
+                        }
+                    }
                 }
             }
         }
+        .alert("Rename Phase", isPresented: Binding(
+            get: { renamingPhase != nil },
+            set: { if !$0 { renamingPhase = nil } })) {
+            TextField("Title", text: $phaseNameDraft)
+            Button("Cancel", role: .cancel) { renamingPhase = nil }
+            Button("Rename") {
+                if var phase = renamingPhase {
+                    phase.title = phaseNameDraft
+                    phase.updatedAt = Date()
+                    dataManager.updateMicroCycle(phase)
+                }
+                renamingPhase = nil
+            }
+        }
+    }
+
+    /// Reorder = swap phaseNumbers with the neighbour — the ordering field
+    /// iOS sorts by, so both platforms agree on sequence.
+    private func movePhase(_ phase: MicroCycle, direction: Int) {
+        guard let index = phases.firstIndex(where: { $0.id == phase.id }) else { return }
+        let target = index + direction
+        guard target >= 0, target < phases.count else { return }
+        var a = phases[index], b = phases[target]
+        swap(&a.phaseNumber, &b.phaseNumber)
+        a.updatedAt = Date(); b.updatedAt = Date()
+        dataManager.updateMicroCycle(a)
+        dataManager.updateMicroCycle(b)
     }
 
     @ViewBuilder
@@ -394,5 +523,153 @@ private struct ProgramDetailView: View {
                 }
             }
         }
+    }
+}
+
+
+// MARK: - Program editing
+
+/// Small transaction per Done; one undo step. Writes the SAME Program
+/// record iOS reads — no Mac-only fields.
+struct ProgramEditSheet: View {
+    let program: Program
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.undoManager) private var undoManager
+
+    @State private var name = ""
+    @State private var descriptionText = ""
+    @State private var ageGroup: AgeGroup = .u10
+    @State private var programType: ProgramType = .group
+    @State private var status: ProgramStatus = .active
+    @State private var recurringDays: Set<Weekday> = []
+    @State private var loaded = false
+
+    var body: some View {
+        MacSheetChrome(title: "Edit Program") { dismiss() } content: {
+            Form {
+                TextField("Name", text: $name)
+                TextField("Description", text: $descriptionText, axis: .vertical)
+                Picker("Type", selection: $programType) {
+                    ForEach(ProgramType.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                }
+                Picker("Age band", selection: $ageGroup) {
+                    ForEach(AgeGroup.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                Picker("Status", selection: $status) {
+                    ForEach(ProgramStatus.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                }
+                Section("Schedule") {
+                    ForEach(Weekday.allCases, id: \.self) { day in
+                        Toggle(day.displayName, isOn: Binding(
+                            get: { recurringDays.contains(day) },
+                            set: { on in
+                                if on { recurringDays.insert(day) } else { recurringDays.remove(day) }
+                            }))
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { dismiss() }
+                    Button("Done") { commit() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .formStyle(.grouped)
+            .frame(minWidth: 460, minHeight: 480)
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            name = program.name
+            descriptionText = program.description ?? ""
+            ageGroup = program.ageGroup
+            programType = program.programType
+            status = program.status
+            recurringDays = Set(program.recurringDays)
+        }
+    }
+
+    private func commit() {
+        let old = program
+        var copy = program
+        copy.name = name.trimmingCharacters(in: .whitespaces)
+        let trimmed = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.description = trimmed.isEmpty ? nil : trimmed
+        copy.ageGroup = ageGroup
+        copy.programType = programType
+        copy.status = status
+        copy.recurringDays = Array(recurringDays)
+        copy.updatedAt = Date()
+        dataManager.updateProgram(copy)
+        undoManager?.registerUndo(withTarget: dataManager) { manager in
+            manager.updateProgram(old)
+        }
+        undoManager?.setActionName("Edit Program")
+        dismiss()
+    }
+}
+
+/// Program roster editor — the SAME relation as the athlete card's program
+/// picker, through the one shared enrollment writer.
+struct ProgramRosterSheet: View {
+    let program: Program
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    var body: some View {
+        MacSheetChrome(title: "Roster — \(program.name)") { dismiss() } content: {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search athletes", text: $search).textFieldStyle(.plain)
+                }
+                .padding(8)
+                .background(.quinary, in: .rect(cornerRadius: 6))
+                .padding(12)
+
+                List {
+                    ForEach(filtered) { student in
+                        let enrolled = isEnrolled(student)
+                        HStack(spacing: 10) {
+                            AthletePhoto(imageData: student.thumbnailImageData ?? student.profileImageData,
+                                         initials: student.initials,
+                                         color: Color.avatarColor(student.avatarColor),
+                                         size: 26)
+                            Text(student.displayName)
+                            if let chinese = student.chineseName, chinese != student.displayName {
+                                Text(chinese).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if enrolled {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            dataManager.setStudentEnrollment(
+                                studentId: student.id,
+                                programId: enrolled ? nil : program.id)
+                        }
+                    }
+                }
+                .listStyle(.inset)
+            }
+            .frame(minWidth: 440, minHeight: 460)
+        }
+    }
+
+    private func isEnrolled(_ student: Student) -> Bool {
+        program.enrolledStudentIds.contains(student.id) || student.programId == program.id
+    }
+
+    private var filtered: [Student] {
+        let base = dataManager.students
+        guard !search.isEmpty else { return base.sorted { $0.name < $1.name } }
+        return base.filter {
+            NameIndex.cached(name: $0.name, secondary: $0.chineseName).matches(search)
+        }.sorted { $0.name < $1.name }
     }
 }

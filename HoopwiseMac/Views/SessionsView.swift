@@ -278,6 +278,8 @@ struct SessionDetailView: View {
     let session: SessionEvent
     @EnvironmentObject var dataManager: DataManager
     @State private var tab: DetailTab = .plan
+    @State private var showingEdit = false
+    @State private var confirmingDelete = false
 
     enum DetailTab: String, CaseIterable, Identifiable {
         case plan, rollCall, notes, stats
@@ -351,25 +353,68 @@ struct SessionDetailView: View {
         }
     }
 
+    /// Every status change goes through SessionLifecycle — the SAME state
+    /// machine iOS runs, extracted to the shared layer. Gating comes from
+    /// isAllowed, so Mac can never offer a transition iOS forbids.
     private var actionBar: some View {
         HStack(spacing: 8) {
             primaryActionButton
+
+            if SessionLifecycle.isAllowed(.skip(.other), from: session.status) {
+                Menu {
+                    ForEach(SkipReason.allCases) { reason in
+                        Button {
+                            applyTransition(.skip(reason))
+                        } label: {
+                            Label(reason.displayName, systemImage: reason.icon)
+                        }
+                    }
+                } label: {
+                    Label("Skip…", systemImage: "forward.end")
+                }
+                .fixedSize()
+            }
+
             Button {
-                mutate { $0.status = .cancelled }
+                applyTransition(.cancel)
             } label: {
                 Label("Cancel Session", systemImage: "xmark.circle")
             }
-            .disabled(session.status == .cancelled || session.status == .completed)
+            .disabled(!SessionLifecycle.isAllowed(.cancel, from: session.status))
+
+            Button {
+                showingEdit = true
+            } label: {
+                Label("Edit…", systemImage: "square.and.pencil")
+            }
 
             Spacer()
 
             Button(role: .destructive) {
-                dataManager.deleteSessionEvent(session)
+                confirmingDelete = true
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+            .confirmationDialog("Delete \"\(session.title)\"?",
+                                isPresented: $confirmingDelete) {
+                Button("Delete Session", role: .destructive) {
+                    dataManager.deleteSessionEvent(session)
+                }
+            } message: {
+                Text("Attendance records for this session are removed. This cannot be undone.")
+            }
         }
         .controlSize(.large)
+        .sheet(isPresented: $showingEdit) {
+            SessionEditSheet(session: session)
+                .dismissesOnPresentationEscape { showingEdit = false }
+        }
+    }
+
+    private func applyTransition(_ transition: SessionLifecycle.Transition) {
+        var copy = session
+        guard SessionLifecycle.apply(transition, to: &copy) else { return }
+        dataManager.updateSessionEvent(copy)
     }
 
     @ViewBuilder
@@ -377,7 +422,7 @@ struct SessionDetailView: View {
         switch session.status {
         case .scheduled:
             Button {
-                mutate { $0.status = .inProgress }
+                applyTransition(.start)
             } label: {
                 Label("Start Session", systemImage: "play.fill")
             }
@@ -385,7 +430,7 @@ struct SessionDetailView: View {
             .tint(.accentColor)
         case .inProgress:
             Button {
-                mutate { $0.status = .completed }
+                applyTransition(.complete)
             } label: {
                 Label("Complete", systemImage: "checkmark.circle.fill")
             }
@@ -393,13 +438,13 @@ struct SessionDetailView: View {
             .tint(.green)
         case .completed:
             Button {
-                mutate { $0.status = .scheduled }
+                applyTransition(.resetToScheduled)
             } label: {
                 Label("Reopen", systemImage: "arrow.uturn.backward.circle")
             }
         case .cancelled, .skipped:
             Button {
-                mutate { $0.status = .scheduled }
+                applyTransition(.resetToScheduled)
             } label: {
                 Label("Restore", systemImage: "arrow.clockwise")
             }
@@ -602,6 +647,15 @@ private struct DrillRow: View {
 private struct RollCallTab: View {
     let session: SessionEvent
     @EnvironmentObject var dataManager: DataManager
+    @State private var showingRosterEditor = false
+
+    // FOUR states, matching iOS's AttendanceMarkControl exactly: unmarked is
+    // NOT absent, present and unexcused-absent consume a bundle session,
+    // excused and unmarked do not. Every write goes through
+    // setStudentAttendanceState — the shared authority that keeps contracts
+    // in lockstep (redeemPrivateAttendance, FIFO). The previous Mac tab
+    // cycled three states and wrote arrays wholesale, so marking present
+    // here never deducted — the exact parity break this replaces.
 
     private var roster: [Student] {
         var ids = Set(session.attendeeIds)
@@ -624,7 +678,18 @@ private struct RollCallTab: View {
                     .foregroundStyle(.green)
                 Spacer()
                 Button {
-                    setAllPresent()
+                    showingRosterEditor = true
+                } label: {
+                    Label("Edit Roster", systemImage: "person.badge.plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button {
+                    for student in roster {
+                        dataManager.setStudentAttendanceState(
+                            sessionId: session.id, studentId: student.id, state: .present)
+                    }
                 } label: {
                     Label("Mark All Present", systemImage: "checkmark.circle.fill")
                 }
@@ -633,133 +698,191 @@ private struct RollCallTab: View {
                 .disabled(roster.isEmpty)
 
                 Button {
-                    clearAttendance()
+                    // Clear = UNMARKED, never absent: clearing must never
+                    // charge (and un-charging past redemptions is refund
+                    // territory, handled by the shared authority).
+                    for student in roster {
+                        dataManager.setStudentAttendanceState(
+                            sessionId: session.id, studentId: student.id, state: .unmarked)
+                    }
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .disabled(session.actualAttendeeIds.isEmpty && session.excusedAbsences.isEmpty)
+                .disabled(session.actualAttendeeIds.isEmpty
+                          && session.excusedAbsences.isEmpty
+                          && session.unexcusedAbsences.isEmpty)
             }
 
             if roster.isEmpty {
                 EmptyPanel(systemImage: "person.2", text: "No athletes assigned to this session yet.")
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+                VStack(spacing: 6) {
                     ForEach(roster) { student in
-                        AttendeeCell(
+                        MacAttendanceRow(
                             student: student,
                             state: state(for: student.id),
-                            onCycle: { cycle(student.id) }
-                        )
+                            consumes: consumesBundle(student.id),
+                            onSet: { newState in
+                                dataManager.setStudentAttendanceState(
+                                    sessionId: session.id,
+                                    studentId: student.id,
+                                    state: newState)
+                            })
                     }
                 }
             }
         }
+        .sheet(isPresented: $showingRosterEditor) {
+            SessionRosterSheet(session: session)
+                .dismissesOnPresentationEscape { showingRosterEditor = false }
+        }
     }
 
-    private enum AttendeeState { case unmarked, present, excused }
-
-    private func state(for id: UUID) -> AttendeeState {
+    private func state(for id: UUID) -> AttendanceTriState {
         if session.actualAttendeeIds.contains(id) { return .present }
         if session.excusedAbsences.contains(id) { return .excused }
+        if session.unexcusedAbsences.contains(id) { return .absent }
         return .unmarked
     }
 
-    private func cycle(_ id: UUID) {
-        var copy = session
-        switch state(for: id) {
-        case .unmarked:
-            copy.actualAttendeeIds.append(id)
-        case .present:
-            copy.actualAttendeeIds.removeAll { $0 == id }
-            copy.excusedAbsences.append(id)
-        case .excused:
-            copy.excusedAbsences.removeAll { $0 == id }
-        }
-        copy.updatedAt = Date()
-        dataManager.updateSessionEvent(copy)
+    /// Whether marking this student present/absent charges a bundle session —
+    /// drives the money-consequence hint, worded like the iOS control.
+    private func consumesBundle(_ id: UUID) -> Bool {
+        guard let contract = dataManager.currentContract(for: id) else { return false }
+        return contract.kind == .privateBundle
     }
+}
 
-    private func setAllPresent() {
-        var copy = session
-        copy.actualAttendeeIds = roster.map(\.id)
-        copy.excusedAbsences = []
-        copy.updatedAt = Date()
-        dataManager.updateSessionEvent(copy)
-    }
+/// Four-state Mac attendance row: segmented state control plus the money
+/// consequence in words, because two of the four states charge the client.
+private struct MacAttendanceRow: View {
+    let student: Student
+    let state: AttendanceTriState
+    let consumes: Bool
+    let onSet: (AttendanceTriState) -> Void
 
-    private func clearAttendance() {
-        var copy = session
-        copy.actualAttendeeIds = []
-        copy.excusedAbsences = []
-        copy.updatedAt = Date()
-        dataManager.updateSessionEvent(copy)
-    }
-
-    private struct AttendeeCell: View {
-        let student: Student
-        let state: AttendeeState
-        let onCycle: () -> Void
-
-        var body: some View {
-            Button(action: onCycle) {
-                HStack(spacing: 10) {
-                    Circle()
-                        .fill(Color.avatarColor(student.avatarColor))
-                        .overlay(
-                            Text(student.initials)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                        )
-                        .frame(width: 32, height: 32)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(student.name).font(.subheadline.weight(.medium)).lineLimit(1)
-                        Text(stateLabel)
-                            .font(.caption2)
-                            .foregroundStyle(stateTint)
-                    }
-                    Spacer()
-                    Image(systemName: stateIcon)
-                        .foregroundStyle(stateTint)
-                        .font(.title3)
+    var body: some View {
+        HStack(spacing: 10) {
+            AthletePhoto(imageData: student.thumbnailImageData ?? student.profileImageData,
+                         initials: student.initials,
+                         color: Color.avatarColor(student.avatarColor),
+                         size: 28)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(student.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
+                if consumes {
+                    Text(consequenceText)
+                        .font(.caption2)
+                        .foregroundStyle(chargesNow ? .orange : .secondary)
                 }
-                .padding(10)
-                .background(stateBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(stateTint.opacity(state == .unmarked ? 0.0 : 0.3), lineWidth: 1))
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            Spacer()
+            Picker("", selection: Binding(get: { state }, set: { onSet($0) })) {
+                Text("—").tag(AttendanceTriState.unmarked)
+                Text("Present").tag(AttendanceTriState.present)
+                Text("Excused").tag(AttendanceTriState.excused)
+                Text("Absent").tag(AttendanceTriState.absent)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(state == .unmarked ? Color.secondary.opacity(0.35) : .clear,
+                              style: StrokeStyle(lineWidth: 1, dash: state == .unmarked ? [4, 3] : []))
+        )
+    }
 
-        private var stateLabel: String {
-            switch state {
-            case .unmarked: return "Tap to mark present"
-            case .present: return "Present"
-            case .excused: return "Excused"
-            }
+    private var chargesNow: Bool { state == .present || state == .absent }
+
+    private var consequenceText: String {
+        switch state {
+        case .present:  return "Deducts 1 session"
+        case .absent:   return "Deducts 1 session (unexcused)"
+        case .excused:  return "No session deducted"
+        case .unmarked: return "Not marked — no session deducted"
         }
-        private var stateIcon: String {
-            switch state {
-            case .unmarked: return "circle.dashed"
-            case .present: return "checkmark.circle.fill"
-            case .excused: return "minus.circle.fill"
-            }
+    }
+
+    private var rowBackground: some ShapeStyle {
+        switch state {
+        case .present:  return AnyShapeStyle(Color.green.opacity(0.10))
+        case .excused:  return AnyShapeStyle(Color.orange.opacity(0.10))
+        case .absent:   return AnyShapeStyle(Color.red.opacity(0.10))
+        case .unmarked: return AnyShapeStyle(Color.secondary.opacity(0.05))
         }
-        private var stateTint: Color {
-            switch state {
-            case .unmarked: return .secondary
-            case .present: return .green
-            case .excused: return .orange
+    }
+}
+
+/// Session roster editing: membership in session.attendeeIds — the same
+/// array iOS reads. Attendance state is untouched by roster edits.
+private struct SessionRosterSheet: View {
+    let session: SessionEvent
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    var body: some View {
+        MacSheetChrome(title: "Session Roster") { dismiss() } content: {
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search athletes", text: $search).textFieldStyle(.plain)
+                }
+                .padding(8)
+                .background(.quinary, in: .rect(cornerRadius: 6))
+                .padding(12)
+
+                List {
+                    ForEach(filtered) { student in
+                        HStack(spacing: 10) {
+                            AthletePhoto(imageData: student.thumbnailImageData ?? student.profileImageData,
+                                         initials: student.initials,
+                                         color: Color.avatarColor(student.avatarColor),
+                                         size: 26)
+                            Text(student.displayName)
+                            if let chinese = student.chineseName, chinese != student.displayName {
+                                Text(chinese).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if session.attendeeIds.contains(student.id) {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { toggle(student.id) }
+                    }
+                }
+                .listStyle(.inset)
             }
+            .frame(minWidth: 420, minHeight: 440)
         }
-        private var stateBackground: AnyShapeStyle {
-            switch state {
-            case .unmarked: return AnyShapeStyle(Material.regular)
-            case .present: return AnyShapeStyle(Color.green.opacity(0.10))
-            case .excused: return AnyShapeStyle(Color.orange.opacity(0.10))
-            }
+    }
+
+    private var filtered: [Student] {
+        let base = dataManager.students
+        guard !search.isEmpty else {
+            return base.sorted { $0.name < $1.name }
         }
+        return base.filter {
+            NameIndex.cached(name: $0.name, secondary: $0.chineseName).matches(search)
+        }.sorted { $0.name < $1.name }
+    }
+
+    private func toggle(_ id: UUID) {
+        var copy = session
+        if copy.attendeeIds.contains(id) {
+            copy.attendeeIds.removeAll { $0 == id }
+        } else {
+            copy.attendeeIds.append(id)
+        }
+        copy.updatedAt = Date()
+        dataManager.updateSessionEvent(copy)
     }
 }
 

@@ -123,6 +123,7 @@
 				Models/Reminder.swift,
 				Models/School.swift,
 				Models/Session.swift,
+				Models/SessionLifecycle.swift,
 				Models/SessionActivityAttributes.swift,
 				Models/SessionFormat.swift,
 				Models/Student.swift,
