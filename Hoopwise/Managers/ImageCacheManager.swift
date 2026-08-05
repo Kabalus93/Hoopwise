@@ -97,6 +97,15 @@ final class ImageCacheManager: ObservableObject {
             return nil
         }
 
+        // Legacy Supabase-era URLs: the host is dead and file:// paths are
+        // another device's container — fetching can never succeed, and it
+        // burned one failed request per student per launch on both
+        // platforms. Photo bytes now live in the records (photo backfill);
+        // these URL values are pure legacy pending roadmap step 10.
+        if urlString.contains("supabase.co") || urlString.hasPrefix("file://") {
+            return nil
+        }
+
         if urlString.hasPrefix("file://") || urlString.hasPrefix("/var/") || urlString.hasPrefix("/Users/") {
             let localPath = urlString.replacingOccurrences(of: "file://", with: "")
             if !FileManager.default.fileExists(atPath: localPath) {
@@ -214,6 +223,15 @@ final class ImageCacheManager: ObservableObject {
         return nil
     }
     
+    /// JPEG bytes for a cached image, downscaled to `maxEdge` — the photo
+    /// backfill's read path. Returns nil when this device's cache has no
+    /// bytes for the id. Pure read: the cache is never mutated.
+    func cachedJPEGData(for id: String, maxEdge: CGFloat) -> Data? {
+        guard let image = loadFromDisk(id: id) else { return nil }
+        let resized = resizeImageIfNeeded(image, maxSize: maxEdge)
+        return imageToData(resized)
+    }
+
     /// Insert into the in-memory cache. Callers that already have a decoded
     /// image (e.g. from inline `Data` on a record) should warm here so
     /// subsequent reads via `image(for:)` don't re-decode.
@@ -263,17 +281,31 @@ final class ImageCacheManager: ObservableObject {
         #elseif canImport(AppKit)
         let size = image.size
         guard size.width > maxSize || size.height > maxSize else { return image }
-        
+
         let scale = min(maxSize / size.width, maxSize / size.height)
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        
-        let newImage = NSImage(size: newSize)
-        newImage.lockFocus()
+
+        // Draw into an EXACT-pixel bitmap rep. lockFocus renders at the
+        // screen's backing scale, so "512" silently became a 1024px bitmap
+        // on Retina — twice the intended byte size.
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil,
+                                         pixelsWide: Int(newSize.width),
+                                         pixelsHigh: Int(newSize.height),
+                                         bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0)
+        else { return image }
+        rep.size = newSize
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.imageInterpolation = .high
         image.draw(in: NSRect(origin: .zero, size: newSize),
                    from: NSRect(origin: .zero, size: size),
                    operation: .copy, fraction: 1.0)
-        newImage.unlockFocus()
-        
+        NSGraphicsContext.restoreGraphicsState()
+        let newImage = NSImage(size: newSize)
+        newImage.addRepresentation(rep)
         return newImage
         #endif
     }

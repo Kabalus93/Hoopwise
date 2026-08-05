@@ -371,6 +371,7 @@ class SwiftDataManager: ObservableObject {
         // Run one-time migrations
         migrateSessionDurationsTo30()
         migrateAttendancePhotoPaths()
+        backfillStudentPhotosFromLocalCache()
         
         // Sync sample drills (adds any new drills from DrillItem.samples)
         syncSampleDrills()
@@ -410,26 +411,28 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
-    /// Preload student images in batches to avoid memory spikes
+    /// Preload student images in batches to avoid memory spikes.
+    ///
+    /// Warms the cache from RECORD bytes only. The URL fetch path is gone:
+    /// every stored profileImageUrl points at the dead Supabase host (or an
+    /// iPhone-local file path), so it produced a wall of failed requests on
+    /// every launch and could never load anything. The photo backfill moves
+    /// cache-only images into the records; URLs are pure legacy pending
+    /// roadmap step 10.
     private func preloadStudentImages() async {
         let students = await MainActor.run { self.cachedStudents }
-        let batchSize = 10
-        
-        for batch in stride(from: 0, to: students.count, by: batchSize) {
-            let end = min(batch + batchSize, students.count)
-            let batchStudents = Array(students[batch..<end])
-            
-            for student in batchStudents {
-                guard let url = student.profileImageUrl, !url.isEmpty else { continue }
-                let cacheId = ImageCacheManager.studentImageId(student.id)
-                _ = await ImageCacheManager.shared.loadImage(for: cacheId, from: url)
+        var warmed = 0
+        for student in students {
+            guard let data = student.thumbnailImageData ?? student.profileImageData,
+                  !data.isEmpty else { continue }
+            let cacheId = ImageCacheManager.studentImageId(student.id)
+            if ImageCacheManager.shared.image(for: cacheId) == nil,
+               let image = CacheImage(data: data) {
+                ImageCacheManager.shared.cacheInMemory(image, for: cacheId)
+                warmed += 1
             }
-            
-            // Small delay between batches to avoid memory pressure
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
         }
-        
-        debugLog("🖼️ Preloaded \(students.filter { $0.profileImageUrl != nil }.count) student images")
+        debugLog("🖼️ Warmed \(warmed) student images from record data")
     }
     
     /// Cancel any ongoing background sync
@@ -1827,6 +1830,47 @@ class SwiftDataManager: ObservableObject {
     /// this migration breaks at load time. `PhotoCaptureManager` can still
     /// resolve them via fallback, but rewriting up front keeps subsequent
     /// loads on the fast path. Idempotent.
+    /// One-time photo rescue: moves student photos that exist ONLY in this
+    /// device's local image cache into the synced record.
+    ///
+    /// The Supabase era stored photos remotely and wrote only the URL into
+    /// the record; the host is dead, so ~110 photos survive solely in the
+    /// iPhone's cache directory — one reinstall away from being lost, and
+    /// invisible to the Mac. Running on the device that HOLDS the cache (the
+    /// iPhone), this writes the bytes into profileImageData/thumbnailImageData
+    /// so CloudKit syncs them everywhere and the photo becomes durable data.
+    /// On devices with an empty cache (the Mac) it is a no-op. Self-limiting:
+    /// once a record has bytes it is skipped, so subsequent launches cost a
+    /// handful of existence checks. Deliberately no revision snapshots — a
+    /// mechanical rescue of 100+ records would flood the history.
+    func backfillStudentPhotosFromLocalCache() {
+        do {
+            let descriptor = FetchDescriptor<SDStudent>()
+            let students = try modelContext.fetch(descriptor)
+            var rescued = 0
+            for sdStudent in students {
+                let hasData = !(sdStudent.profileImageData ?? Data()).isEmpty
+                guard !hasData else { continue }
+                let cacheId = ImageCacheManager.studentImageId(sdStudent.id)
+                guard let jpeg = ImageCacheManager.shared.cachedJPEGData(
+                    for: cacheId, maxEdge: 512) else { continue }
+                sdStudent.profileImageData = jpeg
+                sdStudent.thumbnailImageData = makeProfileThumbnailData(from: jpeg)
+                    ?? jpeg
+                sdStudent.updatedAt = Date()
+                rescued += 1
+            }
+            if rescued > 0 {
+                try modelContext.save()
+                refreshCachesSync()
+                objectWillChange.send()
+                debugLog("📸 Photo backfill: rescued \(rescued) cache-only student photos into synced records")
+            }
+        } catch {
+            debugLog("❌ Photo backfill failed: \(error)")
+        }
+    }
+
     func migrateAttendancePhotoPaths() {
         do {
             let descriptor = FetchDescriptor<SDSessionEvent>()
