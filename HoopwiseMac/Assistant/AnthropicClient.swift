@@ -126,6 +126,22 @@ enum AnthropicClientError: LocalizedError {
             return "Stream error: \(detail)"
         }
     }
+
+    /// Server-side conditions that clear on their own — worth silent retries
+    /// (the official SDKs retry these automatically; this client must too).
+    var isTransient: Bool {
+        switch self {
+        case .noAPIKey:
+            return false
+        case .httpError(let status, _):
+            return status == 429 || status == 500 || status == 502
+                || status == 503 || status == 529
+        case .badStream(let detail):
+            let lowered = detail.lowercased()
+            return lowered.contains("overloaded") || lowered.contains("rate_limit")
+                || lowered.contains("api_error")
+        }
+    }
 }
 
 /// Raw Messages API client over URLSession (no official Swift SDK) —
@@ -226,7 +242,9 @@ struct AnthropicClient: AssistantTransport {
                 return (blocks, stopReason)
             case "error":
                 let error = event["error"] as? [String: Any]
-                throw AnthropicClientError.badStream(error?["message"] as? String ?? "unknown")
+                let errorType = error?["type"] as? String ?? "unknown"
+                let message = error?["message"] as? String ?? "unknown"
+                throw AnthropicClientError.badStream("\(errorType): \(message)")
             default:
                 break
             }

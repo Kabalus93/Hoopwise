@@ -135,20 +135,35 @@ final class AssistantEngine: ObservableObject {
         defer { isStreaming = false }
 
         while true {
-            streamingText = ""
-            let result: (blocks: [AssistantBlock], stopReason: String)
-            do {
-                result = try await transport.streamTurn(
-                    system: systemBlocks(),
-                    messages: conversation.messages,
-                    tools: registry.wireTools,
-                    model: Self.chatModel,
-                    onTextDelta: { [weak self] delta in self?.streamingText += delta })
-            } catch {
-                lastError = error.localizedDescription
+            var result: (blocks: [AssistantBlock], stopReason: String)?
+            var attempt = 0
+            while result == nil {
+                // The turn is only persisted on success, so a retry after a
+                // mid-stream failure is transcript-safe — the partial text
+                // is discarded and regrows.
                 streamingText = ""
-                return
+                do {
+                    result = try await transport.streamTurn(
+                        system: systemBlocks(),
+                        messages: conversation.messages,
+                        tools: registry.wireTools,
+                        model: Self.chatModel,
+                        onTextDelta: { [weak self] delta in self?.streamingText += delta })
+                    lastError = nil
+                } catch {
+                    let transient = (error as? AnthropicClientError)?.isTransient ?? false
+                    if transient && attempt < 2 {
+                        attempt += 1
+                        lastError = "Anthropic is busy — retrying (\(attempt)/2)…"
+                        try? await Task.sleep(nanoseconds: attempt == 1 ? 1_500_000_000 : 4_000_000_000)
+                        continue
+                    }
+                    lastError = Self.friendlyError(error)
+                    streamingText = ""
+                    return
+                }
             }
+            guard let result else { return }
             streamingText = ""
             conversation.messages.append(AssistantMessage(role: "assistant", blocks: result.blocks))
             activeConversation = conversation
@@ -251,6 +266,22 @@ final class AssistantEngine: ObservableObject {
             activeConversation = repaired
             persist()
         }
+    }
+
+    static func friendlyError(_ error: Error) -> String {
+        let raw = error.localizedDescription
+        let lowered = raw.lowercased()
+        if lowered.contains("overloaded") {
+            return "Anthropic's servers are briefly overloaded. Retried twice without luck — it usually clears within a minute."
+        }
+        if lowered.contains("rate_limit") {
+            return "Rate limited by the API. Wait a moment, then retry."
+        }
+        if lowered.contains("offline") || lowered.contains("internet")
+            || lowered.contains("network") || (error as? URLError) != nil {
+            return "No connection to Anthropic — check the network. The rest of the app works offline."
+        }
+        return raw
     }
 
     /// A 400 must not dead-end the chat: repair the transcript and re-send.
