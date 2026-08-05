@@ -500,6 +500,22 @@ struct AthletesDirectoryView: View {
     private func applyDemoEnvironment() {
         let env = ProcessInfo.processInfo.environment
         if let query = env["HOOPWISE_DEMO_DIR_SEARCH"] { search = query }
+        if env["HOOPWISE_DEMO_PHOTO_AUDIT"] == "1" {
+            let logger = os.Logger(subsystem: "hoopwise.demo", category: "photos")
+            var withData = 0, withThumbOnly = 0, urlOnly = 0, none = 0
+            for student in dataManager.students {
+                let hasData = !(student.profileImageData ?? Data()).isEmpty
+                let hasThumb = !(student.thumbnailImageData ?? Data()).isEmpty
+                let hasUrl = !(student.profileImageUrl ?? "").isEmpty
+                if hasData { withData += 1 }
+                else if hasThumb { withThumbOnly += 1 }
+                else if hasUrl {
+                    urlOnly += 1
+                    logger.notice("PHOTO: URL-only \(student.displayName, privacy: .public) url=\(student.profileImageUrl ?? "", privacy: .public)")
+                } else { none += 1 }
+            }
+            logger.notice("PHOTO: total=\(dataManager.students.count) withData=\(withData) thumbOnly=\(withThumbOnly) urlOnly=\(urlOnly) none=\(none)")
+        }
         if env["HOOPWISE_DEMO_DIR_LOG"] == "1" {
             let logger = os.Logger(subsystem: "hoopwise.demo", category: "directory")
             let items = visibleStudents
