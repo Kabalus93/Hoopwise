@@ -50,6 +50,9 @@ where Item.ID == UUID {
 
     @ViewBuilder let row: (Item) -> RowContent
     @ViewBuilder let listAccessory: () -> AnyView
+    /// When non-nil, replaces the sectioned List (search and accessory rows
+    /// stay). Sessions' calendar mode exercises this.
+    var listOverride: (() -> AnyView)?
     @ViewBuilder let detail: () -> DetailContent
 
     /// Drag-in membership: item ids dropped on a user group.
@@ -85,6 +88,7 @@ where Item.ID == UUID {
          onEditSmartRule: ((DirectoryGroup) -> Void)? = nil,
          @ViewBuilder row: @escaping (Item) -> RowContent,
          @ViewBuilder listAccessory: @escaping () -> AnyView,
+         listOverride: (() -> AnyView)? = nil,
          @ViewBuilder detail: @escaping () -> DetailContent) {
         self.groupSections = groupSections
         self._selectedGroups = selectedGroups
@@ -104,6 +108,7 @@ where Item.ID == UUID {
         self.onEditSmartRule = onEditSmartRule
         self.row = row
         self.listAccessory = listAccessory
+        self.listOverride = listOverride
         self.detail = detail
         self._groupsVisible = AppStorage(wrappedValue: true, "\(storageKey).groupsVisible")
     }
@@ -286,6 +291,9 @@ where Item.ID == UUID {
 
             Divider()
 
+            if let listOverride {
+                listOverride()
+            } else {
             ScrollViewReader { proxy in
                 ZStack(alignment: .trailing) {
                     List(selection: $selection) {
@@ -322,6 +330,7 @@ where Item.ID == UUID {
                         indexRail(proxy: proxy)
                     }
                 }
+            }
             }
         }
         .onChange(of: searchFocusToken) { _, _ in searchFocused = true }

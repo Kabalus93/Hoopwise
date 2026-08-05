@@ -201,6 +201,12 @@ it produces confident wrong numbers the coach reconciles books against.
   sort key, A–Z section, and search blob — pinyin for hanzi, diacritics
   stripped (roster latin names carry tone marks). 蔡一铭 sorts under C and
   is findable by "cai" or initials "cym". Verified against the real 133.
+- Sessions has a CALENDAR mode (toggle in the list-accessory row, persisted):
+  month grid with dot indicators per session day, day selection drives the
+  same selection binding as the list. It uses DirectoryView's listOverride
+  slot — the page swaps the List body while search/accessory/count stay
+  skeleton-owned. That slot exists because a second page exercised it; keep
+  it a full-body swap, don't grow per-page knobs inside the skeleton.
 - Directory keyboard rides KeyDispatchCore (the editor's dispatch layer):
   DirectoryKeyDispatcher maps ↑↓, ⌘F, ⌘N, Esc, type-to-select. Never add
   onKeyPress handlers to directory subviews.
