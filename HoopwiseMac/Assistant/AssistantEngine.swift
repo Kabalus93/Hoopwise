@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 import SwiftUI
 
 // MARK: - Conversation model
@@ -9,6 +10,9 @@ struct AssistantConversation: Codable, Identifiable, Equatable {
     var title: String = "New Conversation"
     var createdAt = Date()
     var messages: [AssistantMessage] = []
+    /// "live" | "scripted" — a conversation is bound to the transport it
+    /// began under; scripted transcripts are never sent to the live API.
+    var transport: String? = "live"
 }
 
 /// A write the model wants to make, awaiting the user's click.
@@ -41,6 +45,7 @@ final class AssistantEngine: ObservableObject {
     @Published var streamingText = ""
     @Published var isStreaming = false
     @Published var pendingWrites: [PendingWrite] = []
+    @Published var expiredWriteIds: Set<String> = []
     @Published var lastError: String?
     @Published var curationCards: [CurationCard] = []
     @Published var curationFresh = false      // drives the bubble badge dot
@@ -52,6 +57,8 @@ final class AssistantEngine: ObservableObject {
     private var gatheredResults: [AssistantBlock] = []
 
     var hasAPIKey: Bool { AssistantSecrets.apiKey != nil }
+
+    private var transportKind: String { transport is AnthropicClient ? "live" : "scripted" }
 
     var activeConversation: AssistantConversation? {
         get { conversations.first { $0.id == activeConversationId } }
@@ -77,7 +84,8 @@ final class AssistantEngine: ObservableObject {
     // MARK: Conversations
 
     func newConversation() {
-        let conversation = AssistantConversation()
+        var conversation = AssistantConversation()
+        conversation.transport = transportKind
         conversations.insert(conversation, at: 0)
         activeConversationId = conversation.id
         pendingWrites = []
@@ -96,6 +104,15 @@ final class AssistantEngine: ObservableObject {
     func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isStreaming else { return }
+        // A new message while a confirmation card is pending voids the
+        // write: the turn is closed with "superseded" tool_results BEFORE
+        // the message is appended, so no tool_use ever dangles.
+        if !pendingWrites.isEmpty { voidPendingWrites() }
+        // Scripted transcripts never reach the live API — open fresh.
+        if let active = activeConversation,
+           (active.transport ?? "live") != transportKind {
+            newConversation()
+        }
         if activeConversation == nil { newConversation() }
         guard var conversation = activeConversation else { return }
         conversation.messages.append(AssistantMessage(role: "user", blocks: [.text(trimmed)]))
@@ -110,7 +127,9 @@ final class AssistantEngine: ObservableObject {
     /// The agent loop: stream a turn; execute reads immediately; pause on
     /// writes for confirmation; loop until the model stops calling tools.
     private func runLoop() async {
-        guard let registry, var conversation = activeConversation else { return }
+        repairActiveConversation()
+        guard let registry else { return }
+        guard var conversation = activeConversation else { return }
         lastError = nil
         isStreaming = true
         defer { isStreaming = false }
@@ -167,6 +186,80 @@ final class AssistantEngine: ObservableObject {
             activeConversation = conversation
             persist()
         }
+    }
+
+    /// Close a pending confirmation without executing: every dangling
+    /// tool_use gets a superseded tool_result so the transcript stays valid.
+    private func voidPendingWrites() {
+        guard var conversation = activeConversation, !pendingWrites.isEmpty else { return }
+        var results = gatheredResults
+        for write in pendingWrites {
+            results.append(.toolResult(
+                id: write.id,
+                content: "Not confirmed — superseded by the user's next message. Nothing was written.",
+                isError: true))
+        }
+        expiredWriteIds.formUnion(pendingWrites.map(\.id))
+        pendingWrites = []
+        gatheredResults = []
+        conversation.messages.append(AssistantMessage(role: "user", blocks: results))
+        activeConversation = conversation
+        persist()
+        #if DEBUG
+        auditStore(context: "voided")
+        #endif
+    }
+
+    /// Transcript invariant: every tool_use is closed by a tool_result
+    /// before any later message. Dangling calls (crash, kill, old bug) get
+    /// a synthetic "interrupted" result. Run at load and before every
+    /// request — defense in depth.
+    static func repaired(_ conversation: AssistantConversation) -> AssistantConversation {
+        var repaired = conversation
+        let resultIds = Set(conversation.messages.flatMap(\.blocks).compactMap { block -> String? in
+            if case .toolResult(let id, _, _) = block { return id }
+            return nil
+        })
+        var index = 0
+        while index < repaired.messages.count {
+            let message = repaired.messages[index]
+            if message.role == "assistant" {
+                let dangling = message.blocks.compactMap(\.toolUseInfo).filter { !resultIds.contains($0.id) }
+                if !dangling.isEmpty {
+                    let synthetic = dangling.map { AssistantBlock.toolResult(
+                        id: $0.id,
+                        content: "Interrupted — the app closed before this ran. Nothing was written.",
+                        isError: true) }
+                    repaired.messages.insert(
+                        AssistantMessage(role: "user", blocks: synthetic), at: index + 1)
+                    index += 1
+                }
+            }
+            index += 1
+        }
+        // Trailing hygiene: the transcript must start with a user message.
+        while let first = repaired.messages.first, first.role != "user" {
+            repaired.messages.removeFirst()
+        }
+        return repaired
+    }
+
+    private func repairActiveConversation() {
+        guard let conversation = activeConversation else { return }
+        let repaired = Self.repaired(conversation)
+        if repaired != conversation {
+            activeConversation = repaired
+            persist()
+        }
+    }
+
+    /// A 400 must not dead-end the chat: repair the transcript and re-send.
+    func repairAndRetry() {
+        lastError = nil
+        pendingWrites = []
+        gatheredResults = []
+        repairActiveConversation()
+        Task { await runLoop() }
     }
 
     /// One click confirms (or declines) every previewed write, executes as a
@@ -394,9 +487,46 @@ final class AssistantEngine: ObservableObject {
         guard let data = try? Data(contentsOf: Self.storeURL),
               let stored = try? JSONDecoder().decode([AssistantConversation].self, from: data)
         else { return }
-        conversations = stored
-        activeConversationId = stored.first?.id
+        conversations = stored.map { conversation in
+            var repaired = Self.repaired(conversation)
+            // Anything carrying scripted-demo tool ids is scripted, whatever
+            // its tag claims — it must never reach the live API.
+            let hasDemoIds = repaired.messages.flatMap(\.blocks).contains { block in
+                if case .toolUse(let id, _, _) = block { return id.hasPrefix("demo_tool_") }
+                if case .toolResult(let id, _, _) = block { return id.hasPrefix("demo_tool_") }
+                return false
+            }
+            if hasDemoIds { repaired.transport = "scripted" }
+            if repaired.transport == nil { repaired.transport = "live" }
+            return repaired
+        }
+        activeConversationId = conversations.first?.id
+        persist()
+        #if DEBUG
+        auditStore(context: "load")
+        #endif
     }
+
+    #if DEBUG
+    /// Store invariant audit over the unified log (the container is
+    /// sandbox-protected, so outside shells can't read the JSON directly).
+    func auditStore(context: String) {
+        let logger = Logger(subsystem: "hoopwise.demo", category: "assistant")
+        for conversation in conversations {
+            var uses: Set<String> = [], results: Set<String> = []
+            for message in conversation.messages {
+                for block in message.blocks {
+                    if case .toolUse(let id, _, _) = block { uses.insert(id) }
+                    if case .toolResult(let id, _, _) = block { results.insert(id) }
+                }
+            }
+            let dangling = uses.subtracting(results).sorted().joined(separator: ",")
+            let demoLive = (conversation.transport ?? "live") == "live"
+                && uses.contains { $0.hasPrefix("demo_tool_") }
+            logger.notice("AUDIT[\(context, privacy: .public)] transport=\(conversation.transport ?? "nil", privacy: .public) uses=\(uses.count) dangling=[\(dangling, privacy: .public)] demoInLive=\(demoLive)")
+        }
+    }
+    #endif
 
     private func persist() {
         guard let data = try? JSONEncoder().encode(conversations) else { return }

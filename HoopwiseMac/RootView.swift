@@ -142,11 +142,19 @@ struct RootView: View {
             // Agent assistant: scripted send + confirm at fixed delays.
             if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_ASSISTANT"] == "script" {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    assistantEngine.newConversation()
                     assistantEngine.send("Schedule a demo session for 蔡一铭")
                 }
                 if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_ASSISTANT_CONFIRM"] == "1" {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
                         assistantEngine.resolvePending(confirmed: true)
+                    }
+                }
+                // Accept test: unrelated question while the card hangs —
+                // the pending write must void, never 400, never block.
+                if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_ASSISTANT_SECOND"] == "1" {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 9.0) {
+                        assistantEngine.send("What's on today's schedule?")
                     }
                 }
             }

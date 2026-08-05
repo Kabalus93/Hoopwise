@@ -97,10 +97,15 @@ struct AssistantView: View {
                                 confirmationCard
                             }
                             if let error = engine.lastError {
-                                Label(error, systemImage: "exclamationmark.triangle.fill")
-                                    .font(.callout).foregroundStyle(.orange)
-                                    .padding(10)
-                                    .background(.orange.opacity(0.1), in: .rect(cornerRadius: 8))
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                                        .font(.callout).foregroundStyle(.orange)
+                                    Button("Repair & Retry") { engine.repairAndRetry() }
+                                        .controlSize(.small)
+                                }
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.orange.opacity(0.1), in: .rect(cornerRadius: 8))
                             }
                             Color.clear.frame(height: 1).id("bottom")
                         }
@@ -229,6 +234,8 @@ struct AssistantView: View {
 
     private func chipLabel(name: String, info: (summary: String, isError: Bool)?) -> String {
         guard let info else { return "\(name) · running" }
+        if info.summary.hasPrefix("Not confirmed") { return "\(name) · expired — not written" }
+        if info.summary.hasPrefix("Interrupted") { return "\(name) · interrupted — not written" }
         if info.isError { return "\(name) — \(info.summary)" }
         return info.summary == "done" ? "\(name) ✓" : "\(name) · \(info.summary)"
     }
@@ -307,7 +314,7 @@ struct AssistantView: View {
     }
 
     private var inputEnabled: Bool {
-        (engine.hasAPIKey || engineIsScripted) && !engine.isStreaming && engine.pendingWrites.isEmpty
+        (engine.hasAPIKey || engineIsScripted) && !engine.isStreaming
     }
 
     private var engineIsScripted: Bool {
