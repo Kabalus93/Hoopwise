@@ -14,8 +14,36 @@ import Charts
 struct SalesMacView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var filter: ContractFilter = .all
+    /// Kind filter — PRIVATE BUNDLE by default: this page exists to track
+    /// private clients; group rosters live in Programs.
+    @AppStorage("sales.kindFilter") private var kindFilterRaw = "privateBundle"
     @State private var search = ""
     @State private var selection: UUID?   // student id
+
+    enum KindFilter: String, CaseIterable, Identifiable {
+        case all, privateBundle, payPerSession, group
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .all: return "All Types"
+            case .privateBundle: return "Private Bundle"
+            case .payPerSession: return "Pay-per-session"
+            case .group: return "Group"
+            }
+        }
+        func matches(_ kind: ContractKind) -> Bool {
+            switch self {
+            case .all: return true
+            case .privateBundle: return kind == .privateBundle
+            case .payPerSession: return kind == .privatePayPerSession
+            case .group: return kind == .group
+            }
+        }
+    }
+
+    private var kindFilter: KindFilter {
+        KindFilter(rawValue: kindFilterRaw) ?? .privateBundle
+    }
 
     /// iOS SalesView's filter vocabulary, unchanged.
     enum ContractFilter: String, CaseIterable, Identifiable {
@@ -47,6 +75,7 @@ struct SalesMacView: View {
         .navigationTitle("Sales")
         .onAppear { autoSelect() }
         .onChange(of: filter) { _, _ in autoSelect() }
+        .onChange(of: kindFilterRaw) { _, _ in autoSelect() }
         .onChange(of: search) { _, _ in autoSelect() }
     }
 
@@ -75,11 +104,19 @@ struct SalesMacView: View {
             .background(.quinary, in: .rect(cornerRadius: 6))
             .padding(.horizontal, 12)
 
-            Picker("Filter", selection: $filter) {
-                ForEach(ContractFilter.allCases) { Text($0.rawValue).tag($0) }
+            HStack(spacing: 8) {
+                Picker("Type", selection: $kindFilterRaw) {
+                    ForEach(KindFilter.allCases) { Text($0.label).tag($0.rawValue) }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+                Picker("Filter", selection: $filter) {
+                    ForEach(ContractFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             .padding(12)
 
             Divider()
@@ -194,6 +231,7 @@ struct SalesMacView: View {
 
     private var filteredContracts: [(Student, Contract)] {
         allContracts.filter { student, contract in
+            if !kindFilter.matches(contract.kind) { return false }
             if !search.isEmpty,
                !NameIndex.cached(name: student.name,
                                  secondary: student.chineseName).matches(search) {
@@ -304,10 +342,16 @@ private struct SalesContractRow: View {
 
 /// Right pane: the client's full contract history with the existing Mac
 /// contract cards — statements and agreements export from each card's menu
-/// (the client-facing documents), edit and renew included.
+/// (the client-facing documents), edit and renew included. Private bundles
+/// additionally show their ATTENDANCE HISTORY (the redemption ledger, read
+/// from contract.bundleSessionIds — never recomputed) plus upcoming private
+/// sessions, and a scheduler that creates sessions the redemption authority
+/// automatically counts against the bundle at roll call.
 private struct SalesContractDetail: View {
     let student: Student
     @EnvironmentObject var dataManager: DataManager
+    @State private var schedulingSession = false
+    @State private var editingSession: SessionEvent?
 
     var body: some View {
         ScrollView {
@@ -344,6 +388,10 @@ private struct SalesContractDetail: View {
                     .fixedSize()
                 }
 
+                ForEach(bundleContracts) { contract in
+                    bundleHistorySection(contract)
+                }
+
                 AthleteContractsTab(student: student)
             }
             .padding(24)
@@ -351,5 +399,213 @@ private struct SalesContractDetail: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(NSColor.windowBackgroundColor))
+        .sheet(isPresented: $schedulingSession) {
+            PrivateSessionSheet(student: student)
+                .dismissesOnPresentationEscape { schedulingSession = false }
+        }
+        .sheet(item: $editingSession) { session in
+            SessionEditSheet(session: session)
+                .dismissesOnPresentationEscape { editingSession = nil }
+        }
+    }
+
+    private var bundleContracts: [Contract] {
+        dataManager.cachedContracts
+            .filter { $0.studentId == student.id && $0.kind == .privateBundle }
+            .sorted { $0.contractNumber > $1.contractNumber }
+    }
+
+    // MARK: - Bundle attendance history + scheduling
+
+    @ViewBuilder
+    private func bundleHistorySection(_ contract: Contract) -> some View {
+        let redeemed = redeemedSessions(contract)
+        let upcoming = upcomingPrivateSessions()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Bundle #\(contract.contractNumber) — Attendance")
+                    .font(.headline)
+                Text("\(redeemed.count) of \(contract.bundleSize) used · \(contract.bundleRedemptionsRemaining ?? 0) left")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(((contract.bundleRedemptionsRemaining ?? 0) <= 3
+                                 ? Color.orange : Color.green).opacity(0.16), in: .capsule)
+                    .foregroundStyle((contract.bundleRedemptionsRemaining ?? 0) <= 3
+                                     ? .orange : .green)
+                Spacer()
+                Button {
+                    schedulingSession = true
+                } label: {
+                    Label("Schedule Session", systemImage: "calendar.badge.plus")
+                }
+                .controlSize(.small)
+            }
+
+            if redeemed.isEmpty && upcoming.isEmpty {
+                EmptyPanel(systemImage: "calendar",
+                           text: "No sessions redeemed against this bundle yet.")
+            } else {
+                VStack(spacing: 4) {
+                    // The redemption ledger — the array the redemption
+                    // authority writes, same source as the client statement.
+                    ForEach(redeemed) { session in
+                        bundleSessionRow(session, contract: contract, upcoming: false)
+                    }
+                    ForEach(upcoming) { session in
+                        bundleSessionRow(session, contract: contract, upcoming: true)
+                    }
+                }
+            }
+            Text("Sessions count against the bundle when attendance is marked Present or unexcused Absent — scheduling alone deducts nothing.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quinary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// Ledger order: the sessions this bundle actually paid for.
+    private func redeemedSessions(_ contract: Contract) -> [SessionEvent] {
+        contract.bundleSessionIds.compactMap { id in
+            dataManager.sessionEvents.first { $0.id == id }
+        }
+        .sorted { $0.date > $1.date }
+    }
+
+    /// Scheduled private sessions for this client not yet redeemed by any
+    /// bundle — what is on the calendar against their contract.
+    private func upcomingPrivateSessions() -> [SessionEvent] {
+        let redeemedIds = Set(dataManager.cachedContracts
+            .filter { $0.studentId == student.id }
+            .flatMap(\.bundleSessionIds))
+        return dataManager.sessionEvents.filter { session in
+            session.date >= Date()
+                && session.status == .scheduled
+                && session.programId == nil
+                && session.attendeeIds.contains(student.id)
+                && !redeemedIds.contains(session.id)
+        }
+        .sorted { $0.date < $1.date }
+    }
+
+    private func bundleSessionRow(_ session: SessionEvent,
+                                  contract: Contract,
+                                  upcoming: Bool) -> some View {
+        let attended = session.actualAttendeeIds.contains(student.id)
+        let unexcused = session.unexcusedAbsences.contains(student.id)
+        return Button {
+            editingSession = session
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: upcoming ? "calendar"
+                      : (attended ? "checkmark.circle.fill" : "xmark.circle.fill"))
+                    .foregroundStyle(upcoming ? Color.secondary : (attended ? Color.green : Color.orange))
+                    .font(.caption)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(session.title).font(.subheadline).lineLimit(1)
+                    Text(session.date, format: .dateTime.weekday(.abbreviated).month().day().hour().minute())
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(upcoming ? "Scheduled"
+                     : (attended ? "Attended" : (unexcused ? "Absent (charged)" : "Charged")))
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(upcoming ? Color.secondary : (attended ? Color.green : Color.orange))
+                Image(systemName: "square.and.pencil")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.6),
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}
+
+// MARK: - Private session scheduler
+
+/// Creates a 1:1 session that the redemption authority automatically counts
+/// against the client's contract: program-less with the client on the
+/// roster, which is exactly the "program-less private path" rule
+/// (eventIsPrivate) — bundle redemption and PAYG revenue attribute at roll
+/// call, FIFO across their bundles. Deduction NEVER happens at scheduling.
+private struct PrivateSessionSheet: View {
+    let student: Student
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title = ""
+    @State private var date = Self.defaultStart()
+    @State private var durationMinutes = 60
+    @State private var location = ""
+    @State private var loaded = false
+
+    var body: some View {
+        MacSheetChrome(title: "Private Session — \(student.displayName)") { dismiss() } content: {
+            Form {
+                TextField("Title", text: $title)
+                DatePicker("Starts", selection: $date)
+                Stepper("Duration: \(durationMinutes) min",
+                        value: $durationMinutes, in: 30...180, step: 15)
+                TextField("Location", text: $location)
+                Section {
+                    LabeledContent("Roster", value: student.displayName)
+                    if let contract = dataManager.currentContract(for: student.id) {
+                        LabeledContent("Contract",
+                                       value: contract.kind == .privateBundle
+                                       ? "Bundle · \(contract.bundleRedemptionsRemaining ?? 0) left"
+                                       : contract.kind.rawValue)
+                    }
+                } footer: {
+                    Text("Counts against the contract when attendance is marked — Present or unexcused Absent deducts, Excused does not.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { dismiss() }
+                    Button("Schedule") { commit() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .formStyle(.grouped)
+            .frame(minWidth: 440, minHeight: 360)
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            title = "Private · \(student.displayName)"
+        }
+    }
+
+    private static func defaultStart() -> Date {
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        return calendar.date(bySettingHour: 18, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+    }
+
+    private func commit() {
+        let now = Date()
+        let session = SessionEvent(
+            id: UUID(),
+            programId: nil,     // program-less = the private path
+            sessionType: .training,
+            title: title.trimmingCharacters(in: .whitespaces),
+            date: date,
+            startTime: date,
+            endTime: Calendar.current.date(byAdding: .minute,
+                                           value: durationMinutes, to: date) ?? date,
+            location: location.isEmpty ? nil : location,
+            attendeeIds: [student.id],
+            createdByCoachId: dataManager.loggedInCoachId,
+            createdAt: now,
+            updatedAt: now
+        )
+        dataManager.addSessionEvent(session)
+        dismiss()
     }
 }
