@@ -23,7 +23,7 @@ struct MacSidebar: View {
             }
 
             Section {
-                ForEach([SidebarSection.league, .hub], id: \.self) { s in
+                ForEach([SidebarSection.sales, .league, .hub], id: \.self) { s in
                     sidebarRow(s)
                 }
             } header: {

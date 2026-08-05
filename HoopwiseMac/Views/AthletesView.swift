@@ -729,7 +729,7 @@ struct AthleteContractsTab: View {
     }
 }
 
-private struct ContractCard: View {
+struct ContractCard: View {
     let contract: Contract
     /// Passed in rather than read from the environment: this is a private
     /// leaf view with no dataManager, and the figures must match the coach's
