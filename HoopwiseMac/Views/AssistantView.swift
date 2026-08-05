@@ -332,25 +332,15 @@ struct AssistantView: View {
     }
 }
 
-// MARK: - Whistle mascot glyph
+// MARK: - Whistle mascot glyph (static — the bubble carries the motion)
 
 struct WhistleGlyph: View {
     var size: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(colors: [Color.orange.opacity(0.9), Color.orange.opacity(0.6)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-            Image(systemName: symbolName)
-                .font(.system(size: size * 0.45, weight: .bold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-    }
-
-    private var symbolName: String {
-        NSImage(systemSymbolName: "whistle.fill", accessibilityDescription: nil) != nil
-            ? "whistle.fill" : "megaphone.fill"
+        WhistleIconView(proportions: .sporty, motion: .rest,
+                        darkScheme: colorScheme == .dark)
+            .frame(width: size, height: size)
     }
 }
