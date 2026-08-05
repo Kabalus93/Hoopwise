@@ -1122,9 +1122,21 @@ struct ContractEditSheet: View {
     @State private var manualStatus: ContractStatus?
     @State private var enrollmentDate = Date()
     @State private var bundleSize = 10
+    @State private var pricePerSession = 0.0
+    @State private var payments: [ContractPayment] = []
+    @State private var newPaymentAmount = ""
+    @State private var newPaymentDate = Date()
     @State private var loaded = false
 
     private var consumed: Int { contract.bundleSessionIds.count }
+    private var draftPaid: Double { payments.reduce(0) { $0 + $1.amount } }
+    /// Bundle owed derives: total (price × size) − paid. PAYG owed depends
+    /// on attendance, so only Paid is shown there.
+    private var draftOwed: Double {
+        guard contract.kind == .privateBundle else { return 0 }
+        return max(0, pricePerSession * Double(bundleSize) - draftPaid)
+    }
+    private var currencyCode: String { dataManager.appSettings.currency.currencyCode }
 
     var body: some View {
         MacSheetChrome(title: "Contract #\(contract.contractNumber)") { dismiss() } content: {
@@ -1142,6 +1154,76 @@ struct ContractEditSheet: View {
                 Section("Dates") {
                     DatePicker("Enrolled", selection: $enrollmentDate,
                                displayedComponents: .date)
+                }
+                Section("Pricing") {
+                    HStack {
+                        Text("Per session")
+                        Spacer()
+                        TextField("", value: $pricePerSession,
+                                  format: .currency(code: currencyCode))
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 130)
+                    }
+                    if contract.kind == .privateBundle {
+                        LabeledContent("Bundle total",
+                                       value: (pricePerSession * Double(bundleSize))
+                                        .formatted(.currency(code: currencyCode)))
+                    }
+                }
+                Section {
+                    if payments.isEmpty {
+                        Text("No payments recorded.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(payments) { payment in
+                        HStack {
+                            Text(payment.date, format: .dateTime.year().month().day())
+                            Spacer()
+                            Text(payment.amount.formatted(.currency(code: currencyCode)))
+                                .monospacedDigit()
+                            Button {
+                                payments.removeAll { $0.id == payment.id }
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Remove payment (correction)")
+                        }
+                    }
+                    HStack {
+                        DatePicker("", selection: $newPaymentDate,
+                                   displayedComponents: .date)
+                            .labelsHidden()
+                        TextField("Amount", text: $newPaymentAmount)
+                            .frame(width: 90)
+                        Button {
+                            guard let amount = Double(newPaymentAmount), amount > 0
+                            else { return }
+                            payments.append(ContractPayment(date: newPaymentDate,
+                                                            amount: amount))
+                            payments.sort { $0.date < $1.date }
+                            newPaymentAmount = ""
+                        } label: {
+                            Label("Add", systemImage: "plus.circle.fill")
+                        }
+                        .disabled(Double(newPaymentAmount) == nil
+                                  || (Double(newPaymentAmount) ?? 0) <= 0)
+                    }
+                    HStack(spacing: 16) {
+                        LabeledContent("Paid",
+                                       value: draftPaid.formatted(.currency(code: currencyCode)))
+                        if contract.kind == .privateBundle {
+                            LabeledContent("Owed",
+                                           value: draftOwed.formatted(.currency(code: currencyCode)))
+                        }
+                    }
+                    .font(.callout.weight(.semibold))
+                } header: {
+                    Text("Payments")
+                } footer: {
+                    Text("Paid is the sum of the ledger; owed derives from bundle total minus paid. Travel fees stay separate by design.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 if contract.kind == .privateBundle {
                     Section("Bundle") {
@@ -1178,6 +1260,8 @@ struct ContractEditSheet: View {
             manualStatus = contract.manualStatus
             enrollmentDate = contract.enrollmentDate
             bundleSize = max(contract.bundleSize, 1)
+            pricePerSession = contract.pricePerSession
+            payments = contract.payments
         }
     }
 
@@ -1196,6 +1280,14 @@ struct ContractEditSheet: View {
         if contract.kind == .privateBundle, copy.bundleSize != bundleSize {
             changes.append("bundle \(copy.bundleSize)→\(bundleSize)")
             copy.bundleSize = max(bundleSize, consumed)
+        }
+        if abs(copy.pricePerSession - pricePerSession) > 0.001 {
+            changes.append("price \(Int(copy.pricePerSession))→\(Int(pricePerSession))")
+            copy.pricePerSession = max(0, pricePerSession)
+        }
+        if copy.payments != payments {
+            changes.append("paid \(Int(copy.amountPaid))→\(Int(draftPaid))")
+            copy.payments = payments.sorted { $0.date < $1.date }
         }
         guard !changes.isEmpty else { dismiss(); return }
         // Minimal mutation log in the EXISTING notes field — no new schema.

@@ -770,30 +770,120 @@ struct SessionEditSheet: View {
     @State private var programId: UUID?
     @State private var loaded = false
 
+    private static let durationPresets = [30, 45, 60, 90, 120]
+
     var body: some View {
         MacSheetChrome(title: "Edit Session") { dismiss() } content: {
-            Form {
-                TextField("Title", text: $title)
-                DatePicker("Starts", selection: $date)
-                Stepper("Duration: \(durationMinutes) min",
-                        value: $durationMinutes, in: 15...240, step: 15)
-                TextField("Location", text: $location)
-                Picker("Program", selection: $programId) {
-                    Text("None").tag(UUID?.none)
-                    ForEach(dataManager.programs.filter { $0.status != .archived }) { program in
-                        Text(program.name).tag(Optional(program.id))
+            VStack(alignment: .leading, spacing: 14) {
+                // Title row: type glyph + prominent field, the card-header
+                // grammar the rest of the app already speaks.
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.16))
+                        .frame(width: 44, height: 44)
+                        .overlay(Image(systemName: "figure.basketball")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Color.accentColor))
+                    VStack(alignment: .leading, spacing: 1) {
+                        TextField("Session title", text: $title)
+                            .textFieldStyle(.plain)
+                            .font(.title3.weight(.semibold))
+                        Text(statusLine)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
+
+                editGroup("Schedule", icon: "clock") {
+                    HStack(spacing: 10) {
+                        DatePicker("", selection: $date)
+                            .labelsHidden()
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    Divider().padding(.leading, 12)
+                    HStack(spacing: 6) {
+                        Text("Duration")
+                            .font(.callout)
+                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                        Spacer()
+                        ForEach(Self.durationPresets, id: \.self) { preset in
+                            Button {
+                                durationMinutes = preset
+                            } label: {
+                                Text("\(preset)m")
+                                    .font(.caption.weight(.medium))
+                                    .padding(.horizontal, 9).padding(.vertical, 4)
+                                    .background(durationMinutes == preset
+                                                ? AnyShapeStyle(Color.accentColor)
+                                                : AnyShapeStyle(.quaternary),
+                                                in: Capsule())
+                                    .foregroundStyle(durationMinutes == preset
+                                                     ? .white : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Stepper("", value: $durationMinutes, in: 15...240, step: 15)
+                            .labelsHidden()
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    HStack {
+                        Spacer()
+                        Text(endTimeLine)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 6)
+                }
+
+                editGroup("Where & What", icon: "mappin.and.ellipse") {
+                    HStack(spacing: 8) {
+                        TextField("Location", text: $location)
+                            .textFieldStyle(.plain)
+                        if !recentLocations.isEmpty {
+                            Menu {
+                                ForEach(recentLocations, id: \.self) { name in
+                                    Button(name) { location = name }
+                                }
+                            } label: {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            .help("Recent locations")
+                        }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    Divider().padding(.leading, 12)
+                    HStack {
+                        Text("Program")
+                            .font(.callout)
+                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                        Spacer()
+                        Picker("", selection: $programId) {
+                            Text("None — private").tag(UUID?.none)
+                            ForEach(dataManager.programs.filter { $0.status != .archived }) { program in
+                                Text(program.name).tag(Optional(program.id))
+                            }
+                        }
+                        .labelsHidden().fixedSize()
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                }
+
                 HStack {
                     Spacer()
                     Button("Cancel") { dismiss() }
+                        .controlSize(.large)
                     Button("Done") { commit() }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .formStyle(.grouped)
-            .frame(minWidth: 440, minHeight: 320)
+            .padding(18)
+            .frame(minWidth: 460)
         }
         .onAppear {
             guard !loaded else { return }
@@ -804,6 +894,43 @@ struct SessionEditSheet: View {
             location = session.location ?? ""
             programId = session.programId
         }
+    }
+
+    /// Rounded quinary group with an icon caption — the FieldGroup grammar.
+    private func editGroup(_ title: String, icon: String,
+                           @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 0) { content() }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quinary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
+    private var statusLine: String {
+        "\(session.status.displayName) · \(session.date.formatted(.dateTime.weekday(.wide).month().day()))"
+    }
+
+    private var endTimeLine: String {
+        let end = Calendar.current.date(byAdding: .minute, value: durationMinutes,
+                                        to: date) ?? date
+        return "Ends \(end.formatted(.dateTime.hour().minute())) · \(durationMinutes) min"
+    }
+
+    /// Recent distinct locations: saved venues first, then what recent
+    /// sessions actually used.
+    private var recentLocations: [String] {
+        var seen: [String] = dataManager.locations.map(\.name).filter { !$0.isEmpty }
+        for session in dataManager.sessionEvents.sorted(by: { $0.date > $1.date }) {
+            if let name = session.location, !name.isEmpty, !seen.contains(name) {
+                seen.append(name)
+            }
+            if seen.count >= 6 { break }
+        }
+        return Array(seen.prefix(6))
     }
 
     private func commit() {

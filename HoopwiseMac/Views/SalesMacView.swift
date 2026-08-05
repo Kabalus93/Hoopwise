@@ -421,23 +421,36 @@ private struct SalesContractDetail: View {
     private func bundleHistorySection(_ contract: Contract) -> some View {
         let redeemed = redeemedSessions(contract)
         let upcoming = upcomingPrivateSessions()
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Bundle #\(contract.contractNumber) — Attendance")
-                    .font(.headline)
-                Text("\(redeemed.count) of \(contract.bundleSize) used · \(contract.bundleRedemptionsRemaining ?? 0) left")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8).padding(.vertical, 2)
-                    .background(((contract.bundleRedemptionsRemaining ?? 0) <= 3
-                                 ? Color.orange : Color.green).opacity(0.16), in: .capsule)
-                    .foregroundStyle((contract.bundleRedemptionsRemaining ?? 0) <= 3
-                                     ? .orange : .green)
+        let remaining = contract.bundleRedemptionsRemaining ?? 0
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Bundle #\(contract.contractNumber) — Attendance")
+                        .font(.headline)
+                    // Consumption bar: the ledger drawn as progress, same
+                    // number the statement prints.
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(.quaternary)
+                            Capsule()
+                                .fill(remaining <= 3 ? Color.orange : Color.green)
+                                .frame(width: geo.size.width
+                                       * CGFloat(redeemed.count)
+                                       / CGFloat(max(contract.bundleSize, 1)))
+                        }
+                    }
+                    .frame(width: 180, height: 5)
+                    Text("\(redeemed.count) of \(contract.bundleSize) used · \(remaining) left")
+                        .font(.caption)
+                        .foregroundStyle(remaining <= 3 ? .orange : .secondary)
+                }
                 Spacer()
                 Button {
                     schedulingSession = true
                 } label: {
                     Label("Schedule Session", systemImage: "calendar.badge.plus")
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
 
@@ -445,20 +458,31 @@ private struct SalesContractDetail: View {
                 EmptyPanel(systemImage: "calendar",
                            text: "No sessions redeemed against this bundle yet.")
             } else {
-                VStack(spacing: 4) {
+                VStack(spacing: 3) {
                     // The redemption ledger — the array the redemption
                     // authority writes, same source as the client statement.
-                    ForEach(redeemed) { session in
-                        bundleSessionRow(session, contract: contract, upcoming: false)
+                    ForEach(Array(redeemed.enumerated()), id: \.element.id) { index, session in
+                        bundleSessionRow(session, contract: contract,
+                                         number: redeemed.count - index, upcoming: false)
+                    }
+                    if !redeemed.isEmpty && !upcoming.isEmpty {
+                        HStack {
+                            Text("Scheduled")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                            VStack { Divider() }
+                        }
+                        .padding(.top, 4)
                     }
                     ForEach(upcoming) { session in
-                        bundleSessionRow(session, contract: contract, upcoming: true)
+                        bundleSessionRow(session, contract: contract,
+                                         number: nil, upcoming: true)
                     }
                 }
             }
             Text("Sessions count against the bundle when attendance is marked Present or unexcused Absent — scheduling alone deducts nothing.")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.tertiary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -491,38 +515,80 @@ private struct SalesContractDetail: View {
 
     private func bundleSessionRow(_ session: SessionEvent,
                                   contract: Contract,
+                                  number: Int?,
                                   upcoming: Bool) -> some View {
         let attended = session.actualAttendeeIds.contains(student.id)
         let unexcused = session.unexcusedAbsences.contains(student.id)
-        return Button {
-            editingSession = session
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: upcoming ? "calendar"
-                      : (attended ? "checkmark.circle.fill" : "xmark.circle.fill"))
-                    .foregroundStyle(upcoming ? Color.secondary : (attended ? Color.green : Color.orange))
-                    .font(.caption)
+        return BundleHistoryRow(
+            title: session.title,
+            date: session.date,
+            number: number,
+            icon: upcoming ? "calendar"
+                : (attended ? "checkmark.circle.fill" : "xmark.circle.fill"),
+            tint: upcoming ? Color.secondary : (attended ? Color.green : Color.orange),
+            trailing: upcoming ? "Scheduled"
+                : (attended ? "Attended" : (unexcused ? "Absent · charged" : "Charged")),
+            action: { editingSession = session })
+    }
+}
+
+/// One ledger row: number chip, status glyph, hover-revealed edit affordance,
+/// whole row clickable — the directory row grammar at history density.
+private struct BundleHistoryRow: View {
+    let title: String
+    let date: Date
+    let number: Int?
+    let icon: String
+    let tint: Color
+    let trailing: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if let number {
+                    Text("\(number)")
+                        .font(.caption2.weight(.bold).monospacedDigit())
+                        .frame(width: 20, height: 20)
+                        .background(tint.opacity(0.14), in: Circle())
+                        .foregroundStyle(tint)
+                } else {
+                    Image(systemName: icon)
+                        .font(.caption)
+                        .foregroundStyle(tint)
+                        .frame(width: 20)
+                }
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(session.title).font(.subheadline).lineLimit(1)
-                    Text(session.date, format: .dateTime.weekday(.abbreviated).month().day().hour().minute())
-                        .font(.caption2).foregroundStyle(.secondary)
+                    Text(title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                    Text(date, format: .dateTime.weekday(.abbreviated).month().day().hour().minute())
+                        .font(.caption2)
+                        .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                 }
                 Spacer()
-                Text(upcoming ? "Scheduled"
-                     : (attended ? "Attended" : (unexcused ? "Absent (charged)" : "Charged")))
+                Text(trailing)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(upcoming ? Color.secondary : (attended ? Color.green : Color.orange))
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(tint.opacity(0.12), in: Capsule())
+                    .foregroundStyle(tint)
                 Image(systemName: "square.and.pencil")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(hovering ? Color.accentColor : Color.clear)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.6),
+        .padding(.vertical, 6)
+        .background(hovering
+                    ? AnyShapeStyle(Color.accentColor.opacity(0.07))
+                    : AnyShapeStyle(Color(NSColor.windowBackgroundColor).opacity(0.55)),
                     in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .onHover { hovering = $0 }
+        .help("Edit session")
     }
 }
 
@@ -544,6 +610,8 @@ private struct PrivateSessionSheet: View {
     @State private var location = ""
     @State private var loaded = false
 
+    private var isPast: Bool { date < Date() }
+
     var body: some View {
         MacSheetChrome(title: "Private Session — \(student.displayName)") { dismiss() } content: {
             Form {
@@ -561,19 +629,26 @@ private struct PrivateSessionSheet: View {
                                        : contract.kind.rawValue)
                     }
                 } footer: {
-                    Text("Counts against the contract when attendance is marked — Present or unexcused Absent deducts, Excused does not.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if isPast {
+                        Label("This date is in the past: the session is logged as completed with \(student.displayName) marked Present — it charges the contract immediately and appears in the attendance history.",
+                              systemImage: "clock.arrow.circlepath")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Counts against the contract when attendance is marked — Present or unexcused Absent deducts, Excused does not.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 HStack {
                     Spacer()
                     Button("Cancel") { dismiss() }
-                    Button("Schedule") { commit() }
+                    Button(isPast ? "Log as Attended" : "Schedule") { commit() }
                         .buttonStyle(.borderedProminent)
                         .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
             .formStyle(.grouped)
-            .frame(minWidth: 440, minHeight: 360)
+            .frame(minWidth: 440, minHeight: 380)
         }
         .onAppear {
             guard !loaded else { return }
@@ -590,6 +665,7 @@ private struct PrivateSessionSheet: View {
 
     private func commit() {
         let now = Date()
+        let backdated = isPast
         let session = SessionEvent(
             id: UUID(),
             programId: nil,     // program-less = the private path
@@ -600,12 +676,20 @@ private struct PrivateSessionSheet: View {
             endTime: Calendar.current.date(byAdding: .minute,
                                            value: durationMinutes, to: date) ?? date,
             location: location.isEmpty ? nil : location,
+            status: backdated ? .completed : .scheduled,
             attendeeIds: [student.id],
             createdByCoachId: dataManager.loggedInCoachId,
             createdAt: now,
             updatedAt: now
         )
         dataManager.addSessionEvent(session)
+        if backdated {
+            // Through THE attendance authority, so the redemption lockstep
+            // (FIFO bundle deduction) fires exactly as a live roll call would.
+            dataManager.setStudentAttendanceState(sessionId: session.id,
+                                                  studentId: student.id,
+                                                  state: .present)
+        }
         dismiss()
     }
 }
