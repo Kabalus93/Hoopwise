@@ -517,6 +517,28 @@ any attendance surface.
   second source of truth will drift) and do not drop it (removing a column
   from a live CloudKit schema is a sync risk for no gain).
 
+## The Whistle — integrated LLM assistant (Mac only, August 2026)
+- HoopwiseMac/Assistant/: AssistantTools (tool registry), AnthropicClient
+  (raw URLSession Messages API — no Swift SDK exists), AssistantEngine
+  (conversation store + agent loop + Today curation), WhistleBubble
+  (floating NSPanel). AssistantView is the sidebar page.
+- THE RULE: the assistant never touches the database directly. Every tool
+  handler calls the shared business-rule layer (SessionLifecycle,
+  setStudentEnrollment, updateContract…), so app rules gate it for free.
+  Never add a tool that bypasses that layer.
+- Writes are previewed as confirmation cards; contract changes can NEVER
+  be always-allowed. Every mutation registers one undo step tagged
+  "Assistant: …". Deletes have no tool at all — deliberately.
+- API key lives in the macOS Keychain (Settings → Assistant), falling
+  back to the xcconfig ANTHROPIC_API_KEY. Chat = claude-sonnet-5,
+  curation = claude-haiku-4-5. Data minimization is ON by default:
+  guardian contacts, money amounts, and photos never enter prompts.
+- Curation is an enhancement, never a dependency: offline/keyless, Today
+  renders its deterministic layout and chat degrades with a clear notice.
+- DEBUG env HOOPWISE_DEMO_ASSISTANT=script swaps in a scripted transport
+  that exercises streaming, a real read tool, and the confirmation card
+  with no key or network — the E2E verification path.
+
 ## Build commands
 - iOS:  xcodebuild -project Hoopwise.xcodeproj -scheme Hoopwise -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 - Mac:  xcodebuild -project Hoopwise.xcodeproj -scheme HoopwiseMac -destination 'platform=macOS' build

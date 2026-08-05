@@ -17,6 +17,7 @@ struct MacSettingsView: View {
             generalTab.tabItem { Label("General", systemImage: "gearshape") }
             appearanceTab.tabItem { Label("Appearance", systemImage: "paintbrush") }
             editorTab.tabItem { Label("Editor", systemImage: "sportscourt") }
+            assistantTab.tabItem { Label("Assistant", systemImage: "bubble.left.and.text.bubble.right") }
             syncTab.tabItem { Label("Sync", systemImage: "icloud") }
             shortcutsTab.tabItem { Label("Shortcuts", systemImage: "keyboard") }
             dataTab.tabItem { Label("Data", systemImage: "internaldrive") }
@@ -154,6 +155,85 @@ struct MacSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    // MARK: Assistant (The Whistle)
+
+    @State private var apiKeyDraft = ""
+    @State private var keySaved = false
+    @AppStorage("assistant.minimized") private var assistantMinimized = true
+    @AppStorage("assistant.bubble") private var bubbleEnabled = true
+    @AppStorage("assistant.curation") private var curationEnabled = true
+    @AppStorage("assistant.alwaysAllow.session") private var alwaysAllowSessions = false
+    @AppStorage("assistant.alwaysAllow.athlete") private var alwaysAllowAthletes = false
+    @AppStorage("assistant.mutedCardKinds") private var mutedCardKinds = ""
+
+    private var assistantTab: some View {
+        Form {
+            Section {
+                HStack {
+                    SecureField("Anthropic API key (sk-ant-…)", text: $apiKeyDraft)
+                    Button(keySaved ? "Saved ✓" : "Save") {
+                        AssistantSecrets.setAPIKey(apiKeyDraft.trimmingCharacters(in: .whitespaces))
+                        apiKeyDraft = ""
+                        keySaved = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { keySaved = false }
+                    }
+                    .disabled(apiKeyDraft.isEmpty)
+                }
+                LabeledContent("Status",
+                               value: AssistantSecrets.hasStoredKey ? "Key in Keychain"
+                               : (AssistantSecrets.apiKey != nil ? "Using build-time key" : "No key — chat disabled"))
+            } header: {
+                Text("API Key")
+            } footer: {
+                Text("Stored in the macOS Keychain, never in the app's files. Chat uses \(AssistantEngine.chatModel); homescreen curation uses \(AssistantEngine.curationModel).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Data minimization", isOn: $assistantMinimized)
+            } footer: {
+                Text("On (recommended): guardian phone numbers, contract money amounts, and photos never leave this Mac — the assistant references them and deep-links instead. What does leave: athlete names, attendance records, session titles and schedules, bundle session counts. These are minors' records; turn this off deliberately.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Confirmations") {
+                Toggle("Always allow session changes", isOn: $alwaysAllowSessions)
+                Toggle("Always allow athlete changes", isOn: $alwaysAllowAthletes)
+                LabeledContent("Contract changes", value: "Always confirm — not configurable")
+            }
+
+            Section {
+                Toggle("Floating whistle bubble", isOn: $bubbleEnabled)
+                    .onChange(of: bubbleEnabled) { _, enabled in
+                        WhistleBubbleController.shared.setEnabled(enabled)
+                    }
+                LabeledContent("Toggle shortcut", value: "\u{2325}space")
+                Toggle("Curate the Today page", isOn: $curationEnabled)
+            } footer: {
+                Text("Offline or keyless, Today falls back to its rule-based layout — curation is an enhancement, never a dependency.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Muted card types") {
+                mutedToggle("Bundle low", kind: "bundleLow")
+                mutedToggle("Attendance risk", kind: "attendance")
+                mutedToggle("Today's sessions", kind: "session")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    private func mutedToggle(_ label: String, kind: String) -> some View {
+        Toggle(label, isOn: Binding(
+            get: { !mutedCardKinds.split(separator: ",").map(String.init).contains(kind) },
+            set: { include in
+                var kinds = Set(mutedCardKinds.split(separator: ",").map(String.init))
+                if include { kinds.remove(kind) } else { kinds.insert(kind) }
+                mutedCardKinds = kinds.sorted().joined(separator: ",")
+            }))
     }
 
     // MARK: Shortcuts (read-only, from the dispatch layer's own tables)

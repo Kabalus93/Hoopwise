@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum SidebarSection: String, CaseIterable, Identifiable {
-    case today, athletes, sessions, programs, drills, playbook, courtEditor, sales, league, hub
+    case today, assistant, athletes, sessions, programs, drills, playbook, courtEditor, sales, league, hub
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .today: return "Today"
+        case .assistant: return "Assistant"
         case .athletes: return "Athletes"
         case .sessions: return "Sessions"
         case .programs: return "Programs"
@@ -22,6 +23,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .today: return "sun.max.fill"
+        case .assistant: return "bubble.left.and.text.bubble.right.fill"
         case .athletes: return "person.2.fill"
         case .sessions: return "calendar"
         case .programs: return "list.clipboard.fill"
@@ -47,6 +49,7 @@ struct RootView: View {
             return .athletes
         }
         if env["HOOPWISE_DEMO_SESSIONS"] != nil { return .sessions }
+        if env["HOOPWISE_DEMO_ASSISTANT"] != nil { return .assistant }
         if env["HOOPWISE_DEMO_PAGE"] != nil {
             return SidebarSection(rawValue: env["HOOPWISE_DEMO_PAGE"]!) ?? .today
         }
@@ -72,6 +75,8 @@ struct RootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// App-wide Esc-dismisses-sheets rule; lives as long as the window.
     @State private var presentationKeys = PresentationKeyDispatcher()
+    /// The Whistle — one engine for the page, the bubble, and curation.
+    @StateObject private var assistantEngine = AssistantEngine()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -84,6 +89,7 @@ struct RootView: View {
             // interior minimums and collapse their own columns first.
             detailView
         }
+        .environmentObject(assistantEngine)
         .onReceive(NotificationCenter.default.publisher(for: .macSidebarSelection)) { note in
             if let raw = note.object as? String, let s = SidebarSection(rawValue: raw) {
                 selection = s
@@ -96,6 +102,9 @@ struct RootView: View {
         }
         .onAppear {
             presentationKeys.install()
+            assistantEngine.configure(dataManager: dataManager)
+            WhistleBubbleController.shared.attach(engine: assistantEngine)
+            Task { await assistantEngine.runCuration() }
             #if DEBUG
             // Agent settings: "key=value,key=value" applied to UserDefaults
             // ("key=" removes), so Settings behaviour is testable from
@@ -130,6 +139,17 @@ struct RootView: View {
                     }
                 }
             }
+            // Agent assistant: scripted send + confirm at fixed delays.
+            if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_ASSISTANT"] == "script" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                    assistantEngine.send("Schedule a demo session for 蔡一铭")
+                }
+                if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_ASSISTANT_CONFIRM"] == "1" {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 8.0) {
+                        assistantEngine.resolvePending(confirmed: true)
+                    }
+                }
+            }
             // Agent keys: post a real Esc key-down through the event stream at
             // +N seconds, so the dispatch-layer dismissal is testable without
             // Accessibility. In-process NSApp.postEvent reaches local monitors.
@@ -155,6 +175,7 @@ struct RootView: View {
     private var detailView: some View {
         switch selection ?? .today {
         case .today:    TodayView()
+        case .assistant: AssistantView()
         case .athletes: AthletesDirectoryView()
         case .sessions: SessionsDirectoryView()
         case .programs: ProgramsView()

@@ -125,9 +125,20 @@ struct KeyShortcutDescriptor {
 final class PresentationKeyDispatcher {
 
     private var core: KeyDispatchCore?
+    private var hotkeyCore: KeyDispatchCore?
 
     func install() {
         guard core == nil else { return }
+        // Whistle hotkey: option-Space toggles the bubble, app-wide, through
+        // the dispatch layer (never a stray local handler).
+        let hotkey = KeyDispatchCore(contextName: "whistle-hotkey") { event in
+            guard event.keyCode == 49,
+                  event.modifierFlags.contains(.option) else { return .pass("unmapped") }
+            Task { @MainActor in WhistleBubbleController.shared.toggle() }
+            return .consumed("toggle-whistle")
+        }
+        hotkey.install()
+        self.hotkeyCore = hotkey
         let core = KeyDispatchCore(contextName: "presentation") { event in
             guard event.keyCode == 53,
                   event.window?.isSheet == true else {
@@ -149,6 +160,8 @@ final class PresentationKeyDispatcher {
     func uninstall() {
         core?.uninstall()
         core = nil
+        hotkeyCore?.uninstall()
+        hotkeyCore = nil
     }
 }
 
@@ -378,6 +391,7 @@ final class DirectoryKeyDispatcher {
 extension PresentationKeyDispatcher {
     static let shortcuts: [KeyShortcutDescriptor] = [
         .init(keys: "esc", action: "Close the open sheet"),
+        .init(keys: "\u{2325}space", action: "Toggle the whistle bubble"),
     ]
 }
 

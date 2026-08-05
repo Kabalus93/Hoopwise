@@ -7,7 +7,7 @@ struct MacSidebar: View {
     var body: some View {
         List(selection: $selection) {
             Section {
-                ForEach([SidebarSection.today, .athletes, .sessions], id: \.self) { s in
+                ForEach([SidebarSection.today, .assistant, .athletes, .sessions], id: \.self) { s in
                     sidebarRow(s)
                 }
             } header: {

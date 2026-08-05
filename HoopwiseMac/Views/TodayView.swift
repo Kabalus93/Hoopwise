@@ -19,6 +19,8 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 20) {
                 heroStrip
 
+                CuratedRail()
+
                 if let live = liveSession {
                     LiveSessionBanner(session: live)
                 }
@@ -693,6 +695,77 @@ private struct ReminderRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+        }
+    }
+}
+
+
+// MARK: - Curated by the whistle
+
+/// Assistant-ranked attention cards. Purely additive: offline or keyless,
+/// curation returns nothing and Today renders exactly as before.
+private struct CuratedRail: View {
+    @EnvironmentObject var engine: AssistantEngine
+
+    var body: some View {
+        if !engine.curationCards.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    WhistleGlyph(size: 16)
+                    Text(engine.curationCards.first?.curated == true
+                         ? "Curated by the whistle" : "Worth a look")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Button {
+                        Task { await engine.runCuration(force: true) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise").font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Refresh curation")
+                    Spacer()
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(engine.curationCards) { card in
+                            Button {
+                                open(card)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(card.title)
+                                        .font(.callout.weight(.medium))
+                                        .lineLimit(1)
+                                    Text(card.reason)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                }
+                                .padding(10)
+                                .frame(width: 230, alignment: .leading)
+                                .background(.quinary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func open(_ card: CurationCard) {
+        let center = NotificationCenter.default
+        if let athleteId = card.athleteId {
+            center.post(name: .macSidebarSelection, object: SidebarSection.athletes.rawValue)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                center.post(name: .macOpenAthlete, object: athleteId)
+            }
+        } else if card.kind == "session" {
+            center.post(name: .macSidebarSelection, object: SidebarSection.sessions.rawValue)
+        } else if card.kind == "bundleLow" {
+            center.post(name: .macSidebarSelection, object: SidebarSection.sales.rawValue)
         }
     }
 }
