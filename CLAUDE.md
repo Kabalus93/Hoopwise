@@ -378,6 +378,28 @@ it produces confident wrong numbers the coach reconciles books against.
   subsystem "hoopwise.demo". It disables persistence so scratch plays
   never reach the library.
 
+## "Next Up" widget (iOS home screen, August 2026)
+- SAMWidgets/NextUpWidget.swift renders a snapshot JSON from the App Group
+  (group.OKTO.SAMp) — the widget NEVER touches CloudKit/SwiftData. The
+  app writes the snapshot via WidgetSnapshotWriter (Services/, hooked into
+  refreshAllCaches + refreshCachesSync, debounced; inert on Mac) and the
+  model lives in Models/WidgetSnapshot.swift (member of iOS + Mac + widget
+  targets — the widget's Hoopwise-folder membershipExceptions list).
+- AttentionRules in WidgetSnapshot.swift is THE source of truth for alert
+  thresholds (bundle low ≤3, attendance <50% over ≥4 sessions, noted
+  ≤14 days). The widget's student pick and any curation surface must read
+  these constants, never re-invent the numbers.
+- Timeline entries sit at display-change moments (now, session starts and
+  ends, midnight) — rollover is an entry, not luck. Snapshots older than
+  24h render an "open app to refresh" footer.
+- hoopwise://session/<id> and hoopwise://athlete/<id> are registered
+  (Info.plist) and routed in SAMApp.onOpenURL to
+  .hoopwiseOpenSession/AthleteRequest notifications. NOTHING observes them
+  yet — wiring navigation means touching iOS views, which the UI freeze
+  forbids; taps currently just open the app.
+- Photos in the snapshot: thumbnail bytes ≤120px, monogram fallback;
+  privacy redaction collapses photo+name to monogram + reason chip.
+
 ## Export decisions
 - PDF: draw with CoreGraphics into CGPDFContext. NOT ImageRenderer —
   it silently rasterizes any view containing materials, blurs, or images,

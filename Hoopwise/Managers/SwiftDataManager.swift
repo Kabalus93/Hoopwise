@@ -450,6 +450,7 @@ class SwiftDataManager: ObservableObject {
     
     // MARK: - Refresh Caches
     func refreshAllCaches() async {
+        defer { WidgetSnapshotWriter.scheduleWrite(dataManager: self) }
         do {
             // Fetch all SwiftData models and convert to structs
             let sdStudents = try modelContext.fetch(FetchDescriptor<SDStudent>())
@@ -3990,6 +3991,7 @@ class SwiftDataManager: ObservableObject {
     
     /// Synchronous cache refresh for immediate UI updates after save
     private func refreshCachesSync() {
+        defer { WidgetSnapshotWriter.scheduleWrite(dataManager: self) }
         do {
             let sdStudents = try modelContext.fetch(FetchDescriptor<SDStudent>())
             cachedStudents = sdStudents.map { $0.toStruct() }

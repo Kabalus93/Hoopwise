@@ -6,6 +6,11 @@ extension Notification.Name {
     /// file outside the app. OrganizationView observes this and opens
     /// the import preview sheet.
     static let hoopwiseBundleOpenRequest = Notification.Name("hoopwiseBundleOpenRequest")
+    /// Widget deep links (hoopwise://session/<id>, hoopwise://athlete/<id>).
+    /// Published for navigation; wiring them to actual screens is an iOS
+    /// view change and therefore waits on the UI freeze.
+    static let hoopwiseOpenSessionRequest = Notification.Name("hoopwiseOpenSessionRequest")
+    static let hoopwiseOpenAthleteRequest = Notification.Name("hoopwiseOpenAthleteRequest")
 }
 
 @main
@@ -33,6 +38,21 @@ struct SAMApp: App {
             }
             .task { await initializeApp() }
             .onOpenURL { url in
+                // Widget deep links use the hoopwise:// scheme.
+                if url.scheme == "hoopwise" {
+                    let id = UUID(uuidString: url.lastPathComponent)
+                    switch url.host {
+                    case "session":
+                        NotificationCenter.default.post(
+                            name: .hoopwiseOpenSessionRequest, object: id)
+                    case "athlete":
+                        NotificationCenter.default.post(
+                            name: .hoopwiseOpenAthleteRequest, object: id)
+                    default:
+                        break
+                    }
+                    return
+                }
                 // External `.hoopwise` files (AirDrop, Mail, Files, Messages, etc.)
                 // arrive here. We post a notification that OrganizationView
                 // observes and opens the import preview sheet.

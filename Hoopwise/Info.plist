@@ -20,6 +20,17 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>OKTO.SAMp.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>hoopwise</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
