@@ -378,7 +378,17 @@ it produces confident wrong numbers the coach reconciles books against.
   subsystem "hoopwise.demo". It disables persistence so scratch plays
   never reach the library.
 
-## "Next Up" widget (iOS home screen, August 2026)
+## Widget suite (iOS home screen, August 2026)
+- FOUR widgets (NextUp, Today, Attention, Cadence in SAMWidgets/) + lock
+  accessories, all reading ONE snapshot (schema v2, versioned) through one
+  provider. v2 fields are optional so a v1 snapshot on disk renders old
+  content instead of crashing — keep that invariant when extending.
+- PHOTOS: the widget process cannot read the app container or SwiftData
+  external storage. WidgetSnapshotWriter EXPORTS square 360px JPEGs into
+  AppGroup/WidgetPhotos/<athleteID>.jpg via CGImageSource thumbnailing
+  (full-res never decoded), gated by a SHA256 manifest (re-encode only on
+  change), orphans pruned each write. Widgets load ONLY those files
+  (WidgetAvatar), monogram fallback, photo redacts to monogram.
 - SAMWidgets/NextUpWidget.swift renders a snapshot JSON from the App Group
   (group.OKTO.SAMp) — the widget NEVER touches CloudKit/SwiftData. The
   app writes the snapshot via WidgetSnapshotWriter (Services/, hooked into

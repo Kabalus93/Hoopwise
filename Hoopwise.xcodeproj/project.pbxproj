@@ -127,7 +127,6 @@
 				Models/SessionActivityAttributes.swift,
 				Models/SessionFormat.swift,
 				Models/SessionLifecycle.swift,
-				Models/WidgetSnapshot.swift,
 				Models/Student.swift,
 				Models/SwiftData/SDCoach.swift,
 				Models/SwiftData/SDConceptLink.swift,
@@ -154,6 +153,7 @@
 				Models/SwiftData/SDTeam.swift,
 				Models/SyncLogStore.swift,
 				Models/SyncTypes.swift,
+				Models/WidgetSnapshot.swift,
 				Services/AttendanceStatementDocument.swift,
 				Services/CloudSyncMonitor.swift,
 				Services/DrillPlanGenerator.swift,
@@ -162,13 +162,13 @@
 				Services/LiveSessionEngine.swift,
 				Services/MonthlyStudentCardExportService.swift,
 				Services/PDFDocumentRenderer.swift,
-				Services/WidgetSnapshotWriter.swift,
 				Services/SessionLiveActivityManager.swift,
 				Services/SessionStatusMonitor.swift,
 				Services/StudentIntelligence.swift,
 				Services/TrainingAgreementDocument.swift,
 				Services/UnsplashConfig.swift,
 				Services/UnsplashImageService.swift,
+				Services/WidgetSnapshotWriter.swift,
 				Utilities/CourtGeometry.swift,
 				Utilities/CourtProjection.swift,
 				Utilities/DebugLog.swift,
@@ -932,11 +932,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = SAMWidgets/SAMWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 3SGGYH29MQ;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = SAMWidgets/SAMWidgetsExtension.entitlements;
 				INFOPLIST_FILE = SAMWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SAMWidgets;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -965,11 +965,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = SAMWidgets/SAMWidgetsExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 3SGGYH29MQ;
 				GENERATE_INFOPLIST_FILE = YES;
-				CODE_SIGN_ENTITLEMENTS = SAMWidgets/SAMWidgetsExtension.entitlements;
 				INFOPLIST_FILE = SAMWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SAMWidgets;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

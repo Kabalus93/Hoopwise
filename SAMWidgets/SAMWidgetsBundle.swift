@@ -5,6 +5,9 @@ import SwiftUI
 struct SAMWidgetsBundle: WidgetBundle {
     var body: some Widget {
         NextUpWidget()
+        TodayWidget()
+        AttentionWidget()
+        CadenceWidget()
         SessionLiveActivityWidget()
     }
 }

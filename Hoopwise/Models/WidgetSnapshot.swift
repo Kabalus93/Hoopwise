@@ -1,23 +1,43 @@
 import Foundation
 
-// MARK: - "Next Up" widget snapshot
+// MARK: - Widget snapshot (schema v2)
 //
-// The widget never touches CloudKit/SwiftData — it renders this compact JSON
+// The widgets never touch CloudKit/SwiftData — they render this compact JSON
 // from the App Group container, written by the app whenever relevant data
-// changes. Pure Foundation: this file is a member of the iOS app, the Mac
-// app, and the widget extension.
+// changes. Pure Foundation: member of the iOS app, the Mac app, and the
+// widget extension.
+//
+// Versioning: v2 added today/tomorrow agendas, the attention list, the week
+// map, and file-based photos. Every v2 field is optional so a v1 snapshot on
+// disk still decodes — widgets degrade to v1 content, never crash or blank.
 
 enum WidgetShared {
     static let appGroup = "group.OKTO.SAMp"
     static let snapshotFilename = "nextup-snapshot.json"
-    static let widgetKind = "NextUpWidget"
-    /// Older than this and the widget shows an "open app to refresh" footer.
+    static let photosDirectoryName = "WidgetPhotos"
+    static let widgetKind = "NextUpWidget"            // legacy kind string
+    static let todayKind = "TodayWidget"
+    static let attentionKind = "AttentionWidget"
+    static let cadenceKind = "CadenceWidget"
+    static let allKinds = [widgetKind, todayKind, attentionKind, cadenceKind]
+    /// Older than this and widgets show an "open app to refresh" footer.
     static let stalenessInterval: TimeInterval = 24 * 3600
 
-    static var snapshotURL: URL? {
+    static var containerURL: URL? {
         FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
-            .appendingPathComponent(snapshotFilename)
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+    }
+
+    static var snapshotURL: URL? {
+        containerURL?.appendingPathComponent(snapshotFilename)
+    }
+
+    static var photosDirectory: URL? {
+        containerURL?.appendingPathComponent(photosDirectoryName, isDirectory: true)
+    }
+
+    static func photoURL(filename: String) -> URL? {
+        photosDirectory?.appendingPathComponent(filename)
     }
 
     static func loadSnapshot() -> NextUpSnapshot? {
@@ -31,7 +51,7 @@ enum WidgetShared {
     }
 }
 
-/// One source of truth for the "needs attention" thresholds — the widget's
+/// One source of truth for the "needs attention" thresholds — the widgets'
 /// student selection, the Whistle's Today curation, and any future alert
 /// surface must read these, never re-invent the numbers.
 enum AttentionRules {
@@ -47,9 +67,25 @@ enum AttentionRules {
 
 struct NextUpSnapshot: Codable, Equatable {
     var generatedAt: Date
-    /// Sessions inside the 48h horizon, ascending by start.
+    /// v1: sessions inside the 48h horizon, ascending. Still written in v2
+    /// (Next Up + degradation path read it).
     var sessions: [NextUpSession]
     var highlight: NextUpStudent?
+
+    // MARK: v2 fields — all optional so v1 snapshots decode.
+    var version: Int?
+    /// ALL of today's non-cancelled sessions, including finished ones.
+    var todaySessions: [NextUpSession]?
+    var tomorrowSessions: [NextUpSession]?
+    /// Top attention students, the shared-rules order, max 3.
+    var attention: [NextUpStudent]?
+    /// Current week, first-weekday-first: one cell per day.
+    var weekMap: [WeekCell]?
+    /// Roster-wide attendance over the trailing week — the quiet positive
+    /// stat when nothing needs attention.
+    var weeklyAttendancePercent: Int?
+
+    var schemaVersion: Int { version ?? 1 }
 
     var isStale: Bool {
         Date().timeIntervalSince(generatedAt) > WidgetShared.stalenessInterval
@@ -63,6 +99,41 @@ struct NextUpSnapshot: Codable, Equatable {
         }
         return sessions.first { $0.start > date }
     }
+
+    /// Today's agenda with a v1 fallback (derive from the 48h horizon).
+    func agendaToday(at date: Date, calendar: Calendar = .current) -> [NextUpSession] {
+        if let today = todaySessions { return today }
+        return sessions.filter { calendar.isDate($0.start, inSameDayAs: date) }
+    }
+
+    func agendaTomorrow(at date: Date, calendar: Calendar = .current) -> [NextUpSession] {
+        if let tomorrow = tomorrowSessions { return tomorrow }
+        guard let next = calendar.date(byAdding: .day, value: 1, to: date) else { return [] }
+        return sessions.filter { calendar.isDate($0.start, inSameDayAs: next) }
+    }
+
+    /// Attention list with a v1 fallback (the single highlight).
+    var attentionList: [NextUpStudent] {
+        if let attention { return attention }
+        if let highlight, highlight.reason != .streak { return [highlight] }
+        return []
+    }
+
+    /// Week map with a v1 fallback derived from the known horizon.
+    func week(at date: Date, calendar: Calendar = .current) -> [WeekCell] {
+        if let weekMap { return weekMap }
+        let start = calendar.startOfDay(for: date)
+        let weekdayOffset = (calendar.component(.weekday, from: start)
+            - calendar.firstWeekday + 7) % 7
+        guard let weekStart = calendar.date(byAdding: .day, value: -weekdayOffset, to: start)
+        else { return [] }
+        return (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart)
+            else { return nil }
+            let count = sessions.filter { calendar.isDate($0.start, inSameDayAs: day) }.count
+            return WeekCell(date: day, count: count)
+        }
+    }
 }
 
 struct NextUpSession: Codable, Equatable, Identifiable {
@@ -71,18 +142,28 @@ struct NextUpSession: Codable, Equatable, Identifiable {
     var start: Date
     var end: Date
     var location: String?
+    // v2
+    var rosterCount: Int?
+    /// "U14 · Phase 5" — the program line for the large agenda.
+    var programLine: String?
 }
 
-struct NextUpStudent: Codable, Equatable {
+struct WeekCell: Codable, Equatable, Hashable {
+    var date: Date
+    var count: Int
+}
+
+struct NextUpStudent: Codable, Equatable, Identifiable {
     enum Reason: String, Codable {
         case noted, attention, streak
+        case bundle     // v2: bundle-low gets its own chip
 
-        /// The one-word chip.
         var chipLabel: String {
             switch self {
             case .noted: return "Noted"
             case .attention: return "Attendance"
             case .streak: return "Streak"
+            case .bundle: return "Bundle"
             }
         }
     }
@@ -92,6 +173,33 @@ struct NextUpStudent: Codable, Equatable {
     var chineseName: String?
     var initials: String
     var reason: Reason
-    /// Tiny JPEG (≤ ~120px) for the medium widget; nil renders the monogram.
+    /// v1 legacy: inline JPEG. v2 writes photoFilename instead.
     var avatarJPEG: Data?
+    /// v2: file in AppGroup/WidgetPhotos — the only photo path the widget
+    /// process reads.
+    var photoFilename: String?
+
+    // Tolerate unknown future reason strings instead of failing the decode.
+    init(id: UUID, name: String, chineseName: String?, initials: String,
+         reason: Reason, avatarJPEG: Data? = nil, photoFilename: String? = nil) {
+        self.id = id
+        self.name = name
+        self.chineseName = chineseName
+        self.initials = initials
+        self.reason = reason
+        self.avatarJPEG = avatarJPEG
+        self.photoFilename = photoFilename
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        chineseName = try container.decodeIfPresent(String.self, forKey: .chineseName)
+        initials = try container.decode(String.self, forKey: .initials)
+        let rawReason = try container.decodeIfPresent(String.self, forKey: .reason)
+        reason = rawReason.flatMap(Reason.init(rawValue:)) ?? .attention
+        avatarJPEG = try container.decodeIfPresent(Data.self, forKey: .avatarJPEG)
+        photoFilename = try container.decodeIfPresent(String.self, forKey: .photoFilename)
+    }
 }

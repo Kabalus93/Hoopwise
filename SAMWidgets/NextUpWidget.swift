@@ -10,7 +10,7 @@ import WidgetKit
 // no decoration.
 
 // The app's actual identity: iOS blue in light, lime in dark (AppTheme).
-private let accent = Color(uiColor: UIColor { traits in
+let widgetAccent = Color(uiColor: UIColor { traits in
     traits.userInterfaceStyle == .dark
         ? UIColor(red: 0.80, green: 1.00, blue: 0.00, alpha: 1)   // #CDFF00
         : UIColor(red: 0.00, green: 0.48, blue: 1.00, alpha: 1)   // #007AFF
@@ -71,6 +71,10 @@ struct NextUpWidgetView: View {
             switch family {
             case .systemMedium:
                 mediumBody
+            case .accessoryInline:
+                inlineBody
+            case .accessoryRectangular:
+                rectangularBody
             default:
                 smallBody
             }
@@ -78,6 +82,41 @@ struct NextUpWidgetView: View {
         .containerBackground(for: .widget) {
             Color(uiColor: .systemBackground)
         }
+    }
+
+    // MARK: Lock screen accessories
+
+    private var inlineBody: some View {
+        Group {
+            if let session = featured {
+                Text("Next · \(session.start.formatted(date: .omitted, time: .shortened)) \(session.title)")
+            } else {
+                Text("Rest day")
+            }
+        }
+        .widgetURL(featured.map { URL(string: "hoopwise://session/\($0.id.uuidString)")! })
+    }
+
+    private var rectangularBody: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if let session = featured {
+                Text(session.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(session.start, format: .dateTime.hour().minute())
+                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
+                countdown(for: session)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Rest day").font(.headline)
+                Text("No sessions scheduled")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .widgetURL(featured.map { URL(string: "hoopwise://session/\($0.id.uuidString)")! })
     }
 
     private var featured: NextUpSession? {
@@ -162,7 +201,7 @@ struct NextUpWidgetView: View {
         let isToday = Calendar.current.isDate(session.start, inSameDayAs: entry.date)
         Text(isNow ? "NOW" : isToday ? "NEXT" : "NEXT · TOMORROW")
             .font(.system(size: 10, weight: .bold, design: .rounded))
-            .foregroundStyle(accent)
+            .foregroundStyle(widgetAccent)
             .kerning(0.8)
     }
 
@@ -180,7 +219,7 @@ struct NextUpWidgetView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("REST DAY")
                 .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(accent)
+                .foregroundStyle(widgetAccent)
                 .kerning(0.8)
             Text("No sessions\nscheduled")
                 .font(.system(.title3, design: .rounded, weight: .medium))
@@ -212,38 +251,58 @@ struct NextUpWidgetView: View {
             Text(student.reason.chipLabel)
                 .font(.system(size: 9, weight: .semibold))
                 .padding(.horizontal, 7).padding(.vertical, 2)
-                .background(accent.opacity(0.16), in: Capsule())
-                .foregroundStyle(accent)
+                .background(widgetAccent.opacity(0.16), in: Capsule())
+                .foregroundStyle(widgetAccent)
         }
         .frame(maxHeight: .infinity)
     }
 
-    @ViewBuilder
     private func avatar(_ student: NextUpStudent) -> some View {
-        if let data = student.avatarJPEG, let image = UIImage(data: data) {
-            ZStack {
-                // Redacted mode collapses the photo to the monogram — the
-                // photo is privacy-sensitive, the monogram is its stand-in.
-                monogram(student.initials)
+        WidgetAvatar(student: student, size: 52)
+    }
+}
+
+// MARK: - Shared avatar (file-based photos, monogram fallback + redaction)
+
+/// The only photo path in the widget process: a pre-downsampled JPEG in the
+/// App Group (v2), legacy inline data (v1), else monogram. Redaction
+/// collapses the photo to the monogram — the monogram is the redacted form.
+struct WidgetAvatar: View {
+    let student: NextUpStudent
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            monogram
+            if let image = loadPhoto() {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 52, height: 52)
+                    .frame(width: size, height: size)
                     .clipShape(Circle())
                     .privacySensitive()
             }
-        } else {
-            monogram(student.initials)
         }
+        .frame(width: size, height: size)
     }
 
-    private func monogram(_ initials: String) -> some View {
+    private var monogram: some View {
         Circle()
-            .fill(accent.opacity(0.18))
+            .fill(widgetAccent.opacity(0.18))
             .overlay(
-                Text(initials)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
-                    .foregroundStyle(accent))
+                Text(student.initials)
+                    .font(.system(size: size * 0.34, weight: .bold, design: .rounded))
+                    .foregroundStyle(widgetAccent))
+    }
+
+    private func loadPhoto() -> UIImage? {
+        if let filename = student.photoFilename,
+           let url = WidgetShared.photoURL(filename: filename),
+           let image = UIImage(contentsOfFile: url.path) {
+            return image
+        }
+        if let data = student.avatarJPEG { return UIImage(data: data) }
+        return nil
     }
 }
 
@@ -256,7 +315,8 @@ struct NextUpWidget: Widget {
         }
         .configurationDisplayName("Next Up")
         .description("Your next session and one athlete worth a look.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium,
+                            .accessoryInline, .accessoryRectangular])
     }
 }
 

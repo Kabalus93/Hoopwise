@@ -1,21 +1,29 @@
 import Foundation
 #if os(iOS)
 import WidgetKit
+import ImageIO
+import CryptoKit
 #endif
 
-// MARK: - Snapshot writer for the "Next Up" widget
+// MARK: - Snapshot writer for the widget suite (schema v2)
 //
 // The app-side half: builds the compact snapshot from the shared caches and
 // writes it to the App Group whenever relevant data changes (hooked into the
-// data manager's refresh paths) — the widget itself is a dumb renderer.
+// data manager's refresh paths) — the widgets are dumb renderers.
 // Compiled into both apps; inert on the Mac, whose target has no App Group.
+//
+// Photos: the widget process cannot reliably read the app's container or
+// SwiftData external storage, so athlete thumbnails are EXPORTED into
+// AppGroup/WidgetPhotos/<id>.jpg — downsampled via CGImageSource (~360px,
+// square center crop), re-encoded only when the source bytes change
+// (content hash manifest), orphans pruned every write.
 
 @MainActor
 enum WidgetSnapshotWriter {
     private static var pendingWrite: Task<Void, Never>?
 
     /// Debounced: refresh storms (bulk edits, roll call) collapse to one
-    /// write, and the widget reloads once.
+    /// write, and the widgets reload once.
     static func scheduleWrite(dataManager: DataManager) {
         #if os(iOS)
         pendingWrite?.cancel()
@@ -30,98 +38,141 @@ enum WidgetSnapshotWriter {
     #if os(iOS)
     static func writeNow(dataManager: DataManager) {
         let now = Date()
-        let horizon = now.addingTimeInterval(48 * 3600)
         let calendar = Calendar.current
+        let horizon = now.addingTimeInterval(48 * 3600)
 
-        let upcoming = dataManager.sessionEvents
-            .filter { session in
-                session.status != .cancelled
-                    && session.endTime > now && session.startTime < horizon
+        func snap(_ session: SessionEvent) -> NextUpSession {
+            var programLine: String?
+            if let programId = session.programId,
+               let program = dataManager.programs.first(where: { $0.id == programId }) {
+                programLine = program.name
             }
+            return NextUpSession(id: session.id, title: session.title,
+                                 start: session.startTime, end: session.endTime,
+                                 location: session.location,
+                                 rosterCount: session.attendeeIds.count,
+                                 programLine: programLine)
+        }
+
+        let active = dataManager.sessionEvents.filter { $0.status != .cancelled }
+
+        let upcoming = active
+            .filter { $0.endTime > now && $0.startTime < horizon }
             .sorted { $0.startTime < $1.startTime }
-            .prefix(8)
-            .map { session in
-                NextUpSession(id: session.id, title: session.title,
-                              start: session.startTime, end: session.endTime,
-                              location: session.location)
-            }
+            .prefix(8).map(snap)
+
+        let today = active
+            .filter { calendar.isDateInToday($0.date) }
+            .sorted { $0.startTime < $1.startTime }
+            .prefix(10).map(snap)
+
+        let tomorrow = active
+            .filter { calendar.isDateInTomorrow($0.date) }
+            .sorted { $0.startTime < $1.startTime }
+            .prefix(10).map(snap)
+
+        // Week map: current week, first-weekday-first.
+        let dayStart = calendar.startOfDay(for: now)
+        let weekdayOffset = (calendar.component(.weekday, from: dayStart)
+            - calendar.firstWeekday + 7) % 7
+        let weekStart = calendar.date(byAdding: .day, value: -weekdayOffset, to: dayStart)!
+        let weekMap: [WeekCell] = (0..<7).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: weekStart)
+            else { return nil }
+            let count = active.filter { calendar.isDate($0.date, inSameDayAs: day) }.count
+            return WeekCell(date: day, count: count)
+        }
+
+        let attention = attentionStudents(dataManager: dataManager, calendar: calendar)
+        let nextRoster: Set<UUID> = upcoming.first.flatMap { next in
+            dataManager.sessionEvents.first { $0.id == next.id }.map { Set($0.attendeeIds) }
+        } ?? []
+        let highlight = attention.first
+            ?? topAttender(dataManager: dataManager, roster: nextRoster)
+
+        // Photo export: everyone the snapshot references.
+        var referenced = attention
+        if let highlight { referenced.append(highlight) }
+        let photoNames = exportPhotos(for: referenced.map(\.id), dataManager: dataManager)
+        func withPhoto(_ student: NextUpStudent) -> NextUpStudent {
+            var copy = student
+            copy.photoFilename = photoNames[copy.id]
+            copy.avatarJPEG = nil
+            return copy
+        }
 
         let snapshot = NextUpSnapshot(
             generatedAt: now,
             sessions: Array(upcoming),
-            highlight: selectHighlight(dataManager: dataManager,
-                                       nextSession: upcoming.first, calendar: calendar))
+            highlight: highlight.map(withPhoto),
+            version: 2,
+            todaySessions: Array(today),
+            tomorrowSessions: Array(tomorrow),
+            attention: attention.map(withPhoto),
+            weekMap: weekMap,
+            weeklyAttendancePercent: weeklyAttendance(dataManager: dataManager,
+                                                      calendar: calendar))
         WidgetShared.saveSnapshot(snapshot)
-        WidgetCenter.shared.reloadTimelines(ofKind: WidgetShared.widgetKind)
+        for kind in WidgetShared.allKinds {
+            WidgetCenter.shared.reloadTimelines(ofKind: kind)
+        }
     }
 
-    // MARK: Student selection — deterministic, priority order.
+    // MARK: Attention — shared rules, deterministic order.
 
-    private static func selectHighlight(dataManager: DataManager,
-                                        nextSession: NextUpSession?,
-                                        calendar: Calendar) -> NextUpStudent? {
-        let students = dataManager.students
-        guard !students.isEmpty else { return nil }
-        let roster: Set<UUID> = nextSession.flatMap { next in
-            dataManager.sessionEvents.first { $0.id == next.id }
-                .map { Set($0.attendeeIds) }
-        } ?? []
+    /// Noted (most recent first) → bundle low → attendance drop (worst
+    /// first). Deduplicated, max 3 — the same list every attention surface
+    /// should show.
+    private static func attentionStudents(dataManager: DataManager,
+                                          calendar: Calendar) -> [NextUpStudent] {
+        var picked: [NextUpStudent] = []
+        var seen: Set<UUID> = []
 
-        // Ties prefer a student in the next session's roster.
-        func best(_ candidates: [(Student, Date?)]) -> Student? {
-            guard !candidates.isEmpty else { return nil }
-            let sorted = candidates.sorted { lhs, rhs in
-                let lhsRoster = roster.contains(lhs.0.id), rhsRoster = roster.contains(rhs.0.id)
-                if lhsRoster != rhsRoster { return lhsRoster }
-                return (lhs.1 ?? .distantPast) > (rhs.1 ?? .distantPast)
-            }
-            return sorted.first?.0
-        }
-
-        // 1. Noted — most recent note within the window.
         let notedCutoff = calendar.date(byAdding: .day, value: -AttentionRules.notedWindowDays,
                                         to: Date()) ?? Date()
-        let noted = students.compactMap { student -> (Student, Date?)? in
+        let noted = dataManager.students.compactMap { student -> (Student, Date)? in
             guard let latest = student.parentalTouchpoints.map(\.date).max(),
                   latest >= notedCutoff else { return nil }
             return (student, latest)
-        }
-        if let pick = best(noted) {
-            return makeStudent(pick, reason: .noted)
+        }.sorted { $0.1 > $1.1 }
+        for (student, _) in noted where !seen.contains(student.id) {
+            picked.append(makeStudent(student, reason: .noted))
+            seen.insert(student.id)
         }
 
-        // 2. Needs attention — bundle low or attendance drop, shared rules.
-        var attention: [(Student, Date?)] = []
         for contract in dataManager.cachedContracts
         where contract.kind == .privateBundle && contract.status == .active
             && (contract.bundleRedemptionsRemaining ?? .max) <= AttentionRules.bundleLowRemaining {
-            if let student = students.first(where: { $0.id == contract.studentId }) {
-                attention.append((student, nil))
-            }
-        }
-        for student in students {
-            let rate = attendanceRate(of: student, dataManager: dataManager)
-            if rate.of >= AttentionRules.attendanceMinSessions,
-               rate.percent < AttentionRules.attendanceRiskPercent {
-                attention.append((student, nil))
-            }
-        }
-        if let pick = best(attention) {
-            return makeStudent(pick, reason: .attention)
+            guard let student = dataManager.students.first(where: { $0.id == contract.studentId }),
+                  !seen.contains(student.id) else { continue }
+            picked.append(makeStudent(student, reason: .bundle))
+            seen.insert(student.id)
         }
 
-        // 3. Top attender — the positive fallback.
-        let top = students
+        let risky = dataManager.students
+            .map { ($0, attendanceRate(of: $0, dataManager: dataManager)) }
+            .filter { $0.1.of >= AttentionRules.attendanceMinSessions
+                && $0.1.percent < AttentionRules.attendanceRiskPercent }
+            .sorted { $0.1.percent < $1.1.percent }
+        for (student, _) in risky where !seen.contains(student.id) {
+            picked.append(makeStudent(student, reason: .attention))
+            seen.insert(student.id)
+        }
+        return Array(picked.prefix(3))
+    }
+
+    private static func topAttender(dataManager: DataManager,
+                                    roster: Set<UUID>) -> NextUpStudent? {
+        dataManager.students
             .map { ($0, attendanceRate(of: $0, dataManager: dataManager)) }
             .filter { $0.1.of >= AttentionRules.attendanceMinSessions }
             .sorted { lhs, rhs in
-                let lhsRoster = roster.contains(lhs.0.id), rhsRoster = roster.contains(rhs.0.id)
                 if lhs.1.percent != rhs.1.percent { return lhs.1.percent > rhs.1.percent }
+                let lhsRoster = roster.contains(lhs.0.id), rhsRoster = roster.contains(rhs.0.id)
                 if lhsRoster != rhsRoster { return lhsRoster }
                 return lhs.0.name < rhs.0.name
             }
-            .first?.0
-        return top.map { makeStudent($0, reason: .streak) }
+            .first.map { makeStudent($0.0, reason: .streak) }
     }
 
     private static func attendanceRate(of student: Student,
@@ -136,20 +187,103 @@ enum WidgetSnapshotWriter {
         return (Int(Double(attended) / Double(relevant.count) * 100), relevant.count)
     }
 
+    /// Roster-wide attendance over the trailing 7 days — the quiet positive.
+    private static func weeklyAttendance(dataManager: DataManager,
+                                         calendar: Calendar) -> Int? {
+        let cutoff = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        let recent = dataManager.sessionEvents.filter {
+            $0.date >= cutoff && $0.date <= Date() && $0.status != .cancelled
+        }
+        var attended = 0, expected = 0
+        for session in recent {
+            expected += Set(session.attendeeIds).union(session.actualAttendeeIds).count
+            attended += session.actualAttendeeIds.count
+        }
+        guard expected > 0 else { return nil }
+        return Int(Double(attended) / Double(expected) * 100)
+    }
+
     private static func makeStudent(_ student: Student,
                                     reason: NextUpStudent.Reason) -> NextUpStudent {
-        var avatar = student.thumbnailImageData
-        if avatar == nil, let full = student.profileImageData {
-            avatar = makeProfileThumbnailData(from: full, maxDimension: 120)
+        NextUpStudent(id: student.id, name: student.name,
+                      chineseName: student.chineseName,
+                      initials: student.initials, reason: reason)
+    }
+
+    // MARK: - Photo export (App Group files, hash-gated, orphan-pruned)
+
+    private static let manifestFilename = "manifest.json"
+
+    private static func exportPhotos(for ids: [UUID],
+                                     dataManager: DataManager) -> [UUID: String] {
+        guard let directory = WidgetShared.photosDirectory else { return [:] }
+        try? FileManager.default.createDirectory(at: directory,
+                                                 withIntermediateDirectories: true)
+        let manifestURL = directory.appendingPathComponent(manifestFilename)
+        var manifest: [String: String] = (try? Data(contentsOf: manifestURL))
+            .flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
+
+        var result: [UUID: String] = [:]
+        var kept: Set<String> = [manifestFilename]
+
+        for id in Set(ids) {
+            guard let student = dataManager.students.first(where: { $0.id == id }),
+                  let source = student.profileImageData ?? student.thumbnailImageData
+            else { continue }
+            let filename = "\(id.uuidString).jpg"
+            let fileURL = directory.appendingPathComponent(filename)
+            let hash = SHA256.hash(data: source).map { String(format: "%02x", $0) }.joined()
+
+            // Re-encode only when missing or the source photo changed.
+            if manifest[id.uuidString] != hash
+                || !FileManager.default.fileExists(atPath: fileURL.path) {
+                guard let jpeg = downsampledSquareJPEG(from: source, side: 360) else { continue }
+                try? jpeg.write(to: fileURL, options: .atomic)
+                manifest[id.uuidString] = hash
+            }
+            result[id] = filename
+            kept.insert(filename)
         }
-        // The snapshot must stay tiny — skip any oversized blob.
-        if let data = avatar, data.count > 200_000 { avatar = nil }
-        return NextUpStudent(id: student.id,
-                             name: student.name,
-                             chineseName: student.chineseName,
-                             initials: student.initials,
-                             reason: reason,
-                             avatarJPEG: avatar)
+
+        // Prune orphans so the container doesn't grow forever.
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: directory.path) {
+            for file in contents where !kept.contains(file) {
+                try? FileManager.default.removeItem(at: directory.appendingPathComponent(file))
+                manifest.removeValue(forKey: (file as NSString).deletingPathExtension)
+            }
+        }
+        if let data = try? JSONEncoder().encode(manifest) {
+            try? data.write(to: manifestURL, options: .atomic)
+        }
+        return result
+    }
+
+    /// CGImageSource thumbnailing — the full-res photo never gets decoded
+    /// at size, and never reaches the widget process.
+    private static func downsampledSquareJPEG(from data: Data, side: CGFloat) -> Data? {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: side,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return nil }
+
+        // Aspect-fill center crop to square.
+        let width = thumb.width, height = thumb.height
+        let squareSide = min(width, height)
+        let cropRect = CGRect(x: (width - squareSide) / 2, y: (height - squareSide) / 2,
+                              width: squareSide, height: squareSide)
+        let squared = thumb.cropping(to: cropRect) ?? thumb
+
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            output as CFMutableData, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, squared,
+                                   [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
     }
     #endif
 }
