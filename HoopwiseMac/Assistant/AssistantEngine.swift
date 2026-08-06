@@ -392,7 +392,7 @@ final class AssistantEngine: ObservableObject {
         }
         let bundleLow = dataManager.cachedContracts.filter {
             $0.kind == .privateBundle && $0.status == .active
-                && ($0.bundleRedemptionsRemaining ?? 99) <= 3
+                && ($0.bundleRedemptionsRemaining ?? 99) <= AttentionRules.bundleLowRemaining
         }
         for contract in bundleLow.prefix(5) {
             if let student = dataManager.students.first(where: { $0.id == contract.studentId }) {
@@ -463,7 +463,8 @@ final class AssistantEngine: ObservableObject {
         let calendar = Calendar.current
 
         for contract in dataManager.cachedContracts where contract.kind == .privateBundle
-            && contract.status == .active && (contract.bundleRedemptionsRemaining ?? 99) <= 3 {
+            && contract.status == .active
+            && (contract.bundleRedemptionsRemaining ?? 99) <= AttentionRules.bundleLowRemaining {
             guard let student = dataManager.students.first(where: { $0.id == contract.studentId })
             else { continue }
             let left = contract.bundleRedemptionsRemaining ?? 0
@@ -490,10 +491,10 @@ final class AssistantEngine: ObservableObject {
                 $0.date <= Date() && ($0.attendeeIds.contains(student.id)
                     || $0.actualAttendeeIds.contains(student.id))
             }
-            guard relevant.count >= 4 else { continue }
+            guard relevant.count >= AttentionRules.attendanceMinSessions else { continue }
             let attended = relevant.filter { $0.actualAttendeeIds.contains(student.id) }.count
             let percent = Int(Double(attended) / Double(relevant.count) * 100)
-            if percent < 50 { risk.append((student, percent)) }
+            if percent < AttentionRules.attendanceRiskPercent { risk.append((student, percent)) }
         }
         for (student, percent) in risk.sorted(by: { $0.1 < $1.1 }).prefix(3) {
             facts.append(CurationCard(
