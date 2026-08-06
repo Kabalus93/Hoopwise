@@ -63,6 +63,9 @@ enum AttentionRules {
     static let attendanceMinSessions = 4
     /// A coach note within this window makes the student "Noted".
     static let notedWindowDays = 14
+    /// At or above this attendance (with the minimum sessions) a student
+    /// counts as steady — the bubble cluster's small tier.
+    static let steadyPercent = 80
 }
 
 struct NextUpSnapshot: Codable, Equatable {
@@ -84,11 +87,22 @@ struct NextUpSnapshot: Codable, Equatable {
     /// Roster-wide attendance over the trailing week — the quiet positive
     /// stat when nothing needs attention.
     var weeklyAttendancePercent: Int?
+    /// Precomputed timeline windows: each carries its own featured session,
+    /// highlight, and roster cluster, so rollover changes BOTH the session
+    /// and the student at the boundary without the app waking.
+    var windows: [NextUpWindow]?
 
     var schemaVersion: Int { version ?? 1 }
 
     var isStale: Bool {
         Date().timeIntervalSince(generatedAt) > WidgetShared.stalenessInterval
+    }
+
+    /// The window covering an instant (falls back past the last boundary).
+    func window(at date: Date) -> NextUpWindow? {
+        guard let windows, !windows.isEmpty else { return nil }
+        return windows.first { $0.start <= date && date < $0.end }
+            ?? (date >= windows.last!.end ? windows.last : windows.first)
     }
 
     /// The session to feature at a given instant: an in-progress session
@@ -146,6 +160,37 @@ struct NextUpSession: Codable, Equatable, Identifiable {
     var rosterCount: Int?
     /// "U14 · Phase 5" — the program line for the large agenda.
     var programLine: String?
+    // v2.1: structured fields so widgets never parse titles.
+    var ageBand: String?        // "U8"
+    var category: String?       // "竞赛班"
+
+    /// "U8 · 竞赛班", or the title when no program backs the session.
+    var structuredLine: String? {
+        let parts = [ageBand, category].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+/// One member of a window's roster cluster. Tier is from the SAME shared
+/// scoring as everything else: 0 = AttentionRules fires, 2 = steady
+/// (≥ steadyPercent), 1 = neutral.
+struct NextUpRosterMember: Codable, Equatable, Identifiable {
+    var id: UUID
+    var name: String
+    var initials: String
+    var photoFilename: String?
+    var tier: Int
+    var reason: NextUpStudent.Reason?
+}
+
+struct NextUpWindow: Codable, Equatable {
+    var start: Date
+    var end: Date
+    var session: NextUpSession?
+    var highlight: NextUpStudent?
+    /// The featured session's roster, tier-sorted, capped at 8.
+    var roster: [NextUpRosterMember]?
+    var rosterTotal: Int?
 }
 
 struct WeekCell: Codable, Equatable, Hashable {

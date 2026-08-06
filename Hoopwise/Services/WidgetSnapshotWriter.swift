@@ -43,15 +43,28 @@ enum WidgetSnapshotWriter {
 
         func snap(_ session: SessionEvent) -> NextUpSession {
             var programLine: String?
+            var ageBand: String?
+            var category: String?
             if let programId = session.programId,
                let program = dataManager.programs.first(where: { $0.id == programId }) {
                 programLine = program.name
+                ageBand = program.ageGroup.rawValue
+                // Category from the record, never parsed from titles. Strip a
+                // leading age band from the name so "U14 intermediate"
+                // doesn't render "U14 · U14 intermediate".
+                var name = program.name
+                if name.uppercased().hasPrefix(program.ageGroup.rawValue.uppercased()) {
+                    name = String(name.dropFirst(program.ageGroup.rawValue.count))
+                        .trimmingCharacters(in: CharacterSet(charactersIn: " -–·"))
+                }
+                category = name.isEmpty ? program.programType.rawValue : name
             }
             return NextUpSession(id: session.id, title: session.title,
                                  start: session.startTime, end: session.endTime,
                                  location: session.location,
                                  rosterCount: session.attendeeIds.count,
-                                 programLine: programLine)
+                                 programLine: programLine,
+                                 ageBand: ageBand, category: category)
         }
 
         let active = dataManager.sessionEvents.filter { $0.status != .cancelled }
@@ -84,38 +97,157 @@ enum WidgetSnapshotWriter {
         }
 
         let attention = attentionStudents(dataManager: dataManager, calendar: calendar)
-        let nextRoster: Set<UUID> = upcoming.first.flatMap { next in
-            dataManager.sessionEvents.first { $0.id == next.id }.map { Set($0.attendeeIds) }
-        } ?? []
-        let highlight = attention.first
-            ?? topAttender(dataManager: dataManager, roster: nextRoster)
 
-        // Photo export: everyone the snapshot references.
-        var referenced = attention
-        if let highlight { referenced.append(highlight) }
-        let photoNames = exportPhotos(for: referenced.map(\.id), dataManager: dataManager)
+        // ---- Timeline windows: featured session AND highlight per window,
+        // so relevance rolls over at boundaries without the app waking.
+        var boundaries: Set<Date> = [now]
+        for session in upcoming {
+            if session.start > now { boundaries.insert(session.start) }
+            if session.end > now { boundaries.insert(session.end) }
+        }
+        let sortedBounds = boundaries.sorted()
+        let horizonEnd = horizon
+        var windows: [NextUpWindow] = []
+        for (index, windowStart) in sortedBounds.enumerated() {
+            let windowEnd = index + 1 < sortedBounds.count ? sortedBounds[index + 1] : horizonEnd
+            guard windowEnd > windowStart else { continue }
+            let featured = upcoming.first { $0.start <= windowStart && windowStart < $0.end }
+                ?? upcoming.first { $0.start > windowStart }
+            let roster: Set<UUID> = featured.flatMap { feature in
+                dataManager.sessionEvents.first { $0.id == feature.id }
+                    .map { Set($0.attendeeIds) }
+            } ?? []
+            let windowHighlight = windowHighlight(
+                at: windowStart, attention: attention, roster: roster,
+                horizon: Array(upcoming), dataManager: dataManager)
+            windows.append(NextUpWindow(
+                start: windowStart, end: windowEnd,
+                session: featured,
+                highlight: windowHighlight,
+                roster: featured.flatMap {
+                    rosterCluster(for: $0, attention: attention, dataManager: dataManager)
+                },
+                rosterTotal: featured?.rosterCount))
+        }
+        let highlight = windows.first?.highlight
+
+        // Photo export: everyone the snapshot references (highlights,
+        // attention list, every window's roster).
+        var referencedIds = attention.map(\.id)
+        for window in windows {
+            if let student = window.highlight { referencedIds.append(student.id) }
+            for member in window.roster ?? [] { referencedIds.append(member.id) }
+        }
+        let photoNames = exportPhotos(for: referencedIds, dataManager: dataManager)
         func withPhoto(_ student: NextUpStudent) -> NextUpStudent {
             var copy = student
             copy.photoFilename = photoNames[copy.id]
             copy.avatarJPEG = nil
             return copy
         }
+        for index in windows.indices {
+            windows[index].highlight = windows[index].highlight.map(withPhoto)
+            windows[index].roster = windows[index].roster.map { members in
+                members.map { member in
+                    var copy = member
+                    copy.photoFilename = photoNames[copy.id]
+                    return copy
+                }
+            }
+        }
 
         let snapshot = NextUpSnapshot(
             generatedAt: now,
             sessions: Array(upcoming),
-            highlight: highlight.map(withPhoto),
+            highlight: highlight,
             version: 2,
             todaySessions: Array(today),
             tomorrowSessions: Array(tomorrow),
             attention: attention.map(withPhoto),
             weekMap: weekMap,
             weeklyAttendancePercent: weeklyAttendance(dataManager: dataManager,
-                                                      calendar: calendar))
+                                                      calendar: calendar),
+            windows: windows)
         WidgetShared.saveSnapshot(snapshot)
         for kind in WidgetShared.allKinds {
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         }
+        scheduleRolloverWrite(dataManager: dataManager, boundaries: sortedBounds, now: now)
+    }
+
+    /// While the app happens to be running, rewrite at the next session
+    /// boundary too — fresher than the precomputed windows alone.
+    private static var rolloverTask: Task<Void, Never>?
+    private static func scheduleRolloverWrite(dataManager: DataManager,
+                                              boundaries: [Date], now: Date) {
+        rolloverTask?.cancel()
+        guard let next = boundaries.first(where: { $0 > now.addingTimeInterval(5) }) else { return }
+        let delay = next.timeIntervalSince(now) + 2
+        rolloverTask = Task { @MainActor [weak dataManager] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled, let dataManager else { return }
+            writeNow(dataManager: dataManager)
+        }
+    }
+
+    /// Highlight for one window. Relevance rule: a Noted student who is
+    /// tied to horizon sessions is only eligible while one of their
+    /// sessions has not yet ended; afterwards selection recomputes from
+    /// what's upcoming (attention/streak, next-roster preferred).
+    private static func windowHighlight(at windowStart: Date,
+                                        attention: [NextUpStudent],
+                                        roster: Set<UUID>,
+                                        horizon: [NextUpSession],
+                                        dataManager: DataManager) -> NextUpStudent? {
+        func stillRelevant(_ student: NextUpStudent) -> Bool {
+            guard student.reason == .noted else { return true }
+            let tied = dataManager.sessionEvents.filter { session in
+                session.status != .cancelled
+                    && horizon.contains { $0.id == session.id }
+                    && (session.attendeeIds.contains(student.id)
+                        || session.actualAttendeeIds.contains(student.id))
+            }
+            guard !tied.isEmpty else { return true }   // pure note, no session tie
+            return tied.contains { $0.endTime > windowStart }
+        }
+        let eligible = attention.filter(stillRelevant)
+        // Prefer a candidate in this window's roster when the rule ties.
+        if let inRoster = eligible.first(where: { roster.contains($0.id) }) { return inRoster }
+        if let first = eligible.first { return first }
+        return topAttender(dataManager: dataManager, roster: roster)
+    }
+
+    /// The featured session's roster as tiered cluster members, capped at 8.
+    /// Tier 0 = attention fires, 2 = steady, 1 = neutral — shared scoring.
+    private static func rosterCluster(for session: NextUpSession,
+                                      attention: [NextUpStudent],
+                                      dataManager: DataManager) -> [NextUpRosterMember]? {
+        guard let event = dataManager.sessionEvents.first(where: { $0.id == session.id }),
+              !event.attendeeIds.isEmpty else { return nil }
+        let attentionById = Dictionary(uniqueKeysWithValues: attention.map { ($0.id, $0) })
+        var members: [NextUpRosterMember] = []
+        for id in event.attendeeIds {
+            guard let student = dataManager.students.first(where: { $0.id == id }) else { continue }
+            let tier: Int
+            var reason: NextUpStudent.Reason?
+            if let hit = attentionById[id] {
+                tier = 0
+                reason = hit.reason
+            } else {
+                let rate = attendanceRate(of: student, dataManager: dataManager)
+                tier = (rate.of >= AttentionRules.attendanceMinSessions
+                        && rate.percent >= AttentionRules.steadyPercent) ? 2 : 1
+            }
+            members.append(NextUpRosterMember(id: id, name: student.name,
+                                              initials: student.initials,
+                                              photoFilename: nil,
+                                              tier: tier, reason: reason))
+        }
+        // Deterministic: tier first, then stable id order — no reshuffling.
+        members.sort {
+            $0.tier != $1.tier ? $0.tier < $1.tier : $0.id.uuidString < $1.id.uuidString
+        }
+        return Array(members.prefix(8))
     }
 
     // MARK: Attention — shared rules, deterministic order.

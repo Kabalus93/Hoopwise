@@ -38,12 +38,27 @@ struct NextUpProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<NextUpEntry>) -> Void) {
         let snapshot = WidgetShared.loadSnapshot()
         let now = Date()
-        // Display-change moments: now, every boundary, midnight.
+        // Display-change moments: now, every boundary (precomputed windows
+        // when present — rollover changes session AND highlight), midnight.
         var moments: Set<Date> = [now]
         if let snapshot {
+            if let windows = snapshot.windows {
+                for window in windows where window.start > now {
+                    moments.insert(window.start)
+                }
+            }
             for session in snapshot.sessions {
                 if session.start > now { moments.insert(session.start) }
                 if session.end > now { moments.insert(session.end) }
+            }
+            // Countdown ticks: refresh every 15 minutes ahead of the next
+            // start so "in 1h 14m" stays honest between boundaries.
+            if let next = snapshot.featuredSession(at: now), next.start > now {
+                var tick = now.addingTimeInterval(15 * 60)
+                while tick < next.start && moments.count < 24 {
+                    moments.insert(tick)
+                    tick = tick.addingTimeInterval(15 * 60)
+                }
             }
         }
         if let midnight = Calendar.current.nextDate(
@@ -106,7 +121,7 @@ struct NextUpWidgetView: View {
                 Text(session.start, format: .dateTime.hour().minute())
                     .font(.system(.title3, design: .rounded, weight: .semibold))
                     .monospacedDigit()
-                countdown(for: session)
+                Text(Self.countdownText(to: session.start, from: entry.date))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
@@ -119,8 +134,16 @@ struct NextUpWidgetView: View {
         .widgetURL(featured.map { URL(string: "hoopwise://session/\($0.id.uuidString)")! })
     }
 
+    private var window: NextUpWindow? {
+        entry.snapshot?.window(at: entry.date)
+    }
+
     private var featured: NextUpSession? {
-        entry.snapshot?.featuredSession(at: entry.date)
+        window?.session ?? entry.snapshot?.featuredSession(at: entry.date)
+    }
+
+    private var highlight: NextUpStudent? {
+        window != nil ? window?.highlight : entry.snapshot?.highlight
     }
 
     // MARK: Small — the next session, nothing else.
@@ -142,7 +165,14 @@ struct NextUpWidgetView: View {
             }
             .tint(.primary)
             .foregroundStyle(.primary)
-            if let student = entry.snapshot?.highlight {
+            if let roster = window?.roster, !roster.isEmpty, let session = featured {
+                Divider().padding(.vertical, 8)
+                RosterClusterView(members: roster,
+                                  total: window?.rosterTotal ?? roster.count,
+                                  session: session,
+                                  highlight: highlight)
+                    .frame(width: 124)
+            } else if let student = highlight {
                 Divider().padding(.vertical, 8)
                 Link(destination: URL(string:
                     "hoopwise://athlete/\(student.id.uuidString)")!) {
@@ -170,19 +200,16 @@ struct NextUpWidgetView: View {
                     .foregroundStyle(.primary)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
-                Text(session.title)
+                // Category, not venue: structured "U8 · 竞赛班" from the
+                // program record; title only when no program backs it.
+                Text(session.structuredLine ?? session.title)
                     .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                HStack(spacing: 4) {
-                    if let location = session.location, !location.isEmpty {
-                        Text(location).lineLimit(1)
-                        Text("·")
-                    }
-                    countdown(for: session)
-                }
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+                    .truncationMode(session.structuredLine == nil ? .middle : .tail)
+                countdown(for: session)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             } else {
                 restDay
             }
@@ -207,12 +234,16 @@ struct NextUpWidgetView: View {
 
     @ViewBuilder
     private func countdown(for session: NextUpSession) -> some View {
-        if session.start <= entry.date {
-            Text("under way")
-        } else {
-            // Live countdown: relative style self-updates between entries.
-            Text("in ") + Text(session.start, style: .relative)
-        }
+        Text(Self.countdownText(to: session.start, from: entry.date))
+    }
+
+    static func countdownText(to start: Date, from now: Date) -> String {
+        let seconds = start.timeIntervalSince(now)
+        if seconds <= 0 { return "under way" }
+        let minutes = Int((seconds / 60).rounded(.up))
+        if minutes < 5 { return "starting soon" }
+        if minutes < 60 { return "in \(minutes)m" }
+        return "in \(minutes / 60)h \(minutes % 60)m"
     }
 
     private var restDay: some View {
@@ -317,6 +348,91 @@ struct NextUpWidget: Widget {
         .description("Your next session and one athlete worth a look.")
         .supportedFamilies([.systemSmall, .systemMedium,
                             .accessoryInline, .accessoryRectangular])
+    }
+}
+
+// MARK: - Roster bubble cluster (medium right side)
+
+/// The next session's roster as bubbles, size = attention need. Three tiers
+/// only, deterministic slot packing seeded by athlete id — stable between
+/// refreshes. The whole cluster is one Link to the session; only the labeled
+/// largest bubble links to its profile.
+struct RosterClusterView: View {
+    let members: [NextUpRosterMember]
+    let total: Int
+    let session: NextUpSession
+    let highlight: NextUpStudent?
+
+    private static let slots: [CGPoint] = [
+        CGPoint(x: 34, y: 26), CGPoint(x: 78, y: 18), CGPoint(x: 106, y: 44),
+        CGPoint(x: 16, y: 58), CGPoint(x: 58, y: 52), CGPoint(x: 96, y: 74),
+        CGPoint(x: 32, y: 84), CGPoint(x: 70, y: 88),
+    ]
+    private static let tierSizes: [CGFloat] = [38, 28, 22]
+
+    /// The Mason slot, earned: the first attention-tier member, else the
+    /// window highlight if present in the cluster.
+    private var labeled: NextUpRosterMember? {
+        members.first { $0.tier == 0 }
+            ?? members.first { $0.id == highlight?.id }
+    }
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Link(destination: URL(string: "hoopwise://session/\(session.id.uuidString)")!) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+                        bubble(member, slot: Self.slots[index % Self.slots.count])
+                    }
+                    if total > members.count {
+                        Text("+\(total - members.count)")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
+                            .foregroundStyle(.secondary)
+                            .position(x: 108, y: 92)
+                    }
+                }
+                .frame(width: 124, height: 100)
+                .contentShape(Rectangle())
+            }
+            if let labeled {
+                Link(destination: URL(string: "hoopwise://athlete/\(labeled.id.uuidString)")!) {
+                    VStack(spacing: 1) {
+                        Text(labeled.name)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .privacySensitive()
+                        if let reason = labeled.reason {
+                            Text(reason.chipLabel)
+                                .font(.system(size: 8, weight: .semibold))
+                                .padding(.horizontal, 6).padding(.vertical, 1.5)
+                                .background(widgetAccent.opacity(0.16), in: Capsule())
+                                .foregroundStyle(widgetAccent)
+                        }
+                    }
+                }
+                .tint(.primary)
+            }
+        }
+    }
+
+    private func bubble(_ member: NextUpRosterMember, slot: CGPoint) -> some View {
+        let size = Self.tierSizes[min(max(member.tier, 0), 2)]
+        // Deterministic jitter seeded by athlete id — no reshuffling.
+        let seed = member.id.uuidString.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
+        let dx = CGFloat(seed % 7) - 3
+        let dy = CGFloat((seed / 7) % 7) - 3
+        return WidgetAvatar(
+            student: NextUpStudent(id: member.id, name: member.name, chineseName: nil,
+                                   initials: member.initials, reason: member.reason ?? .streak,
+                                   photoFilename: member.photoFilename),
+            size: size)
+            .overlay(Circle().stroke(member.tier == 0 ? widgetAccent.opacity(0.7) : .clear,
+                                     lineWidth: 1.4))
+            .position(x: slot.x + dx, y: slot.y + dy)
     }
 }
 
