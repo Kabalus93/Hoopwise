@@ -3,6 +3,27 @@ import Foundation
 import WidgetKit
 import ImageIO
 import CryptoKit
+import os
+
+/// Writer-side counterpart of the provider's "hoopwise.widget" logging —
+/// pairs each write with what the widget later reads.
+private let writerLog = Logger(subsystem: "hoopwise.widget", category: "snapshot-writer")
+
+/// File twin of the writer log in the App Group's Library/Caches — the one
+/// place `devicectl device copy from` can read without root, so window
+/// selection is debuggable against real device data. Reset past ~256KB.
+private enum WriterDebugTrace {
+    static func append(_ lines: [String]) {
+        guard let url = WidgetShared.containerURL?
+            .appendingPathComponent("Library/Caches/nextup-writer-trace.log") else { return }
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let existing = (try? Data(contentsOf: url)) ?? Data()
+        var combined = existing.count > 256_000 ? Data() : existing
+        combined.append(Data((lines.joined(separator: "\n") + "\n").utf8))
+        try? combined.write(to: url, options: .atomic)
+    }
+}
 #endif
 
 // MARK: - Snapshot writer for the widget suite (schema v2)
@@ -21,6 +42,14 @@ import CryptoKit
 @MainActor
 enum WidgetSnapshotWriter {
     private static var pendingWrite: Task<Void, Never>?
+
+    /// Deep-link routing evidence for headless device verification — lands
+    /// in the same pullable trace file as the writer's window log.
+    static func traceDeepLink(_ line: String) {
+        #if os(iOS)
+        WriterDebugTrace.append(["deeplink \(line) @ \(traceTimestamp(Date()))"])
+        #endif
+    }
 
     /// Debounced: refresh storms (bulk edits, roll call) collapse to one
     /// write, and the widgets reload once.
@@ -62,7 +91,8 @@ enum WidgetSnapshotWriter {
             return NextUpSession(id: session.id, title: session.title,
                                  start: session.startTime, end: session.endTime,
                                  location: session.location,
-                                 rosterCount: session.attendeeIds.count,
+                                 rosterCount: expectedAttendeeIds(of: session,
+                                                                  dataManager: dataManager).count,
                                  programLine: programLine,
                                  ageBand: ageBand, category: category)
         }
@@ -108,6 +138,11 @@ enum WidgetSnapshotWriter {
         let sortedBounds = boundaries.sorted()
         let horizonEnd = horizon
         var windows: [NextUpWindow] = []
+        var trace: [String] = [
+            "==== writeNow @ \(traceTimestamp(now))",
+            "attention: [\(attention.map { "\($0.name)(\($0.reason.rawValue)) \($0.id.uuidString)" }.joined(separator: ", "))]",
+            "horizon: [\(upcoming.map { "\($0.title) \($0.id.uuidString)" }.joined(separator: ", "))]",
+        ]
         for (index, windowStart) in sortedBounds.enumerated() {
             let windowEnd = index + 1 < sortedBounds.count ? sortedBounds[index + 1] : horizonEnd
             guard windowEnd > windowStart else { continue }
@@ -115,11 +150,12 @@ enum WidgetSnapshotWriter {
                 ?? upcoming.first { $0.start > windowStart }
             let roster: Set<UUID> = featured.flatMap { feature in
                 dataManager.sessionEvents.first { $0.id == feature.id }
-                    .map { Set($0.attendeeIds) }
+                    .map { Set(expectedAttendeeIds(of: $0, dataManager: dataManager)) }
             } ?? []
-            let windowHighlight = windowHighlight(
+            let (windowHighlight, how) = windowHighlight(
                 at: windowStart, attention: attention, roster: roster,
                 horizon: Array(upcoming), dataManager: dataManager)
+            trace.append("window[\(index)] \(traceTimestamp(windowStart)) session=\(featured?.title ?? "none") roster=\(roster.count) highlight=\(windowHighlight?.name ?? "none") via=\(how)")
             windows.append(NextUpWindow(
                 start: windowStart, end: windowEnd,
                 session: featured,
@@ -129,6 +165,7 @@ enum WidgetSnapshotWriter {
                 },
                 rosterTotal: featured?.rosterCount))
         }
+        WriterDebugTrace.append(trace)
         let highlight = windows.first?.highlight
 
         // Photo export: everyone the snapshot references (highlights,
@@ -169,6 +206,10 @@ enum WidgetSnapshotWriter {
                                                       calendar: calendar),
             windows: windows)
         WidgetShared.saveSnapshot(snapshot)
+        let boundsLine = sortedBounds
+            .map { $0.formatted(date: .numeric, time: .standard) }
+            .joined(separator: ", ")
+        writerLog.info("wrote snapshot v2 generated=\(now.formatted(date: .numeric, time: .standard), privacy: .public) sessions=\(upcoming.count) windows=\(windows.count) bounds=[\(boundsLine, privacy: .public)] container=\(WidgetShared.containerURL?.path ?? "NIL", privacy: .public)")
         for kind in WidgetShared.allKinds {
             WidgetCenter.shared.reloadTimelines(ofKind: kind)
         }
@@ -198,23 +239,55 @@ enum WidgetSnapshotWriter {
                                         attention: [NextUpStudent],
                                         roster: Set<UUID>,
                                         horizon: [NextUpSession],
-                                        dataManager: DataManager) -> NextUpStudent? {
+                                        dataManager: DataManager) -> (NextUpStudent?, String) {
         func stillRelevant(_ student: NextUpStudent) -> Bool {
             guard student.reason == .noted else { return true }
             let tied = dataManager.sessionEvents.filter { session in
                 session.status != .cancelled
                     && horizon.contains { $0.id == session.id }
-                    && (session.attendeeIds.contains(student.id)
+                    && (expectedAttendeeIds(of: session, dataManager: dataManager)
+                            .contains(student.id)
                         || session.actualAttendeeIds.contains(student.id))
             }
             guard !tied.isEmpty else { return true }   // pure note, no session tie
             return tied.contains { $0.endTime > windowStart }
         }
         let eligible = attention.filter(stillRelevant)
-        // Prefer a candidate in this window's roster when the rule ties.
-        if let inRoster = eligible.first(where: { roster.contains($0.id) }) { return inRoster }
-        if let first = eligible.first { return first }
-        return topAttender(dataManager: dataManager, roster: roster)
+        // A window's highlight follows ITS session: an attention student on
+        // the roster wins; otherwise the roster's own top attender. Global
+        // attention only fills windows with no known roster — otherwise one
+        // long-lived attention student (a pure note, a low bundle) owns
+        // every window and rollover never changes the face.
+        if let inRoster = eligible.first(where: { roster.contains($0.id) }) {
+            return (inRoster, "attention-in-roster")
+        }
+        if !roster.isEmpty,
+           let rosterTop = topAttender(dataManager: dataManager, roster: roster,
+                                       restrictToRoster: true) {
+            return (rosterTop, "roster-top-attender")
+        }
+        if let first = eligible.first { return (first, "attention-first") }
+        return (topAttender(dataManager: dataManager, roster: roster), "top-attender")
+    }
+
+    private static func traceTimestamp(_ date: Date) -> String {
+        date.formatted(date: .numeric, time: .standard)
+    }
+
+    /// Who is expected at a session. Explicit attendees when set; otherwise
+    /// the program's enrollment — real device sessions are created with
+    /// EMPTY attendeeIds (enrollment is the planned roster), and reading the
+    /// array alone made every window roster empty on device: roster
+    /// preference never fired, the noted-expiry tie check matched nobody,
+    /// and one attention student was highlighted in every window.
+    private static func expectedAttendeeIds(of session: SessionEvent,
+                                            dataManager: DataManager) -> [UUID] {
+        if !session.attendeeIds.isEmpty { return session.attendeeIds }
+        if let programId = session.programId,
+           let program = dataManager.programs.first(where: { $0.id == programId }) {
+            return program.enrolledStudentIds
+        }
+        return []
     }
 
     /// The featured session's roster as tiered cluster members, capped at 8.
@@ -222,11 +295,13 @@ enum WidgetSnapshotWriter {
     private static func rosterCluster(for session: NextUpSession,
                                       attention: [NextUpStudent],
                                       dataManager: DataManager) -> [NextUpRosterMember]? {
-        guard let event = dataManager.sessionEvents.first(where: { $0.id == session.id }),
-              !event.attendeeIds.isEmpty else { return nil }
+        guard let event = dataManager.sessionEvents.first(where: { $0.id == session.id })
+        else { return nil }
+        let expected = expectedAttendeeIds(of: event, dataManager: dataManager)
+        guard !expected.isEmpty else { return nil }
         let attentionById = Dictionary(uniqueKeysWithValues: attention.map { ($0.id, $0) })
         var members: [NextUpRosterMember] = []
-        for id in event.attendeeIds {
+        for id in expected {
             guard let student = dataManager.students.first(where: { $0.id == id }) else { continue }
             let tier: Int
             var reason: NextUpStudent.Reason?
@@ -294,8 +369,10 @@ enum WidgetSnapshotWriter {
     }
 
     private static func topAttender(dataManager: DataManager,
-                                    roster: Set<UUID>) -> NextUpStudent? {
+                                    roster: Set<UUID>,
+                                    restrictToRoster: Bool = false) -> NextUpStudent? {
         dataManager.students
+            .filter { !restrictToRoster || roster.contains($0.id) }
             .map { ($0, attendanceRate(of: $0, dataManager: dataManager)) }
             .filter { $0.1.of >= AttentionRules.attendanceMinSessions }
             .sorted { lhs, rhs in

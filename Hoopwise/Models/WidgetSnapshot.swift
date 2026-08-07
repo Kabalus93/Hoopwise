@@ -98,11 +98,17 @@ struct NextUpSnapshot: Codable, Equatable {
         Date().timeIntervalSince(generatedAt) > WidgetShared.stalenessInterval
     }
 
-    /// The window covering an instant (falls back past the last boundary).
+    /// The window covering an instant. Past the last window's end this is
+    /// nil ON PURPOSE — the precomputed relevance has run out, and carrying
+    /// the final window's student forward would present hours-stale data as
+    /// current. Views render the rest/stale state instead (the snapshot is
+    /// necessarily >24h old there, so the "open app to refresh" footer shows).
     func window(at date: Date) -> NextUpWindow? {
         guard let windows, !windows.isEmpty else { return nil }
-        return windows.first { $0.start <= date && date < $0.end }
-            ?? (date >= windows.last!.end ? windows.last : windows.first)
+        if let covering = windows.first(where: { $0.start <= date && date < $0.end }) {
+            return covering
+        }
+        return date < windows.first!.start ? windows.first : nil
     }
 
     /// The session to feature at a given instant: an in-progress session

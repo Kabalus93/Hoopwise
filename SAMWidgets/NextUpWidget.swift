@@ -1,5 +1,39 @@
 import SwiftUI
 import WidgetKit
+import os
+
+/// Rollover debugging (subsystem mirrors "hoopwise.keys" / "hoopwise.demo"):
+/// every timeline build logs what was read and what each entry will show, so
+/// a stuck highlight is attributable to a layer — stale snapshot (a), wrong
+/// entries (b), or wrong per-entry resolution (c) — instead of guessed at.
+let widgetLog = Logger(subsystem: "hoopwise.widget", category: "nextup-provider")
+
+func widgetLogTimestamp(_ date: Date) -> String {
+    date.formatted(date: .numeric, time: .standard)
+}
+
+/// File twin of the unified-log trace, in the App Group's Library/Caches —
+/// the one place BOTH the widget process can write AND `devicectl device
+/// copy from` can read without root (group-container root and unified logs
+/// are both inaccessible from a dev Mac without sudo). Append-mostly, reset
+/// once it grows past ~256KB.
+enum WidgetDebugTrace {
+    static var traceURL: URL? {
+        WidgetShared.containerURL?
+            .appendingPathComponent("Library/Caches/nextup-provider-trace.log")
+    }
+
+    static func append(_ lines: [String]) {
+        guard let url = traceURL else { return }
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let block = lines.joined(separator: "\n") + "\n"
+        let existing = (try? Data(contentsOf: url)) ?? Data()
+        var combined = existing.count > 256_000 ? Data() : existing
+        combined.append(Data(block.utf8))
+        try? combined.write(to: url, options: .atomic)
+    }
+}
 
 // MARK: - "Next Up" home-screen widget
 //
@@ -38,6 +72,18 @@ struct NextUpProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<NextUpEntry>) -> Void) {
         let snapshot = WidgetShared.loadSnapshot()
         let now = Date()
+        // Layer (a): what the widget process actually read.
+        let containerPath = WidgetShared.containerURL?.path ?? "NIL — App Group unresolved"
+        var trace: [String] = ["==== getTimeline @ \(widgetLogTimestamp(now))"]
+        if let snapshot {
+            let windows = snapshot.windows ?? []
+            trace.append("read snapshot v\(snapshot.schemaVersion) generated=\(widgetLogTimestamp(snapshot.generatedAt)) sessions=\(snapshot.sessions.count) windows=\(windows.count) container=\(containerPath)")
+            for (index, window) in windows.enumerated() {
+                trace.append("window[\(index)] \(widgetLogTimestamp(window.start)) → \(widgetLogTimestamp(window.end)) session=\(window.session?.title ?? "none") highlight=\(window.highlight?.name ?? "none")")
+            }
+        } else {
+            trace.append("ERROR no snapshot decoded at \(WidgetShared.snapshotURL?.path ?? "nil") container=\(containerPath)")
+        }
         // Display-change moments: now, every boundary (precomputed windows
         // when present — rollover changes session AND highlight), midnight.
         var moments: Set<Date> = [now]
@@ -67,6 +113,18 @@ struct NextUpProvider: TimelineProvider {
             moments.insert(midnight)
         }
         let entries = moments.sorted().map { NextUpEntry(date: $0, snapshot: snapshot) }
+        // Layers (b) and (c): the scheduled entry dates, and what each entry
+        // will resolve to when it renders.
+        for entry in entries {
+            let window = snapshot?.window(at: entry.date)
+            let hasWindows = !(snapshot?.windows?.isEmpty ?? true)
+            let resolvedHighlight = hasWindows
+                ? window?.highlight?.name
+                : snapshot?.highlight?.name
+            trace.append("entry \(widgetLogTimestamp(entry.date)) window=\(window.map { widgetLogTimestamp($0.start) } ?? "nil") featured=\(window?.session?.title ?? snapshot?.featuredSession(at: entry.date)?.title ?? "none") highlight=\(resolvedHighlight ?? "none")")
+        }
+        for line in trace { widgetLog.info("\(line, privacy: .public)") }
+        WidgetDebugTrace.append(trace)
         completion(Timeline(entries: entries, policy: .atEnd))
     }
 }
@@ -138,12 +196,19 @@ struct NextUpWidgetView: View {
         entry.snapshot?.window(at: entry.date)
     }
 
+    private var hasWindows: Bool {
+        !(entry.snapshot?.windows?.isEmpty ?? true)
+    }
+
     private var featured: NextUpSession? {
         window?.session ?? entry.snapshot?.featuredSession(at: entry.date)
     }
 
+    /// When windows exist they are authoritative — past the last window
+    /// (window == nil) the highlight is gone, never the v1 top-level student,
+    /// which would freeze one face on the widget until the app next runs.
     private var highlight: NextUpStudent? {
-        window != nil ? window?.highlight : entry.snapshot?.highlight
+        hasWindows ? window?.highlight : entry.snapshot?.highlight
     }
 
     // MARK: Small — the next session, nothing else.
