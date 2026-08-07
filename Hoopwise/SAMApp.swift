@@ -7,10 +7,20 @@ extension Notification.Name {
     /// the import preview sheet.
     static let hoopwiseBundleOpenRequest = Notification.Name("hoopwiseBundleOpenRequest")
     /// Widget deep links (hoopwise://session/<id>, hoopwise://athlete/<id>).
-    /// Published for navigation; wiring them to actual screens is an iOS
-    /// view change and therefore waits on the UI freeze.
+    /// MainTabView observes these (the one sanctioned freeze exception).
     static let hoopwiseOpenSessionRequest = Notification.Name("hoopwiseOpenSessionRequest")
     static let hoopwiseOpenAthleteRequest = Notification.Name("hoopwiseOpenAthleteRequest")
+}
+
+/// A widget deep link that arrived before MainTabView's observers existed —
+/// on a cold start the URL lands while the splash is still up, so posting
+/// the notification alone would drop it into a void. SAMApp stores the route
+/// here as well; MainTabView consumes it once navigation is ready.
+enum PendingWidgetRoute {
+    case session(UUID)
+    case athlete(UUID)
+
+    static var pending: PendingWidgetRoute?
 }
 
 @main
@@ -43,9 +53,11 @@ struct SAMApp: App {
                     let id = UUID(uuidString: url.lastPathComponent)
                     switch url.host {
                     case "session":
+                        PendingWidgetRoute.pending = id.map { .session($0) }
                         NotificationCenter.default.post(
                             name: .hoopwiseOpenSessionRequest, object: id)
                     case "athlete":
+                        PendingWidgetRoute.pending = id.map { .athlete($0) }
                         NotificationCenter.default.post(
                             name: .hoopwiseOpenAthleteRequest, object: id)
                     default:

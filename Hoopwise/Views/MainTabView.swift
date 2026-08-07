@@ -17,6 +17,21 @@ struct MainTabView: View {
     @SceneStorage("selectedTab") private var selectedTab: Int = 0
     @State private var showingLiveSheet = false
     @State private var showingRollCallFromBanner = false
+    @State private var widgetDeepLink: WidgetDeepLink?
+
+    /// Widget tap-through target. One item drives one sheet so a session tap
+    /// arriving while an athlete sheet is up just swaps the content.
+    enum WidgetDeepLink: Identifiable {
+        case session(SessionEvent)
+        case athlete(Student)
+
+        var id: UUID {
+            switch self {
+            case .session(let session): return session.id
+            case .athlete(let student): return student.id
+            }
+        }
+    }
 
     private var isChinese: Bool { localizationManager.currentLanguage == .chinese }
 
@@ -76,6 +91,30 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openLiveSession)) { _ in
             if liveEngine.isActive { showingLiveSheet = true }
         }
+        // Widget deep links (the one sanctioned freeze exception). onReceive
+        // handles warm taps; onAppear drains a route queued during cold start,
+        // when the URL arrived before this view existed.
+        .onAppear { consumePendingWidgetRoute() }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenSessionRequest)) { note in
+            PendingWidgetRoute.pending = nil
+            if let id = note.object as? UUID { openWidgetSession(id) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAthleteRequest)) { note in
+            PendingWidgetRoute.pending = nil
+            if let id = note.object as? UUID { openWidgetAthlete(id) }
+        }
+        .sheet(item: $widgetDeepLink) { link in
+            switch link {
+            case .session(let session):
+                NavigationStack {
+                    FlightySessionPageView(session: session, accessMode: .execution)
+                }
+            case .athlete(let student):
+                NavigationStack {
+                    StudentDetailView(student: student)
+                }
+            }
+        }
         .sheet(isPresented: $showingRollCallFromBanner, onDismiss: {
             liveEngine.dismissRollCallPrompt()
         }) {
@@ -92,6 +131,32 @@ struct MainTabView: View {
                 liveEngine.dismissRollCallPrompt()
             }
         }
+    }
+
+    // MARK: - Widget deep-link routing
+
+    private func consumePendingWidgetRoute() {
+        guard let route = PendingWidgetRoute.pending else { return }
+        PendingWidgetRoute.pending = nil
+        WidgetSnapshotWriter.traceDeepLink("cold-start pending route consumed")
+        switch route {
+        case .session(let id): openWidgetSession(id)
+        case .athlete(let id): openWidgetAthlete(id)
+        }
+    }
+
+    private func openWidgetSession(_ id: UUID) {
+        let session = dataManager.sessionEvents.first(where: { $0.id == id })
+        WidgetSnapshotWriter.traceDeepLink("session \(id) found=\(session != nil)")
+        guard let session else { return }
+        widgetDeepLink = .session(session)
+    }
+
+    private func openWidgetAthlete(_ id: UUID) {
+        let student = dataManager.students.first(where: { $0.id == id })
+        WidgetSnapshotWriter.traceDeepLink("athlete \(id) found=\(student != nil)")
+        guard let student else { return }
+        widgetDeepLink = .athlete(student)
     }
 }
 

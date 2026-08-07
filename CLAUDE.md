@@ -153,7 +153,10 @@ it produces confident wrong numbers the coach reconciles books against.
 ## Product direction (decided July 2026)
 - The iOS UI is FROZEN. The phone is an operations terminal. The only
   permitted iOS changes are contract work and outright bugs (data loss,
-  crashes) — not interface work.
+  crashes) — not interface work. ONE sanctioned exception (August 2026):
+  widget deep-link routing in MainTabView/SAMApp (tap-through to
+  session/athlete). It is an explicit approval for that diff only, not
+  precedent for general iOS edits.
 - iOS/Mac feature parity is CANCELLED as a goal. Do not pursue it.
 - The Mac app becomes an authoring tool for basketball research and video
   production: court/play editor, PDF play sheets, animation export for
@@ -403,10 +406,13 @@ it produces confident wrong numbers the coach reconciles books against.
   ends, midnight) — rollover is an entry, not luck. Snapshots older than
   24h render an "open app to refresh" footer.
 - hoopwise://session/<id> and hoopwise://athlete/<id> are registered
-  (Info.plist) and routed in SAMApp.onOpenURL to
-  .hoopwiseOpenSession/AthleteRequest notifications. NOTHING observes them
-  yet — wiring navigation means touching iOS views, which the UI freeze
-  forbids; taps currently just open the app.
+  (Info.plist), routed in SAMApp.onOpenURL to
+  .hoopwiseOpenSession/AthleteRequest notifications, and OBSERVED by
+  MainTabView (the sanctioned freeze exception): one sheet(item:) presents
+  the session page or student profile. Cold start is covered by
+  PendingWidgetRoute in SAMApp.swift — the URL lands before MainTabView
+  exists, so the route is queued and drained in MainTabView.onAppear
+  (data is loaded by then; lookups by id, unknown ids dropped).
 - Photos in the snapshot: thumbnail bytes ≤120px, monogram fallback;
   privacy redaction collapses photo+name to monogram + reason chip.
 - WINDOW HIGHLIGHT LADDER (fixed August 2026, on-device evidence): expected
