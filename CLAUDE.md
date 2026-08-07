@@ -415,14 +415,22 @@ it produces confident wrong numbers the coach reconciles books against.
   (data is loaded by then; lookups by id, unknown ids dropped).
 - Photos in the snapshot: thumbnail bytes ≤120px, monogram fallback;
   privacy redaction collapses photo+name to monogram + reason chip.
-- WINDOW HIGHLIGHT LADDER (fixed August 2026, on-device evidence): expected
+- WINDOW HIGHLIGHT LADDER v2 (August 2026, on-device evidence): expected
   roster = attendeeIds if non-empty, else PROGRAM ENROLLMENT — real device
   sessions are created with EMPTY attendeeIds, and reading the array alone
   froze one attention student into every window (the stuck-Mason bug; the
-  simulator seed data had the arrays filled). Selection per window:
-  attention-in-roster → roster-top-attender → attention-first →
-  global top attender. Past the last window, window(at:) returns nil and
-  the widget renders rest/stale — never the final window's student.
+  simulator seed data had the arrays filled). Ladder per window:
+  attention-in-roster → roster-top-attender (≥1 recorded session) →
+  roster-any (deterministic, photo-having first) → attention-first →
+  global top attender; the global rungs may fire ONLY when the roster is
+  empty even after the enrollment fallback — a kid actually in the
+  displayed session always beats an unrelated noted student. Noted expiry
+  follows the NOTE'S SESSION (same-day session resolved against ALL
+  events, horizon or not); a session-less note gets a 48h window, NOT the
+  attention list's 14 days — 14d + a global rung let one stale note
+  colonize every abstaining window. Past the last window, window(at:)
+  returns nil and the widget renders rest/stale — never the final
+  window's student.
 - DEBUGGING without root/Accessibility: provider and writer log to unified
   log subsystem "hoopwise.widget" AND mirror to App Group
   Library/Caches/nextup-{provider,writer}-trace.log (256KB-capped), which
@@ -432,7 +440,11 @@ it produces confident wrong numbers the coach reconciles books against.
   Deep links are testable headless via `devicectl device process launch
   --payload-url "hoopwise://..." OKTO.SAMp` (add --terminate-existing for
   the cold-start path); routing writes "deeplink …" lines to the writer
-  trace.
+  trace. Widget "screenshots": copy a `render-request` file into the group
+  Library/Caches and the NEXT timeline build renders every window (medium)
+  into Library/Caches/renders/. ANY reload consumes the flag — drop it
+  only after the snapshot you want rendered is already on disk, or the
+  renders come from the stale one.
 
 ## Export decisions
 - PDF: draw with CoreGraphics into CGPDFContext. NOT ImageRenderer —

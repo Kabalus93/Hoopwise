@@ -35,6 +35,51 @@ enum WidgetDebugTrace {
     }
 }
 
+/// Render-on-request evidence channel: when Library/Caches/render-request
+/// exists, the next timeline build renders each window's medium widget into
+/// Library/Caches/renders/ and consumes the flag. This is the only way to
+/// "screenshot" a widget on a physical iPhone headlessly — no root, no
+/// Accessibility, and the widget process is the one place that can both
+/// build NextUpWidgetView and write somewhere devicectl can pull.
+enum WidgetRenderDump {
+    static func renderIfRequested(snapshot: NextUpSnapshot?) {
+        guard let caches = WidgetShared.containerURL?
+            .appendingPathComponent("Library/Caches", isDirectory: true) else { return }
+        let flag = caches.appendingPathComponent("render-request")
+        guard FileManager.default.fileExists(atPath: flag.path) else { return }
+        try? FileManager.default.removeItem(at: flag)
+        guard let snapshot, let windows = snapshot.windows, !windows.isEmpty else { return }
+        let rendersDir = caches.appendingPathComponent("renders", isDirectory: true)
+        try? FileManager.default.removeItem(at: rendersDir)
+        try? FileManager.default.createDirectory(at: rendersDir,
+                                                 withIntermediateDirectories: true)
+        let work: @MainActor () -> Void = {
+            for (index, window) in windows.enumerated() {
+                // Per-iteration pool: the extension's ~30MB cap killed the
+                // loop partway when 12 renders' autoreleased buffers piled up.
+                autoreleasepool {
+                    let entry = NextUpEntry(date: window.start, snapshot: snapshot)
+                    let view = NextUpWidgetView(entry: entry, familyOverride: .systemMedium)
+                        .frame(width: 338, height: 158)
+                        .background(Color(uiColor: .systemBackground))
+                    let renderer = ImageRenderer(content: view)
+                    renderer.scale = 3
+                    if let png = renderer.uiImage?.pngData() {
+                        try? png.write(to: rendersDir.appendingPathComponent(
+                            String(format: "window-%02d.png", index)))
+                    }
+                }
+            }
+            widgetLog.info("render dump: \(windows.count) windows written")
+        }
+        if Thread.isMainThread {
+            MainActor.assumeIsolated(work)
+        } else {
+            DispatchQueue.main.sync { MainActor.assumeIsolated(work) }
+        }
+    }
+}
+
 // MARK: - "Next Up" home-screen widget
 //
 // A dumb renderer of the App Group snapshot — no CloudKit, no SwiftData,
@@ -125,6 +170,7 @@ struct NextUpProvider: TimelineProvider {
         }
         for line in trace { widgetLog.info("\(line, privacy: .public)") }
         WidgetDebugTrace.append(trace)
+        WidgetRenderDump.renderIfRequested(snapshot: snapshot)
         completion(Timeline(entries: entries, policy: .atEnd))
     }
 }

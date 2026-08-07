@@ -154,15 +154,29 @@ enum WidgetSnapshotWriter {
             } ?? []
             let (windowHighlight, how) = windowHighlight(
                 at: windowStart, attention: attention, roster: roster,
-                horizon: Array(upcoming), dataManager: dataManager)
+                dataManager: dataManager)
             trace.append("window[\(index)] \(traceTimestamp(windowStart)) session=\(featured?.title ?? "none") roster=\(roster.count) highlight=\(windowHighlight?.name ?? "none") via=\(how)")
+            var cluster = featured.flatMap {
+                rosterCluster(for: $0, attention: attention, dataManager: dataManager)
+            }
+            // The labeled athlete must be visible: when the highlight is a
+            // roster member the 8-cap dropped, swap them into the cluster —
+            // otherwise the medium widget shows bubbles with no name and no
+            // profile link.
+            if var members = cluster, let chosen = windowHighlight,
+               roster.contains(chosen.id),
+               !members.contains(where: { $0.id == chosen.id }) {
+                let member = NextUpRosterMember(id: chosen.id, name: chosen.name,
+                                                initials: chosen.initials,
+                                                photoFilename: nil, tier: 1, reason: nil)
+                members[members.count - 1] = member
+                cluster = members
+            }
             windows.append(NextUpWindow(
                 start: windowStart, end: windowEnd,
                 session: featured,
                 highlight: windowHighlight,
-                roster: featured.flatMap {
-                    rosterCluster(for: $0, attention: attention, dataManager: dataManager)
-                },
+                roster: cluster,
                 rosterTotal: featured?.rosterCount))
         }
         WriterDebugTrace.append(trace)
@@ -231,43 +245,72 @@ enum WidgetSnapshotWriter {
         }
     }
 
-    /// Highlight for one window. Relevance rule: a Noted student who is
-    /// tied to horizon sessions is only eligible while one of their
-    /// sessions has not yet ended; afterwards selection recomputes from
-    /// what's upcoming (attention/streak, next-roster preferred).
+    /// Highlight for one window — ladder v2 (August 2026).
+    ///
+    /// Noted expiry follows the NOTE'S SESSION, horizon or not: the note's
+    /// associated session is the same-day session (any session, resolved by
+    /// roster membership against ALL events) — when it has ended, the boost
+    /// has expired. A genuinely session-less note keeps a 48h global window,
+    /// not the attention list's 14 days: 14-day eligibility combined with a
+    /// global rung was a colonization license — one stale note owned every
+    /// window whose roster rung abstained.
+    ///
+    /// Roster relevance outranks global attention: a kid actually in the
+    /// displayed session always beats an unrelated noted student, so the
+    /// global rungs may fire only when the roster is empty even after the
+    /// program-enrollment fallback.
     private static func windowHighlight(at windowStart: Date,
                                         attention: [NextUpStudent],
                                         roster: Set<UUID>,
-                                        horizon: [NextUpSession],
                                         dataManager: DataManager) -> (NextUpStudent?, String) {
         func stillRelevant(_ student: NextUpStudent) -> Bool {
             guard student.reason == .noted else { return true }
-            let tied = dataManager.sessionEvents.filter { session in
+            guard let record = dataManager.students.first(where: { $0.id == student.id }),
+                  let noteDate = record.parentalTouchpoints.map(\.date).max()
+            else { return true }
+            let calendar = Calendar.current
+            let sameDay = dataManager.sessionEvents.filter { session in
                 session.status != .cancelled
-                    && horizon.contains { $0.id == session.id }
+                    && calendar.isDate(session.startTime, inSameDayAs: noteDate)
                     && (expectedAttendeeIds(of: session, dataManager: dataManager)
                             .contains(student.id)
                         || session.actualAttendeeIds.contains(student.id))
             }
-            guard !tied.isEmpty else { return true }   // pure note, no session tie
-            return tied.contains { $0.endTime > windowStart }
+            if let tied = sameDay.max(by: { $0.endTime < $1.endTime }) {
+                return tied.endTime > windowStart   // boost expires with the session
+            }
+            return windowStart < noteDate.addingTimeInterval(48 * 3600)
         }
         let eligible = attention.filter(stillRelevant)
-        // A window's highlight follows ITS session: an attention student on
-        // the roster wins; otherwise the roster's own top attender. Global
-        // attention only fills windows with no known roster — otherwise one
-        // long-lived attention student (a pure note, a low bundle) owns
-        // every window and rollover never changes the face.
         if let inRoster = eligible.first(where: { roster.contains($0.id) }) {
             return (inRoster, "attention-in-roster")
         }
-        if !roster.isEmpty,
-           let rosterTop = topAttender(dataManager: dataManager, roster: roster,
-                                       restrictToRoster: true) {
+        if let rosterTop = topAttender(dataManager: dataManager, roster: roster,
+                                       restrictToRoster: true, minSessions: 1) {
             return (rosterTop, "roster-top-attender")
         }
+        if let anyKid = rosterAny(roster, dataManager: dataManager) {
+            return (anyKid, "roster-any")
+        }
+        // Roster empty (or its ids resolve to no student records) — only now
+        // may a global candidate fill the slot.
         if let first = eligible.first { return (first, "attention-first") }
         return (topAttender(dataManager: dataManager, roster: roster), "top-attender")
+    }
+
+    /// Deterministic roster pick when nobody has attendance history yet —
+    /// photo-having students first so the widget face is a face.
+    private static func rosterAny(_ roster: Set<UUID>,
+                                  dataManager: DataManager) -> NextUpStudent? {
+        dataManager.students
+            .filter { roster.contains($0.id) }
+            .sorted { lhs, rhs in
+                let lhsPhoto = (lhs.profileImageData ?? lhs.thumbnailImageData) != nil
+                let rhsPhoto = (rhs.profileImageData ?? rhs.thumbnailImageData) != nil
+                if lhsPhoto != rhsPhoto { return lhsPhoto }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            .first.map { makeStudent($0, reason: .streak) }
     }
 
     private static func traceTimestamp(_ date: Date) -> String {
@@ -370,11 +413,13 @@ enum WidgetSnapshotWriter {
 
     private static func topAttender(dataManager: DataManager,
                                     roster: Set<UUID>,
-                                    restrictToRoster: Bool = false) -> NextUpStudent? {
+                                    restrictToRoster: Bool = false,
+                                    minSessions: Int = AttentionRules.attendanceMinSessions)
+        -> NextUpStudent? {
         dataManager.students
             .filter { !restrictToRoster || roster.contains($0.id) }
             .map { ($0, attendanceRate(of: $0, dataManager: dataManager)) }
-            .filter { $0.1.of >= AttentionRules.attendanceMinSessions }
+            .filter { $0.1.of >= minSessions }
             .sorted { lhs, rhs in
                 if lhs.1.percent != rhs.1.percent { return lhs.1.percent > rhs.1.percent }
                 let lhsRoster = roster.contains(lhs.0.id), rhsRoster = roster.contains(rhs.0.id)
