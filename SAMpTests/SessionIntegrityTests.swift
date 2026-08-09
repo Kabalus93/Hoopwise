@@ -123,6 +123,48 @@ final class SessionIntegrityTests: XCTestCase {
         XCTAssertEqual(census.brokenCount, 0)
     }
 
+    // MARK: - The phase-window rule (decided: calendar days, inclusive)
+
+    /// Phase windows carry whatever clock time the phase was created at, so
+    /// instant comparison flagged every edge-day session as misfiled. The
+    /// rule is calendar days, inclusive of both edges.
+    func testPhaseWindowIncludesBothEdgeDaysWhateverTheClock() {
+        let start = date(2026, 5, 3, 13, 54)      // phase created at 13:54
+        let end = date(2026, 5, 17, 13, 54)
+
+        XCTAssertTrue(SessionIntegrity.phaseWindow(start: start, end: end,
+                                                   contains: date(2026, 5, 3, 0, 0)),
+                      "Midnight on the first day is inside the window.")
+        XCTAssertTrue(SessionIntegrity.phaseWindow(start: start, end: end,
+                                                   contains: date(2026, 5, 17, 18, 30)),
+                      "The evening of the last day is inside the window.")
+        XCTAssertFalse(SessionIntegrity.phaseWindow(start: start, end: end,
+                                                    contains: date(2026, 5, 2, 23, 59)))
+        XCTAssertFalse(SessionIntegrity.phaseWindow(start: start, end: end,
+                                                    contains: date(2026, 5, 18, 0, 1)))
+    }
+
+    func testEdgeDaySessionsAreNoLongerReportedAsOutside() {
+        let start = date(2026, 5, 3, 13, 54)
+        let phaseWithWindow = phase(phaseId, program: programId,
+                                    start: start, end: date(2026, 5, 17, 13, 54))
+        let onFirstDay = session(program: programId, phase: phaseId, date: date(2026, 5, 3, 9, 0))
+
+        let census = SessionIntegrity.census(sessions: [onFirstDay],
+                                             programs: [program(programId)],
+                                             phases: [phaseWithWindow])
+
+        XCTAssertTrue(census.sessionsOutsideTheirPhaseWindow.isEmpty)
+    }
+
+    private func date(_ year: Int, _ month: Int, _ day: Int,
+                      _ hour: Int, _ minute: Int) -> Date {
+        var components = DateComponents()
+        components.year = year; components.month = month; components.day = day
+        components.hour = hour; components.minute = minute
+        return Calendar.current.date(from: components)!
+    }
+
     /// A phase with no window cannot put anything outside it.
     func testPhaseWithoutDatesProducesNoWindowFindings() {
         let census = SessionIntegrity.census(

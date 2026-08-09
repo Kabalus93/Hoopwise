@@ -40,6 +40,99 @@ enum SessionInspectorDebug {
         try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
     }
 
+    /// HOOPWISE_CREATE_MICROGROUPS=1 — Phase 2.1's second half: one
+    /// `.privateSessions` program per private client, and their standalone
+    /// 1:1 sessions re-homed onto it.
+    ///
+    /// After this, `SessionPrivacy` answers "is it private?" from the program
+    /// type for these sessions — the Phase 2 target rule — instead of the
+    /// interim contract check. Redemption is unaffected: eventIsPrivate stays
+    /// true either way, so no bundle behaviour changes.
+    ///
+    /// Idempotent per client, and it adopts ONLY the sessions the dry-run
+    /// assigned to that client.
+    static func createMicroGroupsIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_CREATE_MICROGROUPS"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/microgroups.txt") else { return }
+
+        var out = ["CREATE PRIVATE MICRO-GROUPS (Phase 2.1)", ""]
+        let plan = SessionAdoption.plan(sessions: dm.sessionEvents,
+                                        programs: dm.programs,
+                                        contracts: dm.contracts,
+                                        students: dm.students)
+
+        // client → the sessions the plan assigned to them.
+        var byClient: [UUID: [UUID]] = [:]
+        for decision in plan.decisions {
+            if case .privateMicroGroup(let studentId, _) = decision.destination {
+                byClient[studentId, default: []].append(decision.id)
+            }
+        }
+        out.append("plan assigns \(plan.decisions.filter { $0.destination.bucket == "private micro-group" }.count) sessions across \(byClient.count) clients")
+        out.append("")
+
+        for (studentId, sessionIds) in byClient.sorted(by: { $0.value.count > $1.value.count }) {
+            guard let student = dm.students.first(where: { $0.id == studentId }) else { continue }
+            let display = [student.chineseName, student.name].compactMap { $0 }
+                .filter { !$0.isEmpty }.joined(separator: " / ")
+            let name = "Private · \(display)"
+
+            // Age band: the student's own birthdate first, then whatever band
+            // their existing programs carry, and only then a flagged default.
+            var bandSource = "birthdate"
+            var band = student.ageGroup
+            if band == nil {
+                let enrolled = dm.programs
+                    .filter { $0.enrolledStudentIds.contains(studentId) }
+                    .map(\.ageGroup)
+                band = enrolled.first
+                bandSource = enrolled.isEmpty ? "DEFAULTED — no birthdate, no enrolment" : "existing enrolment"
+            }
+            let ageGroup = band ?? .adult
+
+            let program: Program
+            if let existing = dm.programs.first(where: { $0.name == name }) {
+                program = existing
+                out.append("\(name) — already exists [\(short(existing.id))]")
+            } else {
+                // No recurringDays and no defaultSessionTime: private sessions
+                // have no fixed weekly slot, and leaving those set would let
+                // the adoption slot-tier match unrelated sessions later.
+                let created = Program(name: name,
+                                      programType: .privateSessions,
+                                      ageGroup: ageGroup,
+                                      enrolledStudentIds: [studentId],
+                                      createdByCoachId: dm.loggedInCoachId ?? dm.coach.id,
+                                      status: .active,
+                                      recurringDays: [],
+                                      defaultSessionTime: nil,
+                                      usesPhases: false)
+                dm.addProgram(created)
+                program = created
+                out.append("\(name) [\(short(created.id))] — band \(ageGroup.rawValue) (\(bandSource))")
+            }
+
+            // Enrol through the one writer, then adopt.
+            dm.setStudentEnrollment(studentId: studentId, programId: program.id)
+            var adopted = 0
+            for sessionId in sessionIds {
+                guard var session = dm.sessionEvents.first(where: { $0.id == sessionId }),
+                      session.programId == nil else { continue }
+                session.programId = program.id
+                dm.updateSessionEvent(session)
+                adopted += 1
+            }
+            out.append("    adopted \(adopted) session\(adopted == 1 ? "" : "s")")
+        }
+
+        out.append("")
+        out.append("AFTER")
+        out.append("  programs: \(dm.programs.count)  ·  private-type: \(dm.programs.filter { $0.programType == .privateSessions }.count)")
+        out.append("  standalone sessions remaining: \(dm.sessionEvents.filter { $0.programId == nil }.count)")
+        write(out, to: url)
+    }
+
     /// HOOPWISE_ADOPT_FRIDAY=1 — the authorised Phase 2.1 adoption for the
     /// Friday U10 class, in one auditable pass:
     ///   1. delete the duplicate program 酷迅 · U10 (owns no sessions)

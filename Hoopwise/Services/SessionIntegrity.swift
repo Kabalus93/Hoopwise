@@ -133,17 +133,12 @@ enum SessionIntegrity {
             }
 
             if let start = phase.startDate, let end = phase.endDate,
-               session.date < start || session.date > end {
-                // Instants, not just days: every violation seen so far has
-                // been an exact-boundary case, which points at the comparison
-                // (Date instants) rather than at misfiled sessions.
-                let sameDayAsEdge = Calendar.current.isDate(session.date, inSameDayAs: start)
-                    || Calendar.current.isDate(session.date, inSameDayAs: end)
+               !SessionIntegrity.phaseWindow(start: start, end: end, contains: session.date) {
                 report.sessionsOutsideTheirPhaseWindow.append(
                     IntegrityFinding(
                         id: session.id,
                         label: label,
-                        detail: "phase “\(phase.title)” [\(String(phase.id.uuidString.prefix(8)))] window \(instant(start))…\(instant(end)); session at \(instant(session.date))\(sameDayAsEdge ? "  ← SAME CALENDAR DAY as an edge (boundary artifact)" : "")"))
+                        detail: "phase “\(phase.title)” [\(String(phase.id.uuidString.prefix(8)))] window \(day(start))…\(day(end)); session on \(day(session.date))"))
             }
         }
 
@@ -198,6 +193,22 @@ enum SessionIntegrity {
 
     static func describe(_ session: SessionEvent) -> String {
         "\(session.title.isEmpty ? "(untitled)" : session.title) · \(day(session.date))"
+    }
+
+    /// THE phase-window test (decided August 2026): CALENDAR DAYS, inclusive
+    /// of both edge days.
+    ///
+    /// Comparing Date instants made every edge-day session look misfiled,
+    /// because a phase window carries whatever clock time the phase happened
+    /// to be created at (13:54, 15:25, 10:59 in the live store) — times the
+    /// coach never chose. All three "violations" were sessions on the first
+    /// or last day of their own phase. Phase 2.4 derives a session's phase
+    /// from its date using this same function, so the rule has one home.
+    static func phaseWindow(start: Date, end: Date, contains date: Date,
+                            calendar: Calendar = .current) -> Bool {
+        let day = calendar.startOfDay(for: date)
+        return day >= calendar.startOfDay(for: start)
+            && day <= calendar.startOfDay(for: end)
     }
 
     private static func instant(_ date: Date) -> String {

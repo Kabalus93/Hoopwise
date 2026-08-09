@@ -688,6 +688,35 @@ any attendance surface.
   morning and an afternoon session as duplicates; SessionIntegrityTests
   pins the correct behaviour.
 
+## Restructure Phase 2.1 — adoption (August 2026, executed)
+- PHASE-WINDOW RULE (decided): CALENDAR DAYS, inclusive of both edge days —
+  SessionIntegrity.phaseWindow(start:end:contains:) is its only home, and
+  2.4's date-derived phase assignment must call it. Instant comparison
+  flagged every edge-day session as misfiled, because a phase window carries
+  whatever clock time the phase was created at (13:54, 15:25, 10:59 in the
+  live store) — times the coach never chose.
+- Services/SessionAdoption.swift plans where standalone sessions land, and
+  writes nothing. Tiers, in order: PRIVATE FIRST (a 1:1 session must never be
+  swept into a group program by shape, slot or title), then exact shape owned
+  by exactly one program, then the program's declared SLOT (weekday + time +
+  duration + venue — a newly created program owns no sessions, so the shape
+  index can never match it), then title == program name. Two candidates at
+  any tier means Unassigned, never a guess.
+- Executed on the live store: the "Training" / "Road to Elite Fridays"
+  Friday series (15 sessions) adopted into the EXISTING Elite U10 Development
+  — profile the existing programs' slots BEFORE creating a new one; a
+  duplicate 酷迅 · U10 was created and deleted when the slot tier flagged the
+  clash. Five one-person `Private · <name>` programs created
+  (.privateSessions, planless, no recurringDays and no defaultSessionTime so
+  the slot tier can never match them; note Program.init defaults
+  recurringDays to [.saturday]). Age bands derived from birthdates.
+- Adoption sets programId ONLY. Phase links stay nil for 2.4.
+- Store after 2.1: 216 sessions, BROKEN 0, window violations 0, standalone
+  41 → 5 (Scrimmage x2, 义蓬U10周日上午9:30, Summer Camp, Private Session -
+  Mason — awaiting triage). Duplicate groups 11 → 16: adoption created 5 new
+  pairs where Elite's phase-generated sessions already sat on those Fridays.
+  ALL 16 remain PENDING until derived names land (2.3).
+
 ## Restructure Phase 1 — integrity foundations (August 2026)
 - Services/SessionReconciler.swift (BOTH targets) is the enforcement point.
   `addSessionEvent` validates at creation, but CloudKit materialises records
