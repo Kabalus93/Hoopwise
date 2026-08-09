@@ -282,12 +282,13 @@ struct AthletesDirectoryView: View {
                 return (c.bundleRedemptionsRemaining ?? .max) <= 3
             }.map(\.id))
         case "smart:lowAttendance":
-            let attended = attendedCounts
-            let expected = expectedCounts
+            // Shared marked-only math (AttendanceMath): the denominator is
+            // sessions the student was explicitly marked in — unrecorded
+            // (auto-closed) sessions can't drag anyone into this group.
             return Set(students.filter {
-                let e = expected[$0.id] ?? 0
-                guard e > 0 else { return false }
-                return Double(attended[$0.id] ?? 0) / Double(e) < lowAttendanceThreshold
+                let rate = AttendanceMath.rate(for: $0.id, in: dataManager.sessionEvents)
+                guard rate.of > 0 else { return false }
+                return Double(rate.percent) / 100 < lowAttendanceThreshold
             }.map(\.id))
         default:
             if groupId.hasPrefix("level:") {

@@ -11,6 +11,9 @@ struct TodayView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var currentTime = Date()
     @State private var selectedSession: SessionEvent?
+    /// Bumped after snooze/dismiss/reopen so the engine-backed computed
+    /// lists re-evaluate (their state lives in UserDefaults, not @State).
+    @State private var attentionRefresh = 0
 
     private let tick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -165,68 +168,111 @@ struct TodayView: View {
                 EmptyPanel(systemImage: "checkmark.seal.fill", text: "All clear. Nothing needs your attention.")
             } else {
                 VStack(spacing: 10) {
-                    if !overdueReminders.isEmpty {
-                        AttentionGroup(
-                            title: "Overdue Reminders",
-                            tint: .red,
-                            systemImage: "exclamationmark.circle.fill"
-                        ) {
-                            ForEach(overdueReminders.prefix(4)) { ReminderRow(reminder: $0) }
-                        }
-                    }
+                    engineGroup(for: .closeOut, title: "Close out",
+                                tint: .red, systemImage: "clock.badge.checkmark")
+                    engineGroup(for: .reEngage, title: "Re-engage",
+                                tint: .orange, systemImage: "person.crop.circle.badge.exclamationmark")
+                    engineGroup(for: .plan, title: "Plan",
+                                tint: .blue, systemImage: "calendar.badge.exclamationmark")
+                }
+            }
 
-                    if !expiringContracts.isEmpty {
-                        AttentionGroup(
-                            title: "Bundles Running Low",
-                            tint: .orange,
-                            systemImage: "creditcard.fill"
-                        ) {
-                            ForEach(expiringContracts.prefix(4), id: \.contract.id) { item in
-                                ExpiringContractRow(contract: item.contract, student: item.student)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { openAthlete(item.student) }
+            // The automation ledger: what the system closed so it never
+            // became attention. Every entry reversible.
+            if !automationLedger.isEmpty {
+                AttentionGroup(
+                    title: "Handled automatically",
+                    tint: .gray,
+                    systemImage: "gearshape"
+                ) {
+                    ForEach(automationLedger.prefix(4)) { entry in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.title)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Text(entry.sessionEnd.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
                             }
-                        }
-                    }
-
-                    if !unplannedSessions.isEmpty {
-                        AttentionGroup(
-                            title: "Unplanned Sessions",
-                            tint: .yellow,
-                            systemImage: "calendar.badge.exclamationmark"
-                        ) {
-                            ForEach(unplannedSessions.prefix(4)) { session in
-                                UnplannedSessionRow(session: session)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selectedSession = session }
+                            Spacer()
+                            Button("Reopen") {
+                                AttentionEngine.reopen(sessionId: entry.sessionId,
+                                                       dataManager: dataManager)
+                                attentionRefresh += 1
                             }
+                            .controlSize(.small)
                         }
                     }
-
-                    if !programsNeedingPlanning.isEmpty {
-                        AttentionGroup(
-                            title: "Programs Need Phases",
-                            tint: .purple,
-                            systemImage: "list.clipboard"
-                        ) {
-                            ForEach(programsNeedingPlanning.prefix(4)) { program in
-                                ProgramPlanningRow(program: program)
-                            }
-                        }
-                    }
-
-                    if !upcomingReminders.isEmpty {
-                        AttentionGroup(
-                            title: "Upcoming Reminders",
-                            tint: .blue,
-                            systemImage: "bell.fill"
-                        ) {
-                            ForEach(upcomingReminders.prefix(4)) { ReminderRow(reminder: $0) }
-                        }
+                    if automationLedger.count > 4 {
+                        Text("+\(automationLedger.count - 4) more this week")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func engineGroup(for category: AttentionEngine.Category,
+                             title: String, tint: Color, systemImage: String) -> some View {
+        let items = attentionItems.filter { $0.category == category }
+        if !items.isEmpty {
+            AttentionGroup(title: title, tint: tint, systemImage: systemImage) {
+                ForEach(items.prefix(4), id: \.key) { item in
+                    engineItemRow(item)
+                }
+            }
+        }
+    }
+
+    private func engineItemRow(_ item: AttentionEngine.Item) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(item.urgency >= 2 ? Color.red : Color.orange)
+                .frame(width: 6, height: 6)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                Text(item.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { openEngineItem(item) }
+        .contextMenu {
+            Button("Snooze until tomorrow") { snoozeEngineItem(item, days: 1) }
+            Button("Snooze one week") { snoozeEngineItem(item, days: 7) }
+            Divider()
+            Button("Dismiss") {
+                AttentionEngine.dismiss(item.key)
+                attentionRefresh += 1
+            }
+        }
+    }
+
+    private func openEngineItem(_ item: AttentionEngine.Item) {
+        if let sessionId = item.sessionId,
+           let session = dataManager.sessionEvents.first(where: { $0.id == sessionId }) {
+            selectedSession = session
+        } else if let studentId = item.studentId,
+                  let student = dataManager.students.first(where: { $0.id == studentId }) {
+            openAthlete(student)
+        }
+    }
+
+    private func snoozeEngineItem(_ item: AttentionEngine.Item, days: Int) {
+        let until = Calendar.current.date(byAdding: .day, value: days,
+                                          to: Calendar.current.startOfDay(for: currentTime))
+            ?? currentTime.addingTimeInterval(TimeInterval(days * 86400))
+        AttentionEngine.snooze(item.key, until: until)
+        attentionRefresh += 1
     }
 
     // MARK: - Computed
@@ -278,48 +324,20 @@ struct TodayView: View {
         dataManager.programs.filter { $0.status == .active }
     }
 
-    private var expiringContracts: [(contract: Contract, student: Student)] {
-        dataManager.students.compactMap { student in
-            guard let contract = dataManager.currentContract(for: student.id) else { return nil }
-            guard contract.kind == .privateBundle else { return nil }
-            let remaining = contract.bundleRedemptionsRemaining ?? .max
-            guard remaining <= 3 else { return nil }
-            return (contract, student)
-        }.sorted { ($0.contract.bundleRedemptionsRemaining ?? 0) < ($1.contract.bundleRedemptionsRemaining ?? 0) }
+    /// v2: the rail renders the SHARED engine's list — the same items the
+    /// iOS card, Whistle curation, and widget writer see. The old duplicate
+    /// predicates (hardcoded 3s and 14-day horizons) are gone.
+    private var attentionItems: [AttentionEngine.Item] {
+        _ = attentionRefresh
+        return AttentionEngine.items(dataManager: dataManager, now: currentTime)
     }
 
-    private var unplannedSessions: [SessionEvent] {
-        let now = currentTime
-        let horizon = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
-        return dataManager.sessionEvents.filter { session in
-            session.date >= now &&
-            session.date <= horizon &&
-            session.status == .scheduled &&
-            session.curriculum.totalDrillCount == 0
-        }.sorted { $0.date < $1.date }
+    private var automationLedger: [AttentionEngine.LedgerEntry] {
+        _ = attentionRefresh
+        return AttentionEngine.ledger(dataManager: dataManager, now: currentTime)
     }
 
-    private var programsNeedingPlanning: [Program] {
-        let now = currentTime
-        let horizon = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
-        return dataManager.programs
-            .filter { $0.status == .active || $0.status == .draft }
-            .filter { program in
-                let phases = dataManager.microCycles.filter { $0.programId == program.id }
-                guard phases.isEmpty else { return false }
-                let hasSoonSessions = dataManager.sessionEvents.contains { session in
-                    session.programId == program.id && session.date >= now && session.date <= horizon
-                }
-                return hasSoonSessions || (program.startDate ?? .distantFuture) <= horizon
-            }
-    }
-
-    private var overdueReminders: [Reminder] { dataManager.overdueReminders }
-    private var upcomingReminders: [Reminder] { dataManager.upcomingReminders }
-
-    private var totalActionItems: Int {
-        overdueReminders.count + expiringContracts.count + unplannedSessions.count + programsNeedingPlanning.count + upcomingReminders.count
-    }
+    private var totalActionItems: Int { attentionItems.count }
 
     private func attendees(for session: SessionEvent) -> [Student] {
         var ids = session.attendeeIds

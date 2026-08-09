@@ -484,17 +484,15 @@ final class AssistantEngine: ObservableObject {
                 athleteId: nil, curated: false))
         }
 
-        // Attendance risk: three most-missed active athletes under 50%.
+        // Attendance risk via the shared marked-only math (AttendanceMath) —
+        // unrecorded sessions are excluded, same as every other surface.
         var risk: [(Student, Int)] = []
         for student in dataManager.students {
-            let relevant = dataManager.sessionEvents.filter {
-                $0.date <= Date() && ($0.attendeeIds.contains(student.id)
-                    || $0.actualAttendeeIds.contains(student.id))
+            let rate = AttendanceMath.rate(for: student.id, in: dataManager.sessionEvents)
+            guard rate.of >= AttentionRules.attendanceMinSessions else { continue }
+            if rate.percent < AttentionRules.attendanceRiskPercent {
+                risk.append((student, rate.percent))
             }
-            guard relevant.count >= AttentionRules.attendanceMinSessions else { continue }
-            let attended = relevant.filter { $0.actualAttendeeIds.contains(student.id) }.count
-            let percent = Int(Double(attended) / Double(relevant.count) * 100)
-            if percent < AttentionRules.attendanceRiskPercent { risk.append((student, percent)) }
         }
         for (student, percent) in risk.sorted(by: { $0.1 < $1.1 }).prefix(3) {
             facts.append(CurationCard(

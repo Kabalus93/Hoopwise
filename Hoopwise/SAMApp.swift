@@ -117,6 +117,7 @@ struct SAMApp: App {
 
         #if DEBUG
         exportStatementIfRequested()
+        AttentionDebugReport.runIfRequested(dataManager: dataManager)
         #endif
     }
 

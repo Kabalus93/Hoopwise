@@ -155,6 +155,7 @@
 				Models/SyncTypes.swift,
 				Models/WidgetSnapshot.swift,
 				Services/AttendanceStatementDocument.swift,
+				Services/AttentionEngine.swift,
 				Services/CloudSyncMonitor.swift,
 				Services/DrillPlanGenerator.swift,
 				Services/HoopwiseBundle.swift,

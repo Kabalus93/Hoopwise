@@ -181,14 +181,11 @@ final class AssistantToolRegistry {
     }
 
     private func attendanceRate(for student: Student) -> (attended: Int, of: Int, rate: Double?) {
-        let relevant = dataManager.sessionEvents.filter { session in
-            session.date <= Date()
-                && (session.attendeeIds.contains(student.id)
-                    || session.actualAttendeeIds.contains(student.id))
-        }
-        let attended = relevant.filter { $0.actualAttendeeIds.contains(student.id) }.count
-        guard !relevant.isEmpty else { return (0, 0, nil) }
-        return (attended, relevant.count, Double(attended) / Double(relevant.count))
+        // Shared marked-only math — unrecorded sessions excluded everywhere.
+        let rate = AttendanceMath.rate(for: student.id, in: dataManager.sessionEvents)
+        guard rate.of > 0 else { return (0, 0, nil) }
+        let attended = Int(round(Double(rate.percent) / 100 * Double(rate.of)))
+        return (attended, rate.of, Double(rate.percent) / 100)
     }
 
     // MARK: - Tool definitions

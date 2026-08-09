@@ -111,12 +111,20 @@ struct AttentionFocusedSheet: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if category == .closeOut, let session {
+                // Through the state machine, not raw writes — a disallowed
+                // transition (e.g. "complete" on an already auto-closed
+                // session) is a silent no-op instead of a rule bypass.
                 Button {
                     var updated = session
-                    updated.status = .completed
-                    updated.updatedAt = Date()
-                    dataManager.updateSessionEvent(updated)
-                    refresh()
+                    // A past scheduled session completes via the legal
+                    // start→complete chain — coach-completed, no marker.
+                    if updated.status == .scheduled {
+                        SessionLifecycle.apply(.start, to: &updated)
+                    }
+                    if SessionLifecycle.apply(.complete, to: &updated) {
+                        dataManager.updateSessionEvent(updated)
+                        refresh()
+                    }
                 } label: {
                     Label(isChinese ? "完成" : "Mark complete", systemImage: "checkmark.circle.fill")
                 }
@@ -124,10 +132,10 @@ struct AttentionFocusedSheet: View {
 
                 Button {
                     var updated = session
-                    updated.status = .cancelled
-                    updated.updatedAt = Date()
-                    dataManager.updateSessionEvent(updated)
-                    refresh()
+                    if SessionLifecycle.apply(.cancel, to: &updated) {
+                        dataManager.updateSessionEvent(updated)
+                        refresh()
+                    }
                 } label: {
                     Label(isChinese ? "取消" : "Cancel", systemImage: "xmark.circle.fill")
                 }

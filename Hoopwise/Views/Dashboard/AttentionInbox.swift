@@ -128,215 +128,58 @@ struct AttentionInbox {
 }
 
 // MARK: - Computation
+//
+// v2: this is an ADAPTER over AttentionEngine (Services/, the shared rules
+// layer). The card renders exactly what Mac Today, Whistle curation, and
+// the widget writer see — edge-triggered, deadlined, small. The old
+// level-triggered predicates (every unclosed session ever, every dormant
+// client, every unplanned session in 14 days) are gone: close-outs are
+// automated away by SessionLifecycle.autoClose, chronic states live in the
+// Tier-3 reports (smart group, filters).
 
 extension AttentionInbox {
-    /// Threshold for flagging a private-bundle client as dormant. Set per
-    /// design call: the coach typically sees a private-bundle student
-    /// roughly once a fortnight, so 14 days without contact is the point
-    /// where re-engagement is genuinely warranted.
-    static let dormancyDays: Int = 14
-
-    /// Build the inbox from the live data manager. Pure aggregation, no UI.
+    /// Build the inbox from the shared engine. Pure aggregation, no UI.
     @MainActor
     static func compute(from dm: DataManager, now: Date = Date()) -> AttentionInbox {
-        var items: [AttentionItem] = []
-
-        let cal = Calendar.current
-        let isCN = LocalizationManager.shared.currentLanguage == .chinese
-
-        // ---------- CLOSE OUT ----------
-
-        // Past sessions still in .scheduled or .inProgress — coach forgot
-        // to close them. Severity grows with how long ago they ended.
-        for session in dm.sessionEvents
-            where session.endTime < now &&
-                  (session.status == .scheduled || session.status == .inProgress) {
-            let hoursPast = Int(now.timeIntervalSince(session.endTime) / 3600)
-            let severity: AttentionSeverity = hoursPast >= 24 ? .urgent : .attention
-            let title = session.title
-            let subtitle = dm.programs
-                .first(where: { $0.id == session.programId })?
-                .resolvedDisplayName(in: dm.programs)
-            let timeContext: String = {
-                let mins = Int(now.timeIntervalSince(session.endTime) / 60)
-                if mins < 60 {
-                    return isCN ? "\(mins) 分钟前结束" : "ended \(mins)m ago"
-                }
-                let hours = mins / 60
-                if hours < 24 {
-                    return isCN ? "\(hours) 小时前结束" : "ended \(hours)h ago"
-                }
-                let days = hours / 24
-                return isCN ? "\(days) 天前结束" : "ended \(days)d ago"
-            }()
-            items.append(AttentionItem(
-                category: .closeOut,
-                severity: severity,
-                title: title,
-                subtitle: subtitle,
-                timeContext: timeContext,
-                icon: "clock.badge.checkmark",
-                payload: .session(session.id),
-                referenceDate: session.endTime
-            ))
-        }
-
-        // Overdue reminders — coach intended to handle these by their due
-        // date and didn't.
-        for reminder in dm.overdueReminders {
-            items.append(AttentionItem(
-                category: .closeOut,
-                severity: .urgent,
-                title: reminder.title,
+        let items = AttentionEngine.items(dataManager: dm, now: now).map { item in
+            AttentionItem(
+                category: category(for: item.category),
+                severity: AttentionSeverity(rawValue: item.urgency) ?? .attention,
+                title: item.title,
                 subtitle: nil,
-                timeContext: reminder.relativeTimeString,
-                icon: "bell.badge.fill",
-                payload: .reminder(reminder.id),
-                referenceDate: reminder.dueDate
-            ))
+                timeContext: item.subtitle,
+                icon: icon(for: item.kind),
+                payload: payload(for: item),
+                referenceDate: item.deadline
+            )
         }
-
-        // ---------- RE-ENGAGE ----------
-
-        // Private-bundle clients running low on sessions. Urgent at ≤1,
-        // attention at 2-3. PAYG and group contracts are excluded —
-        // there's no inherent quota to flag.
-        for student in dm.students {
-            guard let contract = dm.currentContract(for: student.id),
-                  contract.kind == .privateBundle else { continue }
-            let remaining = contract.bundleRedemptionsRemaining ?? .max
-            guard remaining <= 3 else { continue }
-            let severity: AttentionSeverity = remaining <= 1 ? .urgent : .attention
-            items.append(AttentionItem(
-                category: .reEngage,
-                severity: severity,
-                title: student.name,
-                subtitle: isCN ? "私教剩余" : "private bundle",
-                timeContext: isCN
-                    ? "剩 \(remaining) 节课"
-                    : "\(remaining) session\(remaining == 1 ? "" : "s") left",
-                icon: "exclamationmark.triangle.fill",
-                payload: .student(student.id),
-                referenceDate: contract.expiryDate ?? now.addingTimeInterval(TimeInterval(remaining * 86400))
-            ))
-        }
-
-        // Dormant private clients: active private contract (any kind), but
-        // they haven't been an `actualAttendeeIds` member in the dormancy
-        // window. Group / school students are excluded — group cadence is
-        // managed at the program level.
-        let cutoff = cal.date(byAdding: .day, value: -dormancyDays, to: now) ?? now
-        // Index by student → most recent attended session date.
-        var lastAttendance: [UUID: Date] = [:]
-        for session in dm.sessionEvents where session.status == .completed || session.endTime < now {
-            for studentId in session.actualAttendeeIds {
-                let prior = lastAttendance[studentId]
-                if prior == nil || session.endTime > prior! {
-                    lastAttendance[studentId] = session.endTime
-                }
-            }
-        }
-        for student in dm.students {
-            guard let contract = dm.currentContract(for: student.id) else { continue }
-            // Only re-engage private clients — group billing is school/co.
-            guard contract.format == .privateClient else { continue }
-            // Skip if they've been seen recently.
-            if let last = lastAttendance[student.id], last >= cutoff { continue }
-            // Skip if they have no past sessions tracked at all AND were
-            // just enrolled — they're new, not dormant.
-            let hasAnyPast = lastAttendance[student.id] != nil
-            let createdRecently = student.createdAt >= cutoff
-            if !hasAnyPast && createdRecently { continue }
-
-            let daysSince: Int = {
-                if let last = lastAttendance[student.id] {
-                    return Int(now.timeIntervalSince(last) / 86400)
-                }
-                // Never attended — measure from enrollment.
-                return Int(now.timeIntervalSince(student.createdAt) / 86400)
-            }()
-            // Avoid double-flagging students already in the low-bundle list.
-            let alreadyFlagged = items.contains { item in
-                if case .student(let id) = item.payload, id == student.id { return true }
-                return false
-            }
-            if alreadyFlagged { continue }
-
-            items.append(AttentionItem(
-                category: .reEngage,
-                severity: daysSince >= 30 ? .urgent : .attention,
-                title: student.name,
-                subtitle: isCN ? "近期未到场" : "no recent attendance",
-                timeContext: lastAttendance[student.id] == nil
-                    ? (isCN ? "尚未参加过课程" : "no sessions yet")
-                    : (isCN ? "\(daysSince) 天未到" : "\(daysSince) days dormant"),
-                icon: "person.crop.circle.badge.clock",
-                payload: .student(student.id),
-                referenceDate: lastAttendance[student.id] ?? student.createdAt
-            ))
-        }
-
-        // ---------- PLAN ----------
-
-        // Sessions in next two weeks with no curriculum drills set.
-        let twoWeeks = cal.date(byAdding: .day, value: 14, to: now) ?? now
-        for session in dm.sessionEvents where session.date >= now &&
-                                              session.date <= twoWeeks &&
-                                              session.status == .scheduled &&
-                                              session.curriculum.totalDrillCount == 0 {
-            let title = session.title
-            let when: String = {
-                if cal.isDateInToday(session.date)    { return isCN ? "今天" : "Today" }
-                if cal.isDateInTomorrow(session.date) { return isCN ? "明天" : "Tomorrow" }
-                let days = cal.dateComponents([.day], from: now, to: session.date).day ?? 0
-                return isCN ? "\(days) 天后" : "in \(days)d"
-            }()
-            items.append(AttentionItem(
-                category: .plan,
-                severity: cal.isDateInToday(session.date) ? .urgent : .attention,
-                title: title,
-                subtitle: isCN ? "尚未排课" : "no drills planned",
-                timeContext: when,
-                icon: "clipboard",
-                payload: .session(session.id),
-                referenceDate: session.date
-            ))
-        }
-
-        // Active programs with no phases AND upcoming sessions.
-        for program in dm.programs where program.status == .active || program.status == .draft {
-            let phases = dm.microCycles.filter { $0.programId == program.id }
-            guard phases.isEmpty else { continue }
-            let upcoming = dm.sessionEvents.contains { s in
-                s.programId == program.id && s.date >= now && s.date <= twoWeeks
-            }
-            guard upcoming || (program.startDate ?? .distantFuture) <= twoWeeks else { continue }
-            items.append(AttentionItem(
-                category: .plan,
-                severity: .attention,
-                title: program.resolvedDisplayName(in: dm.programs),
-                subtitle: isCN ? "尚无阶段" : "no phases set",
-                timeContext: nil,
-                icon: "rectangle.stack.badge.plus",
-                payload: .program(program.id),
-                referenceDate: program.startDate ?? now
-            ))
-        }
-
-        // Upcoming reminders — gentle FYI, lowest severity.
-        for reminder in dm.upcomingReminders {
-            items.append(AttentionItem(
-                category: .plan,
-                severity: .fyi,
-                title: reminder.title,
-                subtitle: nil,
-                timeContext: reminder.relativeTimeString,
-                icon: "bell",
-                payload: .reminder(reminder.id),
-                referenceDate: reminder.dueDate
-            ))
-        }
-
         return AttentionInbox(items: items)
+    }
+
+    private static func category(for category: AttentionEngine.Category) -> AttentionCategory {
+        switch category {
+        case .closeOut: return .closeOut
+        case .reEngage: return .reEngage
+        case .plan:     return .plan
+        }
+    }
+
+    private static func icon(for kind: AttentionEngine.Kind) -> String {
+        switch kind {
+        case .planNeeded:       return "clipboard"
+        case .rollCallRecovery: return "clock.badge.checkmark"
+        case .renewalWindow:    return "exclamationmark.triangle.fill"
+        case .newStudent:       return "person.crop.circle.badge.plus"
+        case .reengage:         return "person.crop.circle.badge.clock"
+        case .followUp:         return "text.bubble"
+        case .reminderDue:      return "bell.badge.fill"
+        }
+    }
+
+    private static func payload(for item: AttentionEngine.Item) -> AttentionPayload {
+        if let sessionId = item.sessionId { return .session(sessionId) }
+        if let studentId = item.studentId { return .student(studentId) }
+        if let reminderId = item.reminderId { return .reminder(reminderId) }
+        return .reminder(UUID())   // unreachable: every kind carries a ref
     }
 }

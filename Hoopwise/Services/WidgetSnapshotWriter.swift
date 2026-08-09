@@ -325,12 +325,7 @@ enum WidgetSnapshotWriter {
     /// and one attention student was highlighted in every window.
     private static func expectedAttendeeIds(of session: SessionEvent,
                                             dataManager: DataManager) -> [UUID] {
-        if !session.attendeeIds.isEmpty { return session.attendeeIds }
-        if let programId = session.programId,
-           let program = dataManager.programs.first(where: { $0.id == programId }) {
-            return program.enrolledStudentIds
-        }
-        return []
+        AttendanceMath.expectedIds(of: session, programs: dataManager.programs)
     }
 
     /// The featured session's roster as tiered cluster members, capped at 8.
@@ -429,16 +424,11 @@ enum WidgetSnapshotWriter {
             .first.map { makeStudent($0.0, reason: .streak) }
     }
 
+    /// AttendanceMath.rate — marked-only denominators, one definition for
+    /// every attention decision. Unrecorded sessions never poison the rate.
     private static func attendanceRate(of student: Student,
                                        dataManager: DataManager) -> (percent: Int, of: Int) {
-        let relevant = dataManager.sessionEvents.filter {
-            $0.date <= Date()
-                && ($0.attendeeIds.contains(student.id)
-                    || $0.actualAttendeeIds.contains(student.id))
-        }
-        guard !relevant.isEmpty else { return (100, 0) }
-        let attended = relevant.filter { $0.actualAttendeeIds.contains(student.id) }.count
-        return (Int(Double(attended) / Double(relevant.count) * 100), relevant.count)
+        AttendanceMath.rate(for: student.id, in: dataManager.sessionEvents)
     }
 
     /// Roster-wide attendance over the trailing 7 days — the quiet positive.

@@ -21,6 +21,34 @@ enum SessionLifecycle {
         case cancel
         case skip(SkipReason)
         case resetToScheduled
+        /// System-closed after the 12h grace: the session ended and nobody
+        /// completed it. Distinct from a coach's .complete via the notes
+        /// marker, so it can be listed, recovered, and reopened. Attendance
+        /// stays exactly as it was (usually unmarked — and unmarked is NOT
+        /// absent, so auto-close never consumes anyone's bundle).
+        case autoClose
+    }
+
+    /// Stable machine-readable marker `autoClose` appends to notes —
+    /// the same mechanism as "Skipped: …". Never localized: detection
+    /// depends on the prefix.
+    static let autoCloseMarkerPrefix = "Auto-closed: "
+
+    /// Whether this session was closed by the system rather than the coach.
+    static func wasAutoClosed(_ session: SessionEvent) -> Bool {
+        session.status == .completed
+            && session.notes?.contains(autoCloseMarkerPrefix) == true
+    }
+
+    /// Strips the auto-close marker line — used by reopen, so a session the
+    /// coach takes back does not keep claiming it was system-closed.
+    static func strippingAutoCloseMarker(_ notes: String?) -> String? {
+        guard let notes else { return nil }
+        let kept = notes.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.hasPrefix(autoCloseMarkerPrefix) }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return kept.isEmpty ? nil : kept
     }
 
     /// Allowed transitions per state — the union both UIs must obey.
@@ -41,6 +69,10 @@ enum SessionLifecycle {
             return status == .scheduled
         case .resetToScheduled:
             return status != .scheduled
+        case .autoClose:
+            // The states the close-out backlog accumulates in. The TIME gate
+            // (end + grace) belongs to the caller — the machine gates state.
+            return status == .scheduled || status == .inProgress
         }
     }
 
@@ -64,7 +96,18 @@ enum SessionLifecycle {
                 + "Skipped: \(reason.displayName)"
         case .resetToScheduled:
             // Attendance is preserved deliberately — only the status flips.
+            // If the session was auto-closed, reopening also withdraws the
+            // marker — the coach has taken it back.
             session.status = .scheduled
+            session.notes = strippingAutoCloseMarker(session.notes)
+        case .autoClose:
+            session.status = .completed
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            session.notes = (session.notes ?? "")
+                + (session.notes?.isEmpty == false ? "\n" : "")
+                + autoCloseMarkerPrefix + formatter.string(from: Date())
         }
         session.updatedAt = Date()
         return true

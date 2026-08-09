@@ -66,6 +66,34 @@ enum AttentionRules {
     /// At or above this attendance (with the minimum sessions) a student
     /// counts as steady — the bubble cluster's small tier.
     static let steadyPercent = 80
+
+    // MARK: v2 — attention is an action inside ~48h that changes an outcome.
+    // Everything else is automated (Tier 1) or a report (Tier 3).
+
+    /// Hours past a session's end before the system closes it unrecorded.
+    static let autoCloseGraceHours = 12
+    /// An auto-closed session younger than this surfaces ONE roll-call
+    /// recovery item; older, it stops asking forever.
+    static let recoveryWindowHours = 48
+    /// "Plan needed" fires only for sessions starting within this window.
+    static let planWindowHours = 48
+    /// Renewal window: bundle at or below this remaining…
+    static let renewalRemaining = 2
+    /// …with a session scheduled within this many days (the conversation
+    /// moment; that session is the deadline). Fires once per contract.
+    static let renewalSessionWindowDays = 7
+    /// "New student, no first session" applies only this soon after enrollment.
+    static let newStudentWindowDays = 14
+    /// Re-engage fires on the EDGE of this many consecutive missed
+    /// (marked-absent) sessions…
+    static let reengageConsecutiveMisses = 3
+    /// …at most once per athlete per cooldown.
+    static let reengageCooldownDays = 14
+    /// Note follow-ups surface when due within this window.
+    static let followUpWindowHours = 48
+    /// Display cap — a safety rail, not a target. If one rule alone
+    /// regularly produces more than ~5 items, tune the rule, never the cap.
+    static let displayCap = 9
 }
 
 struct NextUpSnapshot: Codable, Equatable {

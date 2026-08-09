@@ -61,45 +61,36 @@ struct FlightyActionableDashboard: View {
         return dataManager.students.filter { playerIds.contains($0.id) }
     }
     
-    /// Surfaces only **private bundles running low** — the only contract kind
-    /// where "X sessions left" is meaningful. PAYG and group contracts have no
-    /// inherent quota, so they never appear in the attention card.
+    /// v2: these legacy sheet inputs derive from the SHARED engine, so the
+    /// "see everything" sheet can never disagree with the card's count.
     private var expiringContracts: [(contract: Contract, student: Student)] {
-        return dataManager.students.compactMap { student -> (contract: Contract, student: Student)? in
-            guard let contract = dataManager.currentContract(for: student.id) else { return nil }
-            guard contract.kind == .privateBundle else { return nil }
-            let remaining = contract.bundleRedemptionsRemaining ?? .max
-            guard remaining <= 3 else { return nil }
+        let studentIds = attentionInbox.items.compactMap { item -> UUID? in
+            guard case .student(let id) = item.payload,
+                  item.category == .reEngage else { return nil }
+            return id
+        }
+        return studentIds.compactMap { id in
+            guard let student = dataManager.students.first(where: { $0.id == id }),
+                  let contract = dataManager.currentContract(for: id),
+                  contract.kind == .privateBundle else { return nil }
             return (contract, student)
-        }.sorted { ($0.contract.bundleRedemptionsRemaining ?? 0) < ($1.contract.bundleRedemptionsRemaining ?? 0) }
-    }
-    
-    private var unplannedSessions: [SessionEvent] {
-        let now = Date()
-        let twoWeeksFromNow = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
-        return dataManager.sessionEvents.filter { session in
-            session.date >= now &&
-            session.date <= twoWeeksFromNow &&
-            session.status == .scheduled &&
-            session.curriculum.totalDrillCount == 0
-        }.sorted { $0.date < $1.date }
-    }
-    
-    private var programsNeedingPlanning: [Program] {
-        let now = Date()
-        let twoWeeksFromNow = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
-        return dataManager.programs.filter { program in
-            program.status == .active || program.status == .draft
-        }.filter { program in
-            let phases = dataManager.microCycles.filter { $0.programId == program.id }
-            // Only show if program has no phases AND has sessions in the next 2 weeks
-            guard phases.isEmpty else { return false }
-            let hasSoonSessions = dataManager.sessionEvents.contains { session in
-                session.programId == program.id && session.date >= now && session.date <= twoWeeksFromNow
-            }
-            return hasSoonSessions || (program.startDate ?? Date.distantFuture) <= twoWeeksFromNow
         }
     }
+
+    private var unplannedSessions: [SessionEvent] {
+        let ids = Set(attentionInbox.items.compactMap { item -> UUID? in
+            guard case .session(let id) = item.payload,
+                  item.category == .plan else { return nil }
+            return id
+        })
+        return dataManager.sessionEvents
+            .filter { ids.contains($0.id) }
+            .sorted { $0.date < $1.date }
+    }
+
+    /// Retired to Tier 3: a phaseless program is deliberate planning work,
+    /// not a 48h action. The planner shows it where planning happens.
+    private var programsNeedingPlanning: [Program] { [] }
     
     private var liveGames: [Game] {
         dataManager.games.filter { $0.status == .live }
@@ -148,7 +139,10 @@ struct FlightyActionableDashboard: View {
         let isCN = LocalizationManager.shared.currentLanguage == .chinese
         let cal = Calendar.current
         let now = currentTime
-        let dormancyCutoff = cal.date(byAdding: .day, value: -AttentionInbox.dormancyDays, to: now) ?? now
+        // Display heuristic for the hero chip only — NOT an attention rule
+        // (those live in AttentionEngine). 14 days ≈ one missed fortnight.
+        let heroDormancyDays = 14
+        let dormancyCutoff = cal.date(byAdding: .day, value: -heroDormancyDays, to: now) ?? now
 
         // Build last-attended map once so each candidate check is O(1).
         var lastAttended: [UUID: Date] = [:]
@@ -533,8 +527,76 @@ struct FlightyActionableDashboard: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            // The automation ledger — what the system handled so it never
+            // became attention. Trust comes from visibility: every entry is
+            // reversible.
+            if briefingExpanded && !automationLedger.isEmpty {
+                if hasSessions || !dataManager.todayReminders.isEmpty {
+                    Divider().padding(.leading, 20)
+                }
+                VStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Label {
+                            Text(isChinese ? "已自动处理" : "HANDLED AUTOMATICALLY")
+                                .font(.caption2.weight(.bold))
+                                .monospaced()
+                        } icon: {
+                            Image(systemName: "checkmark.circle")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(isChinese
+                             ? "已关闭 \(automationLedger.count) 节已结束课程"
+                             : "Closed \(automationLedger.count) ended session\(automationLedger.count == 1 ? "" : "s")")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+
+                    ForEach(Array(automationLedger.prefix(5).enumerated()), id: \.element.id) { index, entry in
+                        HStack(spacing: 12) {
+                            Image(systemName: "gearshape")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.title)
+                                    .font(.footnote.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Text(entry.sessionEnd.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer()
+                            Button(isChinese ? "恢复" : "Reopen") {
+                                AttentionEngine.reopen(sessionId: entry.sessionId,
+                                                       dataManager: dataManager)
+                            }
+                            .font(.caption.weight(.semibold))
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        if index < min(automationLedger.count, 5) - 1 {
+                            Divider().padding(.leading, 44)
+                        }
+                    }
+                    Color.clear.frame(height: 8)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
+    }
+
+    /// Auto-closed sessions from the last 7 days, newest first.
+    private var automationLedger: [AttentionEngine.LedgerEntry] {
+        AttentionEngine.ledger(dataManager: dataManager)
     }
     
     private func briefingReminderRow(_ reminder: Reminder, isLast: Bool) -> some View {

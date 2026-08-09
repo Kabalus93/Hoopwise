@@ -462,6 +462,44 @@ it produces confident wrong numbers the coach reconciles books against.
   follows the existing SDDrillMedia pattern (paths in the model, bytes on
   disk via DrillMediaStorage).
 
+## Attention system v2 (August 2026) — the engine is the record
+- ONE principle: attention = an action inside ~48h that changes an outcome.
+  Everything else is automated (Tier 1) or a report (Tier 3). The rules
+  live in Hoopwise/Services/AttentionEngine.swift (BOTH app targets) with
+  thresholds in AttentionRules (Models/WidgetSnapshot.swift). The iOS
+  Attention card (AttentionInbox is now an adapter), Mac Today's rail,
+  Whistle curation, and the widget writer ALL consume this layer — never
+  re-implement a predicate in a view; that duplication is exactly what
+  produced the 158-item card.
+- TIER 1: SessionLifecycle gained .autoClose (legal from scheduled/
+  inProgress; sets .completed and appends the stable "Auto-closed: <date>"
+  notes marker — same mechanism as "Skipped:"). AttentionEngine.
+  runAutomation closes sessions past end + 12h grace; hooked debounced
+  into refreshAllCaches/refreshCachesSync (foreground + post-sync, both
+  platforms), throttled 5 min, idempotent. The first run IS the amnesty.
+  Reopen = resetToScheduled (strips the marker). The ledger ("Handled
+  automatically", iOS briefing + Mac Today group) derives from the marker.
+- ATTENDANCE MATH: AttendanceMath.rate is THE per-student attendance
+  definition for attention decisions — denominator counts ONLY sessions
+  with an explicit mark (present/excused/unexcused). Unrecorded sessions
+  are excluded, so auto-closing backlog cannot move any percentage.
+  Unmarked is NOT absent, in statistics exactly as in money.
+- TIER 2 state (snooze/dismiss/edge fire dates) is DEVICE-LOCAL JSON in
+  UserDefaults ("attention.state.v2") — deliberately unsynced, like the
+  smart-group threshold. Dismissal is per-edge (keys embed the edge).
+  Items age out at their deadline; display cap AttentionRules.displayCap
+  is a safety rail — if a rule alone produces >5 items, tune the rule.
+- iOS has NO snooze/dismiss controls (UI freeze) — the engine and Mac
+  Today have them; the iOS card benefits from the filtering only. Adding
+  iOS controls is an OPEN FREEZE QUESTION, not sanctioned.
+- Debug evidence hooks (DEBUG, env-gated, iOS): HOOPWISE_ATTENTION_REPORT
+  and HOOPWISE_ATTENTION_SELFTEST write attention-report.txt to the App
+  Group Library/Caches.
+- The Mac target's membership for Hoopwise/ files is an explicit
+  membershipExceptions OPT-IN list in project.pbxproj — a new shared file
+  compiles on iOS but NOT Mac until added there (this is rule 1's actual
+  mechanism; AttentionEngine.swift is in the list).
+
 ## Attendance and bundle redemption — read before touching any of it
 - FOUR states, THREE stored arrays on SDSessionEvent: actualAttendeeIds,
   excusedAbsences, unexcusedAbsences. Membership in none means UNMARKED.
