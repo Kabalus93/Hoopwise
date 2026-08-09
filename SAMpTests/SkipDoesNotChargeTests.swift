@@ -14,27 +14,16 @@ import XCTest
 @MainActor
 final class SkipDoesNotChargeTests: XCTestCase {
 
-    /// ONE in-memory container for the whole class.
-    ///
-    /// Building a fresh ModelContainer in every setUp — eight in a row here —
-    /// intermittently failed the next test with "No eligible connection
-    /// available": the previous container's store was still tearing down.
-    /// Tests stay isolated anyway because every fixture uses fresh UUIDs and
-    /// every assertion looks up its own contract by id.
-    private static var sharedManager: SwiftDataManager?
-
     private var dm: SwiftDataManager!
     private var student: Student!
     private var contract: Contract!
 
     override func setUp() async throws {
         try await super.setUp()
-        if Self.sharedManager == nil {
-            Self.sharedManager = SwiftDataManager.inMemoryForTesting()
-        }
-        dm = Self.sharedManager
+        // One shared container, wiped for each test — see inMemoryForTesting.
+        dm = SwiftDataManager.inMemoryForTesting()
 
-        student = Student(name: "Round Trip Kid \(UUID().uuidString.prefix(4))")
+        student = Student(name: "Round Trip Kid")
         dm.addStudent(student)
 
         // A ten-session private bundle: the shape the redemption authority
@@ -47,8 +36,6 @@ final class SkipDoesNotChargeTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        // The manager is class-level and deliberately outlives the test; only
-        // the per-test fixtures are released.
         dm = nil; student = nil; contract = nil
         try await super.tearDown()
     }

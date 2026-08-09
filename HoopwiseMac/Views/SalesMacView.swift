@@ -506,9 +506,11 @@ private struct SalesContractDetail: View {
         return dataManager.sessionEvents.filter { session in
             session.date >= Date()
                 && session.status == .scheduled
-                && session.programId == nil
                 && session.attendeeIds.contains(student.id)
                 && !redeemedIds.contains(session.id)
+                // The shared rule, not a third private-ness test of its own:
+                // programId == nil alone also matched orphan group sessions.
+                && dataManager.eventIsPrivate(session)
         }
         .sorted { $0.date < $1.date }
     }

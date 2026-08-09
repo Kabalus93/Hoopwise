@@ -122,46 +122,6 @@ enum SessionEventStatus: String, Codable, CaseIterable {
     }
 }
 
-struct PhaseSession: Identifiable, Codable, Hashable {
-    let id: UUID
-    var microCycleId: UUID
-    var sessionNumber: Int
-    var title: String
-    var sessionType: SessionType
-    var objectives: [String]
-    var drillIds: [UUID]
-    var scheduledDate: Date?
-    var durationMinutes: Int
-    var notes: String?
-    var warmUpMinutes: Int
-    var coolDownMinutes: Int
-    var createdAt: Date
-    var updatedAt: Date
-    
-    init(id: UUID = UUID(), microCycleId: UUID, sessionNumber: Int, title: String,
-         sessionType: SessionType = .training, objectives: [String] = [], drillIds: [UUID] = [],
-         scheduledDate: Date? = nil, durationMinutes: Int = 60, notes: String? = nil,
-         warmUpMinutes: Int = 10, coolDownMinutes: Int = 5,
-         createdAt: Date = Date(), updatedAt: Date = Date()) {
-        self.id = id
-        self.microCycleId = microCycleId
-        self.sessionNumber = sessionNumber
-        self.title = title
-        self.sessionType = sessionType
-        self.objectives = objectives
-        self.drillIds = drillIds
-        self.scheduledDate = scheduledDate
-        self.durationMinutes = durationMinutes
-        self.notes = notes
-        self.warmUpMinutes = warmUpMinutes
-        self.coolDownMinutes = coolDownMinutes
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
-    
-    var mainActivityMinutes: Int { durationMinutes - warmUpMinutes - coolDownMinutes }
-    var drillCount: Int { drillIds.count }
-}
 
 // MARK: - Session Game Models
 

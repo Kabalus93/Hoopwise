@@ -658,11 +658,7 @@ private struct RollCallTab: View {
     // here never deducted — the exact parity break this replaces.
 
     private var roster: [Student] {
-        var ids = Set(session.attendeeIds)
-        if ids.isEmpty, let pid = session.programId,
-           let program = dataManager.programs.first(where: { $0.id == pid }) {
-            ids = Set(program.enrolledStudentIds)
-        }
+        let ids = Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
         return dataManager.students.filter { ids.contains($0.id) }.sorted { $0.name < $1.name }
     }
 

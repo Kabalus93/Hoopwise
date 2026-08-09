@@ -528,20 +528,8 @@ struct FlightyProgramsListView: View {
         return Double(totalAttended) / Double(totalExpected) * 100
     }
     
+    /// Cascade lives in the manager — phases and sessions go with it.
     private func deleteProgram(_ program: Program) {
-        // Delete associated micro cycles
-        let programMicroCycles = dataManager.microCycles.filter { $0.programId == program.id }
-        for cycle in programMicroCycles {
-            dataManager.deleteMicroCycle(cycle)
-        }
-        
-        // Delete associated sessions
-        let programSessions = dataManager.sessionEvents.filter { $0.programId == program.id }
-        for session in programSessions {
-            dataManager.deleteSessionEvent(session)
-        }
-        
-        // Delete the program
         dataManager.deleteProgram(program)
     }
     
@@ -2410,12 +2398,17 @@ struct CompactSessionRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    if !session.attendeeIds.isEmpty {
+                    // Shared roster definition: a session with an empty
+                    // attendeeIds still has the program's enrolment, and this
+                    // row used to show nothing at all for those.
+                    let rosterCount = AttendanceMath.expectedIds(
+                        of: session, programs: dataManager.programs).count
+                    if rosterCount > 0 {
                         Text("·").foregroundStyle(.tertiary)
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 9))
                             .foregroundStyle(.tertiary)
-                        Text("\(session.attendeeIds.count)")
+                        Text("\(rosterCount)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -2741,19 +2734,6 @@ struct ArchivedProgramsView: View {
     }
     
     private func permanentlyDeleteProgram(_ program: Program) {
-        // Delete associated micro cycles
-        let programMicroCycles = dataManager.microCycles.filter { $0.programId == program.id }
-        for cycle in programMicroCycles {
-            dataManager.deleteMicroCycle(cycle)
-        }
-        
-        // Delete associated sessions
-        let programSessions = dataManager.sessionEvents.filter { $0.programId == program.id }
-        for session in programSessions {
-            dataManager.deleteSessionEvent(session)
-        }
-        
-        // Delete the program
         dataManager.deleteProgram(program)
     }
 }

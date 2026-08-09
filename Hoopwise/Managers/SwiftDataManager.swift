@@ -185,7 +185,6 @@ class SwiftDataManager: ObservableObject {
     @Published var plays: [Play] = []
     var playbookCollections: [PlaybookCollection] = []
     var enrollments: [ProgramEnrollment] = []
-    var phaseSessions: [PhaseSession] = []
     
     // League data (in-memory for now, can be migrated to SwiftData later)
     @Published var teams: [Team] = []
@@ -301,18 +300,62 @@ class SwiftDataManager: ObservableObject {
     ])
 
     #if DEBUG
+    /// Inserts a record the way CloudKit does — straight into the store, with
+    /// no validation. Tests use this to prove the reconciler repairs what
+    /// creation-time checks can never see.
+    func insertSessionBypassingValidationForTesting(_ event: SessionEvent) {
+        modelContext.insert(SDSessionEvent.from(event))
+        try? modelContext.save()
+        refreshCachesSync()
+    }
+
     /// An isolated, in-memory manager for tests. The app never calls this —
     /// `shared` remains the only instance production code touches — but the
     /// integrity work in the restructure needs somewhere to exercise the real
     /// redemption and reconciliation code without CloudKit or a user's store.
+    ///
+    /// ONE container for the whole test process, wiped between callers.
+    /// Building a fresh ModelContainer per test crashed the runner
+    /// intermittently ("No eligible connection available", then "Restarting
+    /// after unexpected exit") because the previous store was still tearing
+    /// down. Callers still get a clean store, so tests stay independent.
+    private static var testManager: SwiftDataManager?
+
     static func inMemoryForTesting() -> SwiftDataManager {
-        SwiftDataManager(inMemoryTesting: ())
+        if let existing = testManager {
+            existing.resetAllDataForTesting()
+            return existing
+        }
+        let created = SwiftDataManager(inMemoryTesting: ())
+        testManager = created
+        return created
+    }
+
+    /// Empties the in-memory store. Test-only, and it refuses to run against
+    /// anything but an ephemeral instance — this must never be reachable from
+    /// a store holding a coach's data.
+    func resetAllDataForTesting() {
+        guard isEphemeralTestInstance else {
+            assertionFailure("resetAllDataForTesting called on a real store")
+            return
+        }
+        try? modelContext.delete(model: SDSessionEvent.self)
+        try? modelContext.delete(model: SDMicroCycle.self)
+        try? modelContext.delete(model: SDProgram.self)
+        try? modelContext.delete(model: SDContract.self)
+        try? modelContext.delete(model: SDPlayer.self)
+        try? modelContext.delete(model: SDStudent.self)
+        try? modelContext.save()
+        refreshCachesSync()
     }
 
     private init(inMemoryTesting: ()) {
+        // .none, for the same reason as the test-host configuration above:
+        // the default is .automatic and would attach CloudKit mirroring.
         let configuration = ModelConfiguration(schema: Self.schema,
                                                isStoredInMemoryOnly: true,
-                                               allowsSave: true)
+                                               allowsSave: true,
+                                               cloudKitDatabase: .none)
         // A failure here is a broken schema, which every test should fail on.
         modelContainer = try! ModelContainer(for: Self.schema,
                                              configurations: [configuration])
@@ -337,7 +380,18 @@ class SwiftDataManager: ObservableObject {
     /// ("No eligible connection available", then "Restarting after unexpected
     /// exit"). Under test the host must be inert.
     static var isRunningUnitTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let environment = ProcessInfo.processInfo.environment
+        // Belt and braces: the configuration-path variable is NOT reliably
+        // present in the app-host process on this toolchain — relying on it
+        // alone left the CloudKit-backed SQLite store live during tests, and
+        // the mirroring delegate's CKAccountStatusNoAccount recovery tore the
+        // store out from under whichever test was writing ("No eligible
+        // connection available", then a crash loop). The injected XCTest
+        // class is the dependable signal.
+        return environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCTestBundlePath"] != nil
+            || environment["XCTestSessionIdentifier"] != nil
+            || NSClassFromString("XCTestCase") != nil
     }
 
     private init() {
@@ -348,9 +402,16 @@ class SwiftDataManager: ObservableObject {
             // No CloudKit, no file store, no user data: tests must never
             // touch the real store, and the real store must never destabilise
             // the tests.
+            // cloudKitDatabase: .none is REQUIRED, not decoration. The
+            // parameter defaults to .automatic, which turns CloudKit
+            // mirroring on whenever the target carries the iCloud
+            // entitlement — even for an in-memory store. That is why the
+            // test process still spun up an NSCloudKitMirroringDelegate and
+            // spent its startup failing CKAccountStatus checks.
             let testConfiguration = ModelConfiguration(schema: schema,
                                                        isStoredInMemoryOnly: true,
-                                                       allowsSave: true)
+                                                       allowsSave: true,
+                                                       cloudKitDatabase: .none)
             modelContainer = try! ModelContainer(for: schema,
                                                  configurations: [testConfiguration])
             isEphemeralTestInstance = true
@@ -513,6 +574,7 @@ class SwiftDataManager: ObservableObject {
             if !isEphemeralTestInstance {
                 WidgetSnapshotWriter.scheduleWrite(dataManager: self)
                 AttentionEngine.scheduleAutomation(dataManager: self)
+                SessionReconciler.scheduleReconcile(dataManager: self)
             }
         }
         do {
@@ -1096,21 +1158,33 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    /// Deleting a program deletes its DESCENDANTS: phases and sessions.
+    ///
+    /// It used to delete the program and its phases but never its sessions,
+    /// and each iOS view compensated by deleting sessions itself first while
+    /// the Mac path did not — so the same menu item left different wreckage
+    /// depending on the platform. The semantics live here now; the UI's job
+    /// is the confirmation, not the cascade.
+    ///
+    /// Sessions go through `deleteSessionEvent` so each one still refunds any
+    /// prepaid slot it consumed and drops out of every contract's array.
     func deleteProgram(_ program: Program) {
         do {
             let descriptor = FetchDescriptor<SDProgram>(predicate: #Predicate { $0.id == program.id })
-            if let sdProgram = try modelContext.fetch(descriptor).first {
-                modelContext.delete(sdProgram)
-                
-                // Also delete associated micro cycles
-                let cycleDescriptor = FetchDescriptor<SDMicroCycle>(predicate: #Predicate { $0.programId == program.id })
-                let cycles = try modelContext.fetch(cycleDescriptor)
-                for cycle in cycles {
-                    modelContext.delete(cycle)
-                }
-                
-                saveAndRefresh()
+            guard let sdProgram = try modelContext.fetch(descriptor).first else { return }
+
+            for session in cachedSessionEvents where session.programId == program.id {
+                deleteSessionEvent(session)
             }
+
+            let cycleDescriptor = FetchDescriptor<SDMicroCycle>(
+                predicate: #Predicate { $0.programId == program.id })
+            for cycle in try modelContext.fetch(cycleDescriptor) {
+                modelContext.delete(cycle)
+            }
+
+            modelContext.delete(sdProgram)
+            saveAndRefresh()
         } catch {
             debugLog("❌ Failed to delete program: \(error)")
         }
@@ -1550,13 +1624,28 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// Deleting a phase ORPHANS its sessions — deliberately, and here rather
+    /// than in the views.
+    ///
+    /// This used to touch no sessions at all, and the four call sites
+    /// disagreed about compensating: only iOS's program-detail path deleted
+    /// them, so swipe-delete on iOS and the Mac context menu left every
+    /// session pointing at a row that no longer existed. A coach's sessions
+    /// are not deleted because a phase was; they lose the phase link and the
+    /// reconciler treats them as unphased from then on.
     func deleteMicroCycle(_ microCycle: MicroCycle) {
         do {
             let descriptor = FetchDescriptor<SDMicroCycle>(predicate: #Predicate { $0.id == microCycle.id })
-            if let sdCycle = try modelContext.fetch(descriptor).first {
-                modelContext.delete(sdCycle)
-                saveAndRefresh()
+            guard let sdCycle = try modelContext.fetch(descriptor).first else { return }
+
+            for session in cachedSessionEvents where session.microCycleId == microCycle.id {
+                var orphaned = session
+                orphaned.microCycleId = nil
+                updateSessionEvent(orphaned)
             }
+
+            modelContext.delete(sdCycle)
+            saveAndRefresh()
         } catch {
             debugLog("❌ Failed to delete micro cycle: \(error)")
         }
@@ -1564,6 +1653,16 @@ class SwiftDataManager: ObservableObject {
 
     // MARK: - Session CRUD
     func addSessionEvent(_ event: SessionEvent) {
+        // Creation-time validation: the same normalisation the reconciler
+        // applies, so a record cannot be born with a pointer the repair pass
+        // would strip. The reconciler remains the guarantee, because CloudKit
+        // inserts records without coming through here at all.
+        let (normalized, changes) = SessionReconciler.normalize(
+            event, programs: cachedPrograms, phases: cachedMicroCycles)
+        if !changes.isEmpty {
+            debugLog("🧹 addSessionEvent normalized \(changes.joined(separator: ", ")) on “\(event.title)”")
+        }
+        let event = normalized
         let sdSession = SDSessionEvent.from(event)
         modelContext.insert(sdSession)
         
@@ -3150,25 +3249,11 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
-    private func eventIsPrivate(_ event: SessionEvent) -> Bool {
-        // Classic path: session is attached to a program of type .privateSessions.
-        if let pid = event.programId,
-           let program = cachedPrograms.first(where: { $0.id == pid }),
-           program.programType == .privateSessions {
-            return true
-        }
-        // Program-less private path: a 1:1 session created from the private
-        // client / bundle scheduler. We treat it as private if any attendee has
-        // an active private contract — bundle redemption and PAYG revenue then
-        // attribute correctly without forcing the session into a group program.
-        guard event.programId == nil else { return false }
-        let attendees = Set(event.attendeeIds + event.actualAttendeeIds)
-        guard !attendees.isEmpty else { return false }
-        return cachedContracts.contains { contract in
-            (contract.kind == .privateBundle || contract.kind == .privatePayPerSession)
-                && contract.status == .active
-                && attendees.contains(contract.studentId)
-        }
+    /// THE privateness question, answered in one place (SessionPrivacy).
+    /// Internal rather than private so the surfaces that used to keep their
+    /// own divergent copies can call this one.
+    func eventIsPrivate(_ event: SessionEvent) -> Bool {
+        SessionPrivacy.isPrivate(event, programs: cachedPrograms, contracts: cachedContracts)
     }
 
     // MARK: - Attendance counts

@@ -688,6 +688,56 @@ any attendance surface.
   morning and an afternoon session as duplicates; SessionIntegrityTests
   pins the correct behaviour.
 
+## Restructure Phase 1 — integrity foundations (August 2026)
+- Services/SessionReconciler.swift (BOTH targets) is the enforcement point.
+  `addSessionEvent` validates at creation, but CloudKit materialises records
+  without running app code, so the GUARANTEE is a repair pass: one pure
+  `normalize` rule shared by creation and repair, debounced into the same
+  refresh paths as auto-close, 5-min throttle, idempotent. It clears dangling
+  programId / microCycleId and a cross-program phase pointer (the phase link
+  is the invalid half). It COUNTS duplicates and orphan phases and touches
+  neither — the 11 approved merges wait for Phase 2's derived names, because
+  applying them today renames sessions in the coach's calendar.
+- Services/SessionPrivacy.swift is the ONE isPrivate. Program type when a
+  program is named; for programId == nil the strictest interim rule (an
+  attendee holds an ACTIVE private contract). A dangling programId is NOT
+  private — inventing privateness invents a charge. eventIsPrivate, the Hub
+  sheet, Mac Sales and sessionFormat all delegate; the attendee-majority
+  badge vote is deleted. Grep proof: `programType == .privateSessions`
+  appears exactly once in the app.
+- AttendanceMath.expectedIds is the ONE roster definition; the five inline
+  `attendeeIds.isEmpty → enrolledStudentIds` copies are gone. One of them
+  (the calendar row) had been showing NO headcount for enrollment-backed
+  sessions.
+- CASCADE SEMANTICS LIVE IN THE MANAGER: deleteMicroCycle orphans its
+  sessions by clearing the pointer (never deletes them); deleteProgram
+  cascades to phases AND sessions via deleteSessionEvent so slots refund and
+  contract references are released. All four former phase-delete call sites
+  and all five program-delete sites call these; views no longer compensate.
+- PhaseSession is DELETED (no persistence, no writers; its only reference was
+  an unused `phaseSessions` array on the manager). Verdict recorded: gone.
+
+## Tests: never let CloudKit into the test process
+- ModelConfiguration's `cloudKitDatabase` defaults to **.automatic**, which
+  attaches CloudKit mirroring whenever the target has the iCloud entitlement
+  — EVEN FOR AN IN-MEMORY STORE. Both test configurations must pass
+  `cloudKitDatabase: .none`. Symptom when they don't: NSCloudKitMirroringDelegate
+  failing CKAccountStatus, then "No eligible connection available" landing on
+  a random test's setUp, then a crash loop ("Restarting after unexpected exit").
+- `SwiftDataManager.isRunningUnitTests` must check XCTestBundlePath /
+  XCTestSessionIdentifier / NSClassFromString("XCTestCase") — the
+  XCTestConfigurationFilePath variable is NOT set in the app-host process on
+  this toolchain, and relying on it alone left the real CloudKit store open
+  during tests.
+- ONE ModelContainer per test process: `inMemoryForTesting()` reuses a single
+  container and wipes it per caller. Building one per test method crashed the
+  runner intermittently.
+- Run tests SEQUENTIALLY against a pre-booted simulator
+  (`xcrun simctl boot <id>` then `build-for-testing` once, then
+  `test-without-building -destination 'id=<udid>'`). Two concurrent xcodebuilds
+  deadlock on the build DB, and `test-without-building` with no booted sim
+  hangs instead of failing. Note `timeout(1)` does not exist on macOS.
+
 ## Tests (added Phase 0, August 2026)
 - The HoopwiseTests / HoopwiseUITests targets existed in project.pbxproj all
   along as EMPTY SHELLS: their synchronized folder (SAMpTests/) had never

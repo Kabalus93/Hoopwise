@@ -47,15 +47,9 @@ struct FlightyActionableDashboard: View {
         var playerIds = Set<UUID>()
         
         for session in todaySessions {
-            // First try session attendeeIds
-            if !session.attendeeIds.isEmpty {
-                playerIds.formUnion(session.attendeeIds)
-            }
-            // Fall back to program enrolled students
-            else if let programId = session.programId,
-                    let program = dataManager.programs.first(where: { $0.id == programId }) {
-                playerIds.formUnion(program.enrolledStudentIds)
-            }
+            // One roster definition for the whole app (AttendanceMath).
+            playerIds.formUnion(AttendanceMath.expectedIds(of: session,
+                                                           programs: dataManager.programs))
         }
         
         return dataManager.students.filter { playerIds.contains($0.id) }
@@ -672,13 +666,10 @@ struct FlightyActionableDashboard: View {
         let program = session.programId.flatMap { pid in dataManager.programs.first { $0.id == pid } }
         let isPast = session.endTime < currentTime
         let isNow = session.startTime <= currentTime && session.endTime >= currentTime
-        // Effective player count: prefer the session's own attendee list,
-        // fall through to the program's enrolled roster when the session
-        // hasn't been customised. Matches what `todaysPlayers` does.
-        let playerCount: Int = {
-            if !session.attendeeIds.isEmpty { return session.attendeeIds.count }
-            return program?.enrolledStudentIds.count ?? 0
-        }()
+        // Roster size via the one shared definition, so this row cannot
+        // disagree with attendance, the widget, or Mac Today.
+        let playerCount = AttendanceMath.expectedIds(of: session,
+                                                     programs: dataManager.programs).count
         let format = dataManager.sessionFormat(session)
 
         return Button { selectedSession = session } label: {

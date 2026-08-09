@@ -1097,16 +1097,12 @@ struct PrivateClientDetailSheet: View {
         .sorted { $0.date > $1.date }
     }
 
+    /// The shared rule. This used to be a local copy whose comment claimed to
+    /// mirror the money authority while omitting its contract check, so every
+    /// program-less group session — including the legacy orphan recurring
+    /// series — read as private here and appeared in a client's history.
     private func isPrivate(_ event: SessionEvent) -> Bool {
-        // Mirror SwiftDataManager.eventIsPrivate: a session is private when
-        // it's tied to a private-type program, OR when it has no program at
-        // all (newer 1:1 sessions created from the scheduler are program-less
-        // by design — see SchedulePrivateSessionSheet).
-        if let pid = event.programId,
-           let program = dataManager.programs.first(where: { $0.id == pid }) {
-            return program.programType == .privateSessions
-        }
-        return event.programId == nil
+        dataManager.eventIsPrivate(event)
     }
 
     var body: some View {

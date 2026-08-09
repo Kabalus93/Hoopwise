@@ -88,28 +88,14 @@ extension DataManager {
         return currentContract(for: student.id)?.format ?? .group
     }
 
-    /// Format of a SessionEvent. Resolves in this order:
-    /// 1. Linked Program's `format` (school programs surface as `.school`)
-    /// 2. Majority format of attendees (private wins on a tie because a
-    ///    single private client in the room defines billing; school wins
-    ///    over plain group when any attendee is a school student)
-    /// 3. `.group` as a safe default for empty rosters
+    /// Format of a SessionEvent — derived from the ONE privateness rule
+    /// (SessionPrivacy), so the badge can never contradict the money.
+    ///
+    /// The attendee majority vote this replaced was a second opinion: it
+    /// could badge a session "Group" while `eventIsPrivate` charged a private
+    /// bundle for it, because the vote read student formats and the money
+    /// authority read the session's own contracts.
     func sessionFormat(_ session: SessionEvent) -> SessionFormat {
-        if let pid = session.programId,
-           let program = cachedPrograms.first(where: { $0.id == pid }) {
-            return program.format
-        }
-
-        let attendees = session.attendeeIds.compactMap { id in
-            cachedStudents.first(where: { $0.id == id })
-        }
-        guard !attendees.isEmpty else { return .group }
-
-        let formats = attendees.map { studentFormat($0) }
-        if formats.contains(.school) { return .school }
-        let privateCount = formats.filter { $0 == .privateClient }.count
-        return privateCount >= 1 && privateCount * 2 >= attendees.count
-            ? .privateClient
-            : .group
+        SessionPrivacy.format(session, programs: cachedPrograms, contracts: cachedContracts)
     }
 }

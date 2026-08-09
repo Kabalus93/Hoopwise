@@ -306,12 +306,8 @@ struct TodayView: View {
     private var todaysPlayers: [Student] {
         var ids = Set<UUID>()
         for session in todaysSessions {
-            if !session.attendeeIds.isEmpty {
-                ids.formUnion(session.attendeeIds)
-            } else if let pid = session.programId,
-                      let program = dataManager.programs.first(where: { $0.id == pid }) {
-                ids.formUnion(program.enrolledStudentIds)
-            }
+            ids.formUnion(AttendanceMath.expectedIds(of: session,
+                                                     programs: dataManager.programs))
         }
         return dataManager.students.filter { ids.contains($0.id) }
     }
@@ -340,11 +336,7 @@ struct TodayView: View {
     private var totalActionItems: Int { attentionItems.count }
 
     private func attendees(for session: SessionEvent) -> [Student] {
-        var ids = session.attendeeIds
-        if ids.isEmpty, let pid = session.programId,
-           let program = dataManager.programs.first(where: { $0.id == pid }) {
-            ids = program.enrolledStudentIds
-        }
+        let ids = Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
         return dataManager.students.filter { ids.contains($0.id) }
     }
 }

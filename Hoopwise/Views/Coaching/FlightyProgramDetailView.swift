@@ -390,29 +390,17 @@ struct FlightyProgramDetailView: View {
         }
     }
 
+    /// The cascade lives in the manager (phases + sessions). The view's job
+    /// is the confirmation it already shows.
     private func deleteProgram() {
-        let programMicroCycles = dataManager.microCycles.filter { $0.programId == program.id }
-        for cycle in programMicroCycles {
-            dataManager.deleteMicroCycle(cycle)
-        }
-        
-        let programSessions = dataManager.sessionEvents.filter { $0.programId == program.id }
-        for session in programSessions {
-            dataManager.deleteSessionEvent(session)
-        }
-        
         dataManager.deleteProgram(program)
         dismiss()
     }
-    
+
+    /// Phase delete orphans its sessions, in the manager. This used to be the
+    /// ONE of four call sites that deleted them — which is exactly why the
+    /// same action behaved differently depending on where you invoked it.
     private func deletePhase(_ phase: MicroCycle) {
-        // Delete all sessions associated with this phase
-        let phaseSessions = dataManager.sessionEvents.filter { $0.microCycleId == phase.id }
-        for session in phaseSessions {
-            dataManager.deleteSessionEvent(session)
-        }
-        
-        // Delete the phase itself
         dataManager.deleteMicroCycle(phase)
     }
     
