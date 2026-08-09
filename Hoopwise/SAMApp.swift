@@ -119,6 +119,7 @@ struct SAMApp: App {
         exportStatementIfRequested()
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
         runOrphanCensusIfRequested()
+        SessionInspectorDebug.runIfRequested(dataManager: dataManager)
         #endif
     }
 
@@ -137,7 +138,7 @@ struct SAMApp: App {
 
         // The dedupe DRY RUN rides along: same read-only guarantee, and the
         // two reports are only meaningful together.
-        let redeemed = Set(dataManager.contracts.flatMap(\.bundleSessionIds))
+        let redeemed = SessionDedupe.redeemedSessionIds(in: dataManager.contracts)
         let plan = SessionDedupe.plan(
             groups: SessionIntegrity.duplicateSessionGroups(in: dataManager.sessionEvents),
             redeemedSessionIds: redeemed)

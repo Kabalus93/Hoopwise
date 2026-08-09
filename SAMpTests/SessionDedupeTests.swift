@@ -241,6 +241,40 @@ final class SessionDedupeTests: XCTestCase {
         XCTAssertTrue(plan([a, b]).notices.isEmpty)
     }
 
+    /// Only private bundles have prepaid slots. The live store has GROUP
+    /// contracts (bundleSize 0, remaining n/a) carrying legacy entries in
+    /// bundleSessionIds from the divergent redemption path that was removed;
+    /// counting those made a duplicate pair look like a double charge when
+    /// neither record holds a slot at all.
+    func testOnlyPrivateBundlesCountAsRedeemed() {
+        let sessionId = UUID(uuidString: "11111111-0000-0000-0000-000000000001")!
+        let student = UUID()
+        let groupContract = Contract(studentId: student, kind: .group,
+                                     bundleSize: 0, bundleSessionIds: [sessionId])
+        let bundle = Contract(studentId: student, kind: .privateBundle,
+                              bundleSize: 10, bundleSessionIds: [sessionId])
+
+        XCTAssertTrue(SessionDedupe.redeemedSessionIds(in: [groupContract]).isEmpty,
+                      "A group contract has no prepaid slots to redeem.")
+        XCTAssertEqual(SessionDedupe.redeemedSessionIds(in: [groupContract, bundle]), [sessionId])
+    }
+
+    /// …and the false positive must not reach the plan.
+    func testGroupContractEntriesDoNotFabricateADoubleCharge() {
+        let a = session("11111111-0000-0000-0000-000000000001", created: 500, present: [studentA])
+        let b = session("22222222-0000-0000-0000-000000000002", created: 0, present: [studentA])
+        let groupContract = Contract(studentId: studentA, kind: .group, bundleSize: 0,
+                                     bundleSessionIds: [a.id, b.id])
+
+        let decision = plan([a, b],
+                            redeemed: SessionDedupe.redeemedSessionIds(in: [groupContract]))
+
+        XCTAssertFalse(decision.reviewReasons.contains { $0.contains("redeemed bundle slot") },
+                       "No slot exists on a group contract, so nothing may be reported as double-charged.")
+        XCTAssertTrue(decision.survivorReason.contains("roll-call"),
+                      "With no slots, the roll-call rung decides.")
+    }
+
     func testEmptyAndSingletonGroupsProduceNoDecisions() {
         XCTAssertTrue(SessionDedupe.plan(groups: [], redeemedSessionIds: []).decisions.isEmpty)
         let single = [session("11111111-0000-0000-0000-000000000001")]

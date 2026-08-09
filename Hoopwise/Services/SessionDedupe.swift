@@ -119,6 +119,22 @@ struct DedupePlan {
 
 enum SessionDedupe {
 
+    /// Session ids that have actually consumed a PREPAID session.
+    ///
+    /// Only `.privateBundle` contracts have slots to consume, and only they
+    /// are touched by `refundSessionToBundle` and reported by
+    /// `bundleRedemptionsRemaining`. Reading `bundleSessionIds` off every
+    /// contract kind overstates the money at stake: the live store has group
+    /// contracts (bundleSize 0, remaining n/a) carrying legacy entries in
+    /// that array from the divergent redemption path that was removed, and
+    /// counting those made a duplicate pair look like a double charge when no
+    /// slot exists on either side.
+    static func redeemedSessionIds(in contracts: [Contract]) -> Set<UUID> {
+        Set(contracts
+            .filter { $0.kind == .privateBundle }
+            .flatMap(\.bundleSessionIds))
+    }
+
     /// Builds the plan. Pure — nothing is written.
     static func plan(groups: [[SessionEvent]],
                      redeemedSessionIds: Set<UUID>) -> DedupePlan {
