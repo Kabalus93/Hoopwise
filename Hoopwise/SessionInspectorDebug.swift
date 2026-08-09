@@ -40,6 +40,64 @@ enum SessionInspectorDebug {
         try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
     }
 
+    /// HOOPWISE_APPLY_ALL_MERGES=1 — executes every AUTO-resolvable duplicate
+    /// group. Manual-review groups are skipped, always.
+    ///
+    /// Safe to run only now that names are derived: the survivor's stored
+    /// title no longer decides what the coach sees, so a merge can no longer
+    /// rename a calendar entry.
+    ///
+    /// Each merge uses SessionDedupe.merged — the same code the plan proposes
+    /// and the tests cover — then saves the survivor and deletes the sibling
+    /// through deleteSessionEvent, so any prepaid slot is refunded and no
+    /// contract keeps a reference to a record that no longer exists.
+    static func applyAllMergesIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_APPLY_ALL_MERGES"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/merges-applied.txt") else { return }
+
+        let redeemed = SessionDedupe.redeemedSessionIds(in: dm.contracts)
+        let plan = SessionDedupe.plan(
+            groups: SessionIntegrity.duplicateSessionGroups(in: dm.sessionEvents),
+            redeemedSessionIds: redeemed)
+
+        var out = ["APPLY DUPLICATE MERGES", ""]
+        out.append("BEFORE: \(dm.sessionEvents.count) sessions · \(plan.decisions.count) groups (\(plan.automatic.count) auto, \(plan.manualReview.count) review)")
+        out.append("")
+
+        var merged = 0, deleted = 0, refunded = 0
+        for decision in plan.automatic {
+            let slotsBefore = dm.contracts.reduce(0) { $0 + $1.bundleSessionIds.count }
+            dm.updateSessionEvent(decision.survivor)
+            for doomedId in decision.deletedIds {
+                guard let doomed = dm.sessionEvents.first(where: { $0.id == doomedId }) else { continue }
+                dm.deleteSessionEvent(doomed)
+                deleted += 1
+            }
+            let slotsAfter = dm.contracts.reduce(0) { $0 + $1.bundleSessionIds.count }
+            if slotsAfter != slotsBefore { refunded += slotsBefore - slotsAfter }
+            merged += 1
+            out.append("[merged] \(decision.label) — kept \(short(decision.id)), removed \(decision.deletedIds.map(short).joined(separator: ", "))")
+        }
+
+        for decision in plan.manualReview {
+            out.append("[SKIPPED — review] \(decision.label): \(decision.reviewReasons.joined(separator: "; "))")
+        }
+
+        // Re-detect, so the report states the true remaining state.
+        let after = SessionDedupe.plan(
+            groups: SessionIntegrity.duplicateSessionGroups(in: dm.sessionEvents),
+            redeemedSessionIds: SessionDedupe.redeemedSessionIds(in: dm.contracts))
+        let census = SessionIntegrity.census(sessions: dm.sessionEvents,
+                                             programs: dm.programs,
+                                             phases: dm.microCycles)
+        out.append("")
+        out.append("AFTER: \(dm.sessionEvents.count) sessions · \(after.decisions.count) groups remaining")
+        out.append("  merged \(merged) groups, deleted \(deleted) records, bundle slots released \(refunded)")
+        out.append("  census BROKEN TOTAL: \(census.brokenCount) · window violations: \(census.sessionsOutsideTheirPhaseWindow.count)")
+        write(out, to: url)
+    }
+
     /// HOOPWISE_CREATE_MICROGROUPS=1 — Phase 2.1's second half: one
     /// `.privateSessions` program per private client, and their standalone
     /// 1:1 sessions re-homed onto it.

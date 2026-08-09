@@ -717,6 +717,28 @@ any attendance surface.
   pairs where Elite's phase-generated sessions already sat on those Fridays.
   ALL 16 remain PENDING until derived names land (2.3).
 
+## Restructure Phase 2.3 — names are DERIVED (August 2026, executed)
+- Services/SessionNaming.swift (both targets) computes a session's name from
+  the group and the plan. groupFirst = the program's resolved display name
+  (calendar, widget); planFirst = "<phase> · Session N of M" (inside a
+  program). The stored column is a LEGACY FALLBACK, used only when a session
+  has no program; the "Private ·" prefix is stripped there because
+  privateness is the program's TYPE now, not a string prefix.
+- Wiring is at the MANAGER BOUNDARY, not in 45 views: cachedSessionEvents
+  carry the derived title (SwiftDataManager.withDerivedNames), so renaming a
+  phase or program renames every surface at once.
+- THE WRITE-PATH GUARD: `titleToPersist` compares the incoming title to what
+  was rendered for that id. Identical → the caller round-tripped a cached copy
+  and never touched the name, so the STORED string is kept. Different → a
+  deliberate rename, stored as an override. Without this, every save would
+  burn the derived name into the column and derivation would become a
+  one-time rename. Covered by SessionNamingTests — do not remove.
+- The stored `title` column is UNCHANGED on disk. "Retiring title to
+  legacyTitle" is semantic only: renaming the column would be a CloudKit
+  schema removal, which is not allowed.
+- With names derived, the 16 pending duplicate merges executed: 216 → 200
+  sessions, 0 groups remaining, BROKEN 0, 0 bundle slots moved.
+
 ## Restructure Phase 1 — integrity foundations (August 2026)
 - Services/SessionReconciler.swift (BOTH targets) is the enforcement point.
   `addSessionEvent` validates at creation, but CloudKit materialises records

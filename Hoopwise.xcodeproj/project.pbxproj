@@ -167,6 +167,7 @@
 				Services/SessionDedupe.swift,
 				Services/SessionIntegrity.swift,
 				Services/SessionLiveActivityManager.swift,
+				Services/SessionNaming.swift,
 				Services/SessionPrivacy.swift,
 				Services/SessionReconciler.swift,
 				Services/SessionStatusMonitor.swift,

@@ -300,6 +300,13 @@ class SwiftDataManager: ObservableObject {
     ])
 
     #if DEBUG
+    /// The raw stored title, bypassing derivation. Tests assert that a
+    /// round-trip through updateSessionEvent leaves it alone.
+    func storedTitleForTesting(sessionId: UUID) -> String? {
+        try? modelContext.fetch(
+            FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == sessionId })).first?.title
+    }
+
     /// Inserts a record the way CloudKit does — straight into the store, with
     /// no validation. Tests use this to prove the reconciler repairs what
     /// creation-time checks can never see.
@@ -370,6 +377,45 @@ class SwiftDataManager: ObservableObject {
     /// unrelated test's setUp), and auto-close would mutate fixture data
     /// mid-test. Deterministic tests need a quiet manager.
     private(set) var isEphemeralTestInstance = false
+
+    // MARK: - Derived session names (Phase 2.3)
+    //
+    // The cached sessions the whole app reads carry a DERIVED title, so every
+    // surface renames the moment a phase or program is renamed — without
+    // touching 45 render sites. The stored column keeps whatever string is on
+    // disk; it is the legacy fallback for sessions that derive to nothing.
+
+    /// The name each session should display, keyed by id. Kept so
+    /// `updateSessionEvent` can tell "the caller handed back what we rendered"
+    /// from "the coach typed a new name".
+    private var derivedTitles: [UUID: String] = [:]
+
+    static func withDerivedNames(_ sessions: [SessionEvent],
+                                 programs: [Program],
+                                 phases: [MicroCycle]) -> [SessionEvent] {
+        sessions.map { session in
+            var copy = session
+            copy.title = SessionNaming.name(for: session, programs: programs,
+                                            phases: phases, allSessions: sessions,
+                                            style: .groupFirst)
+            return copy
+        }
+    }
+
+    /// The stored title to persist for a session the caller is saving.
+    ///
+    /// If the incoming title is exactly what we rendered, the caller is
+    /// round-tripping a cached copy and never touched the name — keep the
+    /// stored string. Anything else is a deliberate rename and is stored as
+    /// an override. Without this guard, every save would burn the derived
+    /// name into the column and undo the whole point of deriving it.
+    private func titleToPersist(for event: SessionEvent) -> String {
+        guard let rendered = derivedTitles[event.id] else { return event.title }
+        guard event.title == rendered else { return event.title }
+        let stored = try? modelContext.fetch(
+            FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == event.id })).first?.title
+        return (stored ?? nil) ?? event.title
+    }
 
     /// True when the process was launched by the XCTest runner.
     ///
@@ -598,7 +644,11 @@ class SwiftDataManager: ObservableObject {
             cachedMicroCycles = sdMicroCycles.map { $0.toStruct() }
             
             let sdSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
-            cachedSessionEvents = sdSessions.map { $0.toStruct() }
+            cachedSessionEvents = Self.withDerivedNames(
+                sdSessions.map { $0.toStruct() },
+                programs: cachedPrograms, phases: cachedMicroCycles)
+            derivedTitles = Dictionary(uniqueKeysWithValues:
+                cachedSessionEvents.map { ($0.id, $0.title) })
             
             // Debug: Log sessions with games
             let sessionsWithGames = cachedSessionEvents.filter { !$0.games.isEmpty }
@@ -1703,6 +1753,8 @@ class SwiftDataManager: ObservableObject {
                 // createdByCoachId on every save.
                 var incoming = event
                 incoming.updatedAt = Date()
+                // Never burn a derived name into the stored column.
+                incoming.title = titleToPersist(for: event)
                 sdSession.apply(incoming)
 
                 // Debug: Verify games were set
@@ -4196,7 +4248,11 @@ class SwiftDataManager: ObservableObject {
             cachedMicroCycles = sdMicroCycles.map { $0.toStruct() }
             
             let sdSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
-            cachedSessionEvents = sdSessions.map { $0.toStruct() }
+            cachedSessionEvents = Self.withDerivedNames(
+                sdSessions.map { $0.toStruct() },
+                programs: cachedPrograms, phases: cachedMicroCycles)
+            derivedTitles = Dictionary(uniqueKeysWithValues:
+                cachedSessionEvents.map { ($0.id, $0.title) })
 
             let sdDrills = try modelContext.fetch(FetchDescriptor<SDDrill>())
             migrateLegacyVideoUrls(in: sdDrills)
