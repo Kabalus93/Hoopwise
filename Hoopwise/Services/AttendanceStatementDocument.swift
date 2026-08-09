@@ -2,11 +2,16 @@ import Foundation
 import CoreGraphics
 import CoreText
 
-/// Bilingual attendance and account statement for ONE student and ONE contract.
+/// Bilingual attendance statement for ONE student and ONE contract — a
+/// client-facing one-pager, not an internal ledger.
 ///
 /// Scope is deliberately narrow. A statement goes to a client's phone, so it
 /// must never contain a second family's names, rates, or balances — there is no
 /// multi-student variant and there should not be one.
+///
+/// NO MONEY on this document, ever. It states attendance; the agreement and
+/// the conversation state price. A currency symbol here turns a calm statement
+/// into an invoice.
 ///
 /// Fully vector: no attendance photos, no images of any kind. Beyond keeping
 /// the file small enough to send over WeChat, it keeps a minor's photograph out
@@ -18,16 +23,8 @@ enum AttendanceStatementDocument {
     struct SessionLine {
         var date: Date
         var startTime: Date
-        var durationMinutes: Int
         var venue: String?
-        var status: Attendance
-        /// Whether this session consumed a bundle slot.
-        var deductedFromBundle: Bool
         var note: String?
-
-        enum Attendance {
-            case present, absent, excused, unmarked
-        }
     }
 
     struct Input {
@@ -36,36 +33,38 @@ enum AttendanceStatementDocument {
         /// Figures are copied in as scalars rather than holding a Contract, so
         /// the document layer stays independent of the domain model and can be
         /// rendered and verified without one.
-        var pricePerSession: Double
         var bundleSize: Int
-        var sessionsConsumed: Int
-        var bundleTotal: Double
-        var amountPaid: Double
-        var amountOwed: Double
-        var travelFee: Double
-        var travelBasisLabel: String?
         var contractNumberLabel: String
         var coachName: String
-        var currencyCode: String
+        /// Optional contact printed in the footer. Existing Coach field only —
+        /// never invented.
+        var coachPhone: String?
         var statementDate: Date
         /// Nil covers the whole contract.
         var periodStart: Date?
         var periodEnd: Date?
+        /// DEDUCTED sessions only — the rows ARE the consumption record.
         var sessions: [SessionLine]
         /// Written by the coach. Never generated.
         var coachNote: String?
-        var expiryDate: Date?
+
+        /// Consumed DERIVES from the rows, always. The table and the summary
+        /// number cannot disagree because they are the same thing.
+        var sessionsConsumed: Int { sessions.count }
+        var sessionsRemaining: Int { max(0, bundleSize - sessionsConsumed) }
     }
 
     // MARK: - Data Resolution
 
     /// Builds the input from live data.
     ///
-    /// The `deductedFromBundle` flag reads `contract.bundleSessionIds`, which is
-    /// the array `redeemPrivateAttendance` writes. It is NOT recomputed from
-    /// session properties. If the report re-derived consumption it could
-    /// disagree with the app about whether a session was used, and a statement
-    /// that contradicts the running total is worse than no statement at all.
+    /// The session rows ARE `contract.bundleSessionIds` — the array
+    /// `redeemPrivateAttendance` writes — resolved to their events. Nothing is
+    /// recomputed from attendance arrays, and the consumed count derives from
+    /// these rows, so the statement can never contradict itself: rows shown =
+    /// sessions consumed, by construction. (The stored counter and the rows
+    /// could historically drift apart; the document sides with the rows it
+    /// prints.)
     @MainActor
     static func makeInput(studentId: UUID,
                           contract: Contract,
@@ -75,71 +74,33 @@ enum AttendanceStatementDocument {
                           coachNote: String? = nil) -> Input? {
         guard let student = dataManager.students.first(where: { $0.id == studentId }) else { return nil }
 
-        let redeemed = Set(contract.bundleSessionIds)
-
-        let events = dataManager.sessionEvents
+        let lines: [SessionLine] = contract.bundleSessionIds
+            .compactMap { id in dataManager.sessionEvents.first(where: { $0.id == id }) }
             .filter { event in
-                guard event.date >= contract.enrollmentDate else { return false }
-                if let programId = contract.programId, event.programId != programId { return false }
-                // Include any session the student was rostered for or attended,
-                // so absences appear rather than silently vanishing.
-                let involved = event.attendeeIds.contains(studentId)
-                    || event.actualAttendeeIds.contains(studentId)
-                    || event.excusedAbsences.contains(studentId)
-                    || event.unexcusedAbsences.contains(studentId)
-                guard involved else { return false }
                 if let periodStart, event.date < periodStart { return false }
                 if let periodEnd, event.date > periodEnd { return false }
                 return true
             }
             .sorted { $0.date < $1.date }
-
-        let lines: [SessionLine] = events.map { event in
-            let status: SessionLine.Attendance
-            // Four states, three stores. Unmarked is NOT absent — an absence
-            // consumes a session, so it must be explicitly recorded.
-            if event.actualAttendeeIds.contains(studentId) {
-                status = .present
-            } else if event.excusedAbsences.contains(studentId) {
-                status = .excused
-            } else if event.unexcusedAbsences.contains(studentId) {
-                status = .absent
-            } else {
-                status = .unmarked
+            .map { event in
+                SessionLine(date: event.date,
+                            startTime: event.startTime,
+                            venue: event.location,
+                            note: event.notes)
             }
-            return SessionLine(
-                date: event.date,
-                startTime: event.startTime,
-                durationMinutes: event.durationMinutes,
-                venue: event.location,
-                status: status,
-                deductedFromBundle: redeemed.contains(event.id),
-                note: event.notes
-            )
-        }
 
         return Input(
             studentNameZh: student.chineseName,
             studentNameEn: student.name,
-            pricePerSession: contract.pricePerSession,
             bundleSize: contract.bundleSize,
-            sessionsConsumed: contract.bundleSessionIds.count,
-            bundleTotal: contract.bundleAmount,
-            amountPaid: contract.amountPaid,
-            amountOwed: contract.sessionAmountOwed,
-            travelFee: contract.hasTravelFee ? contract.travelFeeAmount : 0,
-            travelBasisLabel: contract.hasTravelFee
-                ? (contract.travelFeeBasis == .perContract ? "每份合同 per contract" : "每节课 per session")
-                : nil,
             contractNumberLabel: "\(contract.contractNumber)",
             coachName: dataManager.coach.name,
-            currencyCode: dataManager.appSettings.currency.currencyCode,
+            coachPhone: dataManager.coach.phone?.isEmpty == false ? dataManager.coach.phone : nil,
             statementDate: Date(),
             periodStart: periodStart,
             periodEnd: periodEnd,
             sessions: lines,
-            coachNote: coachNote,
-            expiryDate: nil
+            coachNote: coachNote
         )
     }
 
@@ -160,20 +121,39 @@ enum AttendanceStatementDocument {
         return "Attendance_\(name)_Contract\(input.contractNumberLabel)_\(formatter.string(from: input.statementDate))"
     }
 
+    // MARK: - Palette
+
+    /// Near-black ink and one accent, used exactly twice (wordmark, remaining
+    /// number). The document is printed and WeChat-forwarded — everything but
+    /// the accent must survive grayscale untouched.
+    private static let ink = CGColor(gray: 0.10, alpha: 1)
+    private static let secondary = CGColor(gray: 0.45, alpha: 1)
+    private static let hairline = CGColor(gray: 0.82, alpha: 1)
+    /// The app identity accent (light-mode blue — the dark-mode lime is
+    /// illegible on paper).
+    private static let accent = CGColor(red: 0, green: 0.478, blue: 1.0, alpha: 1)
+
     // MARK: - Render
 
     @discardableResult
     static func render(_ input: Input, to url: URL? = nil) throws -> URL {
-        let renderer = PDFDocumentRenderer()
-        renderer.onPageBegin = { doc, page in
-            doc.footer("HoopWise · \(input.studentNameZh ?? input.studentNameEn) · 第 \(page) 页 / Page \(page)")
+        let renderer = PDFDocumentRenderer(margins: PDFMargins(all: 56))
+        renderer.onPageBegin = { doc, _ in
+            var thanks = "感谢信任 · Thank you for training with us"
+            if let phone = input.coachPhone {
+                thanks += " · \(input.coachName) \(phone)"
+            }
+            var style = PDFTextStyle(font: PDFFont.bilingual(size: 8),
+                                     color: secondary)
+            style.alignment = .center
+            doc.footer(thanks, style: style)
         }
 
         let body: (PDFDocumentRenderer) -> Void = { doc in
             drawHeader(doc, input)
-            drawSummary(doc, input)
-            drawSessions(doc, input)
-            drawFooterBlock(doc, input)
+            drawSummaryStrip(doc, input)
+            drawSessionTable(doc, input)
+            drawClosing(doc, input)
         }
 
         if let url {
@@ -182,158 +162,229 @@ enum AttendanceStatementDocument {
         return try renderer.renderToTemporaryFile(named: filename(for: input), body)
     }
 
-    // MARK: - Sections
+    // MARK: - Header
 
     private static func drawHeader(_ doc: PDFDocumentRenderer, _ input: Input) {
-        doc.text("出席与账户结算单", style: .title(19))
-        doc.text("Attendance & Account Statement", style: .heading(12))
-        doc.spacer(8)
+        // Wordmark left, document kind right — one quiet band.
+        let wordmark = PDFTextStyle(font: PDFFont.bilingual(size: 9, bold: true),
+                                    color: accent)
+        var kind = PDFTextStyle(font: PDFFont.bilingual(size: 9), color: secondary)
+        kind.alignment = .right
+        let band = doc.reserve(height: 14)
+        drawInRect(doc, band, "HOOPWISE", wordmark)
+        drawInRect(doc, band, "出勤结算单 · Attendance Statement", kind)
 
-        // Chinese name primary, English secondary — the convention the app's
-        // displayName already uses for Chinese-reading clients.
+        doc.spacer(22)
+
+        // The student is the hero.
         let name: String
-        if let zh = input.studentNameZh, !zh.isEmpty {
-            name = "\(zh)  ·  \(input.studentNameEn)"
+        if let zh = input.studentNameZh, !zh.isEmpty, zh != input.studentNameEn {
+            name = "\(zh) · \(input.studentNameEn)"
         } else {
             name = input.studentNameEn
         }
-        doc.text(name, style: .heading(14))
-        doc.spacer(4)
+        doc.text(name, style: PDFTextStyle(font: PDFFont.bilingual(size: 28, bold: true),
+                                           color: ink, lineSpacing: 4))
+        doc.spacer(8)
 
-        doc.text("合同编号 Contract No.: \(input.contractNumberLabel)", style: .body())
-        doc.text("教练 Coach: \(input.coachName)", style: .body())
-        doc.text("结算日期 Statement date: \(dateString(input.statementDate))", style: .body())
-        doc.text("统计区间 Period: \(periodString(input))", style: .body())
-        doc.spacer(6)
-        doc.rule()
-        doc.spacer(10)
+        // Metadata in one quiet line, not a form-field stack.
+        let meta = [
+            "教练 Coach \(input.coachName)",
+            "合同 Contract No. \(input.contractNumberLabel)",
+            "结算日期 Date \(dateString(input.statementDate))",
+            "区间 Period \(periodString(input))"
+        ].joined(separator: "   ·   ")
+        doc.text(meta, style: PDFTextStyle(font: PDFFont.bilingual(size: 8),
+                                           color: secondary, lineSpacing: 3))
+        doc.spacer(20)
     }
 
-    private static func drawSummary(_ doc: PDFDocumentRenderer, _ input: Input) {
-        let code = input.currencyCode
-        let remaining = max(0, input.bundleSize - input.sessionsConsumed)
+    // MARK: - Summary strip
 
-        doc.text("账户摘要 / Account Summary", style: .heading(12))
-        doc.spacer(6)
-
-        var rows: [[String]] = [
-            ["单价 Price per session", money(input.pricePerSession, code)],
-            ["购买课时 Sessions purchased", "\(input.bundleSize)"],
-            ["已消课时 Sessions consumed", "\(input.sessionsConsumed)"],
-            ["剩余课时 Sessions remaining", "\(remaining)"],
-            ["套餐总额 Bundle total", money(input.bundleTotal, code)],
-            ["已付 Paid", money(input.amountPaid, code)],
-            ["应付 Owed", money(input.amountOwed, code)]
-        ]
-
-        // Travel appears only when set, and never folded into session money.
-        if let basis = input.travelBasisLabel {
-            rows.append(["交通补贴 Travel fee (\(basis))", money(input.travelFee, code)])
-        }
-
-        if let expiry = input.expiryDate {
-            rows.append(["有效期至 Valid until", dateString(expiry)])
-        }
-
-        doc.table(
-            columns: [
-                PDFTableColumn(title: "项目 Item", weight: 2.4),
-                PDFTableColumn(title: "金额 / 数量 Value", weight: 1.4, alignment: .right)
-            ],
-            rows: rows)
+    private static func drawSummaryStrip(_ doc: PDFDocumentRenderer, _ input: Input) {
+        doc.rule(color: hairline, width: 0.5)
         doc.spacer(14)
+
+        let band = doc.reserve(height: 48)
+        let third = band.width / 3
+
+        let stats: [(String, String, CGColor)] = [
+            ("\(input.bundleSize)", "购买 Purchased", ink),
+            ("\(input.sessionsConsumed)", "已消 Consumed", ink),
+            ("\(input.sessionsRemaining)", "剩余 Remaining", accent)
+        ]
+        for (index, stat) in stats.enumerated() {
+            let x = band.minX + third * CGFloat(index)
+            var number = PDFTextStyle(font: PDFFont.bilingual(size: 22, bold: true),
+                                      color: stat.2)
+            number.alignment = .center
+            var label = PDFTextStyle(font: PDFFont.bilingual(size: 8), color: secondary)
+            label.alignment = .center
+            // CTFrame drops a line whose height doesn't FULLY fit the box —
+            // a 22pt line needs comfortably more than its point size.
+            drawInRect(doc, CGRect(x: x, y: band.minY, width: third, height: 32),
+                       stat.0, number)
+            drawInRect(doc, CGRect(x: x, y: band.minY + 34, width: third, height: 12),
+                       stat.1, label)
+        }
+
+        doc.spacer(14)
+        doc.rule(color: hairline, width: 0.5)
+        doc.spacer(22)
     }
 
-    private static func drawSessions(_ doc: PDFDocumentRenderer, _ input: Input) {
-        doc.text("课程明细 / Session Detail", style: .heading(12))
-        doc.spacer(6)
+    // MARK: - Session table
 
+    /// Column widths as fractions of the content width:
+    /// # · 日期 Date · 时间 Time · 地点 Venue · 备注 Note
+    private static let columnFractions: [CGFloat] = [0.055, 0.185, 0.115, 0.365, 0.28]
+
+    private static func drawSessionTable(_ doc: PDFDocumentRenderer, _ input: Input) {
         guard !input.sessions.isEmpty else {
-            doc.text("此区间内无课程记录。No sessions recorded in this period.",
-                     style: .caption())
+            doc.text("此区间内无已消课时。No sessions consumed in this period.",
+                     style: PDFTextStyle(font: PDFFont.bilingual(size: 9.5),
+                                         color: secondary))
             doc.spacer(12)
             return
         }
 
-        let rows: [[String]] = input.sessions.enumerated().map { index, line in
-            [
+        // Comfortable ~7mm rows; tighten slightly past 12 rows so ~16 still
+        // fit one page. Never below legibility — past what fits, page 2
+        // continues the table with a repeated header.
+        let rowHeight: CGFloat = input.sessions.count > 12 ? 17.5 : 20
+        let cellStyle = PDFTextStyle(font: PDFFont.bilingual(size: 9.5),
+                                     color: ink, lineSpacing: 1.5)
+        let noteStyle = PDFTextStyle(font: PDFFont.bilingual(size: 8.5),
+                                     color: ink, lineSpacing: 1.5)
+
+        drawTableHeader(doc)
+
+        for (index, line) in input.sessions.enumerated() {
+            let widths = columnFractions.map { $0 * doc.contentWidth }
+
+            // Note wraps to at most two lines; the row grows to hold them.
+            let note = line.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let noteWidth = widths[4] - 8
+            let noteHeight = note.isEmpty ? 0 : doc.measure(note, style: noteStyle, width: noteWidth).height
+            let twoLines = doc.measure("字\n字", style: noteStyle, width: noteWidth).height
+            let effectiveNoteHeight = min(noteHeight, twoLines)
+            let height = max(rowHeight, effectiveNoteHeight + 8)
+
+            // Keep the closing block off a lonely page: break early enough
+            // that at least the row fits above the bottom margin.
+            if height + 4 > doc.remainingHeight {
+                doc.newPage()
+                drawTableHeader(doc)
+            }
+
+            let band = doc.reserve(height: height)
+            var x = band.minX
+            let values = [
                 "\(index + 1)",
                 dateString(line.date),
                 timeString(line.startTime),
-                "\(line.durationMinutes) 分 min",
-                line.venue ?? "—",
-                statusLabel(line.status),
-                line.deductedFromBundle ? "是 Yes" : "否 No",
-                line.note ?? ""
+                middleTruncated(line.venue?.isEmpty == false ? line.venue! : "—",
+                                style: cellStyle, width: widths[3] - 8, doc: doc),
+                note
             ]
+            for (column, width) in widths.enumerated() {
+                var style = column == 4 ? noteStyle : cellStyle
+                style.alignment = column == 0 ? .center : .left
+                let single = doc.measure("字", style: style, width: 1000).height
+                let contentHeight = column == 4 ? min(max(single, effectiveNoteHeight), height - 4) : single
+                let y = band.minY + (height - contentHeight) / 2
+                drawInRect(doc, CGRect(x: x + 4, y: y, width: width - 8,
+                                       height: contentHeight),
+                           values[column], style)
+                x += width
+            }
+            hairlineAt(doc, y: band.maxY)
         }
-
-        doc.table(
-            columns: [
-                PDFTableColumn(title: "#", weight: 0.35, alignment: .center),
-                PDFTableColumn(title: "日期 Date", weight: 1.1),
-                PDFTableColumn(title: "时间 Time", weight: 0.7),
-                PDFTableColumn(title: "时长 Dur.", weight: 0.7),
-                PDFTableColumn(title: "地点 Venue", weight: 1.3),
-                PDFTableColumn(title: "出席 Status", weight: 1.0),
-                PDFTableColumn(title: "扣课 Deducted", weight: 0.85, alignment: .center),
-                PDFTableColumn(title: "备注 Note", weight: 1.5)
-            ],
-            rows: rows,
-            cellStyle: .body(8.5))
-        doc.spacer(12)
+        doc.spacer(4)
     }
 
-    private static func drawFooterBlock(_ doc: PDFDocumentRenderer, _ input: Input) {
-        let remaining = max(0, input.bundleSize - input.sessionsConsumed)
+    private static func drawTableHeader(_ doc: PDFDocumentRenderer) {
+        let titles = ["#", "日期 Date", "时间 Time", "地点 Venue", "备注 Note"]
+        var style = PDFTextStyle(font: PDFFont.bilingual(size: 8, bold: true),
+                                 color: secondary)
+        let band = doc.reserve(height: 18)
+        var x = band.minX
+        for (index, fraction) in columnFractions.enumerated() {
+            let width = fraction * doc.contentWidth
+            style.alignment = index == 0 ? .center : .left
+            drawInRect(doc, CGRect(x: x + 4, y: band.minY + 4,
+                                   width: width - 8, height: 12),
+                       titles[index], style)
+            x += width
+        }
+        hairlineAt(doc, y: band.maxY)
+    }
 
-        doc.ensureSpace(70)
-        doc.rule()
-        doc.spacer(8)
-        doc.text("截至 \(dateString(input.statementDate))，剩余课时 \(remaining) 节。",
-                 style: .heading(11))
-        doc.text("Sessions remaining as of \(dateString(input.statementDate)): \(remaining).",
-                 style: .body())
+    // MARK: - Closing
+
+    private static func drawClosing(_ doc: PDFDocumentRenderer, _ input: Input) {
+        doc.ensureSpace(64)
+        doc.spacer(18)
+        doc.text("截至 \(dateString(input.statementDate))，剩余课时 \(input.sessionsRemaining) 节。",
+                 style: PDFTextStyle(font: PDFFont.bilingual(size: 11, bold: true),
+                                     color: ink, lineSpacing: 3))
+        doc.spacer(2)
+        doc.text("Sessions remaining as of \(dateString(input.statementDate)): \(input.sessionsRemaining).",
+                 style: PDFTextStyle(font: PDFFont.bilingual(size: 9.5),
+                                     color: secondary, lineSpacing: 3))
 
         if let note = input.coachNote, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            doc.spacer(10)
-            doc.text("教练备注 / Coach's Note", style: .heading(11))
-            doc.spacer(4)
-            doc.text(note, style: .body())
+            doc.spacer(12)
+            doc.text("教练备注 / Coach's Note", style: PDFTextStyle(
+                font: PDFFont.bilingual(size: 9.5, bold: true), color: ink))
+            doc.spacer(3)
+            doc.text(note, style: PDFTextStyle(font: PDFFont.bilingual(size: 9.5),
+                                               color: ink, lineSpacing: 2))
         }
+    }
+
+    // MARK: - Drawing helpers
+
+    /// Cursor-space rect (what `reserve` hands out: y measured from the top
+    /// content edge) → the renderer's bottom-up page space.
+    private static func drawInRect(_ doc: PDFDocumentRenderer, _ rect: CGRect,
+                                   _ string: String, _ style: PDFTextStyle) {
+        let pdfY = doc.pageSize.height - doc.margins.top - rect.minY - rect.height
+        doc.drawText(string, style: style,
+                     in: CGRect(x: rect.minX, y: pdfY,
+                                width: rect.width, height: rect.height))
+    }
+
+    /// A full-width hairline at a cursor-space y, independent of the cursor.
+    private static func hairlineAt(_ doc: PDFDocumentRenderer, y: CGFloat) {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: 0.25))
+        path.addLine(to: CGPoint(x: doc.contentWidth, y: 0.25))
+        doc.draw(path: path,
+                 in: CGRect(x: doc.margins.left, y: y - 0.5,
+                            width: doc.contentWidth, height: 0.5),
+                 stroke: hairline, lineWidth: 0.5)
+    }
+
+    /// Middle truncation for one-line cells: the venue keeps its head and tail
+    /// (义蓬…中心) instead of wrapping or losing its distinguishing end.
+    private static func middleTruncated(_ string: String, style: PDFTextStyle,
+                                        width: CGFloat, doc: PDFDocumentRenderer) -> String {
+        guard doc.measure(string, style: style, width: 10_000).width > width else { return string }
+        let characters = Array(string)
+        // Keep head and tail, shrinking symmetrically until "head…tail" fits.
+        for keep in stride(from: characters.count - 1, through: 2, by: -1) {
+            let front = (keep + 1) / 2
+            let back = keep - front
+            let candidate = String(characters.prefix(front)) + "…" + String(characters.suffix(back))
+            if doc.measure(candidate, style: style, width: 10_000).width <= width {
+                return candidate
+            }
+        }
+        return String(characters.prefix(1)) + "…"
     }
 
     // MARK: - Formatting
-
-    private static func statusLabel(_ status: SessionLine.Attendance) -> String {
-        switch status {
-        case .present:  return "出席 Present"
-        case .absent:   return "缺席 Absent"
-        case .excused:  return "请假 Excused"
-        case .unmarked: return "未记录 Not recorded"
-        }
-    }
-
-    /// Formats with the plain currency symbol. `.currency(code:)` alone renders
-    /// CNY as "CN¥" outside a Chinese locale, which reads as a foreign currency
-    /// to the client the document is addressed to.
-    private static func money(_ amount: Double, _ code: String) -> String {
-        let symbol: String
-        switch code {
-        case "CNY": symbol = "¥"
-        case "USD": symbol = "$"
-        case "EUR": symbol = "€"
-        case "GBP": symbol = "£"
-        default:    symbol = code + " "
-        }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let number = formatter.string(from: NSNumber(value: amount)) ?? String(format: "%.2f", amount)
-        return symbol + number
-    }
 
     private static func dateString(_ date: Date) -> String {
         let formatter = DateFormatter()

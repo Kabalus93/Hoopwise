@@ -555,9 +555,17 @@ any attendance surface.
   leak other families' rates and balances. No images, ever: it keeps a
   minor's photo out of a forwardable document and preserves the vector
   property.
-- The statement's "deducted" column reads contract.bundleSessionIds, the
-  array the redemption authority writes. Never recompute it — a document
-  that contradicts the app's running total is worse than no document.
+- The statement is a CLIENT-FACING ONE-PAGER (v2, August 2026): NO MONEY —
+  zero currency symbols; it states attendance, the agreement states price.
+  Its table rows ARE contract.bundleSessionIds (the redemption authority's
+  array) resolved to events, and the Consumed stat DERIVES from those rows
+  — rows shown = sessions consumed by construction, so the document can
+  never contradict itself. Never recompute consumption from attendance
+  arrays. Five columns (# 日期 时间 地点 备注), three-stat strip, accent
+  (#007AFF) exactly twice (wordmark + remaining), hairlines only, must
+  survive grayscale. DEBUG headless export: launch the iOS app with env
+  HOOPWISE_EXPORT_STATEMENT="<name>:<contractNo>" → PDF lands in the App
+  Group Library/Caches as statement-debug.pdf (pullable via devicectl).
 - TrainingAgreementDocument: the coach's clause text is VERBATIM and must
   not be edited, paraphrased, or "improved". Unknown fields print fill-in
   rules, never plausible defaults. Two modes: blank-for-signing (empty

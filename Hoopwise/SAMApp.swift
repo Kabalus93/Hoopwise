@@ -114,5 +114,40 @@ struct SAMApp: App {
         await SessionStatusMonitor.shared.startMonitoring(dataManager: dataManager)
 
         isInitialized = true
+
+        #if DEBUG
+        exportStatementIfRequested()
+        #endif
     }
+
+    #if DEBUG
+    /// Headless statement export for device verification — same channel as
+    /// the widget traces. HOOPWISE_EXPORT_STATEMENT="<studentName>:<contractNo>"
+    /// (set via `devicectl device process launch -e`) writes the PDF to the
+    /// App Group's Library/Caches, pullable without root. Debug only, no UI.
+    @MainActor
+    private func exportStatementIfRequested() {
+        guard let spec = ProcessInfo.processInfo
+            .environment["HOOPWISE_EXPORT_STATEMENT"] else { return }
+        let parts = spec.split(separator: ":")
+        guard let namePart = parts.first else { return }
+        let name = String(namePart)
+        let contractNo = parts.count > 1 ? Int(parts[1]) : nil
+        guard let student = dataManager.students.first(where: {
+            $0.name.caseInsensitiveCompare(name) == .orderedSame || $0.chineseName == name
+        }) else { return }
+        let contracts = dataManager.contracts.filter { $0.studentId == student.id }
+        guard let contract = contractNo
+            .flatMap({ number in contracts.first { $0.contractNumber == number } })
+            ?? contracts.first else { return }
+        guard let input = AttendanceStatementDocument.makeInput(
+                studentId: student.id, contract: contract, dataManager: dataManager),
+              let dir = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches", isDirectory: true)
+        else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        _ = try? AttendanceStatementDocument.render(
+            input, to: dir.appendingPathComponent("statement-debug.pdf"))
+    }
+    #endif
 }
