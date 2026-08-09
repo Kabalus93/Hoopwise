@@ -316,8 +316,17 @@ class SwiftDataManager: ObservableObject {
         // A failure here is a broken schema, which every test should fail on.
         modelContainer = try! ModelContainer(for: Self.schema,
                                              configurations: [configuration])
+        isEphemeralTestInstance = true
     }
     #endif
+
+    /// True only for `inMemoryForTesting()`. Such an instance must not
+    /// schedule the debounced background work the app relies on: those
+    /// timers outlive a test's container and fire against a store that is
+    /// being torn down (observed as "No eligible connection available" in an
+    /// unrelated test's setUp), and auto-close would mutate fixture data
+    /// mid-test. Deterministic tests need a quiet manager.
+    private(set) var isEphemeralTestInstance = false
 
     private init() {
         let schema = Self.schema
@@ -474,8 +483,10 @@ class SwiftDataManager: ObservableObject {
     // MARK: - Refresh Caches
     func refreshAllCaches() async {
         defer {
-            WidgetSnapshotWriter.scheduleWrite(dataManager: self)
-            AttentionEngine.scheduleAutomation(dataManager: self)
+            if !isEphemeralTestInstance {
+                WidgetSnapshotWriter.scheduleWrite(dataManager: self)
+                AttentionEngine.scheduleAutomation(dataManager: self)
+            }
         }
         do {
             // Fetch all SwiftData models and convert to structs
@@ -4034,8 +4045,10 @@ class SwiftDataManager: ObservableObject {
     /// Synchronous cache refresh for immediate UI updates after save
     private func refreshCachesSync() {
         defer {
-            WidgetSnapshotWriter.scheduleWrite(dataManager: self)
-            AttentionEngine.scheduleAutomation(dataManager: self)
+            if !isEphemeralTestInstance {
+                WidgetSnapshotWriter.scheduleWrite(dataManager: self)
+                AttentionEngine.scheduleAutomation(dataManager: self)
+            }
         }
         do {
             let sdStudents = try modelContext.fetch(FetchDescriptor<SDStudent>())

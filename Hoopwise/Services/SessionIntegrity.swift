@@ -151,9 +151,13 @@ enum SessionIntegrity {
         return report
     }
 
-    /// Groups of sessions sharing program + calendar day + start time. One
-    /// finding per GROUP, labelled with how many records are in it.
-    private static func duplicateGroups(in sessions: [SessionEvent]) -> [IntegrityFinding] {
+    /// Sessions sharing program + calendar day + start time, grouped. The
+    /// dedupe planner consumes these; the census only counts them.
+    ///
+    /// Bucketing includes the START TIME on purpose: the legacy
+    /// `dedupeProgramSessions` buckets on start-of-day alone and would call a
+    /// morning and an afternoon session duplicates.
+    static func duplicateSessionGroups(in sessions: [SessionEvent]) -> [[SessionEvent]] {
         let calendar = Calendar.current
         var buckets: [String: [SessionEvent]] = [:]
         for session in sessions {
@@ -168,9 +172,16 @@ enum SessionIntegrity {
         }
         return buckets.values
             .filter { $0.count > 1 }
+            .map { $0.sorted { $0.id.uuidString < $1.id.uuidString } }
+            .sorted { ($0.first?.date ?? .distantPast) < ($1.first?.date ?? .distantPast) }
+    }
+
+    /// Groups of sessions sharing program + calendar day + start time. One
+    /// finding per GROUP, labelled with how many records are in it.
+    private static func duplicateGroups(in sessions: [SessionEvent]) -> [IntegrityFinding] {
+        duplicateSessionGroups(in: sessions)
             .compactMap { group -> IntegrityFinding? in
-                guard let first = group.sorted(by: { $0.id.uuidString < $1.id.uuidString }).first
-                else { return nil }
+                guard let first = group.first else { return nil }
                 return IntegrityFinding(id: first.id,
                                         label: describe(first),
                                         detail: "\(group.count) records share this program/day/time")
@@ -178,7 +189,7 @@ enum SessionIntegrity {
             .sorted { $0.label < $1.label }
     }
 
-    private static func describe(_ session: SessionEvent) -> String {
+    static func describe(_ session: SessionEvent) -> String {
         "\(session.title.isEmpty ? "(untitled)" : session.title) · \(day(session.date))"
     }
 

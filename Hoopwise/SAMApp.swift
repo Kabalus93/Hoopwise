@@ -134,9 +134,18 @@ struct SAMApp: App {
         let census = SessionIntegrity.census(sessions: dataManager.sessionEvents,
                                              programs: dataManager.programs,
                                              phases: dataManager.microCycles)
+
+        // The dedupe DRY RUN rides along: same read-only guarantee, and the
+        // two reports are only meaningful together.
+        let redeemed = Set(dataManager.contracts.flatMap(\.bundleSessionIds))
+        let plan = SessionDedupe.plan(
+            groups: SessionIntegrity.duplicateSessionGroups(in: dataManager.sessionEvents),
+            redeemedSessionIds: redeemed)
+
+        let text = SessionIntegrity.report(census) + "\n\n" + SessionDedupe.report(plan)
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? Data(SessionIntegrity.report(census).utf8).write(to: url, options: .atomic)
+        try? Data(text.utf8).write(to: url, options: .atomic)
     }
     #endif
 

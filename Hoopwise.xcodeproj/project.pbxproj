@@ -163,6 +163,7 @@
 				Services/LiveSessionEngine.swift,
 				Services/MonthlyStudentCardExportService.swift,
 				Services/PDFDocumentRenderer.swift,
+				Services/SessionDedupe.swift,
 				Services/SessionIntegrity.swift,
 				Services/SessionLiveActivityManager.swift,
 				Services/SessionStatusMonitor.swift,
