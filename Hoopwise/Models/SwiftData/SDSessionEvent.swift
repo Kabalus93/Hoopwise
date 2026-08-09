@@ -220,35 +220,53 @@ final class SDSessionEvent {
 
     /// Create from legacy SessionEvent struct
     static func from(_ event: SessionEvent) -> SDSessionEvent {
-        let sdEvent = SDSessionEvent(
-            id: event.id,
-            microCycleId: event.microCycleId,
-            programId: event.programId,
-            sessionType: event.sessionType,
-            title: event.title,
-            date: event.date,
-            startTime: event.startTime,
-            endTime: event.endTime,
-            location: event.location,
-            status: event.status,
-            curriculum: event.curriculum,
-            attendeeIds: event.attendeeIds,
-            actualAttendeeIds: event.actualAttendeeIds,
-            excusedAbsences: event.excusedAbsences,
-            unexcusedAbsences: event.unexcusedAbsences,
-            attendancePhotoPath: event.attendancePhotoPath,
-            notes: event.notes,
-            coachNotes: event.coachNotes,
-            developmentFocus: event.developmentFocus,
-            manOfTheMatchId: event.manOfTheMatchId,
-            drillsCompleted: event.drillsCompleted,
-            rating: event.rating,
-            createdByCoachId: event.createdByCoachId,
-            createdAt: event.createdAt,
-            updatedAt: event.updatedAt
-        )
-        sdEvent.games = event.games
-        sdEvent.headerImageURL = event.headerImageURL
+        // The initializer's required arguments are re-set by apply(); it is
+        // the single writer of content.
+        let sdEvent = SDSessionEvent(id: event.id,
+                                     title: event.title,
+                                     date: event.date,
+                                     startTime: event.startTime,
+                                     endTime: event.endTime)
+        sdEvent.apply(event)
+        sdEvent.createdAt = event.createdAt
         return sdEvent
+    }
+
+    /// THE whole-record write. Every mutable column is copied here and
+    /// NOWHERE else, so a field cannot be persisted on create but dropped on
+    /// update — which is exactly what happened to unexcusedAbsences (the
+    /// revenue-critical one), developmentFocus, headerImageURL and
+    /// createdByCoachId: `updateSessionEvent` hand-listed 19 of the 23
+    /// columns and silently lost the other four on every save.
+    ///
+    /// `id` and `createdAt` are identity, not content, so they are not
+    /// touched. Adding a property to this @Model means adding it here;
+    /// SessionRoundTripTests fails until you do.
+    func apply(_ event: SessionEvent) {
+        microCycleId = event.microCycleId
+        programId = event.programId
+        sessionType = event.sessionType
+        title = event.title
+        date = event.date
+        startTime = event.startTime
+        endTime = event.endTime
+        location = event.location
+        status = event.status
+        curriculum = event.curriculum
+        games = event.games
+        attendeeIds = event.attendeeIds
+        actualAttendeeIds = event.actualAttendeeIds
+        excusedAbsences = event.excusedAbsences
+        unexcusedAbsences = event.unexcusedAbsences
+        attendancePhotoPath = event.attendancePhotoPath
+        notes = event.notes
+        coachNotes = event.coachNotes
+        developmentFocus = event.developmentFocus
+        manOfTheMatchId = event.manOfTheMatchId
+        drillsCompleted = event.drillsCompleted
+        rating = event.rating
+        createdByCoachId = event.createdByCoachId
+        headerImageURL = event.headerImageURL
+        updatedAt = event.updatedAt
     }
 }

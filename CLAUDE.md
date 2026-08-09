@@ -519,10 +519,20 @@ it produces confident wrong numbers the coach reconciles books against.
   un-deducted. Silently reclaiming past sessions would move a client's
   balance without her knowing why and would contradict figures already
   discussed with her. Do not "fix" this with a backfill migration.
-- Nothing un-charges a session automatically. refundSessionToBundle is an
-  explicit correction the coach invokes when a session was charged in
-  error. It used to fire as a side effect of marking someone absent, which
-  is how a no-show silently got refunded.
+- Nothing un-charges a session automatically, WITH TWO EXCEPTIONS added in
+  the restructure's Phase 0 (August 2026), both because the alternative is
+  a charge the coach cannot see or find:
+  a. A session that becomes SKIPPED or CANCELLED refunds whatever it
+     consumed, and can never be charged afterwards (redeemPrivateAttendance
+     gates on status). SkipSessionSheet has always promised "Skipped
+     sessions won't count toward contracts" and nothing enforced it —
+     mark attendance, then skip, and the client stayed charged forever.
+  b. DELETING a session refunds what it consumed. This is what makes the
+     back-dated private-session flow undoable in one step; without it the
+     charge outlived the record that explained it.
+  Marking someone ABSENT still consumes, and still un-charges only via the
+  coach's explicit refundSessionToBundle. Covered by
+  SAMpTests/SkipDoesNotChargeTests.swift — change these rules and it fails.
 - The 24-hour threshold in clause 4 is NOT representable in data. Nothing
   timestamps when notice was given, so excused-vs-absent rests on the
   coach's judgement at the moment of marking. This is acceptable and
@@ -658,6 +668,23 @@ any attendance surface.
 - DEBUG env HOOPWISE_DEMO_ASSISTANT=script swaps in a scripted transport
   that exercises streaming, a real read tool, and the confirmation card
   with no key or network — the E2E verification path.
+
+## Tests (added Phase 0, August 2026)
+- The HoopwiseTests / HoopwiseUITests targets existed in project.pbxproj all
+  along as EMPTY SHELLS: their synchronized folder (SAMpTests/) had never
+  been created, TEST_HOST still pointed at the pre-rename SAMp.app, and the
+  Hoopwise scheme had no <Testables>. All three are fixed; tests live in
+  SAMpTests/ and ⌘U (or `xcodebuild test -scheme Hoopwise`) runs them.
+- SwiftDataManager.inMemoryForTesting() (DEBUG) is the test seam: a second
+  instance over the SAME Schema (now `SwiftDataManager.schema`), in memory,
+  no CloudKit. The app still only ever touches `shared`.
+- SDSessionEvent.apply(_:) is THE whole-record writer — both `from(_:)` and
+  updateSessionEvent go through it. updateSessionEvent used to hand-list 19
+  of 23 columns and silently dropped unexcusedAbsences (revenue-critical),
+  developmentFocus, headerImageURL and createdByCoachId on every save.
+  SessionRoundTripTests reflects over SessionEvent and FAILS when the model
+  gains a property, so a new field cannot be silently un-persisted again.
+- SessionEvent.init no longer invents a random Unsplash headerImageURL.
 
 ## Build commands
 - iOS:  xcodebuild -project Hoopwise.xcodeproj -scheme Hoopwise -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build

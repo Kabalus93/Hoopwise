@@ -1259,9 +1259,13 @@ struct AllAttentionItemsSheet: View {
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
+                            // Through the state machine — a raw status write
+                            // here could skip an already-completed session and
+                            // left no "Skipped:" note behind.
                             var updated = session
-                            updated.status = .skipped
-                            dataManager.updateSessionEvent(updated)
+                            if SessionLifecycle.apply(.skip(.other), to: &updated) {
+                                dataManager.updateSessionEvent(updated)
+                            }
                         } label: {
                             Label(isChinese ? "跳过" : "Skip", systemImage: "forward.fill")
                         }

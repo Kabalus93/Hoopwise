@@ -677,7 +677,11 @@ struct SessionEvent: Identifiable, Codable, Hashable {
         self.rating = rating
         self.createdByCoachId = createdByCoachId
         self.games = games
-        self.headerImageURL = headerImageURL ?? SessionEvent.randomUnsplashURL()
+        // No random default. A session with no header image has none —
+        // minting a random Unsplash URL nobody asked for made every session
+        // carry a stock photo, and (before headerImageURL was persisted)
+        // regenerated a different one on every read.
+        self.headerImageURL = headerImageURL
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

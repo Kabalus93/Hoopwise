@@ -263,9 +263,10 @@ class SwiftDataManager: ObservableObject {
         return nil
     }
     
-    private init() {
-        // Configure SwiftData schema
-        let schema = Schema([
+    /// The registered record types. Extracted from `init` so tests can build
+    /// an isolated container over the SAME schema the app ships — a test
+    /// running against a hand-written subset would not catch a model change.
+    static let schema: Schema = Schema([
             SDStudent.self,
             SDPlayer.self,
             SDContract.self,
@@ -297,13 +298,35 @@ class SwiftDataManager: ObservableObject {
             // Same deploy-once rule as the play types above: registered now so
             // the next CloudKit schema deploy carries it.
             SDDirectoryGroup.self
-        ])
-        
+    ])
+
+    #if DEBUG
+    /// An isolated, in-memory manager for tests. The app never calls this —
+    /// `shared` remains the only instance production code touches — but the
+    /// integrity work in the restructure needs somewhere to exercise the real
+    /// redemption and reconciliation code without CloudKit or a user's store.
+    static func inMemoryForTesting() -> SwiftDataManager {
+        SwiftDataManager(inMemoryTesting: ())
+    }
+
+    private init(inMemoryTesting: ()) {
+        let configuration = ModelConfiguration(schema: Self.schema,
+                                               isStoredInMemoryOnly: true,
+                                               allowsSave: true)
+        // A failure here is a broken schema, which every test should fail on.
+        modelContainer = try! ModelContainer(for: Self.schema,
+                                             configurations: [configuration])
+    }
+    #endif
+
+    private init() {
+        let schema = Self.schema
+
         // Use platform-specific local storage
         // iOS and macOS each have their own local data store
         // CloudKit private DB syncs SwiftData across the user's devices automatically
         let modelConfiguration: ModelConfiguration
-        
+
         // CloudKit-backed configuration. iCloud private database syncs across the
         // user's devices automatically. SwiftData manages the schema in CloudKit.
         let cloudKitContainerID = "iCloud.com.hoopwise.Hoopwise"
@@ -1537,28 +1560,14 @@ class SwiftDataManager: ObservableObject {
                     }
                 }
                 
-                sdSession.microCycleId = event.microCycleId
-                sdSession.programId = event.programId
-                sdSession.sessionType = event.sessionType
-                sdSession.title = event.title
-                sdSession.date = event.date
-                sdSession.startTime = event.startTime
-                sdSession.endTime = event.endTime
-                sdSession.location = event.location
-                sdSession.status = event.status
-                sdSession.curriculum = event.curriculum
-                sdSession.attendeeIds = event.attendeeIds
-                sdSession.actualAttendeeIds = event.actualAttendeeIds
-                sdSession.excusedAbsences = event.excusedAbsences
-                sdSession.attendancePhotoPath = event.attendancePhotoPath
-                sdSession.notes = event.notes
-                sdSession.coachNotes = event.coachNotes
-                sdSession.manOfTheMatchId = event.manOfTheMatchId
-                sdSession.drillsCompleted = event.drillsCompleted
-                sdSession.rating = event.rating
-                sdSession.games = event.games  // Persist in-session games
-                sdSession.updatedAt = Date()
-                
+                // ONE whole-record writer (SDSessionEvent.apply). This used to
+                // hand-list 19 of the 23 columns and silently dropped
+                // unexcusedAbsences, developmentFocus, headerImageURL and
+                // createdByCoachId on every save.
+                var incoming = event
+                incoming.updatedAt = Date()
+                sdSession.apply(incoming)
+
                 // Debug: Verify games were set
                 debugLog("   - Saved games count: \(sdSession.games.count)")
                 
@@ -1770,6 +1779,20 @@ class SwiftDataManager: ObservableObject {
     /// calls `refundSessionToBundle`. Silently reclaiming past sessions would
     /// move a client's balance without her knowing why.
     private func updateContractsForAttendance(sessionEvent: SessionEvent) {
+        // Skipped or cancelled: the session did not happen, so anything it
+        // already consumed comes back. This is the ONE automatic refund and
+        // it exists because the skip sheet promises it — marking a student
+        // absent still consumes, and still un-charges only on the coach's
+        // explicit refundSessionToBundle.
+        if sessionEvent.status == .skipped || sessionEvent.status == .cancelled {
+            for contract in cachedContracts
+            where contract.bundleSessionIds.contains(sessionEvent.id) {
+                refundSessionToBundle(sessionId: sessionEvent.id,
+                                      studentId: contract.studentId)
+            }
+            return
+        }
+
         let consuming = Set(sessionEvent.actualAttendeeIds)
             .union(sessionEvent.unexcusedAbsences)
         for studentId in consuming {
@@ -1786,6 +1809,16 @@ class SwiftDataManager: ObservableObject {
         do {
             let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == event.id })
             if let sdSession = try modelContext.fetch(descriptor).first {
+                // A deleted session cannot hold a bundle slot hostage. This is
+                // what makes "schedule a back-dated private session" undoable
+                // in ONE step: deleting the session the sheet created also
+                // returns the slot it redeemed. Without it the charge outlived
+                // the record and only a manual refund could find it.
+                for contract in cachedContracts
+                where contract.bundleSessionIds.contains(event.id) {
+                    refundSessionToBundle(sessionId: event.id,
+                                          studentId: contract.studentId)
+                }
                 modelContext.delete(sdSession)
                 saveAndRefresh()
             }
@@ -3129,6 +3162,12 @@ class SwiftDataManager: ObservableObject {
     func redeemPrivateAttendance(sessionId: UUID, studentId: UUID) {
         guard let event = cachedSessionEvents.first(where: { $0.id == sessionId }),
               eventIsPrivate(event) else { return }
+
+        // A session that did not happen charges nobody. SkipSessionSheet
+        // promises exactly this ("Skipped sessions won't count toward
+        // contracts") and nothing used to enforce it: attendance marked
+        // before the skip was still charged, permanently.
+        guard event.status != .skipped, event.status != .cancelled else { return }
 
         let consumes = event.actualAttendeeIds.contains(studentId)
             || event.unexcusedAbsences.contains(studentId)

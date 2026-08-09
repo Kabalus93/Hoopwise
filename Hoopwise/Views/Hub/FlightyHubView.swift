@@ -1452,6 +1452,14 @@ struct SchedulePrivateSessionSheet: View {
                     }
                 } header: {
                     Text("Attendance")
+                } footer: {
+                    // Consent, not surprise: this toggle moves a prepaid
+                    // session the moment Create is tapped, and it used to do
+                    // so silently (it auto-switches on for past dates).
+                    // Contract work, so permitted under the iOS UI freeze.
+                    if markAttended, let remaining = contract.bundleRedemptionsRemaining {
+                        Text("Creating this session redeems 1 prepaid session — \(max(0, remaining - 1)) of \(contract.bundleSize) will remain. Deleting the session returns it.")
+                    }
                 }
 
                 Section("Notes") {
