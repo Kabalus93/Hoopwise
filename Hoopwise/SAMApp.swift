@@ -166,9 +166,13 @@ struct SAMApp: App {
                                             contracts: dataManager.contracts,
                                             students: dataManager.students)
 
+        let phasePlan = PhaseAssignment.plan(sessions: dataManager.sessionEvents,
+                                             phases: dataManager.microCycles)
+
         let text = SessionIntegrity.report(census)
             + "\n\n" + SessionDedupe.report(plan)
             + "\n\n" + SessionAdoption.report(adoption)
+            + "\n\n" + PhaseAssignment.report(phasePlan)
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? Data(text.utf8).write(to: url, options: .atomic)
