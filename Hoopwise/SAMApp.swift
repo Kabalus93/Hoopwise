@@ -118,8 +118,27 @@ struct SAMApp: App {
         #if DEBUG
         exportStatementIfRequested()
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
+        runOrphanCensusIfRequested()
         #endif
     }
+
+    #if DEBUG
+    /// HOOPWISE_ORPHAN_CENSUS=1 → writes the referential-integrity census for
+    /// the live store to the App Group's Library/Caches, pullable via
+    /// devicectl. Read-only: the census never repairs anything.
+    @MainActor
+    private func runOrphanCensusIfRequested() {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_ORPHAN_CENSUS"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/orphan-census.txt") else { return }
+        let census = SessionIntegrity.census(sessions: dataManager.sessionEvents,
+                                             programs: dataManager.programs,
+                                             phases: dataManager.microCycles)
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data(SessionIntegrity.report(census).utf8).write(to: url, options: .atomic)
+    }
+    #endif
 
     #if DEBUG
     /// Headless statement export for device verification — same channel as

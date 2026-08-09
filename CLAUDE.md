@@ -669,6 +669,25 @@ any attendance surface.
   that exercises streaming, a real read tool, and the confirmation card
   with no key or network — the E2E verification path.
 
+## Referential integrity / orphan census (Phase 1, August 2026)
+- Services/SessionIntegrity.swift (BOTH targets) is the detection that did
+  not exist: a PURE census over sessions/programs/phases — dangling
+  programId, dangling microCycleId, phases naming a deleted program,
+  sessions whose phase belongs to another program (the invariant nothing
+  validates), plus advisory counts for sessions outside their phase window
+  and same-program/day/TIME duplicate groups. No repair, no I/O.
+- Run it on real data: launch iOS with env HOOPWISE_ORPHAN_CENSUS=1 → the
+  report lands in the App Group Library/Caches as orphan-census.txt.
+- BASELINE, live store, 2026-08-09: 217 sessions / 20 phases / 12 programs,
+  **BROKEN TOTAL 0**. The inconsistent delete paths documented in the
+  survey have evidently never been exercised on this data. Advisory:
+  41 standalone (programId nil) sessions — the Phase 2 adoption workload;
+  12 duplicate groups; 3 sessions outside their phase's window.
+- Note the duplicate test bucket is program + day + START TIME. The legacy
+  dedupeProgramSessions buckets on start-of-day alone, so it treats a
+  morning and an afternoon session as duplicates; SessionIntegrityTests
+  pins the correct behaviour.
+
 ## Tests (added Phase 0, August 2026)
 - The HoopwiseTests / HoopwiseUITests targets existed in project.pbxproj all
   along as EMPTY SHELLS: their synchronized folder (SAMpTests/) had never
