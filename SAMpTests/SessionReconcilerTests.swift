@@ -122,6 +122,39 @@ final class SessionReconcilerTests: XCTestCase {
         XCTAssertEqual(dm.sessionEvents.count, countBefore, "The reconciler must never delete a duplicate.")
     }
 
+    // MARK: - 2.4: the reconciler maintains phase links
+
+    func testReconcilerLinksASessionToThePhaseWhoseWindowHoldsIt() {
+        let dm = SwiftDataManager.inMemoryForTesting()
+        dm.addProgram(program(programId))
+        var window = phase(phaseId, program: programId)
+        window.startDate = Date(timeIntervalSince1970: 1_699_000_000)
+        window.endDate = Date(timeIntervalSince1970: 1_701_000_000)
+        dm.addMicroCycle(window)
+        let unphased = session(program: programId, phase: nil)   // date sits inside
+        dm.addSessionEvent(unphased)
+
+        let result = SessionReconciler.run(dataManager: dm, force: true)
+
+        XCTAssertEqual(result.phaseLinksMaintained, 1)
+        XCTAssertEqual(dm.sessionEvents.first { $0.id == unphased.id }?.microCycleId, phaseId)
+    }
+
+    /// A dateless plan cannot derive anything, and must not clear what is
+    /// already there — this is the live Elite U10 Development case.
+    func testDatelessPhasesLeaveExistingLinksAlone() {
+        let dm = SwiftDataManager.inMemoryForTesting()
+        dm.addProgram(program(programId))
+        dm.addMicroCycle(phase(phaseId, program: programId))      // no window
+        dm.addSessionEvent(session(program: programId, phase: phaseId))
+
+        let result = SessionReconciler.run(dataManager: dm, force: true)
+
+        XCTAssertEqual(result.phaseLinksMaintained, 0)
+        XCTAssertEqual(dm.sessionEvents.first?.microCycleId, phaseId,
+                       "A plan with no calendar must not strip a session's phase.")
+    }
+
     // MARK: - Creation-time validation
 
     func testAddSessionEventNormalizesOnTheWayIn() {

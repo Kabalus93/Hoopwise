@@ -29,6 +29,8 @@ enum SessionReconciler {
         var repairedDanglingProgram = 0
         var repairedDanglingPhase = 0
         var repairedCrossProgramPhase = 0
+        /// Phase links brought in line with the plan's windows (2.4).
+        var phaseLinksMaintained = 0
         /// Not repaired — held for Phase 2.
         var pendingDuplicateGroups = 0
         var pendingOrphanPhases = 0
@@ -39,7 +41,7 @@ enum SessionReconciler {
         var didRepair: Bool { repairCount > 0 }
 
         var summary: String {
-            "repaired \(repairCount) (program \(repairedDanglingProgram), phase \(repairedDanglingPhase), cross-program \(repairedCrossProgramPhase)) · pending \(pendingDuplicateGroups) duplicate groups, \(pendingOrphanPhases) orphan phases"
+            "repaired \(repairCount) (program \(repairedDanglingProgram), phase \(repairedDanglingPhase), cross-program \(repairedCrossProgramPhase)) · phase links maintained \(phaseLinksMaintained) · pending \(pendingDuplicateGroups) duplicate groups, \(pendingOrphanPhases) orphan phases"
         }
     }
 
@@ -115,6 +117,21 @@ enum SessionReconciler {
             }
             dataManager.updateSessionEvent(corrected)
             debugLog("🧹 reconciler repaired \(changes.joined(separator: ", ")) on “\(session.title)”")
+        }
+
+        // 2.4: the plan owns the calendar, so phase links are maintained, not
+        // preserved as write-once truth. Only an unambiguous window match
+        // moves a link — `noWindow` and `ambiguous` deliberately leave the
+        // existing value alone (see PhaseAssignment).
+        for session in dataManager.sessionEvents where session.programId != nil {
+            guard case .assign(let phaseId) = PhaseAssignment.derive(
+                session: session, phases: phases) else { continue }
+            guard session.microCycleId != phaseId else { continue }
+            var updated = session
+            updated.microCycleId = phaseId
+            dataManager.updateSessionEvent(updated)
+            result.phaseLinksMaintained += 1
+            debugLog("🧹 reconciler linked “\(session.title)” to phase \(phaseId)")
         }
 
         // Counted, not touched.

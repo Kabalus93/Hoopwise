@@ -40,6 +40,23 @@ enum SessionInspectorDebug {
         try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
     }
 
+    /// HOOPWISE_REWINDOW_DRYRUN="<program name>" — what laying contiguous
+    /// windows on that program's dateless phases would do to its sessions.
+    /// Read-only.
+    static func rewindowDryRunIfRequested(dataManager dm: DataManager) {
+        guard let name = ProcessInfo.processInfo.environment["HOOPWISE_REWINDOW_DRYRUN"],
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/rewindow.txt") else { return }
+        guard let program = dm.programs.first(where: { $0.name == name }) else {
+            write(["RE-WINDOW DRY RUN — no program named “\(name)”"], to: url)
+            return
+        }
+        let text = PhaseAssignment.rewindowReport(program: program,
+                                                  phases: dm.microCycles,
+                                                  sessions: dm.sessionEvents)
+        write([text], to: url)
+    }
+
     /// HOOPWISE_APPLY_ALL_MERGES=1 — executes every AUTO-resolvable duplicate
     /// group. Manual-review groups are skipped, always.
     ///

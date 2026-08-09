@@ -130,6 +130,72 @@ enum PhaseAssignment {
         return lines.joined(separator: "\n")
     }
 
+    // MARK: - Re-windowing an undated plan (dry run)
+
+    /// What giving a program's phases real windows would do to its sessions.
+    ///
+    /// Programs created through the wizard's phased branch get "Phase 1…N"
+    /// with NO dates, so date-derivation cannot function for them at all —
+    /// their sessions keep whatever link a generator wrote. Laying contiguous
+    /// windows from the program's start date makes derivation possible, but
+    /// it can also move sessions between phases, so it gets its own report.
+    static func rewindowReport(program: Program,
+                               phases: [MicroCycle],
+                               sessions: [SessionEvent],
+                               calendar: Calendar = .current) -> String {
+        let mine = phases.filter { $0.programId == program.id }
+            .sorted { $0.phaseNumber < $1.phaseNumber }
+        let mySessions = sessions.filter { $0.programId == program.id }
+            .sorted { $0.date < $1.date }
+        guard let start = program.startDate else {
+            return "RE-WINDOW DRY RUN — “\(program.name)” has no start date, so windows cannot be laid out. Nothing to propose."
+        }
+
+        let proposed = rewindowed(mine, programStart: start, calendar: calendar)
+        let titleOf = Dictionary(phases.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
+
+        var lines = ["RE-WINDOW DRY RUN — “\(program.name)” — nothing was written"]
+        lines.append("  program starts \(day(start)) · \(mine.count) phases · \(mySessions.count) sessions")
+        lines.append("")
+        lines.append("proposed windows:")
+        for phase in proposed {
+            lines.append("    \(phase.phaseNumber). \(phase.title)  \(day(phase.startDate!))…\(day(phase.endDate!))  (\(phase.durationWeeks)w)")
+        }
+        let planEnd = proposed.last?.endDate
+        lines.append("")
+
+        var moved = 0, unchanged = 0, outside = 0
+        var detail: [String] = []
+        for session in mySessions {
+            let outcome = derive(session: session, phases: proposed, calendar: calendar)
+            let current = session.microCycleId.flatMap { titleOf[$0] } ?? "—"
+            switch outcome {
+            case .assign(let phaseId):
+                let next = proposed.first { $0.id == phaseId }?.title ?? "?"
+                if session.microCycleId == phaseId { unchanged += 1 }
+                else { moved += 1; detail.append("    · \(day(session.date)): \(current) → \(next)") }
+            case .noWindow:
+                outside += 1
+                detail.append("    · \(day(session.date)): \(current) → OUTSIDE the plan (kept)")
+            case .ambiguous:
+                detail.append("    · \(day(session.date)): \(current) → ambiguous (kept)")
+            }
+        }
+        lines.append("effect on sessions: \(unchanged) unchanged · \(moved) move phase · \(outside) fall outside the plan")
+        if let planEnd { lines.append("  plan covers \(day(start))…\(day(planEnd)); sessions run to \(day(mySessions.last?.date ?? start))") }
+        lines.append("")
+        lines.append(contentsOf: detail.prefix(30))
+        if detail.count > 30 { lines.append("    … \(detail.count - 30) more") }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func day(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: date)
+    }
+
     // MARK: - Reorder = re-window
 
     /// Reordering a plan renumbers the phases AND recomputes their windows,

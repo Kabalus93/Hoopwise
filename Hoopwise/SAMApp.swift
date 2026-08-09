@@ -136,6 +136,7 @@ struct SAMApp: App {
         SessionInspectorDebug.adoptFridaySeriesIfRequested(dataManager: dataManager)
         SessionInspectorDebug.createMicroGroupsIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyAllMergesIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.rewindowDryRunIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
         #endif
     }
