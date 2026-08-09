@@ -135,6 +135,97 @@ final class SessionAdoptionTests: XCTestCase {
         XCTAssertEqual(result.unassignedCount, 1)
     }
 
+    // MARK: - Tier 1b: a brand-new program adopts the series it was made for
+
+    private func scheduledProgram(_ id: UUID, name: String,
+                                  weekday: Weekday = .friday,
+                                  clock: (Int, Int) = (18, 30),
+                                  minutes: Int = 90,
+                                  venue: String = "酷迅") -> Program {
+        var components = DateComponents()
+        components.year = 2026; components.month = 1; components.day = 1
+        components.hour = clock.0; components.minute = clock.1
+        return Program(id: id, name: name, ageGroup: .u10,
+                       recurringDays: [weekday],
+                       defaultSessionTime: Calendar.current.date(from: components),
+                       defaultSessionDurationMinutes: minutes,
+                       locationName: venue)
+    }
+
+    /// The case that matters for this migration: the program owns no sessions
+    /// yet, so the shape index can never match it. Its own schedule must.
+    func testNewProgramAdoptsSessionsInItsDeclaredSlot() {
+        // 2026-06-12 is a Friday.
+        var friday1830 = DateComponents()
+        friday1830.year = 2026; friday1830.month = 6; friday1830.day = 12
+        friday1830.hour = 18; friday1830.minute = 30
+        let when = Calendar.current.date(from: friday1830)!
+        let orphan = session("Training", program: nil, at: when, location: "酷迅")
+
+        let result = plan([orphan], programs: [scheduledProgram(programId, name: "酷迅 · U10")])
+
+        XCTAssertEqual(result.fingerprintCount, 1)
+        XCTAssertEqual(result.programAbsorption["酷迅 · U10"], 1)
+    }
+
+    func testSlotMatchRequiresVenueToAgree() {
+        var friday1830 = DateComponents()
+        friday1830.year = 2026; friday1830.month = 6; friday1830.day = 12
+        friday1830.hour = 18; friday1830.minute = 30
+        let when = Calendar.current.date(from: friday1830)!
+        let elsewhere = session("Training", program: nil, at: when, location: "Hezhuang court")
+
+        let result = plan([elsewhere], programs: [scheduledProgram(programId, name: "酷迅 · U10")])
+
+        XCTAssertEqual(result.fingerprintCount, 0, "Same time, different gym is a different class.")
+    }
+
+    func testSlotMatchRequiresTheRightWeekday() {
+        var saturday = DateComponents()
+        saturday.year = 2026; saturday.month = 6; saturday.day = 13
+        saturday.hour = 18; saturday.minute = 30
+        let when = Calendar.current.date(from: saturday)!
+        let orphan = session("Training", program: nil, at: when, location: "酷迅")
+
+        let result = plan([orphan], programs: [scheduledProgram(programId, name: "酷迅 · U10")])
+
+        XCTAssertEqual(result.fingerprintCount, 0)
+    }
+
+    func testTwoProgramsSharingASlotStayAmbiguous() {
+        var friday1830 = DateComponents()
+        friday1830.year = 2026; friday1830.month = 6; friday1830.day = 12
+        friday1830.hour = 18; friday1830.minute = 30
+        let when = Calendar.current.date(from: friday1830)!
+        let orphan = session("Training", program: nil, at: when, location: "酷迅")
+
+        let result = plan([orphan], programs: [
+            scheduledProgram(programId, name: "酷迅 · U10"),
+            scheduledProgram(otherProgramId, name: "酷迅 · U12"),
+        ])
+
+        XCTAssertEqual(result.unassignedCount, 1)
+        XCTAssertTrue(result.unassignedReasons.keys.contains { $0.contains("share this slot") })
+    }
+
+    /// Private still wins over a slot match.
+    func testPrivateSessionInAProgramsSlotStaysPrivate() {
+        var friday1830 = DateComponents()
+        friday1830.year = 2026; friday1830.month = 6; friday1830.day = 12
+        friday1830.hour = 18; friday1830.minute = 30
+        let when = Calendar.current.date(from: friday1830)!
+        let orphan = session("Private — Frank", program: nil, at: when,
+                             location: "酷迅", attendees: [clientId])
+
+        let result = plan([orphan],
+                          programs: [scheduledProgram(programId, name: "酷迅 · U10")],
+                          contracts: [contract(clientId)],
+                          students: [student(clientId, "Frank")])
+
+        XCTAssertEqual(result.privateCount, 1)
+        XCTAssertEqual(result.fingerprintCount, 0)
+    }
+
     // MARK: - Unassigned is the honest default
 
     func testNoMatchGoesToUnassignedNotAGuess() {

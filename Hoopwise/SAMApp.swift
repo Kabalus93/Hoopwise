@@ -130,6 +130,10 @@ struct SAMApp: App {
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
         runOrphanCensusIfRequested()
         SessionInspectorDebug.runIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.seriesReportIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.seedFridayProgramIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.programProfileIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.adoptFridaySeriesIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
         #endif
     }

@@ -96,6 +96,31 @@ enum SessionAdoption {
                      durationMinutes: Int(session.endTime.timeIntervalSince(session.startTime) / 60))
     }
 
+    /// Does this session sit in the program's declared weekly slot? All four
+    /// of weekday, start time, duration and venue must agree — three out of
+    /// four is a different class at the same gym.
+    private static func matchesSchedule(_ session: SessionEvent,
+                                        of program: Program,
+                                        calendar: Calendar) -> Bool {
+        guard let programTime = program.defaultSessionTime else { return false }
+        let weekday = calendar.component(.weekday, from: session.date)
+        // Weekday.rawValue is already Calendar's numbering (1 = Sunday).
+        guard program.recurringDays.contains(where: { $0.rawValue == weekday }) else { return false }
+
+        let sessionClock = calendar.dateComponents([.hour, .minute], from: session.startTime)
+        let programClock = calendar.dateComponents([.hour, .minute], from: programTime)
+        guard sessionClock.hour == programClock.hour,
+              sessionClock.minute == programClock.minute else { return false }
+
+        let duration = Int(session.endTime.timeIntervalSince(session.startTime) / 60)
+        guard duration == program.defaultSessionDurationMinutes else { return false }
+
+        let venue = (session.location ?? "").trimmingCharacters(in: .whitespaces)
+        let programVenue = (program.locationName ?? "").trimmingCharacters(in: .whitespaces)
+        guard !venue.isEmpty, !programVenue.isEmpty else { return false }
+        return venue == programVenue
+    }
+
     static func plan(sessions: [SessionEvent],
                      programs: [Program],
                      contracts: [Contract],
@@ -117,25 +142,8 @@ enum SessionAdoption {
         for session in sessions where session.programId == nil {
             let label = "\(session.title.isEmpty ? "(untitled)" : session.title) · \(day(session.date))"
 
-            // Tier 1: an existing program already owns this exact shape.
-            let owners = shapeOwners[shape(of: session, calendar: calendar)] ?? []
-            if owners.count == 1, let owner = owners.first {
-                plan.decisions.append(Decision(
-                    id: session.id, label: label,
-                    destination: .fingerprint(programId: owner,
-                                              programName: programName[owner] ?? "?",
-                                              tier: "shape")))
-                continue
-            }
-            if owners.count > 1 {
-                plan.decisions.append(Decision(
-                    id: session.id, label: label,
-                    destination: .unassigned(reason: "ambiguous — \(owners.count) programs own this shape")))
-                continue
-            }
-
-            // Private before Tier 2: a 1:1 session must never be adopted into
-            // a group program on the strength of a matching title.
+            // PRIVATE FIRST. A 1:1 session must never be swept into a group
+            // program by a matching shape, slot or title.
             if SessionPrivacy.isPrivate(session, programs: programs, contracts: contracts) {
                 let roster = Set(session.attendeeIds).union(session.actualAttendeeIds)
                 let clients = contracts
@@ -155,6 +163,45 @@ enum SessionAdoption {
                             ? "private but no identifiable client"
                             : "private with \(distinct.count) private-contract attendees")))
                 }
+                continue
+            }
+
+            // Tier 1: an existing program already owns this exact shape.
+            let owners = shapeOwners[shape(of: session, calendar: calendar)] ?? []
+            if owners.count == 1, let owner = owners.first {
+                plan.decisions.append(Decision(
+                    id: session.id, label: label,
+                    destination: .fingerprint(programId: owner,
+                                              programName: programName[owner] ?? "?",
+                                              tier: "shape")))
+                continue
+            }
+            if owners.count > 1 {
+                plan.decisions.append(Decision(
+                    id: session.id, label: label,
+                    destination: .unassigned(reason: "ambiguous — \(owners.count) programs own this shape")))
+                continue
+            }
+
+            // Tier 1b: the program's OWN SCHEDULE matches this session's slot
+            // — same weekday, start time, duration and venue. This is what
+            // lets a newly created program adopt the series it was created
+            // for: it owns no sessions yet, so Tier 1 can never match it.
+            let slotMatches = programs.filter { program in
+                matchesSchedule(session, of: program, calendar: calendar)
+            }
+            if slotMatches.count == 1 {
+                plan.decisions.append(Decision(
+                    id: session.id, label: label,
+                    destination: .fingerprint(programId: slotMatches[0].id,
+                                              programName: slotMatches[0].name,
+                                              tier: "program schedule slot")))
+                continue
+            }
+            if slotMatches.count > 1 {
+                plan.decisions.append(Decision(
+                    id: session.id, label: label,
+                    destination: .unassigned(reason: "ambiguous — \(slotMatches.count) programs share this slot")))
                 continue
             }
 
