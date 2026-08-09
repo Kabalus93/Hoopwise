@@ -134,9 +134,16 @@ enum SessionIntegrity {
 
             if let start = phase.startDate, let end = phase.endDate,
                session.date < start || session.date > end {
+                // Instants, not just days: every violation seen so far has
+                // been an exact-boundary case, which points at the comparison
+                // (Date instants) rather than at misfiled sessions.
+                let sameDayAsEdge = Calendar.current.isDate(session.date, inSameDayAs: start)
+                    || Calendar.current.isDate(session.date, inSameDayAs: end)
                 report.sessionsOutsideTheirPhaseWindow.append(
-                    IntegrityFinding(id: session.id, label: label,
-                                     detail: "phase window \(day(start))…\(day(end))"))
+                    IntegrityFinding(
+                        id: session.id,
+                        label: label,
+                        detail: "phase “\(phase.title)” [\(String(phase.id.uuidString.prefix(8)))] window \(instant(start))…\(instant(end)); session at \(instant(session.date))\(sameDayAsEdge ? "  ← SAME CALENDAR DAY as an edge (boundary artifact)" : "")"))
             }
         }
 
@@ -191,6 +198,13 @@ enum SessionIntegrity {
 
     static func describe(_ session: SessionEvent) -> String {
         "\(session.title.isEmpty ? "(untitled)" : session.title) · \(day(session.date))"
+    }
+
+    private static func instant(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: date)
     }
 
     private static func day(_ date: Date) -> String {

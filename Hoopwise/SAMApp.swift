@@ -154,7 +154,15 @@ struct SAMApp: App {
             groups: SessionIntegrity.duplicateSessionGroups(in: dataManager.sessionEvents),
             redeemedSessionIds: redeemed)
 
-        let text = SessionIntegrity.report(census) + "\n\n" + SessionDedupe.report(plan)
+        // Phase 2.1 adoption plan rides along — same read-only guarantee.
+        let adoption = SessionAdoption.plan(sessions: dataManager.sessionEvents,
+                                            programs: dataManager.programs,
+                                            contracts: dataManager.contracts,
+                                            students: dataManager.students)
+
+        let text = SessionIntegrity.report(census)
+            + "\n\n" + SessionDedupe.report(plan)
+            + "\n\n" + SessionAdoption.report(adoption)
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? Data(text.utf8).write(to: url, options: .atomic)
