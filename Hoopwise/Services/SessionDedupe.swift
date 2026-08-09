@@ -233,6 +233,15 @@ enum SessionDedupe {
             notices: notices)
     }
 
+    /// The merge the plan proposes, as a value. Applying a decision by hand
+    /// must use THIS — a second implementation at the call site would not be
+    /// the thing the tests cover.
+    static func merged(_ survivor: SessionEvent, absorbing other: SessionEvent) -> SessionEvent {
+        var result = survivor
+        merge(other, into: &result)
+        return result
+    }
+
     /// Union attendance, append notes, and fill any empty field on the
     /// survivor from the record being deleted. Nothing on the survivor is
     /// overwritten — that is what makes the deletion lossless.

@@ -109,6 +109,16 @@ struct SAMApp: App {
     private func initializeApp() async {
         guard !isInitialized else { return }
 
+        #if DEBUG
+        // Unit tests are hosted in this app. Booting the data load, the
+        // status monitor and the debug hooks alongside them destabilised the
+        // test process; the tests drive their own manager.
+        if SwiftDataManager.isRunningUnitTests {
+            isInitialized = true
+            return
+        }
+        #endif
+
         await dataManager.loadAllData()
 
         await SessionStatusMonitor.shared.startMonitoring(dataManager: dataManager)
@@ -120,6 +130,7 @@ struct SAMApp: App {
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
         runOrphanCensusIfRequested()
         SessionInspectorDebug.runIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
         #endif
     }
 

@@ -328,8 +328,35 @@ class SwiftDataManager: ObservableObject {
     /// mid-test. Deterministic tests need a quiet manager.
     private(set) var isEphemeralTestInstance = false
 
+    /// True when the process was launched by the XCTest runner.
+    ///
+    /// Unit tests are hosted INSIDE the app, so the app boots for real: the
+    /// CloudKit-backed container, the 30-second status timer, the widget
+    /// snapshot writer and the attention automation all start up beside the
+    /// tests. That combination crashed the test process intermittently
+    /// ("No eligible connection available", then "Restarting after unexpected
+    /// exit"). Under test the host must be inert.
+    static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     private init() {
         let schema = Self.schema
+
+        #if DEBUG
+        if Self.isRunningUnitTests {
+            // No CloudKit, no file store, no user data: tests must never
+            // touch the real store, and the real store must never destabilise
+            // the tests.
+            let testConfiguration = ModelConfiguration(schema: schema,
+                                                       isStoredInMemoryOnly: true,
+                                                       allowsSave: true)
+            modelContainer = try! ModelContainer(for: schema,
+                                                 configurations: [testConfiguration])
+            isEphemeralTestInstance = true
+            return
+        }
+        #endif
 
         // Use platform-specific local storage
         // iOS and macOS each have their own local data store
@@ -1826,9 +1853,23 @@ class SwiftDataManager: ObservableObject {
                 // returns the slot it redeemed. Without it the charge outlived
                 // the record and only a manual refund could find it.
                 for contract in cachedContracts
-                where contract.bundleSessionIds.contains(event.id) {
+                where contract.kind == .privateBundle
+                    && contract.bundleSessionIds.contains(event.id) {
                     refundSessionToBundle(sessionId: event.id,
                                           studentId: contract.studentId)
+                }
+
+                // Non-bundle contracts have no slots to refund, but the live
+                // store has group contracts carrying entries in
+                // bundleSessionIds — residue from the divergent redemption
+                // path that was removed. A deleted session must not remain
+                // referenced anywhere, so strip those too. No money moves:
+                // bundleRedemptionsRemaining is nil for these kinds.
+                for var contract in cachedContracts
+                where contract.kind != .privateBundle
+                    && contract.bundleSessionIds.contains(event.id) {
+                    contract.bundleSessionIds.removeAll { $0 == event.id }
+                    updateContract(contract)
                 }
                 modelContext.delete(sdSession)
                 saveAndRefresh()

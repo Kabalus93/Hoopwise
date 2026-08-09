@@ -40,6 +40,85 @@ enum SessionInspectorDebug {
         try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
     }
 
+    /// HOOPWISE_APPLY_DEDUPE="survivor=AB82ECB5,delete=A9FA88CE" applies ONE
+    /// duplicate resolution that a human has chosen: merge the doomed record
+    /// into the survivor using the tested merge, save, delete, and write a
+    /// before/after audit to Library/Caches/dedupe-applied.txt.
+    ///
+    /// The merge is `SessionDedupe.merged` — the same code the plan proposes
+    /// and the tests cover — never a second implementation.
+    static func applyDedupeIfRequested(dataManager dm: DataManager) {
+        guard let spec = ProcessInfo.processInfo.environment["HOOPWISE_APPLY_DEDUPE"],
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/dedupe-applied.txt") else { return }
+
+        var survivorPrefix = "", deletePrefix = ""
+        for part in spec.split(separator: ",") {
+            let pair = part.split(separator: "=", maxSplits: 1)
+            guard pair.count == 2 else { continue }
+            let value = pair[1].trimmingCharacters(in: .whitespaces).uppercased()
+            if pair[0].hasPrefix("survivor") { survivorPrefix = value }
+            if pair[0].hasPrefix("delete") { deletePrefix = value }
+        }
+
+        var out: [String] = ["DEDUPE APPLY — \(spec)", ""]
+        func find(_ prefix: String) -> SessionEvent? {
+            dm.sessionEvents.first { $0.id.uuidString.uppercased().hasPrefix(prefix) }
+        }
+        guard !survivorPrefix.isEmpty, !deletePrefix.isEmpty,
+              let survivor = find(survivorPrefix), let doomed = find(deletePrefix),
+              survivor.id != doomed.id else {
+            out.append("ABORTED — could not resolve both ids distinctly. Nothing was written.")
+            write(out, to: url)
+            return
+        }
+
+        // ---- BEFORE
+        out.append("BEFORE")
+        out.append(contentsOf: contractState(for: [survivor.id, doomed.id], dm: dm).map { "  \($0)" })
+        out.append("  survivor \(short(survivor.id)) phase=\(survivor.microCycleId.map(short) ?? "none") expected=\(survivor.attendeeIds.count) present=\(survivor.actualAttendeeIds.count)")
+        out.append("  doomed   \(short(doomed.id)) phase=\(doomed.microCycleId.map(short) ?? "none") expected=\(doomed.attendeeIds.count) present=\(doomed.actualAttendeeIds.count)")
+        out.append("")
+
+        // ---- APPLY
+        let merged = SessionDedupe.merged(survivor, absorbing: doomed)
+        dm.updateSessionEvent(merged)
+        dm.deleteSessionEvent(doomed)
+
+        // ---- AFTER
+        out.append("AFTER")
+        out.append(contentsOf: contractState(for: [survivor.id, doomed.id], dm: dm).map { "  \($0)" })
+        if let kept = dm.sessionEvents.first(where: { $0.id == survivor.id }) {
+            out.append("  survivor \(short(kept.id)) phase=\(kept.microCycleId.map(short) ?? "none") expected=\(kept.attendeeIds.count) present=\(kept.actualAttendeeIds.count) title=\(kept.title)")
+        } else {
+            out.append("  ERROR survivor is gone")
+        }
+        let deletedStillPresent = dm.sessionEvents.contains { $0.id == doomed.id }
+        out.append("  deleted record still in store: \(deletedStillPresent ? "YES — FAILED" : "no")")
+        let stillReferenced = dm.contracts.filter { $0.bundleSessionIds.contains(doomed.id) }
+        out.append("  contracts still referencing \(short(doomed.id)): \(stillReferenced.isEmpty ? "none" : stillReferenced.map { "#\($0.contractNumber)" }.joined(separator: ", "))")
+        write(out, to: url)
+    }
+
+    /// Every contract touching these session ids, with the numbers that
+    /// matter: the array contents and the remaining count.
+    private static func contractState(for sessionIds: [UUID], dm: DataManager) -> [String] {
+        let relevant = dm.contracts.filter { contract in
+            sessionIds.contains { contract.bundleSessionIds.contains($0) }
+        }
+        guard !relevant.isEmpty else { return ["no contract references either session"] }
+        return relevant.map { contract in
+            let ids = contract.bundleSessionIds.map(short).joined(separator: ", ")
+            return "contract #\(contract.contractNumber) [\(short(contract.id))] \(contract.kind.rawValue) size=\(contract.bundleSize) remaining=\(contract.bundleRedemptionsRemaining.map(String.init) ?? "n/a") bundleSessionIds=[\(ids)]"
+        }
+    }
+
+    private static func write(_ lines: [String], to url: URL) {
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
+    }
+
     private static func describe(_ session: SessionEvent,
                                  dataManager dm: DataManager) -> [String] {
         var out: [String] = []
