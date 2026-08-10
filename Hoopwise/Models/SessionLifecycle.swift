@@ -29,6 +29,30 @@ enum SessionLifecycle {
         case autoClose
     }
 
+    /// THE skip rule (Phase 2.6).
+    ///
+    /// A skipped session and a cancelled one are the same fact to every
+    /// consumer: it did not take place and it will not. The app said so in
+    /// exactly two places — the Phase 0 refund and the redemption gate — and
+    /// everywhere else asked "did this happen?" by testing `.cancelled`
+    /// ALONE. So a session skipped for a holiday still counted as a real one:
+    /// it sat in today's list, it could be the next session on the home
+    /// screen, and if it had been marked before being skipped its attendance
+    /// still weighed on a student's rate — after its money had been refunded.
+    ///
+    /// Money and statistics have to agree, and they agree here.
+    ///
+    /// This is NOT a visibility rule. A skipped session stays in the calendar
+    /// and in history, carrying its "Skipped: <reason>" note — that record is
+    /// the reason the coach can explain the gap later.
+    static func didNotHappen(_ session: SessionEvent) -> Bool {
+        didNotHappen(session.status)
+    }
+
+    static func didNotHappen(_ status: SessionEventStatus) -> Bool {
+        status == .cancelled || status == .skipped
+    }
+
     /// Stable machine-readable marker `autoClose` appends to notes —
     /// the same mechanism as "Skipped: …". Never localized: detection
     /// depends on the prefix.

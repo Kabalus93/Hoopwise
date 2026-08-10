@@ -2046,7 +2046,7 @@ class SwiftDataManager: ObservableObject {
         // it exists because the skip sheet promises it — marking a student
         // absent still consumes, and still un-charges only on the coach's
         // explicit refundSessionToBundle.
-        if sessionEvent.status == .skipped || sessionEvent.status == .cancelled {
+        if SessionLifecycle.didNotHappen(sessionEvent) {
             for contract in cachedContracts
             where contract.bundleSessionIds.contains(sessionEvent.id) {
                 refundSessionToBundle(sessionId: sessionEvent.id,
@@ -3419,7 +3419,7 @@ class SwiftDataManager: ObservableObject {
         // promises exactly this ("Skipped sessions won't count toward
         // contracts") and nothing used to enforce it: attendance marked
         // before the skip was still charged, permanently.
-        guard event.status != .skipped, event.status != .cancelled else { return }
+        guard !SessionLifecycle.didNotHappen(event) else { return }
 
         let consumes = event.actualAttendeeIds.contains(studentId)
             || event.unexcusedAbsences.contains(studentId)

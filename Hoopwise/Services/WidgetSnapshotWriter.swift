@@ -97,7 +97,7 @@ enum WidgetSnapshotWriter {
                                  ageBand: ageBand, category: category)
         }
 
-        let active = dataManager.sessionEvents.filter { $0.status != .cancelled }
+        let active = dataManager.sessionEvents.filter { !SessionLifecycle.didNotHappen($0) }
 
         let upcoming = active
             .filter { $0.endTime > now && $0.startTime < horizon }
@@ -270,7 +270,7 @@ enum WidgetSnapshotWriter {
             else { return true }
             let calendar = Calendar.current
             let sameDay = dataManager.sessionEvents.filter { session in
-                session.status != .cancelled
+                !SessionLifecycle.didNotHappen(session)
                     && calendar.isDate(session.startTime, inSameDayAs: noteDate)
                     && (expectedAttendeeIds(of: session, dataManager: dataManager)
                             .contains(student.id)
@@ -436,7 +436,7 @@ enum WidgetSnapshotWriter {
                                          calendar: Calendar) -> Int? {
         let cutoff = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         let recent = dataManager.sessionEvents.filter {
-            $0.date >= cutoff && $0.date <= Date() && $0.status != .cancelled
+            $0.date >= cutoff && $0.date <= Date() && !SessionLifecycle.didNotHappen($0)
         }
         var attended = 0, expected = 0
         for session in recent {

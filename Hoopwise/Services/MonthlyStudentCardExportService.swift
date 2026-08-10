@@ -335,7 +335,7 @@ struct MonthlyStudentCardExportService {
             .filter { session in
                 session.date >= interval.start &&
                 session.date < interval.end &&
-                session.status != .cancelled
+                !SessionLifecycle.didNotHappen(session)
             }
             .sorted { $0.date < $1.date }
     }

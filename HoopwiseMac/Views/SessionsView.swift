@@ -151,17 +151,21 @@ struct SessionsView: View {
 
     @ViewBuilder
     private func sessionContextMenu(session: SessionEvent) -> some View {
+        // Through the state machine, and offered only where it allows the
+        // transition. Setting status directly used to offer "Cancel Session"
+        // on a session that had already been skipped — a transition isAllowed
+        // forbids, performed anyway because the menu never asked it.
         switch session.status {
         case .scheduled:
-            Button("Start Session", systemImage: "play.fill") { mutate(session) { $0.status = .inProgress } }
+            Button("Start Session", systemImage: "play.fill") { transition(session, .start) }
         case .inProgress:
-            Button("Complete", systemImage: "checkmark.circle") { mutate(session) { $0.status = .completed } }
+            Button("Complete", systemImage: "checkmark.circle") { transition(session, .complete) }
         default:
             EmptyView()
         }
-        if session.status != .cancelled {
+        if SessionLifecycle.isAllowed(.cancel, from: session.status) {
             Button("Cancel Session", systemImage: "xmark.circle", role: .destructive) {
-                mutate(session) { $0.status = .cancelled }
+                transition(session, .cancel)
             }
         }
         Divider()
@@ -185,8 +189,8 @@ struct SessionsView: View {
         switch filter {
         case .all:      base = dataManager.sessionEvents
         case .today:    base = dataManager.sessionEvents.filter { cal.isDateInToday($0.date) }
-        case .upcoming: base = dataManager.sessionEvents.filter { $0.date >= now && $0.status != .cancelled }
-        case .past:     base = dataManager.sessionEvents.filter { $0.date < now || $0.status == .completed || $0.status == .cancelled }
+        case .upcoming: base = dataManager.sessionEvents.filter { $0.date >= now && !SessionLifecycle.didNotHappen($0) }
+        case .past:     base = dataManager.sessionEvents.filter { $0.date < now || $0.status == .completed || SessionLifecycle.didNotHappen($0) }
         }
         let searched = search.isEmpty ? base : base.filter {
             $0.title.localizedCaseInsensitiveContains(search) ||
@@ -212,6 +216,14 @@ struct SessionsView: View {
         var copy = session
         block(&copy)
         copy.updatedAt = Date()
+        dataManager.updateSessionEvent(copy)
+    }
+
+    /// Status changes go through SessionLifecycle, which refuses a transition
+    /// its own gate disallows.
+    private func transition(_ session: SessionEvent, _ transition: SessionLifecycle.Transition) {
+        var copy = session
+        guard SessionLifecycle.apply(transition, to: &copy) else { return }
         dataManager.updateSessionEvent(copy)
     }
 }

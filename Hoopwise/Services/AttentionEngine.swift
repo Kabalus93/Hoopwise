@@ -40,7 +40,7 @@ enum AttendanceMath {
     static func rate(for studentId: UUID, in sessions: [SessionEvent],
                      asOf now: Date = Date()) -> (percent: Int, of: Int) {
         var marked = 0, present = 0
-        for session in sessions where session.date <= now && session.status != .cancelled {
+        for session in sessions where session.date <= now && !SessionLifecycle.didNotHappen(session) {
             if session.actualAttendeeIds.contains(studentId) {
                 marked += 1; present += 1
             } else if session.excusedAbsences.contains(studentId)
@@ -59,7 +59,7 @@ enum AttendanceMath {
                                   asOf now: Date = Date()) -> Int {
         let marked = sessions
             .filter { session in
-                session.date <= now && session.status != .cancelled
+                session.date <= now && !SessionLifecycle.didNotHappen(session)
                     && (session.actualAttendeeIds.contains(studentId)
                         || session.excusedAbsences.contains(studentId)
                         || session.unexcusedAbsences.contains(studentId))

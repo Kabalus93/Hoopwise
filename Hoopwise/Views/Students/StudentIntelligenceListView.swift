@@ -1179,7 +1179,7 @@ struct StudentIntelligenceListView: View {
             .filter { session in
                 let isInProgram = !allProgramIds.isEmpty && (session.programId.map { allProgramIds.contains($0) } ?? false)
                 let isAttendee = session.attendeeIds.contains(student.id)
-                let isUpcoming = session.date >= now && session.status != .completed && session.status != .cancelled
+                let isUpcoming = session.date >= now && session.status != .completed && !SessionLifecycle.didNotHappen(session)
                 return (isInProgram || isAttendee) && isUpcoming
             }
             .sorted { $0.date < $1.date }
@@ -1456,7 +1456,7 @@ struct StudentIntelligenceListView: View {
             .filter { session in
                 let isInProgram = !allProgramIds.isEmpty && (session.programId.map { allProgramIds.contains($0) } ?? false)
                 let isAttendee = session.attendeeIds.contains(student.id)
-                let isUpcoming = session.date >= now && session.status != .completed && session.status != .cancelled
+                let isUpcoming = session.date >= now && session.status != .completed && !SessionLifecycle.didNotHappen(session)
                 return (isInProgram || isAttendee) && isUpcoming
             }
             .sorted { $0.date < $1.date }

@@ -24,7 +24,7 @@ struct FlightyActionableDashboard: View {
     
     private var todaySessions: [SessionEvent] {
         dataManager.sessionEvents
-            .filter { Calendar.current.isDateInToday($0.date) && $0.status != .cancelled }
+            .filter { Calendar.current.isDateInToday($0.date) && !SessionLifecycle.didNotHappen($0) }
             .sorted { $0.startTime < $1.startTime }
     }
 
@@ -1562,7 +1562,7 @@ private struct AllPlayersRow: View {
             .filter { event in
                 cal.isDateInToday(event.date)
                     && event.attendeeIds.contains(student.id)
-                    && event.status != .cancelled
+                    && !SessionLifecycle.didNotHappen(event)
             }
             .sorted { $0.startTime < $1.startTime }
             .first

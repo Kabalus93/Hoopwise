@@ -291,14 +291,14 @@ struct TodayView: View {
 
     private var todaysSessions: [SessionEvent] {
         dataManager.sessionEvents
-            .filter { Calendar.current.isDateInToday($0.date) && $0.status != .cancelled }
+            .filter { Calendar.current.isDateInToday($0.date) && !SessionLifecycle.didNotHappen($0) }
             .sorted { $0.startTime < $1.startTime }
     }
 
     private var nextUpcomingSession: SessionEvent? {
         let now = currentTime
         return dataManager.sessionEvents
-            .filter { $0.startTime > now && $0.status != .cancelled }
+            .filter { $0.startTime > now && !SessionLifecycle.didNotHappen($0) }
             .sorted { $0.startTime < $1.startTime }
             .first
     }

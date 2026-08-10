@@ -747,6 +747,30 @@ any attendance surface.
   pairs where Elite's phase-generated sessions already sat on those Fridays.
   ALL 16 remain PENDING until derived names land (2.3).
 
+## Restructure Phase 2.6 — the skip rule (August 2026)
+- `SessionLifecycle.didNotHappen` is THE predicate: skipped and cancelled are
+  the same fact — it did not take place and it will not. Before this the app
+  agreed with itself in exactly two places, both about money (the Phase 0
+  refund and the redemption gate); ~20 other sites asked "did this happen?"
+  by testing `.cancelled` ALONE.
+- So a holiday-skipped session was still real everywhere else: it sat in
+  today's list, it could be NEXT UP on the home screen, and marks recorded
+  before the skip still weighed on a student's attendance rate — after the
+  money had been refunded. MONEY AND STATISTICS NOW AGREE.
+- Adopted in: AttendanceMath.rate and consecutiveMisses, the monthly card
+  export, WidgetSnapshotWriter (all three: NextUp roster, noted-session
+  resolution, weekly attendance), the iOS dashboard's Today list and its
+  per-athlete row, both "isUpcoming" badges, and Mac Today/Sessions.
+  The two money gates now call it too, so there is ONE definition.
+- IT IS NOT A VISIBILITY RULE. A skipped session stays in the calendar and in
+  history carrying its "Skipped: <reason>" note — that record is how the coach
+  explains the gap later. Status STYLING (the cancelled strikethrough, the
+  gray) is untouched.
+- Mac's session context menu now routes through SessionLifecycle.apply and
+  gates on isAllowed. It used to set status directly, which let it offer
+  "Cancel Session" on an already-skipped session — a transition the state
+  machine forbids, performed anyway because the menu never asked it.
+
 ## Restructure Phase 2.5 — ONE creation service (August 2026)
 - Services/SessionCreation.swift (BOTH targets) is THE way a session is born.
   Nine sites built a SessionEvent by hand and disagreed on every derived
