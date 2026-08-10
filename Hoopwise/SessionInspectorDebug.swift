@@ -40,6 +40,93 @@ enum SessionInspectorDebug {
         try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
     }
 
+    /// HOOPWISE_APPLY_PLAN_RESHAPE=1 — writes the reshape the dry run
+    /// describes, using the SAME `proposedElitePlan` computation so what was
+    /// reviewed and what is written cannot diverge.
+    ///
+    /// Idempotent: if "Summer Block" already exists for the program it
+    /// reports and writes nothing, so a second run cannot create a duplicate
+    /// phase.
+    static func applyPlanReshapeIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_APPLY_PLAN_RESHAPE"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/plan-reshape.txt") else { return }
+
+        let programName = "Elite U10 Development"
+        var out = ["APPLY PLAN RESHAPE — “\(programName)”", ""]
+        guard let program = dm.programs.first(where: { $0.name == programName }) else {
+            out.append("ABORTED — no such program. Nothing written.")
+            write(out, to: url)
+            return
+        }
+        if dm.microCycles.contains(where: { $0.programId == program.id && $0.title == "Summer Block" }) {
+            out.append("already applied — “Summer Block” exists. Nothing written.")
+            write(out, to: url)
+            return
+        }
+
+        func phaseLines() -> [String] {
+            dm.microCycles.filter { $0.programId == program.id }
+                .sorted { $0.phaseNumber < $1.phaseNumber }
+                .map { "    \($0.phaseNumber). \($0.title)  \(dayString($0.startDate))…\(dayString($0.endDate))  (\($0.durationWeeks)w)" }
+        }
+        func sessionsPerPhase() -> [String] {
+            let mine = dm.sessionEvents.filter { $0.programId == program.id }
+            let titles = Dictionary(dm.microCycles.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
+            var counts: [String: Int] = [:]
+            for session in mine { counts[session.microCycleId.flatMap { titles[$0] } ?? "— unphased", default: 0] += 1 }
+            return counts.sorted { $0.key < $1.key }.map { "    \($0.key): \($0.value)" }
+        }
+
+        out.append("BEFORE")
+        out.append("  program start \(dayString(program.startDate))")
+        out.append(contentsOf: phaseLines())
+        out.append("  sessions per phase:")
+        out.append(contentsOf: sessionsPerPhase())
+        out.append("")
+
+        let (_, proposed) = proposedElitePlan(dm: dm)
+        guard !proposed.isEmpty else {
+            out.append("ABORTED — proposal came back empty. Nothing written.")
+            write(out, to: url)
+            return
+        }
+
+        var components = DateComponents()
+        components.year = 2026; components.month = 5; components.day = 1
+        var updatedProgram = program
+        updatedProgram.startDate = Calendar.current.date(from: components)
+        updatedProgram.updatedAt = Date()
+        dm.updateProgram(updatedProgram)
+
+        let existingIds = Set(dm.microCycles.filter { $0.programId == program.id }.map(\.id))
+        var added = 0, updated = 0
+        for phase in proposed {
+            if existingIds.contains(phase.id) { dm.updateMicroCycle(phase); updated += 1 }
+            else { dm.addMicroCycle(phase); added += 1 }
+        }
+        out.append("wrote: program start → 2026-05-01 · \(updated) phases re-windowed · \(added) phase added")
+
+        // Links are derived, so let the reconciler place the sessions.
+        let reconciled = SessionReconciler.run(dataManager: dm, force: true)
+        out.append("reconciler: \(reconciled.summary)")
+        out.append("")
+
+        out.append("AFTER")
+        out.append("  program start \(dayString(dm.programs.first { $0.id == program.id }?.startDate))")
+        out.append(contentsOf: phaseLines())
+        out.append("  sessions per phase:")
+        out.append(contentsOf: sessionsPerPhase())
+
+        let census = SessionIntegrity.census(sessions: dm.sessionEvents,
+                                             programs: dm.programs, phases: dm.microCycles)
+        let derivation = PhaseAssignment.plan(sessions: dm.sessionEvents, phases: dm.microCycles)
+        out.append("")
+        out.append("  census: \(dm.sessionEvents.count) sessions · BROKEN \(census.brokenCount) · window violations \(census.sessionsOutsideTheirPhaseWindow.count)")
+        out.append("  derivation outstanding: assigned \(derivation.assigned) · corrected \(derivation.corrected) · ambiguous \(derivation.ambiguous) · left \(derivation.uncovered)")
+        write(out, to: url)
+    }
+
     /// HOOPWISE_EXTEND_PLAN_DRYRUN=1 — the authorised plan reshape for
     /// Elite U10 Development, as a DRY RUN:
     ///   · program start 2026-05-08 → 2026-05-01 (so the 05-01 session is covered)

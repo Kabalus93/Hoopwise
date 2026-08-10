@@ -138,6 +138,7 @@ struct SAMApp: App {
         SessionInspectorDebug.applyAllMergesIfRequested(dataManager: dataManager)
         SessionInspectorDebug.rewindowDryRunIfRequested(dataManager: dataManager)
         SessionInspectorDebug.extendPlanDryRunIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.applyPlanReshapeIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
         #endif
     }
