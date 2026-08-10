@@ -747,6 +747,39 @@ any attendance surface.
   pairs where Elite's phase-generated sessions already sat on those Fridays.
   ALL 16 remain PENDING until derived names land (2.3).
 
+## Restructure Phase 2.7 — a phase's WORDS are derived (August 2026)
+- Services/PhaseNaming.swift (BOTH targets) finishes what 2.3's header comment
+  flagged: PhaseTemplate carries LocalizedTriple(en/zh/es), but `instantiate`
+  calls resolve(currentLanguage) and STORES one string. A plan built in
+  English is called "Pre-Season" forever, and after 2.3 that English leaks
+  onward into every session name, the calendar, the widget and the PDFs on a
+  phone running in Chinese.
+- The stored column is the LEGACY FALLBACK, same as 2.3. No schema change and
+  no migration: the link back to the template IS the stored string, matched
+  against every locale of every template for that program's AGE BAND.
+- Two rules keep it honest. PER FIELD — title, description and each objective
+  match independently, so a coach who keeps the preset title and rewrites the
+  objectives keeps their objectives. NEVER GUESS — no match or two different
+  renderings returns the stored string verbatim. ("Pre-Season" really is two
+  phases in Chinese: 季前适应 for mini12, 季前 for infantil/senior. That is why
+  the lookup is scoped by band, not a global title index.)
+- Coach-authored templates (PhaseTemplateStore) are searched BEFORE the FEB
+  defaults — a coach's programs are built from their own templates.
+- Wired at the MANAGER BOUNDARY (cachedMicroCycles), like 2.3, with the same
+  kind of write-path guard: `phaseTextToPersist` keeps the stored words when
+  the caller round-tripped a cached copy, so saving an unrelated edit while
+  running in Chinese cannot burn the Chinese rendering into an English plan.
+- Switching language POSTS .hoopwiseLanguageChanged and the manager rebuilds
+  its caches. Without that the chrome changes language and the coach's plan
+  does not.
+- Live-store evidence (HOOPWISE_PHASE_LANG, read-only, 2026-08-10): of 21
+  phases, 11 preset ones resolve per language and 10 stay verbatim — the
+  generic "Phase 1…5" and "Summer Block", which are not preset text. No false
+  positives.
+- STILL ENGLISH-ONLY, not addressed here: TrainingFocus.displayName. It is a
+  missing translation rather than a frozen one, so it belongs to a
+  localization pass, not to this rule.
+
 ## Restructure Phase 2.6 — the skip rule (August 2026)
 - `SessionLifecycle.didNotHappen` is THE predicate: skipped and cancelled are
   the same fact — it did not take place and it will not. Before this the app

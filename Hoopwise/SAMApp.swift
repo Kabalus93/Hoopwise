@@ -157,6 +157,7 @@ struct SAMApp: App {
         SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
         SessionInspectorDebug.venueCensusIfRequested(dataManager: dataManager)
         SessionInspectorDebug.foldStraySessionIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.phaseLanguageReportIfRequested(dataManager: dataManager)
         #endif
     }
 

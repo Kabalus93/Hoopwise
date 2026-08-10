@@ -164,6 +164,7 @@
 				Services/MonthlyStudentCardExportService.swift,
 				Services/PDFDocumentRenderer.swift,
 				Services/PhaseAssignment.swift,
+				Services/PhaseNaming.swift,
 				Services/SessionAdoption.swift,
 				Services/SessionCreation.swift,
 				Services/SessionDedupe.swift,

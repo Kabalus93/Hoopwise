@@ -402,6 +402,59 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// The words each phase should display, keyed by id — the phase-level
+    /// counterpart of `derivedTitles`, so `updateMicroCycle` can tell "the
+    /// caller handed back what we rendered" from "the coach typed new words".
+    private var derivedPhaseText: [UUID: PhaseText] = [:]
+
+    private var languageObserver: NSObjectProtocol?
+
+    struct PhaseText: Equatable {
+        let title: String
+        let description: String?
+        let objectives: [String]
+
+        init(_ phase: MicroCycle) {
+            title = phase.title
+            description = phase.description
+            objectives = phase.objectives
+        }
+    }
+
+    /// Phase text resolved into the CURRENT language (Phase 2.7). The stored
+    /// column keeps whatever locale the phase was created in; this is what the
+    /// app reads.
+    private func localizedPhases(_ phases: [MicroCycle]) -> [MicroCycle] {
+        let localized = PhaseNaming.localized(
+            phases,
+            programs: cachedPrograms,
+            userTemplates: PhaseTemplateStore.shared.templates,
+            language: LocalizationManager.shared.currentLanguage)
+        derivedPhaseText = Dictionary(uniqueKeysWithValues:
+            localized.map { ($0.id, PhaseText($0)) })
+        return localized
+    }
+
+    /// The stored words to persist for a phase the caller is saving.
+    ///
+    /// Identical to what was rendered means the caller round-tripped a cached
+    /// copy and never touched the words — so the STORED string is kept, and a
+    /// coach who saves an unrelated edit while running in Chinese does not
+    /// silently burn the Chinese rendering into a plan built in English.
+    /// Anything else is a deliberate edit and is stored verbatim.
+    private func phaseTextToPersist(for phase: MicroCycle) -> PhaseText {
+        guard let rendered = derivedPhaseText[phase.id],
+              rendered == PhaseText(phase) else { return PhaseText(phase) }
+        guard let stored = try? modelContext.fetch(
+            FetchDescriptor<SDMicroCycle>(predicate: #Predicate { $0.id == phase.id })).first
+        else { return PhaseText(phase) }
+        var original = phase
+        original.title = stored.title
+        original.description = stored.cycleDescription
+        original.objectives = stored.objectives
+        return PhaseText(original)
+    }
+
     /// The stored title to persist for a session the caller is saving.
     ///
     /// If the incoming title is exactly what we rendered, the caller is
@@ -514,6 +567,17 @@ class SwiftDataManager: ObservableObject {
                 Self.startupFailure = "The data store could not be opened at all. \(error.localizedDescription)"
             }
         }
+        observeLanguageChanges()
+    }
+
+    /// Phase words resolve into the current language when the caches are built
+    /// (Phase 2.7), so switching language has to rebuild them — otherwise the
+    /// coach's plan keeps speaking the old language while the chrome changes.
+    private func observeLanguageChanges() {
+        languageObserver = NotificationCenter.default.addObserver(
+            forName: .hoopwiseLanguageChanged, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshCachesSync() }
+            }
     }
     
     // MARK: - Load All Data
@@ -641,7 +705,7 @@ class SwiftDataManager: ObservableObject {
             cachedPrograms = sdPrograms.map { $0.toStruct() }
             
             let sdMicroCycles = try modelContext.fetch(FetchDescriptor<SDMicroCycle>())
-            cachedMicroCycles = sdMicroCycles.map { $0.toStruct() }
+            cachedMicroCycles = localizedPhases(sdMicroCycles.map { $0.toStruct() })
             
             let sdSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
             cachedSessionEvents = Self.withDerivedNames(
@@ -1585,12 +1649,15 @@ class SwiftDataManager: ObservableObject {
         do {
             let descriptor = FetchDescriptor<SDMicroCycle>(predicate: #Predicate { $0.id == microCycle.id })
             if let sdCycle = try modelContext.fetch(descriptor).first {
+                // Words go through the 2.7 guard, so a round-tripped cached
+                // copy keeps the locale it was stored in.
+                let text = phaseTextToPersist(for: microCycle)
                 sdCycle.phaseNumber = microCycle.phaseNumber
-                sdCycle.title = microCycle.title
+                sdCycle.title = text.title
                 sdCycle.focus = microCycle.focus
                 sdCycle.durationWeeks = microCycle.durationWeeks
-                sdCycle.cycleDescription = microCycle.description
-                sdCycle.objectives = microCycle.objectives
+                sdCycle.cycleDescription = text.description
+                sdCycle.objectives = text.objectives
                 sdCycle.suggestedDrillIds = microCycle.suggestedDrillIds
                 sdCycle.startDate = microCycle.startDate
                 sdCycle.endDate = microCycle.endDate
@@ -4308,7 +4375,7 @@ class SwiftDataManager: ObservableObject {
             cachedPrograms = sdPrograms.map { $0.toStruct() }
             
             let sdMicroCycles = try modelContext.fetch(FetchDescriptor<SDMicroCycle>())
-            cachedMicroCycles = sdMicroCycles.map { $0.toStruct() }
+            cachedMicroCycles = localizedPhases(sdMicroCycles.map { $0.toStruct() })
             
             let sdSessions = try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
             cachedSessionEvents = Self.withDerivedNames(

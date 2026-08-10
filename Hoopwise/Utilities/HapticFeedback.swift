@@ -30,12 +30,24 @@ enum AppLanguage: String, CaseIterable, Codable {
 
 // MARK: - Localization Manager
 @MainActor
+extension Notification.Name {
+    /// The app language changed. SwiftDataManager rebuilds its caches, because
+    /// phase words and derived session names resolve at cache-build time.
+    static let hoopwiseLanguageChanged = Notification.Name("hoopwiseLanguageChanged")
+}
+
 class LocalizationManager: ObservableObject {
     static let shared = LocalizationManager()
     
     @Published var currentLanguage: AppLanguage {
         didSet {
+            guard oldValue != currentLanguage else { return }
             UserDefaults.standard.set(currentLanguage.rawValue, forKey: "app_language")
+            // Phase 2.7: phase words — and the session names derived from them
+            // — are resolved into the current language when the caches are
+            // built. Without this the plan keeps speaking the old language
+            // until something else happens to trigger a refresh.
+            NotificationCenter.default.post(name: .hoopwiseLanguageChanged, object: nil)
         }
     }
     

@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import SwiftData
 
 /// Read-only inspector for individual session records, for deciding a
 /// duplicate merge by hand.
@@ -757,6 +758,44 @@ enum SessionInspectorDebug {
         out.append("")
         out.append("  census: \(dm.sessionEvents.count) sessions · BROKEN \(census.brokenCount) · window violations \(census.sessionsOutsideTheirPhaseWindow.count) · standalone \(dm.sessionEvents.filter { $0.programId == nil }.count)")
         write(out, to: url)
+    }
+
+    /// HOOPWISE_PHASE_LANG=1 — read-only: what Phase 2.7 resolves each stored
+    /// phase title to, in all three languages, against real data. Proof that
+    /// coach-authored titles are left verbatim and only preset text moves.
+    static func phaseLanguageReportIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_PHASE_LANG"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/phase-language.txt") else { return }
+
+        var lines = ["PHASE LANGUAGE — read only, nothing was written", ""]
+        lines.append("\(dm.microCycles.count) phases · app language \(LocalizationManager.shared.currentLanguage.rawValue)")
+        lines.append("")
+
+        // The cache already carries resolved titles, so compare against what
+        // is actually on disk.
+        var stored: [UUID: String] = [:]
+        if let rows = try? dm.modelContext.fetch(FetchDescriptor<SDMicroCycle>()) {
+            for row in rows { stored[row.id] = row.title }
+        }
+
+        var moved = 0, verbatim = 0
+        for phase in dm.microCycles.sorted(by: { $0.phaseNumber < $1.phaseNumber }) {
+            let program = dm.programs.first { $0.id == phase.programId }
+            let onDisk = stored[phase.id] ?? phase.title
+            let raw = MicroCycle(id: phase.id, programId: phase.programId,
+                                 phaseNumber: phase.phaseNumber, title: onDisk)
+            let renderings = [AppLanguage.english, .chinese, .spanish].map { language in
+                "\(language.rawValue)=\(PhaseNaming.localized(raw, program: program, userTemplates: PhaseTemplateStore.shared.templates, language: language).title)"
+            }
+            let changes = Set(renderings.map { $0.split(separator: "=").dropFirst().joined() }).count > 1
+            if changes { moved += 1 } else { verbatim += 1 }
+            lines.append("\(changes ? "→" : " ·") stored “\(onDisk)”  [\(program?.name ?? "no program")]")
+            lines.append("     \(renderings.joined(separator: "   "))")
+        }
+        lines.append("")
+        lines.append("resolves per language: \(moved) · left verbatim: \(verbatim)")
+        write(lines, to: url)
     }
 
     /// HOOPWISE_VENUE_CENSUS=1 — read-only evidence for deciding whether a
