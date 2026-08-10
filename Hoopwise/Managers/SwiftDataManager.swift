@@ -1326,7 +1326,6 @@ class SwiftDataManager: ObservableObject {
                                          minute: timeOfDay.minute,
                                          second: 0,
                                          of: cursor) ?? cursor
-                let endTime = cal.date(byAdding: .minute, value: durationMinutes, to: startTime) ?? startTime
 
                 let title = suffixOrdinals
                     ? "\(phase.title) · \(sessionNumber)"
@@ -1352,20 +1351,14 @@ class SwiftDataManager: ObservableObject {
                     // else: already belongs to a phase (this one or another) —
                     // never create a duplicate.
                 } else {
-                    let event = SessionEvent(
-                        microCycleId: phase.id,
-                        programId: program.id,
-                        seriesId: seriesId,
-                        sessionType: .training,
+                    createSession(SessionCreation.Intent(
+                        group: .program(program.id),
+                        start: startTime,
+                        durationMinutes: durationMinutes,
                         title: title,
-                        date: startTime,
-                        startTime: startTime,
-                        endTime: endTime,
-                        location: program.locationName,
-                        attendeeIds: program.enrolledStudentIds,
-                        createdByCoachId: program.coachId ?? loggedInCoachId
-                    )
-                    addSessionEvent(event)
+                        phase: phase.id,
+                        seriesId: seriesId,
+                        createdByCoachId: program.coachId ?? loggedInCoachId))
                     created += 1
                 }
             }
@@ -1521,22 +1514,14 @@ class SwiftDataManager: ObservableObject {
                                              minute: timeOfDay.minute,
                                              second: 0,
                                              of: cursor) ?? cursor
-                    let endTime = cal.date(byAdding: .minute, value: durationMinutes, to: startTime) ?? startTime
-
-                    let event = SessionEvent(
-                        microCycleId: phase.id,
-                        programId: program.id,
-                        seriesId: backfillSeriesId,
-                        sessionType: .training,
+                    createSession(SessionCreation.Intent(
+                        group: .program(program.id),
+                        start: startTime,
+                        durationMinutes: durationMinutes,
                         title: suffixOrdinals ? "\(phase.title) · 1" : phase.title,
-                        date: startTime,
-                        startTime: startTime,
-                        endTime: endTime,
-                        location: program.locationName,
-                        attendeeIds: program.enrolledStudentIds,
-                        createdByCoachId: program.coachId ?? loggedInCoachId
-                    )
-                    addSessionEvent(event)
+                        phase: phase.id,
+                        seriesId: backfillSeriesId,
+                        createdByCoachId: program.coachId ?? loggedInCoachId))
                     created += 1
                 }
                 guard let next = cal.date(byAdding: .day, value: 1, to: cursor) else { break }
@@ -1706,6 +1691,86 @@ class SwiftDataManager: ObservableObject {
             saveAndRefresh()
         } catch {
             debugLog("❌ Failed to delete micro cycle: \(error)")
+        }
+    }
+
+    // MARK: - Session creation (Phase 2.5)
+
+    /// What `createSession` did, in enough detail to reverse it in ONE step.
+    struct SessionCreationResult {
+        let session: SessionEvent
+        /// A private micro-group this creation brought into existence.
+        let createdProgramId: UUID?
+        /// A dormant private program this creation reactivated, and the status
+        /// it held before.
+        let reactivatedProgramId: UUID?
+        let previousStatus: ProgramStatus?
+        /// A student whose program pointer this creation set.
+        let enrolledStudentId: UUID?
+    }
+
+    /// THE way to create a session. Resolves the group, derives the phase from
+    /// the date, defaults venue and roster from the program, and creates or
+    /// reactivates a private micro-group when a 1:1 client has none — all
+    /// decided by `SessionCreation.plan` before anything is written.
+    @discardableResult
+    func createSession(_ intent: SessionCreation.Intent) -> SessionCreationResult {
+        let plan = SessionCreation.plan(intent,
+                                        programs: cachedPrograms,
+                                        phases: cachedMicroCycles,
+                                        students: cachedStudents,
+                                        sessions: cachedSessionEvents,
+                                        defaultCoachId: loggedInCoachId ?? coach.id)
+
+        var createdProgramId: UUID?
+        var reactivatedProgramId: UUID?
+        var previousStatus: ProgramStatus?
+
+        if let program = plan.programToCreate {
+            addProgram(program)
+            createdProgramId = program.id
+        }
+        if let revived = plan.reactivate {
+            previousStatus = cachedPrograms.first { $0.id == revived.id }?.status
+            updateProgram(revived)
+            reactivatedProgramId = revived.id
+        }
+        if let enroll = plan.enroll {
+            setStudentEnrollment(studentId: enroll.studentId, programId: enroll.programId)
+        }
+        addSessionEvent(plan.event)
+
+        return SessionCreationResult(session: plan.event,
+                                     createdProgramId: createdProgramId,
+                                     reactivatedProgramId: reactivatedProgramId,
+                                     previousStatus: previousStatus,
+                                     enrolledStudentId: plan.enroll?.studentId)
+    }
+
+    /// Reverses a `createSession` completely — including a micro-group it
+    /// created. Registered as ONE undo action by the callers that have an undo
+    /// manager, so ⌘Z on a mistaken booking never leaves an empty program
+    /// behind for the coach to find later and not understand.
+    func undoSessionCreation(_ result: SessionCreationResult) {
+        if let session = cachedSessionEvents.first(where: { $0.id == result.session.id }) {
+            deleteSessionEvent(session)
+        }
+        if let studentId = result.enrolledStudentId {
+            setStudentEnrollment(studentId: studentId, programId: nil)
+        }
+        if let id = result.reactivatedProgramId,
+           let status = result.previousStatus,
+           var program = cachedPrograms.first(where: { $0.id == id }) {
+            program.status = status
+            program.updatedAt = Date()
+            updateProgram(program)
+        }
+        if let id = result.createdProgramId,
+           let program = cachedPrograms.first(where: { $0.id == id }),
+           cachedSessionEvents.allSatisfy({ $0.programId != id }) {
+            // Guarded: deleteProgram cascades to sessions, so it may only run
+            // once the program is provably empty.
+            deleteProgram(program)
         }
     }
 

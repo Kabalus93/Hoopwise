@@ -338,8 +338,6 @@ struct FlightyCreateSessionView: View {
     }
     
     private func createSession() {
-        let attendeeIds = program?.enrolledStudentIds ?? []
-        
         let curriculum = SessionCurriculum(
             warmupDrillIds: Array(selectedWarmupDrillIds),
             skillDrillIds: Array(selectedSkillDrillIds),
@@ -358,22 +356,19 @@ struct FlightyCreateSessionView: View {
                                              minute: endComponents.minute ?? 0,
                                              second: 0, of: date) ?? date
         
-        let session = SessionEvent(
-            microCycleId: microCycle.id,
-            programId: program?.id,
+        // The phase is explicit: this sheet is opened from inside one, and a
+        // plan is allowed to carry no dates for derivation to work from.
+        dataManager.createSession(SessionCreation.Intent(
+            group: .program(program?.id ?? microCycle.programId),
             sessionType: sessionType,
+            start: combinedStartTime,
+            durationMinutes: Int(combinedEndTime.timeIntervalSince(combinedStartTime) / 60),
             title: title.trimmingCharacters(in: .whitespaces),
-            date: date,
-            startTime: combinedStartTime,
-            endTime: combinedEndTime,
             location: locationString,
-            curriculum: curriculum,
-            attendeeIds: attendeeIds,
+            phase: microCycle.id,
             notes: notes.isEmpty ? nil : notes,
-            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId
-        )
-        
-        dataManager.addSessionEvent(session)
+            curriculum: curriculum,
+            createdByCoachId: selectedCoachId ?? dataManager.loggedInCoachId))
         dismiss()
     }
 }

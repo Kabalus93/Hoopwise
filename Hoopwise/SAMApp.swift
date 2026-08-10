@@ -31,11 +31,23 @@ struct SAMApp: App {
     @State private var isInitialized = false
     @State private var hasOnboarded = UserDefaults.standard.bool(forKey: "hasOnboarded")
 
+    /// Non-nil only in a DEBUG build launched with HOOPWISE_SHOT — the
+    /// creation-sheet screenshot harness. Release builds compile to `nil`.
+    private var debugSheetShot: String? {
+        #if DEBUG
+        return SheetGalleryDebug.requestedShot
+        #else
+        return nil
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
                 if !isInitialized {
                     splashView
+                } else if let shot = debugSheetShot {
+                    SheetGalleryDebug.root(shot: shot, dataManager: dataManager)
                 } else if !hasOnboarded {
                     OnboardingView {
                         hasOnboarded = true
@@ -126,6 +138,9 @@ struct SAMApp: App {
         isInitialized = true
 
         #if DEBUG
+        if SheetGalleryDebug.requestedShot != nil {
+            SheetGalleryDebug.seedIfEmpty(dataManager: dataManager)
+        }
         exportStatementIfRequested()
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
         runOrphanCensusIfRequested()

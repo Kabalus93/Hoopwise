@@ -681,28 +681,24 @@ struct AddSessionOnboardingView: View {
         let title = (effectiveProgramId.flatMap { id in dataManager.programs.first(where: { $0.id == id })?.displayName })
             ?? type.displayName
 
-        // Pre-populate attendees from the linked program's roster, if any.
-        let attendees: [UUID] = effectiveProgramId
-            .flatMap { id in dataManager.programs.first(where: { $0.id == id })?.enrolledStudentIds }
-            ?? []
+        // A batch is one series (Phase 2.2), so siblings resolve by identity
+        // rather than by the structural fingerprint a rename would break.
+        let group: SessionCreation.Group = effectiveProgramId.map { .program($0) } ?? .unassigned
+        let seriesId: UUID? = dates.count > 1 ? UUID() : nil
 
         for day in dates {
             let start = cal.date(bySettingHour: timeComps.hour ?? 18,
                                  minute: timeComps.minute ?? 0,
                                  second: 0, of: day) ?? day
-            let end = cal.date(byAdding: .minute, value: sessionDurationMinutes, to: start) ?? start
-            let event = SessionEvent(
-                programId: effectiveProgramId,
+            dataManager.createSession(SessionCreation.Intent(
+                group: group,
                 sessionType: type,
+                start: start,
+                durationMinutes: sessionDurationMinutes,
                 title: title,
-                date: day,
-                startTime: start,
-                endTime: end,
                 location: location?.name,
-                attendeeIds: attendees,
-                createdByCoachId: dataManager.loggedInCoachId
-            )
-            dataManager.addSessionEvent(event)
+                seriesId: seriesId,
+                createdByCoachId: dataManager.loggedInCoachId))
         }
         dismiss()
     }

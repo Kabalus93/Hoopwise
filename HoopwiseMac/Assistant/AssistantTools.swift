@@ -395,20 +395,21 @@ final class AssistantToolRegistry {
                        let program = dataManager.programs.first(where: { $0.id == programId }) {
                         attendees = program.enrolledStudentIds
                     }
-                    let now = Date()
-                    let session = SessionEvent(
-                        id: UUID(), programId: programId, sessionType: .training,
-                        title: title, date: starts, startTime: starts,
-                        endTime: Calendar.current.date(byAdding: .minute, value: duration, to: starts) ?? starts,
+                    // Through the shared creation service, so the assistant
+                    // gets the same phase derivation, venue default and series
+                    // handling as the app — the rule that it never touches the
+                    // database except through the business-rule layer.
+                    let result = dataManager.createSession(SessionCreation.Intent(
+                        group: programId.map { .program($0) } ?? .unassigned,
+                        start: starts,
+                        durationMinutes: duration,
+                        title: title,
                         location: args["location"] as? String,
-                        attendeeIds: attendees,
-                        createdByCoachId: dataManager.loggedInCoachId,
-                        createdAt: now, updatedAt: now)
-                    dataManager.addSessionEvent(session)
+                        roster: attendees.isEmpty ? nil : attendees,
+                        createdByCoachId: dataManager.loggedInCoachId))
+                    let session = result.session
                     registerUndo(name: "Assistant: Create Session") { manager in
-                        if let created = manager.sessionEvents.first(where: { $0.id == session.id }) {
-                            manager.deleteSessionEvent(created)
-                        }
+                        manager.undoSessionCreation(result)
                     }
                     return AssistantToolResult(
                         payload: Self.encode(["created": true, "session_id": session.id.uuidString]),

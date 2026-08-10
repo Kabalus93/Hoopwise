@@ -165,6 +165,7 @@
 				Services/PDFDocumentRenderer.swift,
 				Services/PhaseAssignment.swift,
 				Services/SessionAdoption.swift,
+				Services/SessionCreation.swift,
 				Services/SessionDedupe.swift,
 				Services/SessionIntegrity.swift,
 				Services/SessionLiveActivityManager.swift,

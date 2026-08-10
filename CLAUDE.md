@@ -157,6 +157,16 @@ it produces confident wrong numbers the coach reconciles books against.
   widget deep-link routing in MainTabView/SAMApp (tap-through to
   session/athlete). It is an explicit approval for that diff only, not
   precedent for general iOS edits.
+- WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
+  the iOS UI SURFACE — what renders and reads on screen. Rewiring the
+  plumbing BEHIND that interface to a shared service is permitted, because
+  the coach's screen is unchanged by it. The bar is evidence, not
+  assertion: a plumbing diff carries before/after screenshots of every
+  touched sheet, pixel-identical. SheetGalleryDebug + HOOPWISE_SHOT is the
+  harness that makes that cheap (it constructs the real sheet directly, so
+  two runs cannot differ in how they navigated there); scratchpad
+  `pixdiff` does the comparison. Phase 2.5 is the worked example: four
+  createSession() bodies replaced, four sheets identical to the pixel.
 - iOS/Mac feature parity is CANCELLED as a goal. Do not pursue it.
 - The Mac app becomes an authoring tool for basketball research and video
   production: court/play editor, PDF play sheets, animation export for
@@ -736,6 +746,42 @@ any attendance surface.
   Mason — awaiting triage). Duplicate groups 11 → 16: adoption created 5 new
   pairs where Elite's phase-generated sessions already sat on those Fridays.
   ALL 16 remain PENDING until derived names land (2.3).
+
+## Restructure Phase 2.5 — ONE creation service (August 2026)
+- Services/SessionCreation.swift (BOTH targets) is THE way a session is born.
+  Nine sites built a SessionEvent by hand and disagreed on every derived
+  field; the stray Frank session (no program, venue typed "Kuxun Main court"
+  for a gym stored as 酷迅, no phase) is what that cost in practice.
+- Two steps: pure `plan` decides (so it is testable without a store), then
+  `SwiftDataManager.createSession` writes. Callers state an INTENT.
+- `Group` is the whole point: `.program(id)`, `.privateClient(id)`,
+  `.unassigned`. programId == nil still exists — a scrimmage or a camp really
+  belongs to no program — but it now means ONLY that. Nothing infers
+  privateness from it, and no site may hardcode it "because private".
+- PRIVATE CLIENTS: find-or-create their micro-group, in the 2.1 shape (no
+  recurringDays, no defaultSessionTime, planless). The search IGNORES status,
+  so a returning client REACTIVATES their archived program instead of
+  spawning "Private · Frank 2" beside it.
+- ENROLMENT is only written when the student has no program pointer at all.
+  setStudentEnrollment clears every other program's roster by design, so
+  pointing a group athlete at their private micro-group would silently remove
+  them from the squad they train with.
+- UNDO IS ONE STEP: createSession returns a SessionCreationResult and
+  `undoSessionCreation` reverses all of it — session, auto-created program,
+  reactivation, enrolment. ⌘Z on a mistaken booking never leaves an empty
+  "Private · <name>" program behind. Program deletion is guarded on the
+  program being provably empty, because deleteProgram cascades to sessions.
+- Derived at creation: phase FROM THE DATE (2.4's window rule), venue and
+  roster from the program, `date` == `startTime` (one convention), and the
+  stored title = what the coach typed, else the derived name. `Intent.phase`
+  overrides derivation for the generators, which generate FOR a phase — 16
+  links in the live store sit in dateless plans and would otherwise be lost.
+- Every batch stamps ONE seriesId, including the two wizard generators that
+  used to stamp none.
+- Residue, deliberately not converted: SDSessionEvent.from (model mapping),
+  #Preview and `samples` fixtures, AttentionDebugReport's scratch records
+  (DEBUG, deleted immediately, and they test the attention engine), and
+  SampleDataGenerator — which has NO call sites at all and is a 2.8 verdict.
 
 ## Restructure Phase 2.3 — names are DERIVED (August 2026, executed)
 - Services/SessionNaming.swift (both targets) computes a session's name from

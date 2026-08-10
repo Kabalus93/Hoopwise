@@ -1006,24 +1006,24 @@ struct AddProgramOnboardingView: View {
         // Otherwise only fire on matching weekdays. This prevents silent zero-session
         // creation when the picked days don't fall inside the date range.
         let runEveryDay = recurringDays.isEmpty
+        // One generated run, one series id (Phase 2.2). The roster is left to
+        // the service, which takes the program's enrolment — this generator
+        // used to create every session with no attendees at all, which is why
+        // the widget's window ladder had to fall back to enrolment to find one.
+        let seriesId = UUID()
         for date in datesInRange {
             let weekday = cal.component(.weekday, from: date)
             guard runEveryDay || recurringDays.contains(where: { $0.rawValue == weekday }) else { continue }
             let start = cal.date(bySettingHour: timeComps.hour ?? 18,
                                  minute: timeComps.minute ?? 0,
                                  second: 0, of: date) ?? date
-            let endTime = cal.date(byAdding: .minute, value: sessionDurationMinutes, to: start) ?? start
-            let event = SessionEvent(
-                programId: program.id,
-                sessionType: .training,
+            dataManager.createSession(SessionCreation.Intent(
+                group: .program(program.id),
+                start: start,
+                durationMinutes: sessionDurationMinutes,
                 title: program.name,
-                date: date,
-                startTime: start,
-                endTime: endTime,
-                location: program.locationName,
-                createdByCoachId: dataManager.loggedInCoachId
-            )
-            dataManager.addSessionEvent(event)
+                seriesId: seriesId,
+                createdByCoachId: dataManager.loggedInCoachId))
         }
         _ = end // kept for signature compatibility
     }

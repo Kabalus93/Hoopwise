@@ -605,6 +605,7 @@ private struct PrivateSessionSheet: View {
     let student: Student
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.undoManager) private var undoManager
 
     @State private var title = ""
     @State private var date = Self.defaultStart()
@@ -666,25 +667,23 @@ private struct PrivateSessionSheet: View {
     }
 
     private func commit() {
-        let now = Date()
         let backdated = isPast
-        let session = SessionEvent(
-            id: UUID(),
-            programId: nil,     // program-less = the private path
-            sessionType: .training,
+        // The client's private micro-group, found or created. This used to be
+        // `programId: nil // program-less = the private path` — the encoding
+        // Phase 1 replaced with the program's TYPE.
+        let result = dataManager.createSession(SessionCreation.Intent(
+            group: .privateClient(student.id),
+            start: date,
+            durationMinutes: durationMinutes,
             title: title.trimmingCharacters(in: .whitespaces),
-            date: date,
-            startTime: date,
-            endTime: Calendar.current.date(byAdding: .minute,
-                                           value: durationMinutes, to: date) ?? date,
             location: location.isEmpty ? nil : location,
             status: backdated ? .completed : .scheduled,
-            attendeeIds: [student.id],
-            createdByCoachId: dataManager.loggedInCoachId,
-            createdAt: now,
-            updatedAt: now
-        )
-        dataManager.addSessionEvent(session)
+            createdByCoachId: dataManager.loggedInCoachId))
+        let session = result.session
+        undoManager?.registerUndo(withTarget: dataManager) { manager in
+            manager.undoSessionCreation(result)
+        }
+        undoManager?.setActionName("Schedule Private Session")
         if backdated {
             // Through THE attendance authority, so the redemption lockstep
             // (FIFO bundle deduction) fires exactly as a live roll call would.

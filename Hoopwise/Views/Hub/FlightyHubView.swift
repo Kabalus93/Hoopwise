@@ -1489,24 +1489,20 @@ struct SchedulePrivateSessionSheet: View {
     private func createSession() {
         guard canSave else { return }
 
-        // Private 1:1 sessions are intentionally program-less. They're
-        // identified as private downstream by the attendee having an active
-        // private contract — see SwiftDataManager.eventIsPrivate.
-        let event = SessionEvent(
-            programId: nil,
-            sessionType: .training,
+        // A 1:1 belongs to the client's private micro-group. It used to be
+        // deliberately program-less, with privateness inferred downstream from
+        // the attendee's contract — the encoding Phase 1 replaced with the
+        // program's TYPE, and Phase 2.5 stopped minting here.
+        let result = dataManager.createSession(SessionCreation.Intent(
+            group: .privateClient(student.id),
+            start: combinedStart,
+            durationMinutes: Int(endTime.timeIntervalSince(combinedStart) / 60),
             title: title.trimmingCharacters(in: .whitespaces),
-            date: combinedStart,
-            startTime: combinedStart,
-            endTime: endTime,
             location: resolvedLocation,
-            attendeeIds: [student.id],
-            actualAttendeeIds: markAttended ? [student.id] : [],
             notes: notes.isEmpty ? nil : notes,
-            createdByCoachId: dataManager.loggedInCoachId
-        )
-
-        dataManager.addSessionEvent(event)
+            actualAttendeeIds: markAttended ? [student.id] : [],
+            createdByCoachId: dataManager.loggedInCoachId))
+        let event = result.session
 
         // If pre-marking attendance, redeem a bundle slot right away so the
         // counter ticks down without a second trip through the attendance UI.

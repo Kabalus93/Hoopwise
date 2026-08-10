@@ -224,6 +224,7 @@ struct NewAthleteSheet: View {
 struct NewSessionSheet: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.undoManager) private var undoManager
 
     @State private var title: String = ""
     @State private var date: Date = Self.defaultStart()
@@ -366,22 +367,19 @@ struct NewSessionSheet: View {
 
     private func save() {
         guard canSave else { return }
-        let now = Date()
-        let session = SessionEvent(
-            id: UUID(),
-            programId: programId,
+        let result = dataManager.createSession(SessionCreation.Intent(
+            group: programId.map { .program($0) } ?? .unassigned,
             sessionType: sessionType,
+            start: date,
+            durationMinutes: Int(endTime.timeIntervalSince(date) / 60),
             title: trimmedTitle,
-            date: date,
-            startTime: date,
-            endTime: endTime,
             location: location.isEmpty ? nil : location,
-            attendeeIds: Array(attendeeIds),
-            createdByCoachId: dataManager.loggedInCoachId,
-            createdAt: now,
-            updatedAt: now
-        )
-        dataManager.addSessionEvent(session)
+            roster: Array(attendeeIds),
+            createdByCoachId: dataManager.loggedInCoachId))
+        undoManager?.registerUndo(withTarget: dataManager) { manager in
+            manager.undoSessionCreation(result)
+        }
+        undoManager?.setActionName("New Session")
         dismiss()
     }
 }
