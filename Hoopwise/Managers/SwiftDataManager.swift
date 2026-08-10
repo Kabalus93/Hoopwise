@@ -3129,6 +3129,9 @@ class SwiftDataManager: ObservableObject {
         sd.sessionMinutes = contract.sessionMinutes
         sd.validityMonths = contract.validityMonths
         sd.programId = contract.programId
+        sd.signedDate = contract.signedDate
+        sd.jerseyGivenDate = contract.jerseyGivenDate
+        sd.ballGivenDate = contract.ballGivenDate
         sd.notes = contract.notes
         sd.manualStatus = contract.manualStatus
         sd.updatedAt = Date()

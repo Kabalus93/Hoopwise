@@ -760,6 +760,90 @@ enum SessionInspectorDebug {
         write(out, to: url)
     }
 
+    /// HOOPWISE_HANDOVER=1 — read-only: the signed / jersey / ball facts as
+    /// this device sees them. Used to prove the Mac→CloudKit→iOS round trip
+    /// for the three columns Phase 2.9 added.
+    static func handoverReportIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_HANDOVER"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/handover.txt") else { return }
+
+        func name(_ id: UUID) -> String {
+            dm.students.first { $0.id == id }.map { student in
+                [student.chineseName, student.name].compactMap { $0 }
+                    .filter { !$0.isEmpty }.joined(separator: " / ")
+            } ?? "unknown \(short(id))"
+        }
+
+        var lines = ["HANDOVER FACTS — read only, nothing was written", ""]
+        lines.append("read at \(stamp(Date())) \(time(Date())) · \(dm.contracts.count) contracts")
+        lines.append("")
+
+        let marked = dm.contracts.filter {
+            $0.signedDate != nil || $0.jerseyGivenDate != nil || $0.ballGivenDate != nil
+        }
+        lines.append("ANY FACT RECORDED: \(marked.count)")
+        for contract in marked.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            lines.append("  · \(name(contract.studentId)) — #\(contract.contractNumber) [\(short(contract.id))]")
+            lines.append("      signed \(contract.signedDate.map { stamp($0) + " " + time($0) } ?? "—")")
+            lines.append("      jersey \(contract.jerseyGivenDate.map { stamp($0) + " " + time($0) } ?? "—")")
+            lines.append("      ball   \(contract.ballGivenDate.map { stamp($0) + " " + time($0) } ?? "—")")
+            lines.append("      updated \(stamp(contract.updatedAt)) \(time(contract.updatedAt))")
+        }
+        lines.append("")
+        lines.append("FIVE MOST RECENTLY UPDATED CONTRACTS (for picking a round-trip target)")
+        for contract in dm.contracts.sorted(by: { $0.updatedAt > $1.updatedAt }).prefix(5) {
+            lines.append("  · \(name(contract.studentId)) — #\(contract.contractNumber) [\(short(contract.id))] · \(contract.kind.rawValue) · updated \(stamp(contract.updatedAt)) \(time(contract.updatedAt))")
+        }
+        write(lines, to: url)
+    }
+
+    /// HOOPWISE_EXPIRY_FLIP=1 — read-only: exactly which contracts start
+    /// reading as expired now that `isExpired` derives from validityMonths
+    /// instead of returning false. Nothing should reach a coach's screen as a
+    /// surprise, so the list is produced before the change ships.
+    static func expiryFlipReportIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_EXPIRY_FLIP"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/expiry-flip.txt") else { return }
+
+        func name(_ id: UUID) -> String {
+            dm.students.first { $0.id == id }.map { student in
+                [student.chineseName, student.name].compactMap { $0 }
+                    .filter { !$0.isEmpty }.joined(separator: " / ")
+            } ?? "unknown student \(short(id))"
+        }
+
+        var lines = ["EXPIRY FLIP — read only, nothing was written", ""]
+        let now = Date()
+        lines.append("\(dm.contracts.count) contracts · as of \(stamp(now))")
+        lines.append("")
+
+        let withTerm = dm.contracts.filter { $0.validityMonths > 0 }
+        let expired = withTerm.filter { $0.isExpired(asOf: now) }
+        let live = withTerm.filter { !$0.isExpired(asOf: now) }
+
+        lines.append("NO TERM SET (validityMonths == 0) — can never expire: \(dm.contracts.count - withTerm.count)")
+        lines.append("")
+        lines.append("FLIPPING TO EXPIRED: \(expired.count)")
+        for contract in expired.sorted(by: { ($0.expiresOn ?? now) < ($1.expiresOn ?? now) }) {
+            let remaining = contract.bundleRedemptionsRemaining.map(String.init) ?? "n/a"
+            lines.append("  · \(name(contract.studentId)) — contract #\(contract.contractNumber) [\(short(contract.id))]")
+            lines.append("      \(contract.kind.rawValue) · bought \(stamp(contract.effectiveBundlePurchaseDate)) · \(contract.validityMonths) months → expired \(stamp(contract.expiresOn ?? now))")
+            lines.append("      sessions remaining \(remaining) · status stays \(contract.status.rawValue) · owed \(contract.sessionAmountOwed)")
+        }
+        lines.append("")
+        lines.append("STILL LIVE, but now countable: \(live.count)")
+        for contract in live.sorted(by: { ($0.expiresOn ?? now) < ($1.expiresOn ?? now) }) {
+            lines.append("  · \(name(contract.studentId)) — #\(contract.contractNumber) expires \(stamp(contract.expiresOn ?? now))")
+        }
+        lines.append("")
+        lines.append("NOTE: status is deliberately unchanged — an expired contract stays")
+        lines.append("      .active, so redemption and the private-session rule behave exactly")
+        lines.append("      as before. Only the display warnings change.")
+        write(lines, to: url)
+    }
+
     /// HOOPWISE_DEDUPE_RULES=1 — read-only: what the old calendar-day-only
     /// dedupe would have deleted versus what the real duplicate rule (program
     /// + day + START TIME) finds. The difference is real sessions.

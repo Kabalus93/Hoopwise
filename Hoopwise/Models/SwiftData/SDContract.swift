@@ -34,6 +34,17 @@ final class SDContract {
     /// Agreement validity in months, for clause 3. Zero means unset.
     var validityMonths: Int = 0
     var programId: UUID?
+    // MARK: - Handover facts (Phase 2.9)
+    //
+    // The DATE is the truth and the Bool derives from it, the same reasoning
+    // as the consent ledger: a Bool loses when it happened, and "was the
+    // agreement signed?" is a question the coach answers from a date. All
+    // three are optional with no default, so they are additive and
+    // CloudKit-safe (rule 7a) and ride the already-pending Dev→Production
+    // deploy alongside seriesId.
+    var signedDate: Date?
+    var jerseyGivenDate: Date?
+    var ballGivenDate: Date?
     var notes: String?
     var createdByCoachId: UUID?
     var manualStatusRaw: String?
@@ -111,6 +122,9 @@ final class SDContract {
         sessionMinutes: Int = 90,
         validityMonths: Int = 0,
         programId: UUID? = nil,
+        signedDate: Date? = nil,
+        jerseyGivenDate: Date? = nil,
+        ballGivenDate: Date? = nil,
         notes: String? = nil,
         createdByCoachId: UUID? = nil,
         manualStatus: ContractStatus? = nil,
@@ -130,6 +144,9 @@ final class SDContract {
         self.sessionMinutes = sessionMinutes
         self.validityMonths = validityMonths
         self.programId = programId
+        self.signedDate = signedDate
+        self.jerseyGivenDate = jerseyGivenDate
+        self.ballGivenDate = ballGivenDate
         self.notes = notes
         self.createdByCoachId = createdByCoachId
         self.manualStatusRaw = manualStatus?.rawValue
@@ -160,6 +177,9 @@ final class SDContract {
             sessionMinutes: sessionMinutes,
             validityMonths: validityMonths,
             programId: programId,
+            signedDate: signedDate,
+            jerseyGivenDate: jerseyGivenDate,
+            ballGivenDate: ballGivenDate,
             notes: notes,
             createdByCoachId: createdByCoachId,
             manualStatus: manualStatus,
@@ -186,6 +206,9 @@ final class SDContract {
             sessionMinutes: contract.sessionMinutes,
             validityMonths: contract.validityMonths,
             programId: contract.programId,
+            signedDate: contract.signedDate,
+            jerseyGivenDate: contract.jerseyGivenDate,
+            ballGivenDate: contract.ballGivenDate,
             notes: contract.notes,
             createdByCoachId: contract.createdByCoachId,
             manualStatus: contract.manualStatus,

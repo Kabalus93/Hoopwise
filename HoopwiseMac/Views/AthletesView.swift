@@ -737,6 +737,7 @@ struct ContractCard: View {
     let currencyCode: String
     let studentId: UUID
     @EnvironmentObject private var dataManager: DataManager
+    @Environment(\.undoManager) private var undoManager
     @State private var showingEdit = false
     @State private var confirmingRenew = false
     var body: some View {
@@ -772,11 +773,61 @@ struct ContractCard: View {
                 }
                 .font(.caption)
             }
+
+            handoverRow
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.separator.opacity(0.5), lineWidth: 0.5))
+    }
+
+    /// Signed / jersey / ball. iOS has offered these three toggles all along
+    /// while their setters discarded the write; now that they persist, the Mac
+    /// gets them too — rule 6, fix it on both or remove it. Each writes one
+    /// contract and registers one undo step.
+    private var handoverRow: some View {
+        HStack(spacing: 16) {
+            handoverToggle("Signed", isOn: contract.isSigned, on: contract.signedDate) {
+                var updated = contract
+                updated.isSigned = $0
+                return updated
+            }
+            handoverToggle("Jersey", isOn: contract.jerseyGiven, on: contract.jerseyGivenDate) {
+                var updated = contract
+                updated.jerseyGiven = $0
+                return updated
+            }
+            handoverToggle("Ball", isOn: contract.ballGiven, on: contract.ballGivenDate) {
+                var updated = contract
+                updated.ballGiven = $0
+                return updated
+            }
+            Spacer()
+        }
+        .toggleStyle(.checkbox)
+        .font(.caption)
+    }
+
+    private func handoverToggle(_ label: String,
+                                isOn: Bool,
+                                on date: Date?,
+                                apply: @escaping (Bool) -> Contract) -> some View {
+        Toggle(isOn: Binding(
+            get: { isOn },
+            set: { newValue in
+                let old = contract
+                dataManager.updateContract(apply(newValue))
+                undoManager?.registerUndo(withTarget: dataManager) { manager in
+                    manager.updateContract(old)
+                }
+                undoManager?.setActionName("\(label) — contract #\(contract.contractNumber)")
+            })) {
+                // The date is the record; the tick derives from it, so the
+                // day it happened is visible rather than merely stored.
+                Text(date.map { "\(label) · \($0.formatted(.dateTime.month().day()))" } ?? label)
+            }
+            .help(date.map { "Recorded \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "Not recorded")
     }
 
     /// Per-contract fees show the flat figure; per-session fees show the rate

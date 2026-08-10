@@ -366,6 +366,20 @@ struct Contract: Identifiable, Codable, Hashable {
     /// prints as a fill-in rule rather than a fabricated term.
     var validityMonths: Int
 
+    // MARK: - Handover facts (Phase 2.9)
+    //
+    // These three were compile-time shims that returned a constant and threw
+    // their setters away, while SalesView offered a toggle for each and called
+    // save. The coach ticked "Jersey Given", the row said it saved, and the
+    // next launch showed it untouched.
+    //
+    // The DATE is stored and the Bool derives, as with the consent ledger: a
+    // Bool loses when it happened, and the row already wanted to print
+    // "Given on <date>".
+    var signedDate: Date?
+    var jerseyGivenDate: Date?
+    var ballGivenDate: Date?
+
     var notes: String?
     var createdByCoachId: UUID?
     var manualStatus: ContractStatus?
@@ -390,6 +404,9 @@ struct Contract: Identifiable, Codable, Hashable {
         sessionMinutes: Int = 90,
         validityMonths: Int = 0,
         programId: UUID? = nil,
+        signedDate: Date? = nil,
+        jerseyGivenDate: Date? = nil,
+        ballGivenDate: Date? = nil,
         notes: String? = nil,
         createdByCoachId: UUID? = nil,
         manualStatus: ContractStatus? = nil,
@@ -412,6 +429,9 @@ struct Contract: Identifiable, Codable, Hashable {
         self.sessionMinutes = sessionMinutes
         self.validityMonths = validityMonths
         self.programId = programId
+        self.signedDate = signedDate
+        self.jerseyGivenDate = jerseyGivenDate
+        self.ballGivenDate = ballGivenDate
         self.notes = notes
         self.createdByCoachId = createdByCoachId
         self.manualStatus = manualStatus
@@ -447,6 +467,9 @@ struct Contract: Identifiable, Codable, Hashable {
         consents = try c.decodeIfPresent([MediaConsentEntry].self, forKey: .consents) ?? []
         sessionMinutes = try c.decodeIfPresent(Int.self, forKey: .sessionMinutes) ?? 90
         validityMonths = try c.decodeIfPresent(Int.self, forKey: .validityMonths) ?? 0
+        signedDate = try c.decodeIfPresent(Date.self, forKey: .signedDate)
+        jerseyGivenDate = try c.decodeIfPresent(Date.self, forKey: .jerseyGivenDate)
+        ballGivenDate = try c.decodeIfPresent(Date.self, forKey: .ballGivenDate)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         createdByCoachId = try c.decodeIfPresent(UUID.self, forKey: .createdByCoachId)
         manualStatus = try c.decodeIfPresent(ContractStatus.self, forKey: .manualStatus)
@@ -460,6 +483,7 @@ struct Contract: Identifiable, Codable, Hashable {
         case payments, travelFeeAmount, travelFeeBasis
         case consents, sessionMinutes, validityMonths
         case programId, notes, createdByCoachId, manualStatus, createdAt, updatedAt
+        case signedDate, jerseyGivenDate, ballGivenDate
         // Legacy
         case contractType, startDate, attendedSessionIds, programAssignments
     }
@@ -485,6 +509,9 @@ struct Contract: Identifiable, Codable, Hashable {
         try c.encode(sessionMinutes, forKey: .sessionMinutes)
         try c.encode(validityMonths, forKey: .validityMonths)
         try c.encodeIfPresent(programId, forKey: .programId)
+        try c.encodeIfPresent(signedDate, forKey: .signedDate)
+        try c.encodeIfPresent(jerseyGivenDate, forKey: .jerseyGivenDate)
+        try c.encodeIfPresent(ballGivenDate, forKey: .ballGivenDate)
         try c.encodeIfPresent(notes, forKey: .notes)
         try c.encodeIfPresent(createdByCoachId, forKey: .createdByCoachId)
         try c.encodeIfPresent(manualStatus, forKey: .manualStatus)
@@ -639,7 +666,12 @@ struct Contract: Identifiable, Codable, Hashable {
         get { enrollmentDate }
         set { if let v = newValue { enrollmentDate = v } }
     }
-    var expiryDate: Date? { nil }
+    /// The DERIVED expiry — see `expiresOn`. This is not a revival of the dead
+    /// `expiryDate` column, which stays dead: the value comes from
+    /// validityMonths, so there is still exactly one source of truth. Leaving
+    /// it nil while `isExpired` says "expired" would have put a contract on
+    /// screen that is expired with no expiry date.
+    var expiryDate: Date? { expiresOn }
     var totalSessions: Int { bundleSize }
     var attendedSessions: Int { bundleSessionIds.count }
     var attendedSessionIds: [UUID] {
@@ -657,51 +689,32 @@ struct Contract: Identifiable, Codable, Hashable {
     // from the payment ledger. Travel is excluded — see the money section.
     var outstandingBalance: Double { max(0, sessionAmountOwed) }
     var isFullyPaid: Bool { sessionAmountOwed <= 0 }
+    /// Derived from `signedDate`. Setting it stamps or clears that date —
+    /// it never touches `enrollmentDate`, which an earlier setter did: it
+    /// overwrote the enrollment date with today and persisted it, and because
+    /// bundle revenue is attributed via `effectiveBundlePurchaseDate` (which
+    /// falls back to `enrollmentDate`), ticking "Contract Signed" silently
+    /// moved revenue between months.
     var isSigned: Bool {
-        get { true }
-        set { _ = newValue }
-    }
-    /// Read-only. The setter used to write `enrollmentDate`, so toggling
-    /// "Contract Signed" in SalesView overwrote the enrollment date with today
-    /// and persisted it — and because bundle revenue is attributed via
-    /// `effectiveBundlePurchaseDate` (which falls back to `enrollmentDate`),
-    /// that silently moved revenue between months. There is no real signed-date
-    /// field to write to, so the setter now discards like its siblings.
-    var signedDate: Date? {
-        get { enrollmentDate }
-        set { _ = newValue }
+        get { signedDate != nil }
+        set { signedDate = newValue ? (signedDate ?? Date()) : nil }
     }
     var jerseyGiven: Bool {
-        get { false }
-        set { _ = newValue }
-    }
-    var jerseyGivenDate: Date? {
-        get { nil }
-        set { _ = newValue }
+        get { jerseyGivenDate != nil }
+        set { jerseyGivenDate = newValue ? (jerseyGivenDate ?? Date()) : nil }
     }
     var ballGiven: Bool {
-        get { false }
-        set { _ = newValue }
+        get { ballGivenDate != nil }
+        set { ballGivenDate = newValue ? (ballGivenDate ?? Date()) : nil }
     }
-    var ballGivenDate: Date? {
-        get { nil }
-        set { _ = newValue }
-    }
-    var jerseyNumber: Int? {
-        get { nil }
-        set { _ = newValue }
-    }
-    var jerseySize: String? {
-        get { nil }
-        set { _ = newValue }
-    }
+    /// Still not stored, and now honest about it: nothing ever wrote a jersey
+    /// number or size to a CONTRACT (Player.jerseyNumber is the real one), so
+    /// there is no value to recover. The two read sites are guarded on nil.
+    var jerseyNumber: Int? { nil }
+    var jerseySize: String? { nil }
     var programAssignments: [UUID] {
         get { programId.map { [$0] } ?? [] }
         set { programId = newValue.first }
-    }
-    var historicalSessionsConsumed: Int {
-        get { 0 }
-        set { _ = newValue }
     }
     var sessionCount: Int { bundleSessionIds.count }
     var calculatedAttendedSessions: Int { sessionCount }
@@ -713,7 +726,27 @@ struct Contract: Identifiable, Codable, Hashable {
         guard kind.isBundle, bundleSize > 0 else { return 0 }
         return Double(bundleSessionIds.count) / Double(bundleSize)
     }
-    var isExpired: Bool { false }
+    /// A bundle's agreement runs for `validityMonths` from the day it was
+    /// bought (clause 3). Zero means the coach never set a term, and a term
+    /// nobody agreed cannot expire.
+    ///
+    /// Derived, not stored: the dead `expiryDate` column stays dead, because a
+    /// second source of truth drifts from the first.
+    ///
+    /// This used to return `false` unconditionally, behind a red warning in
+    /// four screens that could therefore never fire.
+    var expiresOn: Date? {
+        guard validityMonths > 0 else { return nil }
+        return Calendar.current.date(byAdding: .month, value: validityMonths,
+                                     to: effectiveBundlePurchaseDate)
+    }
+
+    func isExpired(asOf now: Date = Date()) -> Bool {
+        guard let expiresOn else { return false }
+        return expiresOn < now
+    }
+
+    var isExpired: Bool { isExpired() }
     var typeLabel: String { kind.shortName }
     var typeLabelChinese: String { kind.displayNameChinese }
 

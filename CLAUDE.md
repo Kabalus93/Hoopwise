@@ -747,6 +747,46 @@ any attendance surface.
   pairs where Elite's phase-generated sessions already sat on those Fridays.
   ALL 16 remain PENDING until derived names land (2.3).
 
+## Restructure Phase 2.9 — the Contract shims stop lying (August 2026)
+- The dangerous class was a CONTROL THAT CLAIMED TO SAVE: SalesView offered
+  Contract Signed / Jersey Given / Ball Given, called save, and the setters
+  discarded the write. `isSigned` also returned TRUE for every contract ever
+  created, so the sheet showed "Signed on <enrollment date>" for agreements
+  nobody had signed. `isExpired` returned FALSE always, behind a red warning
+  in four screens that could never fire.
+- SCHEMA CHANGE, PENDING DEPLOY: SDContract gained `signedDate`,
+  `jerseyGivenDate`, `ballGivenDate` — three optional Dates, additive and
+  CloudKit-safe (rule 7a). They ride the SAME pending Dev→Production deploy as
+  seriesId and the play record types; adding them before that deploy is why
+  they cost nothing extra. Rule 7d/7e still apply before any released build.
+- THE DATE IS THE TRUTH, the Bool derives — same reasoning as the consent
+  ledger: a Bool loses when it happened, and the rows already wanted to print
+  "Given on <date>". Re-setting a true toggle does NOT restamp.
+- Signing NEVER touches enrollmentDate. The old setter wrote it, and bundle
+  revenue is attributed via effectiveBundlePurchaseDate (which falls back to
+  enrollmentDate), so ticking "Contract Signed" moved revenue between months.
+- `isExpired` DERIVES from validityMonths + effectiveBundlePurchaseDate. Zero
+  months means no agreed term, which cannot expire. `expiryDate` returns that
+  derivation so a contract cannot read "expired" with no expiry date — this is
+  NOT a revival of the dead expiryDate COLUMN, which stays dead; there is
+  still one source of truth.
+- STATUS IS DELIBERATELY UNCHANGED. An expired contract stays `.active`, so
+  redemption and the private-session rule behave exactly as before. Making
+  expiry inactive is a MONEY decision, not a display one, and is not taken here.
+- LIVE-STORE FLIP LIST (HOOPWISE_EXPIRY_FLIP, read-only, 2026-08-10): of 176
+  contracts, **0 flip to expired** — every one has validityMonths == 0. The
+  warning becomes capable of firing; nothing changes on screen today.
+- Mac ContractCard gained the same three toggles (rule 6: fix on both or
+  remove), each one contract write and one undo step.
+- `applyContract` hand-lists its columns, which is how four session fields were
+  silently dropped before SessionRoundTripTests existed. ContractHandoverTests
+  now carries the same reflection guard for Contract.
+- Still shims, and now honest about it: contract `jerseyNumber` / `jerseySize`
+  return nil (nothing ever wrote a jersey number to a CONTRACT —
+  Player.jerseyNumber is the real one) and the two read sites are guarded, so
+  a ticked jersey no longer renders "Jersey #0". `weeklyAttendance` is still
+  always empty.
+
 ## Restructure Phase 2.8 — deadwood verdicts (August 2026)
 Every candidate the restructure surfaced, with its verdict. Recorded so none
 of them gets re-investigated from scratch a third time.

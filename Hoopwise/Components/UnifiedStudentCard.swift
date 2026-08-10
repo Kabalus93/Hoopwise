@@ -1815,7 +1815,12 @@ struct UnifiedStudentCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "tshirt.fill")
                                     .foregroundColor(.blue)
-                                Text("Jersey #\(contract.jerseyNumber ?? 0)")
+                                // No contract ever carried a jersey NUMBER —
+                                // Player.jerseyNumber is the real one. This
+                                // branch was unreachable while jerseyGiven was
+                                // hardcoded false; now that it can fire, the
+                                // `?? 0` would have printed "Jersey #0".
+                                Text(contract.jerseyNumber.map { "Jersey #\($0)" } ?? "Jersey Given")
                                     .font(.caption)
                             }
                         }

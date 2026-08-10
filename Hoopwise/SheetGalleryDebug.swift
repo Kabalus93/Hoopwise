@@ -29,6 +29,7 @@ enum SheetGalleryDebug {
     private static let contractId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000002")!
     private static let programId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000003")!
     private static let phaseId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000004")!
+    private static let expiredContractId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000005")!
 
     /// Deterministic minimum needed to construct the sheets. Refuses to touch
     /// a store that has anything in it.
@@ -67,6 +68,23 @@ enum SheetGalleryDebug {
                                 bundleSize: 10,
                                 bundlePurchaseDate: Date(),
                                 sessionMinutes: 60))
+
+        // A second contract with a real term, bought long enough ago to be
+        // past it — the case the red "Expired" warning exists for and could
+        // never reach while isExpired returned false.
+        var termStart = DateComponents()
+        termStart.year = 2025; termStart.month = 9; termStart.day = 1
+        let lastAutumn = Calendar.current.date(from: termStart)
+        dm.addContract(Contract(id: expiredContractId,
+                                studentId: studentId,
+                                contractNumber: 2,
+                                kind: .privateBundle,
+                                enrollmentDate: lastAutumn ?? Date(),
+                                pricePerSession: 300,
+                                bundleSize: 10,
+                                bundlePurchaseDate: lastAutumn,
+                                sessionMinutes: 60,
+                                validityMonths: 6))
     }
 
     /// The sheet in a real sheet presentation, so what is captured is what a
@@ -108,6 +126,41 @@ enum SheetGalleryDebug {
 
         case "addProgram":
             AddProgramOnboardingView { _ in }
+
+        case "expiredWarning":
+            // The red "Expired" warning that could never fire while isExpired
+            // returned false. The fixture's second contract carries a real
+            // six-month term bought in September 2025.
+            if let student = dm.students.first(where: { $0.id == studentId }) {
+                // The component is presented directly rather than scrolled to:
+                // the warning is the subject, and a scripted scroll is the
+                // least repeatable part of any capture.
+                ScrollView { UnifiedStudentCard(student: student).padding() }
+            } else {
+                missing("expiredWarning: fixture student not found")
+            }
+
+        case "contractExpired":
+            if let student = dm.students.first(where: { $0.id == studentId }),
+               let contract = dm.contracts.first(where: { $0.id == expiredContractId }) {
+                ContractDetailView(student: student, contract: contract)
+            } else {
+                missing("contractExpired: fixture contract not found")
+            }
+
+        case "contractStatus":
+            // The three toggles whose setters used to discard the write while
+            // the row said it saved (Phase 2.9).
+            if let student = dm.students.first(where: { $0.id == studentId }),
+               let contract = dm.contracts.first(where: { $0.id == contractId }) {
+                // Anchored to the bottom: the Status and Equipment toggles sit
+                // below the fold, and a scripted scroll is far less repeatable
+                // than asking the scroll view where to start.
+                ContractDetailView(student: student, contract: contract)
+                    .defaultScrollAnchor(.bottom)
+            } else {
+                missing("contractStatus: fixture student/contract not found")
+            }
 
         default:
             missing("unknown shot “\(shot)” — expected privateBooking, createSession, addSession or addProgram")
