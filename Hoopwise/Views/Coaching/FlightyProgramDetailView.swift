@@ -41,14 +41,13 @@ struct FlightyProgramDetailView: View {
     /// Count of sessions for this program that collide with another session
     /// on the same calendar day. Drives the "Clean up duplicates" menu item —
     /// hidden when zero so the menu doesn't carry dead options.
+    /// Counted by THE duplicate rule — program + day + START TIME — so the
+    /// number on the button is the number the clean-up would remove. Counting
+    /// by calendar day alone reported a program's afternoon session as a
+    /// duplicate of its morning one.
     var duplicateSessionCount: Int {
-        let cal = Calendar.current
-        let buckets = Dictionary(grouping: dataManager.sessionEvents.filter { $0.programId == program.id }) {
-            cal.startOfDay(for: $0.date)
-        }
-        return buckets.values.reduce(0) { acc, group in
-            acc + max(0, group.count - 1)
-        }
+        dataManager.duplicateSessionGroups(forProgramId: program.id)
+            .reduce(0) { $0 + max(0, $1.count - 1) }
     }
 
     /// True when at least one phase on this program has zero session events

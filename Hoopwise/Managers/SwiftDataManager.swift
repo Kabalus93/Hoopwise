@@ -205,63 +205,13 @@ class SwiftDataManager: ObservableObject {
     @Published var reminders: [Reminder] = []
 
 
-    /// Delete local database to force schema rebuild (use when schema changes)
-    static func deleteLocalDatabase() {
-        if let url = getLocalStorageURL() {
-            let fileManager = FileManager.default
-            // Delete main store file and related files
-            let basePath = url.deletingPathExtension().path
-            let extensions = ["", ".sqlite", ".sqlite-shm", ".sqlite-wal", "-shm", "-wal"]
-            for ext in extensions {
-                let path = basePath + ext
-                if fileManager.fileExists(atPath: path) {
-                    try? fileManager.removeItem(atPath: path)
-                    debugLog("🗑️ Deleted: \(path)")
-                }
-            }
-            // Also try the exact URL
-            if fileManager.fileExists(atPath: url.path) {
-                try? fileManager.removeItem(at: url)
-                debugLog("🗑️ Deleted: \(url.path)")
-            }
-            debugLog("✅ Local database deleted - will rebuild on next launch")
-        }
-    }
-    
-    // Helper to get platform-specific local storage URL
-    // Each platform (iOS/macOS) has its own local storage - CloudKit is the sync mechanism
-    private static func getLocalStorageURL() -> URL? {
-        let fileManager = FileManager.default
-        
-        #if os(macOS)
-        // On macOS, use ~/Library/Application Support/SAM/
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let samFolder = appSupportURL.appendingPathComponent("SAM", isDirectory: true)
-            
-            // Create directory if it doesn't exist
-            if !fileManager.fileExists(atPath: samFolder.path) {
-                try? fileManager.createDirectory(at: samFolder, withIntermediateDirectories: true)
-            }
-            
-            return samFolder.appendingPathComponent("SAMData.store")
-        }
-        #else
-        // On iOS, use Documents directory
-        if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let samFolder = documentsURL.appendingPathComponent("SAMData", isDirectory: true)
-            
-            // Create directory if it doesn't exist
-            if !fileManager.fileExists(atPath: samFolder.path) {
-                try? fileManager.createDirectory(at: samFolder, withIntermediateDirectories: true)
-            }
-            
-            return samFolder.appendingPathComponent("SAMData.store")
-        }
-        #endif
-        
-        return nil
-    }
-    
+    // Phase 2.8: deleteLocalDatabase() and getLocalStorageURL() are GONE.
+    // Neither had a caller, and the URL they operated on was never passed to
+    // ModelConfiguration — so the "delete the local database" utility deleted
+    // a path the store does not live at, and the comments describing
+    // platform-specific storage described a scheme the app does not use. A
+    // break-glass reset that silently resets nothing is a trap, not a tool.
+
     /// The registered record types. Extracted from `init` so tests can build
     /// an isolated container over the SAME schema the app ships — a test
     /// running against a hand-written subset would not catch a model change.
@@ -1065,18 +1015,15 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
-    // MARK: - Cloud Sync (no-ops; CloudKit handles sync automatically)
-    /// CloudKit syncs SwiftData automatically - this is a no-op for legacy callers.
-    func syncFromCloud() async {
-        lastSyncDate = Date()
-    }
+    // MARK: - Cloud Sync (CloudKit handles sync automatically)
+    //
+    // Phase 2.8: syncFromCloud() and syncToCloud() are GONE. They had no
+    // callers and did nothing but stamp lastSyncDate, which made the stamp a
+    // lie — it read as "synced just now" when nothing had been asked of
+    // CloudKit. CloudSyncMonitor reports real sync state; a function that
+    // fakes it is worse than no function.
 
-    /// CloudKit syncs SwiftData automatically - this is a no-op for legacy callers.
-    func syncToCloud() async {
-        lastSyncDate = Date()
-    }
-
-    /// CloudKit syncs SwiftData automatically - this is a no-op for legacy callers.
+    /// CloudKit syncs SwiftData automatically — this only re-reads local caches.
     func fullSync() async {
         await refreshAllCaches()
         lastSyncDate = Date()
@@ -1448,54 +1395,54 @@ class SwiftDataManager: ObservableObject {
     /// 5. The one with `status != .scheduled` over a default-state record.
     /// 6. The oldest `createdAt` (assume earliest is canonical).
     @discardableResult
-    func dedupeProgramSessions(forProgramId programId: UUID) -> Int {
-        let cal = Calendar.current
-        let allForProgram = cachedSessionEvents.filter { $0.programId == programId }
+    /// Duplicate groups for one program, by THE rule: program + day + START
+    /// TIME (SessionIntegrity). A program that trains twice on one day has two
+    /// sessions, not a duplicate.
+    func duplicateSessionGroups(forProgramId programId: UUID) -> [[SessionEvent]] {
+        SessionIntegrity.duplicateSessionGroups(
+            in: cachedSessionEvents.filter { $0.programId == programId })
+    }
 
-        // Group by start-of-day. We deliberately don't include time-of-day
-        // in the key — duplicates we care about are calendar-day collisions,
-        // not back-to-back morning/afternoon sessions on the same day.
-        var groups: [Date: [SessionEvent]] = [:]
-        for event in allForProgram {
-            let key = cal.startOfDay(for: event.date)
-            groups[key, default: []].append(event)
-        }
+    /// Resolves this program's duplicates through the tested Phase 1 layer:
+    /// SessionDedupe picks the survivor (redeemed slot → attendance → notes →
+    /// elder) and MERGES the loser's content into it before deleting, so
+    /// nothing the coach recorded is thrown away.
+    ///
+    /// It replaces a version that grouped by CALENDAR DAY ALONE and deleted
+    /// every session but the "most populated" one. Its own comment claimed it
+    /// spared back-to-back morning/afternoon sessions; grouping by day is
+    /// precisely what deletes them. On a program that runs twice a day, one
+    /// press of a button captioned "This can't be undone" destroyed the second
+    /// session — and, since Phase 0, silently refunded whatever it had
+    /// consumed.
+    ///
+    /// Groups needing a human decision are LEFT ALONE and reported, never
+    /// resolved by guess.
+    @discardableResult
+    func dedupeProgramSessions(forProgramId programId: UUID) -> Int {
+        let groups = duplicateSessionGroups(forProgramId: programId)
+        guard !groups.isEmpty else { return 0 }
+
+        let plan = SessionDedupe.plan(
+            groups: groups,
+            redeemedSessionIds: SessionDedupe.redeemedSessionIds(in: cachedContracts))
 
         var deleted = 0
-        for (_, events) in groups where events.count > 1 {
-            let keeper = events.max { lhs, rhs in
-                let lhsScore = sessionContentScore(lhs)
-                let rhsScore = sessionContentScore(rhs)
-                if lhsScore != rhsScore { return lhsScore < rhsScore }
-                // Tiebreak: phase-tagged > orphan, then earliest createdAt.
-                let lhsHasPhase = lhs.microCycleId != nil ? 1 : 0
-                let rhsHasPhase = rhs.microCycleId != nil ? 1 : 0
-                if lhsHasPhase != rhsHasPhase { return lhsHasPhase < rhsHasPhase }
-                return lhs.createdAt > rhs.createdAt   // older wins (returns false from `max` when older = lhs)
-            }
-            guard let keeper = keeper else { continue }
-            for event in events where event.id != keeper.id {
-                deleteSessionEvent(event)
+        for decision in plan.automatic {
+            updateSessionEvent(decision.survivor)
+            for doomedId in decision.deletedIds {
+                guard let doomed = cachedSessionEvents.first(where: { $0.id == doomedId }) else { continue }
+                deleteSessionEvent(doomed)
                 deleted += 1
             }
         }
+        if !plan.manualReview.isEmpty {
+            debugLog("🧹 \(plan.manualReview.count) duplicate group(s) left for review on program \(programId)")
+        }
         if deleted > 0 {
-            debugLog("🧹 Removed \(deleted) duplicate session(s) for program \(programId)")
+            debugLog("🧹 Merged and removed \(deleted) duplicate session(s) for program \(programId)")
         }
         return deleted
-    }
-
-    /// Higher score = "more invested in" — used as the primary keep heuristic
-    /// during dedupe. Pure function; side-effect free.
-    private func sessionContentScore(_ event: SessionEvent) -> Int {
-        var score = 0
-        score += event.curriculum.totalDrillCount * 10
-        if (event.notes?.isEmpty == false) { score += 5 }
-        if (event.coachNotes?.isEmpty == false) { score += 5 }
-        if !event.actualAttendeeIds.isEmpty { score += 3 }
-        if !event.games.isEmpty { score += 3 }
-        if event.status != .scheduled { score += 2 }
-        return score
     }
 
     /// Backfill helper for the "Generate sessions" button: materializes every

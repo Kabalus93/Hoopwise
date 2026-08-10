@@ -101,7 +101,6 @@
 				Components/Theme.swift,
 				Managers/ImageCacheManager.swift,
 				Managers/PhaseTemplateStore.swift,
-				Managers/SampleDataGenerator.swift,
 				Managers/SwiftDataManager.swift,
 				Models/BasketballCategory.swift,
 				Models/Coach.swift,

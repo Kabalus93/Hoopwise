@@ -747,6 +747,59 @@ any attendance surface.
   pairs where Elite's phase-generated sessions already sat on those Fridays.
   ALL 16 remain PENDING until derived names land (2.3).
 
+## Restructure Phase 2.8 — deadwood verdicts (August 2026)
+Every candidate the restructure surfaced, with its verdict. Recorded so none
+of them gets re-investigated from scratch a third time.
+
+DELETED:
+- `SampleDataGenerator.swift` (488 lines, both targets) — zero references
+  anywhere. Gone.
+- `syncFromCloud()` / `syncToCloud()` — no callers, and they only stamped
+  lastSyncDate, which made the stamp a lie: it read "synced just now" when
+  nothing had been asked of CloudKit. CloudSyncMonitor reports real state.
+- `deleteLocalDatabase()` + `getLocalStorageURL()` — no callers, and the URL
+  was never passed to ModelConfiguration, so the "delete the local database"
+  utility deleted a path the store does not live at. A break-glass reset that
+  silently resets nothing is a trap, not a tool. The stale platform-storage
+  comments went with them.
+
+FIXED (it was not deadwood — it was armed):
+- `dedupeProgramSessions` sits behind a coach-facing iOS button captioned
+  "This can't be undone". It grouped by CALENDAR DAY ALONE and deleted every
+  session but the most populated one, while its own comment claimed it spared
+  "back-to-back morning/afternoon sessions" — which is exactly what grouping
+  by day destroys. Since Phase 0 a delete also refunds, so one press could
+  remove a real session and move a client's balance. It now runs the tested
+  Phase 1 layer (SessionIntegrity.duplicateSessionGroups + SessionDedupe:
+  program + day + START TIME, merge into the survivor, leave review cases
+  alone), and the count on the button uses the same rule so the number is
+  what would actually go. Live store 2026-08-10: 0 real duplicates and 0
+  same-day-different-time pairs, so nothing was at risk that day — the defect
+  was latent, not active. Covered by ProgramDedupeTests.
+
+KEEP, with the reason:
+- `SDCoach.autoSyncEnabled` — unused, deliberately. Removing a column from a
+  live CloudKit schema is a sync risk for no gain (same verdict as
+  Contract.expiryDate).
+- The five Supabase mentions in Swift (ImageCacheManager, SwiftDataManager)
+  are NOT deadwood: they detect dead-host and file:// profileImageUrls in real
+  legacy data. The 23 `supabase_*.sql` / migration files are deadwood and are
+  roadmap step 10's job — nothing blocks that step now.
+- `CourtScheme` / `CourtFrame` — superseded by PlayDiagram but still wired to
+  the Basketball Lab views. They die with the step 5 port, not before.
+
+STILL OPEN, needs a decision rather than a verdict:
+- The Contract legacy shims that LIE (isSigned always true, isExpired always
+  false behind a red warning that can never fire, jerseyGiven/ballGiven,
+  jerseyNumber/jerseySize, weeklyAttendance) and SalesView's three toggles
+  whose setters discard the write while the UI says it saved. Fixing them
+  removes or changes iOS controls, so it needs the same explicit call the 2.6
+  iOS half got. Listed under "Known broken things" since July 2026.
+- `AddProgramView.swift` contains no `AddProgramView`. It holds
+  EditEnrolledStudentsView, EditProgramView, MicroCycleDetailView and
+  FlowLayout — all live. The file name and its doc comment are the deadwood;
+  a rename is cosmetic and was not taken during a data-correctness phase.
+
 ## Restructure Phase 2.7 — a phase's WORDS are derived (August 2026)
 - Services/PhaseNaming.swift (BOTH targets) finishes what 2.3's header comment
   flagged: PhaseTemplate carries LocalizedTriple(en/zh/es), but `instantiate`

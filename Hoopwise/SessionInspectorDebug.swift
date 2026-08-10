@@ -760,6 +760,42 @@ enum SessionInspectorDebug {
         write(out, to: url)
     }
 
+    /// HOOPWISE_DEDUPE_RULES=1 — read-only: what the old calendar-day-only
+    /// dedupe would have deleted versus what the real duplicate rule (program
+    /// + day + START TIME) finds. The difference is real sessions.
+    static func dedupeRuleComparisonIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_DEDUPE_RULES"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/dedupe-rules.txt") else { return }
+
+        let calendar = Calendar.current
+        var lines = ["DEDUPE RULE COMPARISON — read only, nothing was written", ""]
+        let correct = SessionIntegrity.duplicateSessionGroups(in: dm.sessionEvents)
+        lines.append("real duplicates (program + day + start time): \(correct.reduce(0) { $0 + $1.count - 1 })")
+
+        var dayOnlyVictims = 0
+        for program in dm.programs.sorted(by: { $0.name < $1.name }) {
+            let mine = dm.sessionEvents.filter { $0.programId == program.id }
+            let byDay = Dictionary(grouping: mine) { calendar.startOfDay(for: $0.date) }
+            var victims: [String] = []
+            for (day, group) in byDay where group.count > 1 {
+                let times = group.sorted { $0.startTime < $1.startTime }.map { time($0.startTime) }
+                if Set(times).count > 1 {
+                    victims.append("    \(stamp(day)): \(times.joined(separator: " + ")) → day-only keeps ONE")
+                    dayOnlyVictims += group.count - 1
+                }
+            }
+            if !victims.isEmpty {
+                lines.append("")
+                lines.append("\(program.name) [\(short(program.id))]")
+                lines.append(contentsOf: victims)
+            }
+        }
+        lines.append("")
+        lines.append("sessions the day-only rule would have deleted that are NOT duplicates: \(dayOnlyVictims)")
+        write(lines, to: url)
+    }
+
     /// HOOPWISE_PHASE_LANG=1 — read-only: what Phase 2.7 resolves each stored
     /// phase title to, in all three languages, against real data. Proof that
     /// coach-authored titles are left verbatim and only preset text moves.
