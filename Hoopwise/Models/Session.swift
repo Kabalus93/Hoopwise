@@ -561,6 +561,10 @@ struct SessionEvent: Identifiable, Codable, Hashable {
     let id: UUID
     var microCycleId: UUID?      // Parent Phase (required for architect flow)
     var programId: UUID?          // Parent Program (for quick lookup)
+    /// The generated recurring series this session belongs to (Phase 2.2),
+    /// stamped when a series is generated. nil for one-offs and for records
+    /// created before the field existed.
+    var seriesId: UUID?
     var sessionType: SessionType
     var title: String
     var date: Date                // Required timestamp for calendar query
@@ -603,6 +607,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
     var updatedAt: Date
     
     init(id: UUID = UUID(), microCycleId: UUID? = nil, programId: UUID? = nil,
+         seriesId: UUID? = nil,
          sessionType: SessionType = .training, title: String, date: Date, startTime: Date, endTime: Date,
          location: String? = nil, status: SessionEventStatus = .scheduled,
          curriculum: SessionCurriculum = SessionCurriculum(),
@@ -616,6 +621,7 @@ struct SessionEvent: Identifiable, Codable, Hashable {
         self.id = id
         self.microCycleId = microCycleId
         self.programId = programId
+        self.seriesId = seriesId
         self.sessionType = sessionType
         self.title = title
         self.date = date

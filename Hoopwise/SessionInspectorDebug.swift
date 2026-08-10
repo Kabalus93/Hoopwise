@@ -40,6 +40,97 @@ enum SessionInspectorDebug {
         try? Data(lines.joined(separator: "\n").utf8).write(to: url, options: .atomic)
     }
 
+    /// HOOPWISE_EXTEND_PLAN_DRYRUN=1 — the authorised plan reshape for
+    /// Elite U10 Development, as a DRY RUN:
+    ///   · program start 2026-05-08 → 2026-05-01 (so the 05-01 session is covered)
+    ///   · Phase 1 stretched 2w → 3w to absorb the earlier start, leaving
+    ///     Phases 2–5 on exactly the dates they already have
+    ///   · a sixth phase "Summer Block" appended for the rest of the season
+    ///
+    /// Whole-week durations cannot land exactly on 2026-09-11: 8 weeks ends
+    /// 09-10 and would leave the final session outside the plan by one day,
+    /// so Summer Block is 9 weeks and ends 09-17.
+    static func extendPlanDryRunIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_EXTEND_PLAN_DRYRUN"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/extend-plan.txt") else { return }
+        let (text, _) = proposedElitePlan(dm: dm)
+        write([text], to: url)
+    }
+
+    /// Shared by the dry run and the apply step, so what is reported and what
+    /// is written cannot diverge.
+    static func proposedElitePlan(dm: DataManager) -> (report: String, phases: [MicroCycle]) {
+        let programName = "Elite U10 Development"
+        guard let program = dm.programs.first(where: { $0.name == programName }) else {
+            return ("EXTEND PLAN — no program named “\(programName)”", [])
+        }
+        var components = DateComponents()
+        components.year = 2026; components.month = 5; components.day = 1
+        let newStart = Calendar.current.date(from: components)!
+
+        var existing = dm.microCycles.filter { $0.programId == program.id }
+            .sorted { $0.phaseNumber < $1.phaseNumber }
+        guard !existing.isEmpty else { return ("EXTEND PLAN — no phases", []) }
+        existing[0].durationWeeks = 3      // absorb the earlier start
+
+        let summer = MicroCycle(programId: program.id,
+                                phaseNumber: existing.count + 1,
+                                title: "Summer Block",
+                                durationWeeks: 9)
+        let proposed = PhaseAssignment.rewindowed(existing + [summer],
+                                                  programStart: newStart)
+
+        var lines = ["EXTEND PLAN DRY RUN — “\(programName)” — nothing was written"]
+        lines.append("  program start \(dayString(program.startDate)) → 2026-05-01")
+        lines.append("  Phase 1: 2 weeks → 3 weeks · appending “Summer Block” (9 weeks)")
+        lines.append("")
+        lines.append("proposed windows:")
+        for phase in proposed {
+            lines.append("    \(phase.phaseNumber). \(phase.title)  \(dayString(phase.startDate))…\(dayString(phase.endDate))  (\(phase.durationWeeks)w)")
+        }
+        lines.append("")
+
+        let titleOf = Dictionary(dm.microCycles.map { ($0.id, $0.title) },
+                                 uniquingKeysWith: { a, _ in a })
+        let sessions = dm.sessionEvents.filter { $0.programId == program.id }
+            .sorted { $0.date < $1.date }
+        var landing: [String: Int] = [:]
+        var outside = 0
+        var moves: [String] = []
+        for session in sessions {
+            let current = session.microCycleId.flatMap { titleOf[$0] } ?? "—"
+            switch PhaseAssignment.derive(session: session, phases: proposed) {
+            case .assign(let phaseId):
+                let next = proposed.first { $0.id == phaseId }?.title ?? "?"
+                landing[next, default: 0] += 1
+                moves.append("    · \(dayString(session.date)): \(current) → \(next)\(current == next ? "" : "   [MOVED]")")
+            case .noWindow:
+                outside += 1
+                moves.append("    · \(dayString(session.date)): \(current) → still outside the plan")
+            case .ambiguous:
+                moves.append("    · \(dayString(session.date)): \(current) → ambiguous")
+            }
+        }
+        lines.append("sessions landing per phase:")
+        for phase in proposed {
+            lines.append("    \(phase.title): \(landing[phase.title] ?? 0)")
+        }
+        lines.append("    still outside: \(outside)")
+        lines.append("")
+        lines.append("per session (\(sessions.count)):")
+        lines.append(contentsOf: moves)
+        return (lines.joined(separator: "\n"), proposed)
+    }
+
+    private static func dayString(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: date)
+    }
+
     /// HOOPWISE_REWINDOW_DRYRUN="<program name>" — what laying contiguous
     /// windows on that program's dateless phases would do to its sessions.
     /// Read-only.

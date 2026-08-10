@@ -688,6 +688,26 @@ any attendance surface.
   morning and an afternoon session as duplicates; SessionIntegrityTests
   pins the correct behaviour.
 
+## Restructure Phase 2.2 — decomposing programId == nil (August 2026)
+- SCHEMA CHANGE PENDING DEPLOY: SDSessionEvent gained `seriesId: UUID?`
+  (optional + defaulted, so additive and CloudKit-safe). Rule 7 still
+  applies — it must be deployed Development→Production by hand, and an iOS
+  build carrying the field must ship, before any released build writes it.
+  It rides along with the other registered-but-undeployed types.
+- Services/SessionSeries.swift owns what `programId == nil` used to imply:
+  · SERIES IDENTITY. A generated run stamps one `seriesId` on every session
+    it creates (materializeSessions, backfillSessions).
+    SessionSeries.siblings prefers the id; the old structural fingerprint
+    (title + venue + weekday + time + duration + no program) survives ONLY
+    for unstamped legacy records. The fingerprint was wrong in both
+    directions: renaming a session or moving its venue ejected it from its
+    own series, and two unrelated one-offs in the same slot looked like one.
+  · LIVE ACTIVITY. allowsLiveActivity is an explicit rule: group-shaped
+    programs yes, private behind the `liveActivity.privateSessions`
+    preference (default OFF, preserving today's behaviour), no program → no.
+    Private clients previously got none purely because privateness was
+    encoded as the absence of a program — never a decision.
+
 ## Restructure Phase 2.1 — adoption (August 2026, executed)
 - PHASE-WINDOW RULE (decided): CALENDAR DAYS, inclusive of both edge days —
   SessionIntegrity.phaseWindow(start:end:contains:) is its only home, and

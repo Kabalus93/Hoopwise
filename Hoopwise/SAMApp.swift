@@ -137,6 +137,7 @@ struct SAMApp: App {
         SessionInspectorDebug.createMicroGroupsIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyAllMergesIfRequested(dataManager: dataManager)
         SessionInspectorDebug.rewindowDryRunIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.extendPlanDryRunIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
         #endif
     }

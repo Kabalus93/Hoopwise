@@ -6,6 +6,12 @@ final class SDSessionEvent {
     var id: UUID = UUID()
     var microCycleId: UUID?
     var programId: UUID?
+    /// Identity of the generated recurring series this session belongs to,
+    /// stamped at generation (Phase 2.2). Optional and defaulted, so the
+    /// CloudKit schema change is additive. Replaces the structural
+    /// fingerprint that recognised a series by title + venue + weekday +
+    /// time + duration.
+    var seriesId: UUID?
     var sessionTypeRaw: String = "training"
     var title: String = ""
     var date: Date = Date()
@@ -183,6 +189,7 @@ final class SDSessionEvent {
             id: id,
             microCycleId: microCycleId,
             programId: programId,
+            seriesId: seriesId,
             sessionType: sessionType,
             title: title,
             date: date,
@@ -245,6 +252,7 @@ final class SDSessionEvent {
     func apply(_ event: SessionEvent) {
         microCycleId = event.microCycleId
         programId = event.programId
+        seriesId = event.seriesId
         sessionType = event.sessionType
         title = event.title
         date = event.date

@@ -171,6 +171,7 @@
 				Services/SessionNaming.swift,
 				Services/SessionPrivacy.swift,
 				Services/SessionReconciler.swift,
+				Services/SessionSeries.swift,
 				Services/SessionStatusMonitor.swift,
 				Services/StudentIntelligence.swift,
 				Services/TrainingAgreementDocument.swift,

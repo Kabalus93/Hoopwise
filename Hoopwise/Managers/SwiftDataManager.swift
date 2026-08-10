@@ -1289,6 +1289,10 @@ class SwiftDataManager: ObservableObject {
         // column on every list/calendar already disambiguates.
         let suffixOrdinals = program.recurringDays.count <= 1
 
+        // One identity for everything this generation run produces, so the
+        // series is recognisable later without guessing from title + slot.
+        let seriesId = UUID()
+
         // Index existing sessions for this program by start-of-day so we
         // can dedupe / adopt instead of creating fresh ones. Orphan
         // sessions (microCycleId == nil) created when the program ran in
@@ -1351,6 +1355,7 @@ class SwiftDataManager: ObservableObject {
                     let event = SessionEvent(
                         microCycleId: phase.id,
                         programId: program.id,
+                        seriesId: seriesId,
                         sessionType: .training,
                         title: title,
                         date: startTime,
@@ -1469,6 +1474,8 @@ class SwiftDataManager: ObservableObject {
             .sorted { $0.phaseNumber < $1.phaseNumber }
         guard !phases.isEmpty else { return 0 }
 
+        // One identity for this backfill run (Phase 2.2).
+        let backfillSeriesId = UUID()
         let cal = Calendar.current
         let timeOfDay: (hour: Int, minute: Int) = {
             if let t = program.defaultSessionTime {
@@ -1519,6 +1526,7 @@ class SwiftDataManager: ObservableObject {
                     let event = SessionEvent(
                         microCycleId: phase.id,
                         programId: program.id,
+                        seriesId: backfillSeriesId,
                         sessionType: .training,
                         title: suffixOrdinals ? "\(phase.title) · 1" : phase.title,
                         date: startTime,
@@ -2035,20 +2043,10 @@ class SwiftDataManager: ObservableObject {
     /// program link. Used to bulk-edit/delete legacy recurring sessions that
     /// pre-date the auto-program-on-recurring change.
     func recurringSiblings(of event: SessionEvent) -> [SessionEvent] {
-        guard event.programId == nil else { return [] }
-        let cal = Calendar.current
-        let weekday = cal.component(.weekday, from: event.date)
-        let hourMin = cal.dateComponents([.hour, .minute], from: event.startTime)
-        let duration = Int(event.endTime.timeIntervalSince(event.startTime) / 60)
-
-        return cachedSessionEvents.filter { other in
-            other.programId == nil
-                && other.title == event.title
-                && other.location == event.location
-                && cal.component(.weekday, from: other.date) == weekday
-                && cal.dateComponents([.hour, .minute], from: other.startTime) == hourMin
-                && Int(other.endTime.timeIntervalSince(other.startTime) / 60) == duration
-        }
+        // Series identity is a stamped id now (Phase 2.2). The structural
+        // fingerprint survives inside SessionSeries only for records
+        // generated before the field existed.
+        SessionSeries.siblings(of: event, in: cachedSessionEvents)
     }
 
     /// Delete the entire orphan recurring series that `event` belongs to.

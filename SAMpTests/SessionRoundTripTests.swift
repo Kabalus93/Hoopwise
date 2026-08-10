@@ -23,7 +23,7 @@ final class SessionRoundTripTests: XCTestCase {
     /// new field would simply never be persisted on update and no test would
     /// notice, which is exactly how the four fields above were lost.
     private static let reviewedProperties: Set<String> = [
-        "id", "microCycleId", "programId", "sessionType", "title", "date",
+        "id", "microCycleId", "programId", "seriesId", "sessionType", "title", "date",
         "startTime", "endTime", "location", "status", "curriculum",
         "attendeeIds", "actualAttendeeIds", "excusedAbsences",
         "unexcusedAbsences", "attendancePhotoPath", "notes", "coachNotes",
@@ -148,6 +148,7 @@ final class SessionRoundTripTests: XCTestCase {
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             microCycleId: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
             programId: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+            seriesId: UUID(uuidString: "3F3F3F3F-3F3F-3F3F-3F3F-3F3F3F3F3F3F")!,
             sessionType: .assessment,
             title: "Round trip",
             date: Date(timeIntervalSince1970: 1_000_000),

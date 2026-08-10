@@ -76,6 +76,16 @@ class SessionStatusMonitor: ObservableObject {
               let program = dataManager.programs.first(where: { $0.id == programId }) else {
             return
         }
+        // Phase 2.2: an explicit rule, not a side effect of privateness being
+        // encoded as "no program". Group-shaped programs always raise one;
+        // private sessions are a preference, defaulting off.
+        guard SessionSeries.allowsLiveActivity(
+            session,
+            programs: dataManager.programs,
+            contracts: dataManager.contracts,
+            privateSessionsEnabled: SessionSeries.privateLiveActivityEnabled) else {
+            return
+        }
         
         // Build drill names dictionary
         var drillNames: [UUID: String] = [:]

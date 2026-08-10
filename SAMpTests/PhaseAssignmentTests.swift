@@ -144,6 +144,42 @@ final class PhaseAssignmentTests: XCTestCase {
                                                        to: reordered[1].startDate!).day, 1)
     }
 
+    /// The exact arithmetic behind the Elite U10 extension: pulling the start
+    /// back a week and stretching Phase 1 from 2 weeks to 3 must leave
+    /// Phase 2 starting on the day it already started.
+    func testStretchingTheFirstPhaseAbsorbsAnEarlierStart() {
+        let original = PhaseAssignment.rewindowed(
+            [phase(phaseA, number: 1, title: "P1", start: nil, end: nil, weeks: 2),
+             phase(phaseB, number: 2, title: "P2", start: nil, end: nil, weeks: 2)],
+            programStart: date(2026, 5, 8, 0))
+
+        let stretched = PhaseAssignment.rewindowed(
+            [phase(phaseA, number: 1, title: "P1", start: nil, end: nil, weeks: 3),
+             phase(phaseB, number: 2, title: "P2", start: nil, end: nil, weeks: 2)],
+            programStart: date(2026, 5, 1, 0))
+
+        XCTAssertEqual(stretched[0].startDate, Calendar.current.startOfDay(for: date(2026, 5, 1)))
+        XCTAssertEqual(stretched[0].endDate, Calendar.current.startOfDay(for: date(2026, 5, 21)))
+        XCTAssertEqual(stretched[1].startDate, original[1].startDate,
+                       "Phase 2 must not move when Phase 1 absorbs the earlier start.")
+    }
+
+    /// Whole weeks cannot end exactly on 2026-09-11: 8 weeks from 07-17 ends
+    /// 09-10 and would strand the final session by a single day.
+    func testNineWeekBlockCoversTheFinalSeptemberSession() {
+        let eight = PhaseAssignment.rewindowed(
+            [phase(phaseA, number: 1, title: "Summer", start: nil, end: nil, weeks: 8)],
+            programStart: date(2026, 7, 17, 0))
+        let nine = PhaseAssignment.rewindowed(
+            [phase(phaseA, number: 1, title: "Summer", start: nil, end: nil, weeks: 9)],
+            programStart: date(2026, 7, 17, 0))
+
+        let finalSession = session(phase: nil, program: programId, on: date(2026, 9, 11))
+        XCTAssertEqual(PhaseAssignment.derive(session: finalSession, phases: eight), .noWindow)
+        XCTAssertEqual(PhaseAssignment.derive(session: finalSession, phases: nine),
+                       .assign(phaseId: phaseA))
+    }
+
     /// Windows are contiguous and never overlap after a re-window, which is
     /// what makes derivation unambiguous going forward.
     func testRewindowedPlanHasNoOverlaps() {
