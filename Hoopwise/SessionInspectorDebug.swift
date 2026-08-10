@@ -644,6 +644,182 @@ enum SessionInspectorDebug {
         write(lines, to: url)
     }
 
+    /// HOOPWISE_FOLD_STRAY="0C0095EB,venue=酷迅" folds ONE standalone session
+    /// into the private micro-group its client already has, and optionally
+    /// rewrites its venue string to a label the human named.
+    ///
+    /// This function decides NOTHING. The destination comes from
+    /// `SessionAdoption.plan` — the same planner the dry run reports — and it
+    /// refuses unless the verdict is `.privateMicroGroup` for a client who
+    /// already owns exactly one private program. Creating a program is
+    /// `createMicroGroupsIfRequested`'s job, and running that instead would
+    /// sweep up the standalone sessions still awaiting triage.
+    ///
+    /// The venue is applied verbatim from the spec, never inferred: whether
+    /// two venue strings name one gym is a human judgement, and a fuzzy match
+    /// would move sessions between real places.
+    ///
+    /// Idempotent: a session that already has a program is reported, not
+    /// rewritten.
+    static func foldStraySessionIfRequested(dataManager dm: DataManager) {
+        guard let spec = ProcessInfo.processInfo.environment["HOOPWISE_FOLD_STRAY"],
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/fold-stray.txt") else { return }
+
+        var out = ["FOLD STRAY SESSION → private micro-group", "spec: \(spec)", ""]
+        func abort(_ reason: String) {
+            out.append("ABORTED — \(reason). Nothing written.")
+            write(out, to: url)
+        }
+
+        // spec: "<idPrefix>[,venue=<label>]"
+        var prefix = ""
+        var venue: String?
+        for field in spec.split(separator: ",") {
+            let piece = field.trimmingCharacters(in: .whitespaces)
+            if piece.lowercased().hasPrefix("venue=") {
+                venue = String(piece.dropFirst("venue=".count))
+            } else if prefix.isEmpty {
+                prefix = piece.uppercased()
+            }
+        }
+        guard !prefix.isEmpty else { return abort("no session id prefix in the spec") }
+
+        let matches = dm.sessionEvents.filter {
+            $0.id.uuidString.uppercased().hasPrefix(prefix)
+        }
+        guard matches.count == 1, let session = matches.first else {
+            return abort("\(matches.count) sessions match “\(prefix)” — need exactly one")
+        }
+
+        out.append("BEFORE")
+        out.append(contentsOf: describe(session, dataManager: dm))
+        out.append("")
+
+        guard session.programId == nil else {
+            out.append("already folded — this session has a program. Nothing written.")
+            return write(out, to: url)
+        }
+
+        // The planner decides, not this function.
+        let plan = SessionAdoption.plan(sessions: dm.sessionEvents,
+                                        programs: dm.programs,
+                                        contracts: dm.contracts,
+                                        students: dm.students)
+        guard let decision = plan.decisions.first(where: { $0.id == session.id }) else {
+            return abort("the adoption planner returned no decision for this session")
+        }
+        guard case .privateMicroGroup(let clientId, let clientName) = decision.destination else {
+            return abort("planner verdict is “\(decision.destination.bucket)”, not a private micro-group")
+        }
+        out.append("planner verdict: private micro-group → \(clientName)")
+
+        // The client's existing one-person program. Creating one is a
+        // different, wider migration.
+        let owned = dm.programs.filter {
+            $0.programType == .privateSessions && $0.enrolledStudentIds.contains(clientId)
+        }
+        guard owned.count == 1, let program = owned.first else {
+            return abort("\(clientName) has \(owned.count) private programs — need exactly one that already exists")
+        }
+        out.append("destination: \(program.name) [\(short(program.id))]")
+        out.append("")
+
+        var updated = session
+        updated.programId = program.id
+        if let venue, venue != (session.location ?? "") {
+            out.append("venue: “\(session.location ?? "—")” → “\(venue)”")
+            updated.location = venue
+        } else {
+            out.append("venue: “\(session.location ?? "—")” — unchanged")
+        }
+        // Phase link stays nil: a planless private program has no phases, and
+        // the reconciler derives links from dates, not from this step.
+        dm.updateSessionEvent(updated)
+        out.append("wrote: programId → [\(short(program.id))]")
+
+        // Enrolment goes through the ONE writer, and only when it is missing.
+        if !program.enrolledStudentIds.contains(clientId) {
+            dm.setStudentEnrollment(studentId: clientId, programId: program.id)
+            out.append("enrolled \(clientName) (roster was missing them)")
+        }
+
+        let reconciled = SessionReconciler.run(dataManager: dm, force: true)
+        out.append("reconciler: \(reconciled.summary)")
+        out.append("")
+
+        out.append("AFTER")
+        if let after = dm.sessionEvents.first(where: { $0.id == session.id }) {
+            out.append(contentsOf: describe(after, dataManager: dm))
+        }
+        let census = SessionIntegrity.census(sessions: dm.sessionEvents,
+                                             programs: dm.programs, phases: dm.microCycles)
+        out.append("")
+        out.append("  census: \(dm.sessionEvents.count) sessions · BROKEN \(census.brokenCount) · window violations \(census.sessionsOutsideTheirPhaseWindow.count) · standalone \(dm.sessionEvents.filter { $0.programId == nil }.count)")
+        write(out, to: url)
+    }
+
+    /// HOOPWISE_VENUE_CENSUS=1 — read-only evidence for deciding whether a
+    /// freshly typed venue string names a place the store already knows.
+    /// Lists every Location record, every distinct session venue with its
+    /// usage, every program's venue, the sessions created most recently, and
+    /// the standalone remainder. Writes nothing.
+    static func venueCensusIfRequested(dataManager dm: DataManager) {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_VENUE_CENSUS"] != nil,
+              let url = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches/venue-census.txt") else { return }
+
+        var lines = ["VENUE CENSUS — read only, nothing was written", ""]
+        lines.append("store: \(dm.sessionEvents.count) sessions · \(dm.programs.count) programs · \(dm.locations.count) locations")
+        lines.append("")
+
+        lines.append("LOCATION RECORDS")
+        if dm.locations.isEmpty { lines.append("   none") }
+        for location in dm.locations.sorted(by: { $0.name < $1.name }) {
+            lines.append("   “\(location.name)” [\(short(location.id))] · \(location.isActive ? "active" : "inactive") · \(location.address ?? "no address")")
+        }
+        lines.append("")
+
+        lines.append("SESSION VENUE STRINGS")
+        let byVenue = Dictionary(grouping: dm.sessionEvents) { $0.location ?? "— (none)" }
+        for (venue, group) in byVenue.sorted(by: { $0.value.count > $1.value.count }) {
+            let sorted = group.sorted { $0.date < $1.date }
+            let programNames = Set(group.compactMap { session in
+                session.programId.flatMap { id in dm.programs.first { $0.id == id }?.name }
+            }).sorted()
+            lines.append("   “\(venue)” — \(group.count) session\(group.count == 1 ? "" : "s") · \(stamp(sorted.first!.date)) → \(stamp(sorted.last!.date))")
+            lines.append("      programs: \(programNames.isEmpty ? "— (standalone only)" : programNames.joined(separator: ", "))")
+        }
+        lines.append("")
+
+        lines.append("PROGRAM VENUES")
+        for program in dm.programs.sorted(by: { $0.name < $1.name }) {
+            lines.append("   \(program.name) [\(short(program.id))] → “\(program.locationName ?? "—")”\(program.locationId == nil ? "" : " [\(short(program.locationId!))]")")
+        }
+        lines.append("")
+
+        lines.append("TEN MOST RECENTLY CREATED SESSIONS")
+        let newest = dm.sessionEvents.sorted { $0.createdAt > $1.createdAt }.prefix(10)
+        for session in newest {
+            lines.append(contentsOf: describe(session, dataManager: dm))
+            lines.append("")
+        }
+
+        let standalone = dm.sessionEvents.filter { $0.programId == nil }
+            .sorted { $0.date < $1.date }
+        lines.append("STANDALONE REMAINDER — \(standalone.count)")
+        for session in standalone {
+            let attendees = Set(session.attendeeIds + session.actualAttendeeIds)
+            let names = dm.students.filter { attendees.contains($0.id) }.map { student in
+                [student.chineseName, student.name].compactMap { $0 }
+                    .filter { !$0.isEmpty }.joined(separator: "/")
+            }
+            lines.append("   [\(short(session.id))] \(stamp(session.date)) \(time(session.startTime)) · “\(session.title)” · venue “\(session.location ?? "—")” · \(session.status.rawValue)")
+            lines.append("      roster: \(names.isEmpty ? "—" : names.joined(separator: ", "))")
+        }
+        write(lines, to: url)
+    }
+
     private static func rosterIds(for title: String,
                                   in byTitle: [String: [SessionEvent]]) -> Set<UUID> {
         var ids = Set<UUID>()

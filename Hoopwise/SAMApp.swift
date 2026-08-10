@@ -140,6 +140,8 @@ struct SAMApp: App {
         SessionInspectorDebug.extendPlanDryRunIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyPlanReshapeIfRequested(dataManager: dataManager)
         SessionInspectorDebug.applyDedupeIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.venueCensusIfRequested(dataManager: dataManager)
+        SessionInspectorDebug.foldStraySessionIfRequested(dataManager: dataManager)
         #endif
     }
 
