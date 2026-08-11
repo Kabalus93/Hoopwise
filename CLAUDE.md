@@ -778,11 +778,19 @@ any attendance surface.
   warning becomes capable of firing; nothing changes on screen today.
 - Mac ContractCard gained the same three toggles (rule 6: fix on both or
   remove), each one contract write and one undo step.
-- ROUND TRIP PROVEN on real data (2026-08-11), Mac → CloudKit → iPhone → back:
-  Frank's contract #1 [F5269E85] jersey false→true from the Mac at 10:53, read
-  on the phone as "jersey 2026-08-11 10:53", then true→false at 10:54 and read
-  back as no facts recorded. The contract is exactly as it was; only
-  `updatedAt` moved. Development environment, both debug builds.
+- ROUND TRIP PROVEN for ALL THREE toggles on real data (2026-08-11), Mac →
+  CloudKit → iPhone → back: Frank's contract #1 [F5269E85] signed+jersey+ball
+  all false→true from the Mac at 14:16, read on the phone as three stamps at
+  14:16, then all→false at 14:17 and read back as no facts recorded. The
+  contract is exactly as it was; only `updatedAt` moved. Development
+  environment, both debug builds.
+- THE RED EXPIRY WARNING has exactly ONE live home:
+  StudentQuickPeepView.contractInfoSection. StudentDetailView.contractSection,
+  UnifiedStudentCard.contractSectionCard and .contractDetailSection all render
+  the same warning and are NEVER REFERENCED — so four of the nine isExpired
+  sites could not have fired whatever isExpired returned. Verified firing on a
+  six-month term bought 2025-09-01: "49 Weeks" (tenure, purple) → "Mar 1 /
+  Expired" (red).
 - The Mac write went through HandoverWriteDebug (HOOPWISE_HANDOVER_WRITE=
   "<idPrefix>,jersey=on", Mac target, DEBUG) rather than synthetic clicks. The
   coach is often AT the machine — driving the UI with CGEvent clicks risks

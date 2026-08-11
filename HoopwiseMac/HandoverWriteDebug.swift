@@ -22,18 +22,17 @@ enum HandoverWriteDebug {
         guard let spec = ProcessInfo.processInfo.environment["HOOPWISE_HANDOVER_WRITE"] else { return }
 
         var prefix = ""
-        var field = ""
-        var turnOn = true
+        var fields: [(name: String, on: Bool)] = []
         for piece in spec.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }) {
             if piece.contains("=") {
                 let parts = piece.split(separator: "=", maxSplits: 1)
-                field = parts[0].lowercased()
-                turnOn = parts.count > 1 && parts[1].lowercased() == "on"
+                fields.append((String(parts[0]).lowercased(),
+                               parts.count > 1 && parts[1].lowercased() == "on"))
             } else if prefix.isEmpty {
                 prefix = piece.uppercased()
             }
         }
-        guard !prefix.isEmpty, !field.isEmpty else {
+        guard !prefix.isEmpty, !fields.isEmpty else {
             log.error("HANDOVER WRITE aborted — spec needs \"<idPrefix>,<field>=on|off\", got \(spec, privacy: .public)")
             return
         }
@@ -45,13 +44,15 @@ enum HandoverWriteDebug {
         }
 
         let before = "signed=\(contract.isSigned) jersey=\(contract.jerseyGiven) ball=\(contract.ballGiven)"
-        switch field {
-        case "signed": contract.isSigned = turnOn
-        case "jersey": contract.jerseyGiven = turnOn
-        case "ball":   contract.ballGiven = turnOn
-        default:
-            log.error("HANDOVER WRITE aborted — unknown field \(field, privacy: .public)")
-            return
+        for field in fields {
+            switch field.name {
+            case "signed": contract.isSigned = field.on
+            case "jersey": contract.jerseyGiven = field.on
+            case "ball":   contract.ballGiven = field.on
+            default:
+                log.error("HANDOVER WRITE aborted — unknown field \(field.name, privacy: .public)")
+                return
+            }
         }
 
         // The same writer the ContractCard toggle uses.
@@ -62,7 +63,7 @@ enum HandoverWriteDebug {
         let stamp = reread.flatMap { $0.jerseyGivenDate ?? $0.signedDate ?? $0.ballGivenDate }
         log.notice("""
             HANDOVER WRITE ok — contract \(contract.id.uuidString, privacy: .public) \
-            field=\(field, privacy: .public) on=\(turnOn, privacy: .public) \
+            fields=\(fields.map { "\($0.name)=\($0.on ? "on" : "off")" }.joined(separator: " "), privacy: .public) \
             BEFORE \(before, privacy: .public) AFTER \(after, privacy: .public) \
             stamp=\(stamp.map { ISO8601DateFormatter().string(from: $0) } ?? "—", privacy: .public)
             """)

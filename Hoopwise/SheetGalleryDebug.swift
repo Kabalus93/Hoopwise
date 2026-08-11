@@ -30,6 +30,9 @@ enum SheetGalleryDebug {
     private static let programId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000003")!
     private static let phaseId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000004")!
     private static let expiredContractId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000005")!
+    /// Own student, so "first active contract" pickers cannot land on the
+    /// termless one instead.
+    private static let expiredStudentId = UUID(uuidString: "5A1D0000-0000-4000-A000-000000000006")!
 
     /// Deterministic minimum needed to construct the sheets. Refuses to touch
     /// a store that has anything in it.
@@ -75,8 +78,11 @@ enum SheetGalleryDebug {
         var termStart = DateComponents()
         termStart.year = 2025; termStart.month = 9; termStart.day = 1
         let lastAutumn = Calendar.current.date(from: termStart)
+        dm.addStudent(Student(id: expiredStudentId,
+                              name: "Lapsed Fixture",
+                              birthdate: birthdate))
         dm.addContract(Contract(id: expiredContractId,
-                                studentId: studentId,
+                                studentId: expiredStudentId,
                                 contractNumber: 2,
                                 kind: .privateBundle,
                                 enrollmentDate: lastAutumn ?? Date(),
@@ -128,20 +134,36 @@ enum SheetGalleryDebug {
             AddProgramOnboardingView { _ in }
 
         case "expiredWarning":
-            // The red "Expired" warning that could never fire while isExpired
-            // returned false. The fixture's second contract carries a real
-            // six-month term bought in September 2025.
-            if let student = dm.students.first(where: { $0.id == studentId }) {
-                // The component is presented directly rather than scrolled to:
-                // the warning is the subject, and a scripted scroll is the
-                // least repeatable part of any capture.
-                ScrollView { UnifiedStudentCard(student: student).padding() }
+            // The red "Expired" warning, on the client whose six-month term
+            // lapsed in March. StudentQuickPeepView.contractInfoSection is the
+            // only LIVE one: StudentDetailView.contractSection and both of
+            // UnifiedStudentCard's contract sections render the same warning
+            // and are never referenced, so they could not show it whatever
+            // isExpired returned.
+            if let student = dm.students.first(where: { $0.id == expiredStudentId }) {
+                StudentQuickPeepView(student: student, sessionId: nil)
+                    .defaultScrollAnchor(.bottom)
             } else {
                 missing("expiredWarning: fixture student not found")
             }
 
-        case "contractExpired":
+        case "contractRow":
+            // The Sales list row. Its "signed" seal was FILLED for every
+            // contract in the store, because isSigned returned true for all of
+            // them; it is now filled only for a contract that was signed.
             if let student = dm.students.first(where: { $0.id == studentId }),
+               let contract = dm.contracts.first(where: { $0.id == contractId }) {
+                VStack(spacing: 12) {
+                    ContractCard(student: student, contract: contract)
+                    Spacer()
+                }
+                .padding()
+            } else {
+                missing("contractRow: fixture not found")
+            }
+
+        case "contractExpired":
+            if let student = dm.students.first(where: { $0.id == expiredStudentId }),
                let contract = dm.contracts.first(where: { $0.id == expiredContractId }) {
                 ContractDetailView(student: student, contract: contract)
             } else {
