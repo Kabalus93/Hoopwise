@@ -778,6 +778,17 @@ any attendance surface.
   warning becomes capable of firing; nothing changes on screen today.
 - Mac ContractCard gained the same three toggles (rule 6: fix on both or
   remove), each one contract write and one undo step.
+- ROUND TRIP PROVEN on real data (2026-08-11), Mac → CloudKit → iPhone → back:
+  Frank's contract #1 [F5269E85] jersey false→true from the Mac at 10:53, read
+  on the phone as "jersey 2026-08-11 10:53", then true→false at 10:54 and read
+  back as no facts recorded. The contract is exactly as it was; only
+  `updatedAt` moved. Development environment, both debug builds.
+- The Mac write went through HandoverWriteDebug (HOOPWISE_HANDOVER_WRITE=
+  "<idPrefix>,jersey=on", Mac target, DEBUG) rather than synthetic clicks. The
+  coach is often AT the machine — driving the UI with CGEvent clicks risks
+  landing them in whatever window is frontmost, and a gated call through the
+  same `updateContract` the toggle uses proves the same thing safely. Read side
+  is HOOPWISE_HANDOVER on iOS.
 - `applyContract` hand-lists its columns, which is how four session fields were
   silently dropped before SessionRoundTripTests existed. ContractHandoverTests
   now carries the same reflection guard for Contract.

@@ -89,6 +89,9 @@ struct HoopwiseMacApp: App {
         await dataManager.loadAllData()
         await SessionStatusMonitor.shared.startMonitoring(dataManager: dataManager)
         isInitialized = true
+        #if DEBUG
+        HandoverWriteDebug.runIfRequested(dataManager: dataManager)
+        #endif
     }
 }
 
