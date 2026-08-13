@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SidebarSection: String, CaseIterable, Identifiable {
-    case today, assistant, athletes, sessions, programs, drills, playbook, courtEditor, sales, league, hub
+    case today, assistant, athletes, sessions, programs, drills, playbook, courtEditor, frameEditor, sales, league, hub
     var id: String { rawValue }
 
     var title: String {
@@ -14,6 +14,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .drills: return "Drills"
         case .playbook: return "Playbook"
         case .courtEditor: return "Court Editor"
+        case .frameEditor: return "Play Editor"
         case .sales: return "Sales"
         case .league: return "League"
         case .hub: return "Hub"
@@ -30,6 +31,7 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         case .drills: return "figure.basketball"
         case .playbook: return "book.pages.fill"
         case .courtEditor: return "sportscourt.fill"
+        case .frameEditor: return "rectangle.split.3x1.fill"
         case .sales: return "creditcard.fill"
         case .league: return "trophy.fill"
         case .hub: return "building.2.fill"
@@ -72,6 +74,9 @@ struct RootView: View {
     /// window's undo stack, and Cmd-Z after navigation dereferenced freed
     /// memory. Window lifetime plus purge-on-teardown removes the class.
     @StateObject private var editorModel = PlayEditorModel(diagram: PlayEditorModel.newDiagram())
+    /// Play Editor v2. Window lifetime for the same reason: NSUndoManager
+    /// holds its target unowned(unsafe).
+    @StateObject private var frameModel = FrameEditorModel(diagram: FrameEditorModel.newDiagram())
     /// Sidebar collapse PERSISTS, like every other pane the coach positions.
     /// It was plain @State, so collapsing it for room on the court lasted until
     /// quit and no further. Note this is app-wide, not editor-only: every Mac
@@ -199,6 +204,7 @@ struct RootView: View {
         case .drills:   DrillsView()
         case .playbook: PlaybookMacView()
         case .courtEditor: PlayEditorView(model: editorModel)
+        case .frameEditor: FrameEditorView(model: frameModel)
         case .sales:    SalesMacView()
         case .league:   LeagueMacView()
         case .hub:      HubMacView()
