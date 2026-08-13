@@ -1,11 +1,29 @@
-# The Ball lane — semantic spec (A3)
+# Possession semantics — what the ball lane meant (A3)
 
-**Status: PROPOSED. Nothing here is implemented.** Approve, amend, or reject
-before any code is written.
+**Status: IMPLEMENTATION CANCELLED (2026-08-14). Kept as the record of
+possession semantics that Play Editor v2's frame model must preserve.**
 
-One sentence of scope: **this row answers "where is the ball, and when does that
-change" — nothing else.** Anything that cannot be justified by that sentence is
-listed below under *Delete*.
+This began as a build spec for the timeline's Ball row. The row does not survive
+v2 — the frame model replaces the timeline entirely — so none of the interaction
+design below will be built. What survives is everything it forced into words:
+what the ball's states ARE, which of them are facts and which are consequences,
+and what a coach must be able to say about a ball's movement. A frame model that
+cannot express §1, §2 and §6 has lost something the timeline could do.
+
+**Read §1, §2 and §6 as binding.** §3, §4 and §5 are interaction design for a
+row that is going away; they are kept because they document *why* each element
+existed, which is the same question v2 has to answer in its own vocabulary.
+
+**§6's proposal is ACCEPTED as semantics** (2026-08-14): dragging a pass
+**release SHIFTS** the flight, dragging the **attach STRETCHES** it. One end
+moves the event, the other sets the arrival. That is the rule wherever
+pass-dragging resurfaces in v2, under whatever the frame model calls those two
+handles.
+
+One sentence of scope, which was true of the row and stays true of whatever
+replaces it: **it answers "where is the ball, and when does that change" —
+nothing else.** Anything that cannot be justified by that sentence is listed
+below under *Delete*.
 
 ---
 
