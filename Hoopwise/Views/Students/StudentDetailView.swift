@@ -8,7 +8,6 @@ struct StudentDetailView: View {
     @State private var contractEdit: ContractEdit?
 
     // Section expansion states
-    @State private var showContract = true
     @State private var showParent = false
     @State private var showMeasurements = false
 
@@ -397,101 +396,6 @@ struct StudentDetailView: View {
     }
     
     // MARK: - Contract Section (Simplified - Legacy)
-    private var contractSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label {
-                    Text(isChinese ? "合同" : "Contract")
-                        .font(.footnote.weight(.semibold))
-                } icon: {
-                    Image(systemName: "doc.text.fill").font(.caption)
-                }
-                .foregroundStyle(.primary)
-                Spacer()
-                if let contract = contract {
-                    Text(isChinese ? contract.typeLabelChinese : contract.typeLabel)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.accentColor.opacity(0.12), in: .rect(cornerRadius: 6))
-                }
-            }
-
-            if let contract = contract {
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text("\(contract.sessionCount)")
-                                .font(.title2.bold().monospacedDigit())
-                                .foregroundStyle(Color.green)
-                                .contentTransition(.numericText())
-                            Text(isChinese ? "已参加" : "attended")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if !contract.isPayAsYouGo {
-                            if let remaining = contract.remainingSessions {
-                                Text("\(remaining) \(isChinese ? "剩余" : "remaining")")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(remaining <= 3 ? AnyShapeStyle(Color.red) : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
-                            }
-                        }
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Label {
-                            Text(contract.enrollmentDate.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption2)
-                        } icon: {
-                            Image(systemName: "calendar.badge.plus").font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-
-                        if !contract.isPayAsYouGo, let expiry = contract.expiryDate {
-                            Label {
-                                Text(expiry.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption2)
-                            } icon: {
-                                Image(systemName: contract.isExpired ? "exclamationmark.triangle.fill" : "calendar")
-                                    .font(.caption2)
-                            }
-                            .foregroundStyle(contract.isExpired ? AnyShapeStyle(Color.red) : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
-                        }
-                    }
-                }
-
-                if !contract.isPayAsYouGo {
-                    ProgressView(value: contract.progressPercentage)
-                        .progressViewStyle(.linear)
-                        .tint(.green)
-                }
-
-                if contract.sessionCount > 0 {
-                    NavigationLink(destination: AttendedSessionsListView(studentId: student.id)) {
-                        HStack {
-                            Image(systemName: "list.bullet.rectangle").font(.caption2)
-                            Text(isChinese ? "查看出勤记录" : "View attendance history")
-                                .font(.caption)
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption2)
-                        }
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.top, 4)
-                    }
-                }
-            } else {
-                Text(isChinese ? "暂无合同记录" : "No contract yet")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-    }
 
     // MARK: - Parent Section
     private func parentSection(_ player: Player) -> some View {

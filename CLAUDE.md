@@ -1,5 +1,10 @@
 # HoopWise — Project Context
 
+## Start here
+- `RESTRUCTURE.md` — the Phase 2 restructure's end-state and its OPEN LEDGER.
+  Read the ledger before touching sessions, programs, phases or contracts.
+- "THE SESSION LAYER — canonical" below is the rule for new code in that area.
+
 ## What this is
 Basketball coaching management app. SwiftUI + SwiftData. iOS is the
 primary, mature target; a macOS version (HoopwiseMac) is in active
@@ -35,12 +40,12 @@ development and currently raw. Version 2, Build 2.
   errors, and the CloudKit environment.
 
 ## Fabricated accessors — the recurring failure mode here
-Contract carries legacy compile-time shims for fields the model no longer
-has. Several return constants that the UI renders as real data, and
-several have setters that silently discard writes. Three were fixed in
-July 2026 (amountPaid, outstandingBalance, isFullyPaid — they now derive
-from the payment ledger); the rest are still live and are listed under
-"Known broken things" below.
+Contract carried legacy compile-time shims for fields the model no longer
+had: constants the UI rendered as real data, and setters that silently
+discarded writes. Most are now fixed — amountPaid/outstandingBalance/
+isFullyPaid derive from the payment ledger (July 2026), and isSigned,
+jerseyGiven, ballGiven and isExpired became real in Phase 2.9. What
+survives is listed under "Known broken things" below.
 
 When touching any accessor in the legacy-shim block of Contract, assume
 it lies until proven otherwise, and check whether a view renders it.
@@ -48,24 +53,64 @@ it lies until proven otherwise, and check whether a view renders it.
 Fabricating a value the UI presents as fact is worse than crashing —
 it produces confident wrong numbers the coach reconciles books against.
 
+SECOND HALF OF THE SAME LESSON (Phase 2.9): before concluding that a
+predicate is why something never appears on screen, CHECK THAT ITS VIEW IS
+REACHABLE. Four of `isExpired`'s nine call sites sat in view properties that
+were defined and never referenced, so they could not have rendered whatever
+the predicate returned. A lie and a dead view look identical from the outside.
+
 ## Known broken things (do not mistake these for working)
-- Contract legacy shims that lie. Read-path (always show the same value
-  regardless of reality): isSigned (always true), isExpired (always
-  false, 9 UI refs incl. a red warning that can never fire),
-  jerseyGiven/ballGiven (always false), jerseyNumber/jerseySize on
-  Contract (always nil — note Player.jerseyNumber IS real),
-  weeklyAttendance (always empty, so those sections never render).
-  Write-path (setter discards, but the UI offers a control and calls
-  save): SalesView's Contract Signed, Jersey Given and Ball Given
-  toggles all no-op while appearing to save.
-- syncFromCloud() and syncToCloud() in SwiftDataManager are no-ops that
-  only stamp lastSyncDate.
-- getLocalStorageURL() returns a URL that is never passed to
-  ModelConfiguration. It is dead code and its surrounding comments about
-  platform-specific storage are stale.
+- Contract shims that still lie, both harmless-by-guard but not honest:
+  `jerseyNumber` / `jerseySize` on Contract are always nil (nothing ever wrote
+  a jersey number to a CONTRACT — Player.jerseyNumber IS real; the two read
+  sites are guarded so nothing renders "Jersey #0"), and `weeklyAttendance` is
+  always empty.
 - The 121 drills visible in both apps are seeded locally every launch by
   syncSampleDrills() from bundled DrillItem.samples. Their presence is
   NOT evidence that CloudKit sync works.
+
+## THE SESSION LAYER — canonical, post-restructure (August 2026)
+Phase 2 ended here. Every question about a session has exactly one answer,
+and it lives in a service. New code CALLS these; it does not re-derive them.
+
+| question | authority |
+|---|---|
+| how is a session created? | `SessionCreation` + `DataManager.createSession` |
+| what is it called? | `SessionNaming` (stored title is a fallback) |
+| is it private? | `SessionPrivacy` (the program's TYPE) |
+| what state is it in? | `SessionLifecycle` (isAllowed + apply) |
+| did it happen? | `SessionLifecycle.didNotHappen` |
+| which phase? | `PhaseAssignment` (from the DATE) |
+| what do its phase's words say? | `PhaseNaming` (current language) |
+| who is expected? | `AttendanceMath.expectedIds` |
+| what does it charge? | `redeemPrivateAttendance` — the ONE authority |
+| are the pointers sane? | `SessionReconciler` (repairs), `SessionIntegrity` (counts) |
+
+TWO RULES FOR NEW CODE, both greppable:
+1. NEVER construct a `SessionEvent` outside `SessionCreation`. Creation
+   derives phase, venue, roster, series and name together; a hand-built record
+   gets none of it. The only legitimate direct constructions left are
+   `SDSessionEvent` model mapping, `#Preview`/`samples` fixtures, and DEBUG
+   scratch records that are deleted in the same function.
+2. NEVER read `programId == nil` as a proxy for something else. It means ONE
+   thing now — a deliberate one-off — and `SessionCreation.Group.unassigned`
+   is how a caller says so. It does NOT mean private (ask `SessionPrivacy`),
+   does NOT mean standalone-series (ask `SessionSeries`), and does NOT mean
+   "no Live Activity" (ask `SessionSeries.allowsLiveActivity`). Reading it to
+   ASK "is this a one-off?" is fine and is what the census, the adoption
+   planner and `SessionSeries`' legacy fingerprint fallback do.
+
+SKIP SEMANTICS: skipped and cancelled are the same fact — it did not happen
+and will not. `SessionLifecycle.didNotHappen` is the only test. It refunds
+what it consumed, it leaves every attendance statistic, and it never appears
+as live or next-up. It is NOT a visibility rule: the record stays in the
+calendar with its "Skipped: <reason>" note.
+
+EXPIRY SEMANTICS: `Contract.expiresOn` derives from `validityMonths` +
+`effectiveBundlePurchaseDate`; zero months is a term nobody agreed and never
+expires. `isExpired` is display only — an expired contract STAYS `.active`, so
+redemption and the private-session rule are unchanged. Making expiry stop a
+bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
 
 ## History — read before touching git
 - This repo was created fresh in July 2026 after migrating to a new
@@ -172,10 +217,20 @@ it produces confident wrong numbers the coach reconciles books against.
   production: court/play editor, PDF play sheets, animation export for
   DaVinci Resolve, and a linked knowledge base.
 
-## Current state (July 2026)
+## Current state (August 2026, restructure complete)
 - CloudKit sync works. Both apps see the same private-database data.
 - HoopwiseMac builds and runs; Settings has General / Profile / Sync /
   Data.
+- THE PHASE 2 RESTRUCTURE IS DONE — see RESTRUCTURE.md for the one-page
+  summary: store end-state, per-phase commits, the invariants the reconciler
+  enforces, and the OPEN LEDGER. Read the ledger before starting anything in
+  the session/contract area; it is what is deliberately unfinished.
+- Store, 2026-08-11: 201 sessions · 21 phases · 17 programs · 176 contracts ·
+  134 athletes. BROKEN 0, duplicate groups 0, phase-window violations 0,
+  5 standalone sessions (the triage list in RESTRUCTURE.md).
+- A SCHEMA DEPLOY IS OWED before any released build: seriesId, signedDate,
+  jerseyGivenDate, ballGivenDate (rule 7d/7e). They are written and working in
+  Development; Production does not know them yet.
 - Roadmap: (0) DONE documents — PDF layer, attendance statement, training
   agreement, export on both platforms; (1) DONE contracts — payments ledger + travel fee, (2) DONE
   persist Play, four new record types defined and registered,
@@ -821,6 +876,16 @@ DELETED:
   utility deleted a path the store does not live at. A break-glass reset that
   silently resets nothing is a trap, not a tool. The stale platform-storage
   comments went with them.
+
+DELETED (found during 2.9, added to this ledger afterwards):
+- `StudentDetailView.contractSection`, `UnifiedStudentCard.contractSectionCard`
+  and `UnifiedStudentCard.contractDetailSection` — 351 lines of view code
+  DEFINED AND NEVER REFERENCED. This class is worse than ordinary deadwood: all
+  three render the red expiry warning, so four of the nine `isExpired` sites
+  could never have fired whatever `isExpired` returned. The dead views made a
+  lying shim look like the whole explanation. When a warning "never appears",
+  check that its view is reachable before concluding the predicate is wrong.
+  `allContracts` and `showContract` were orphaned with them and went too.
 
 FIXED (it was not deadwood — it was armed):
 - `dedupeProgramSessions` sits behind a coach-facing iOS button captioned
