@@ -400,57 +400,40 @@ enum BallRelease: Codable, Hashable {
 /// the ball in one now samples `position(atProgress:)`; the drawn path is that
 /// same function sampled, so the two cannot drift apart by construction.
 ///
-/// THE TUCK IS A HELD-STATE AFFECTATION. A held ball sits BESIDE its holder;
-/// a flying ball belongs on its arc. So the offset is blended out over
-/// `tuckBlendSeconds` at the release and back in at the catch — the ball leaves
-/// a hand and arrives at a hand without ever teleporting by the offset, and
-/// spends the whole middle of the flight exactly on the centre-line curve.
+/// THE ENDPOINTS ARE HANDS, and the line between them is straight.
+///
+/// A held ball sits BESIDE its holder, so at the instant of release the ball is
+/// off the centre line whether anyone likes it or not. Three things cannot all
+/// be true at once:
+///
+///   1. the ball is continuous at the release and the catch (no sideways pop),
+///   2. the ball sits exactly on the path that is drawn for it,
+///   3. a pass is drawn as a straight line.
+///
+/// An earlier revision kept (1) and (2) by blending the held offset away over
+/// 0.1s at each end — and lost (3): the drawn pass hooked out of the passer's
+/// hand and back into the receiver's, measured at **32.8° of turn and 1.54 ft
+/// of bow** on an ordinary pass between two players who had last moved in
+/// unrelated directions. A crooked pass line is wrong however it is justified.
+///
+/// So the offset lives in the ENDPOINTS: the flight runs hand-to-hand. All
+/// three hold — continuous, ball-on-path, and dead straight — because the
+/// off-line points are the ends of the line rather than deviations from it.
 struct BallFlight: Equatable {
-    /// Holder CENTRE at release.
+    /// The holder's HAND at release — his centre plus the held offset.
     var from: CGPoint
-    /// Receiver centre at arrival, or the rim for a shot.
+    /// The receiver's hand at arrival, or the rim for a shot.
     var to: CGPoint
-    /// The held offset in force at each end, blended out/in across the flight.
-    var releaseTuck: CGVector
-    var catchTuck: CGVector
     var isShot: Bool
-    /// Seconds. Blending is expressed in real time, not progress: a 0.1s ramp
-    /// must mean the same thing on a short pass and a long one.
+    /// Seconds.
     var duration: Double
     /// Parabola height at midpoint, in court feet. Zero for a pass — a pass is
-    /// a straight line at constant velocity.
+    /// a straight line at constant velocity, and the only curvature a flight
+    /// may carry is a shot's arc.
     var arcFeet: CGFloat
 
     /// Shot arc height. A shot rises; a pass does not.
     static let shotArcFeet: CGFloat = 1.6
-    /// How long the held-ball tuck takes to blend away at each end.
-    static let tuckBlendSeconds: Double = 0.1
-
-    init(from: CGPoint, to: CGPoint,
-         releaseTuck: CGVector = .zero, catchTuck: CGVector = .zero,
-         isShot: Bool, duration: Double, arcFeet: CGFloat) {
-        self.from = from
-        self.to = to
-        self.releaseTuck = releaseTuck
-        self.catchTuck = catchTuck
-        self.isShot = isShot
-        self.duration = duration
-        self.arcFeet = arcFeet
-    }
-
-    /// Effective blend, clamped so the two ramps cannot overlap on a flight
-    /// shorter than twice the nominal blend.
-    private var blendSeconds: Double { min(Self.tuckBlendSeconds, duration / 2) }
-
-    /// Cosine ramp: 1 at the hand, 0 at `blendSeconds`, with zero slope at both
-    /// ends so the join into the arc has no corner in it.
-    private func tuckWeight(secondsFromHand: Double) -> CGFloat {
-        let blend = blendSeconds
-        guard blend > 0 else { return 0 }
-        guard secondsFromHand > 0 else { return 1 }
-        guard secondsFromHand < blend else { return 0 }
-        return CGFloat(0.5 * (1 + cos(.pi * secondsFromHand / blend)))
-    }
 
     /// THE position function. Everything — the ball on the canvas, the drawn
     /// arc, presentation, export — comes through here.
@@ -459,25 +442,17 @@ struct BallFlight: Equatable {
         // A PASS is linear: constant velocity is the whole point of deriving
         // duration from distance. A SHOT decelerates, because a shot does.
         let eased = isShot ? Easing.easeOut.apply(p) : p
-        var x = from.x + (to.x - from.x) * CGFloat(eased)
+        let x = from.x + (to.x - from.x) * CGFloat(eased)
         var y = from.y + (to.y - from.y) * CGFloat(eased)
         if arcFeet != 0 {
             y -= CGFloat(sin(eased * .pi)) * arcFeet
         }
-        let seconds = p * duration
-        let leaving = tuckWeight(secondsFromHand: seconds)
-        let arriving = tuckWeight(secondsFromHand: duration - seconds)
-        x += releaseTuck.dx * leaving + catchTuck.dx * arriving
-        y += releaseTuck.dy * leaving + catchTuck.dy * arriving
         return CGPoint(x: x, y: y)
     }
 
     var startPoint: CGPoint { position(atProgress: 0) }
     var endPoint: CGPoint { position(atProgress: 1) }
 
-    /// Progress values a polyline must include: the uniform samples plus the
-    /// two blend boundaries, so a chord never cuts the corner where the tuck
-    /// ramp meets the arc.
     private func sampleProgress(from start: Double, samples: Int) -> [Double] {
         let lower = min(max(start, 0), 1)
         var values: [Double] = []
@@ -485,13 +460,7 @@ struct BallFlight: Equatable {
         for step in 0...count {
             values.append(lower + (1 - lower) * Double(step) / Double(count))
         }
-        if duration > 0 {
-            let blend = blendSeconds / duration
-            for boundary in [blend, 1 - blend] where boundary > lower && boundary < 1 {
-                values.append(boundary)
-            }
-        }
-        return values.sorted()
+        return values
     }
 
     /// The whole arc in court feet, for drawing.
@@ -760,9 +729,10 @@ struct ReadNode: Identifiable, Codable, Hashable {
         guard let releaseTime = possession.end, let release = possession.release
         else { return nil }
         let ordered = possessions ?? sortedPossessions
-        let from = positionOf(possession.holderId, releaseTime)
-        let releaseTuck = heldTuck(possession.holderId, at: releaseTime,
-                                   heldOffsetFeet: heldOffsetFeet, positionOf: positionOf)
+        // HAND, not centre: the flight starts exactly where the held ball is,
+        // so release is continuous and the drawn line still runs straight.
+        let from = heldPosition(possession.holderId, at: releaseTime,
+                                heldOffsetFeet: heldOffsetFeet, positionOf: positionOf)
 
         switch release {
         case .pass(let toId):
@@ -772,23 +742,19 @@ struct ReadNode: Identifiable, Codable, Hashable {
             let arrival = ordered.first { $0.start > releaseTime }?.start ?? derived
             let duration = max(0.0001, arrival - releaseTime)
             return BallFlight(from: from,
-                              to: positionOf(toId, arrival),
-                              releaseTuck: releaseTuck,
-                              catchTuck: heldTuck(toId, at: arrival,
-                                                  heldOffsetFeet: heldOffsetFeet,
-                                                  positionOf: positionOf),
+                              to: heldPosition(toId, at: arrival,
+                                               heldOffsetFeet: heldOffsetFeet,
+                                               positionOf: positionOf),
                               isShot: false,
                               duration: duration,
                               arcFeet: 0)
 
         case .shot(let target):
             let distance = Double(hypot(target.x - from.x, target.y - from.y))
-            // Nothing catches a shot, so it keeps no arriving tuck — it comes
-            // to rest exactly at the rim it was aimed at.
+            // Nothing catches a shot: it comes to rest exactly at the rim it
+            // was aimed at, so that end takes no hand offset.
             return BallFlight(from: from,
                               to: target,
-                              releaseTuck: releaseTuck,
-                              catchTuck: .zero,
                               isShot: true,
                               duration: max(0.12, distance / max(shotSpeed, 1)),
                               arcFeet: BallFlight.shotArcFeet)

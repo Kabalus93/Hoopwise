@@ -28,6 +28,34 @@ final class PlayFlightGeometryTests: XCTestCase {
     private struct Fixture {
         var node: ReadNode
         var positionOf: (UUID, Double) -> CGPoint
+        var passerId: UUID = UUID()
+    }
+
+    /// The crooked-path configuration: passer and receiver last moved in
+    /// UNRELATED directions, so their hand offsets point different ways. This
+    /// is the ordinary case in a real play, and it is what put a 32.8° hook in
+    /// the drawn line when the offset was blended along the flight instead of
+    /// living in its endpoints.
+    private func crossingPassFixture() -> Fixture {
+        let passer = UUID(uuidString: "55555555-5555-5555-5555-555555555555")!
+        let receiver = UUID(uuidString: "66666666-6666-6666-6666-666666666666")!
+        let passerTrack = Track(entityId: passer, keyframes: [
+            Keyframe(t: 0, position: CGPoint(x: 25, y: 34)),
+            Keyframe(t: 1.0, position: CGPoint(x: 25, y: 28))])       // toward the rim
+        let receiverTrack = Track(entityId: receiver, keyframes: [
+            Keyframe(t: 0, position: CGPoint(x: 4, y: 20)),
+            Keyframe(t: 1.2, position: CGPoint(x: 10, y: 20))])       // across
+        let node = ReadNode(title: "Base",
+                            tracks: [passerTrack, receiverTrack],
+                            possessions: [
+                                Possession(holderId: passer, start: 0, end: 1.0,
+                                           release: .pass(toId: receiver)),
+                                Possession(holderId: receiver, start: 1.5)])
+        return Fixture(node: node, positionOf: { id, t in
+            if id == passer { return passerTrack.position(at: t) ?? .zero }
+            if id == receiver { return receiverTrack.position(at: t) ?? .zero }
+            return .zero
+        }, passerId: passer)
     }
 
     /// O1 dribbles up and passes to O2, who is cutting. Both players MOVE, so
@@ -50,11 +78,11 @@ final class PlayFlightGeometryTests: XCTestCase {
                                 Possession(holderId: passer, start: 0, end: 1.0,
                                            release: .pass(toId: receiver)),
                                 Possession(holderId: receiver, start: 1.4)])
-        return Fixture(node: node) { id, t in
+        return Fixture(node: node, positionOf: { id, t in
             if id == passer { return passerTrack.position(at: t) ?? .zero }
             if id == receiver { return receiverTrack.position(at: t) ?? .zero }
             return .zero
-        }
+        }, passerId: passer)
     }
 
     /// O2 rises into a shot at the rim — the parabola case.
@@ -69,9 +97,9 @@ final class PlayFlightGeometryTests: XCTestCase {
                             possessions: [
                                 Possession(holderId: shooter, start: 0, end: 1.2,
                                            release: .shot(target: rim))])
-        return Fixture(node: node) { id, t in
+        return Fixture(node: node, positionOf: { id, t in
             id == shooter ? (track.position(at: t) ?? .zero) : .zero
-        }
+        }, passerId: shooter)
     }
 
     // MARK: - Geometry helpers
@@ -134,25 +162,90 @@ final class PlayFlightGeometryTests: XCTestCase {
         assertBallRidesCurve(shotFixture())
     }
 
-    /// The tuck is a HELD-state affectation: past the blend, the ball is on the
-    /// centre line, not beside it. This is the half a "compensating nudge" fix
-    /// would have got wrong — it would have moved the drawn line to the ball
-    /// instead of the ball to the line.
-    func testTuckIsGoneThroughTheMiddleOfAFlight() {
-        let fixture = passFixture()
-        guard let release = fixture.node.releases(passSpeed: passSpeed, shotSpeed: shotSpeed,
-                                                  heldOffsetFeet: tuck,
-                                                  positionOf: fixture.positionOf).first
-        else { return XCTFail("no release authored") }
-        let flight = release.flight
-        XCTAssertGreaterThan(hypot(flight.releaseTuck.dx, flight.releaseTuck.dy), 0.5,
-                             "fixture must actually carry a tuck, or it proves nothing")
+    // MARK: - Curve smoothness
 
-        let middle = flight.position(atProgress: 0.5)
-        let centreLine = CGPoint(x: flight.from.x + (flight.to.x - flight.from.x) * 0.5,
-                                 y: flight.from.y + (flight.to.y - flight.from.y) * 0.5)
-        XCTAssertLessThan(hypot(middle.x - centreLine.x, middle.y - centreLine.y), 0.01,
-                          "mid-flight the ball belongs on the centre line")
+    /// Worst turn between consecutive polyline segments, in degrees, and the
+    /// worst bow away from the chord, in feet.
+    private func crookedness(_ points: [CGPoint]) -> (turn: Double, bow: CGFloat) {
+        var worstTurn: Double = 0
+        for index in 1..<(points.count - 1) {
+            let a = points[index - 1], b = points[index], c = points[index + 1]
+            let v1 = CGVector(dx: b.x - a.x, dy: b.y - a.y)
+            let v2 = CGVector(dx: c.x - b.x, dy: c.y - b.y)
+            guard hypot(v1.dx, v1.dy) > 0.0001, hypot(v2.dx, v2.dy) > 0.0001 else { continue }
+            let cross = Double(v1.dx * v2.dy - v1.dy * v2.dx)
+            let dot = Double(v1.dx * v2.dx + v1.dy * v2.dy)
+            worstTurn = max(worstTurn, abs(atan2(cross, dot)) * 180 / .pi)
+        }
+        let first = points[0], last = points[points.count - 1]
+        var worstBow: CGFloat = 0
+        for point in points {
+            worstBow = max(worstBow, distance(point, toSegment: first, last))
+        }
+        return (worstTurn, worstBow)
+    }
+
+    /// A PASS IS A STRAIGHT LINE.
+    ///
+    /// This is the test that exists because it once failed. Holding the ball
+    /// beside its holder means the release point is off the centre line, and an
+    /// earlier revision resolved that by blending the offset away over 0.1s at
+    /// each end — which put a hook in the DRAWN path: 32.8° of turn and 1.54 ft
+    /// of bow on this configuration, two players who last moved in unrelated
+    /// directions. The offset lives in the endpoints now, so the line between
+    /// two hands is straight.
+    func testPassPathIsStraight() {
+        let fixture = crossingPassFixture()
+        guard let flight = fixture.node.releases(passSpeed: passSpeed, shotSpeed: shotSpeed,
+                                                 heldOffsetFeet: tuck,
+                                                 positionOf: fixture.positionOf).first?.flight
+        else { return XCTFail("no pass authored") }
+        let measured = crookedness(flight.polyline())
+        XCTAssertLessThan(measured.turn, 1.0,
+                          String(format: "pass path turns %.1f° — it must be straight",
+                                 measured.turn))
+        XCTAssertLessThan(measured.bow, 0.01,
+                          String(format: "pass path bows %.2f ft off its own chord",
+                                 measured.bow))
+    }
+
+    /// A SHOT ARCS, SMOOTHLY. It is the one flight allowed to curve, so the
+    /// test cannot just demand straightness — it demands that the curvature is
+    /// gentle and never reverses, which is what separates a parabola from a
+    /// hook at the hand.
+    func testShotArcIsSmoothAndNeverReverses() {
+        let fixture = shotFixture()
+        guard let flight = fixture.node.releases(passSpeed: passSpeed, shotSpeed: shotSpeed,
+                                                 heldOffsetFeet: tuck,
+                                                 positionOf: fixture.positionOf).first?.flight
+        else { return XCTFail("no shot authored") }
+        let points = flight.polyline()
+        XCTAssertLessThan(crookedness(points).turn, 12.0, "shot arc has a kink in it")
+
+        var sign = 0
+        for index in 1..<(points.count - 1) {
+            let a = points[index - 1], b = points[index], c = points[index + 1]
+            let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+            guard abs(cross) > 0.0001 else { continue }
+            let now = cross > 0 ? 1 : -1
+            if sign == 0 { sign = now }
+            XCTAssertEqual(now, sign, "the shot arc changes direction — that is a hook, not an arc")
+        }
+    }
+
+    /// The hand offset is REAL and is what the endpoints carry — without it the
+    /// straightness test above would pass trivially on a fixture that never
+    /// exercised the offset at all.
+    func testFlightRunsHandToHandNotCentreToCentre() {
+        let fixture = passFixture()
+        guard let flight = fixture.node.releases(passSpeed: passSpeed, shotSpeed: shotSpeed,
+                                                 heldOffsetFeet: tuck,
+                                                 positionOf: fixture.positionOf).first?.flight
+        else { return XCTFail("no release authored") }
+        let passerCentre = fixture.positionOf(fixture.passerId, 1.0)
+        let offset = hypot(flight.from.x - passerCentre.x, flight.from.y - passerCentre.y)
+        XCTAssertEqual(Double(offset), Double(tuck), accuracy: 0.001,
+                       "the flight must start at the hand, one held-offset from the centre")
     }
 
     /// …and the ball still LEAVES A HAND. Dropping the tuck outright would pop

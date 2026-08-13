@@ -187,8 +187,33 @@ final class PlayEditorModel: ObservableObject {
     /// is this play" comes from here; only the authoring surface uses the
     /// padded extent, and the ruler shades the difference so it is visible
     /// rather than implied.
+    /// THE BALL'S STORY IS PART OF THE PLAY. `branchDuration` measures TRACK
+    /// keyframes only, and found on the coach's own plays: Triangle Offense's
+    /// pass lands at 3.55s over a 2.62s branch, and one play is entirely
+    /// possession with every player static — branchDuration 0, so the transport
+    /// offered a 0.10s play and the pass could not be scrubbed to at all.
+    /// Whatever is furthest out — last keyframe, last attach, last arrival —
+    /// is where the play ends.
     var playbackDuration: Double {
-        max(0.1, branchDuration)
+        var end = branchDuration
+        for step in activeSteps {
+            for possession in step.node.sortedPossessions {
+                end = max(end, step.startsAt + possession.start)
+                if let release = possession.end {
+                    end = max(end, step.startsAt + release)
+                }
+                if let arrival = step.node.arrivalTime(
+                    of: possession,
+                    passSpeed: look.passSpeedFeetPerSecond,
+                    shotSpeed: look.shotSpeedFeetPerSecond,
+                    positionOf: { [weak self] id, t in
+                        self?.resolvedPosition(of: id, at: step.startsAt + t) ?? .zero
+                    }) {
+                    end = max(end, step.startsAt + arrival)
+                }
+            }
+        }
+        return max(0.1, end)
     }
 
     /// The AUTHORING extent: the play plus headroom to place keyframes past
