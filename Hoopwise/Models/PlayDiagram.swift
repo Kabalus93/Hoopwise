@@ -539,6 +539,11 @@ struct ReadEdge: Identifiable, Codable, Hashable {
     /// plus the leaf's own duration.
     var branchTime: Double
 
+    /// V2: the branch departs AFTER THIS FRAME of the source read — "after
+    /// frame 2, if they go under…". Nil on every pre-rebuild edge, which is
+    /// why `branchTime` is still here; Phase E deletes the time.
+    var afterFrameIndex: Int?
+
     /// Where in the TARGET the play resumes, in the target's local time.
     /// Meaningful only for `.returns`.
     ///
@@ -553,17 +558,19 @@ struct ReadEdge: Identifiable, Codable, Hashable {
          kind: ReadEdgeKind = .branch,
          condition: String? = nil,
          branchTime: Double = 0,
+         afterFrameIndex: Int? = nil,
          returnToTime: Double? = nil) {
         self.id = id
         self.targetId = targetId
         self.kind = kind
         self.condition = condition
         self.branchTime = branchTime
+        self.afterFrameIndex = afterFrameIndex
         self.returnToTime = kind == .returns ? (returnToTime ?? 0) : returnToTime
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, targetId, kind, condition, branchTime, returnToTime
+        case id, targetId, kind, condition, branchTime, afterFrameIndex, returnToTime
     }
 
     init(from decoder: Decoder) throws {
@@ -573,6 +580,7 @@ struct ReadEdge: Identifiable, Codable, Hashable {
         kind = try c.decodeIfPresent(ReadEdgeKind.self, forKey: .kind) ?? .branch
         condition = try c.decodeIfPresent(String.self, forKey: .condition)
         branchTime = try c.decodeIfPresent(Double.self, forKey: .branchTime) ?? 0
+        afterFrameIndex = try c.decodeIfPresent(Int.self, forKey: .afterFrameIndex)
         returnToTime = try c.decodeIfPresent(Double.self, forKey: .returnToTime)
     }
 }
@@ -593,26 +601,57 @@ struct ReadNode: Identifiable, Codable, Hashable {
     /// Short name for the branch, e.g. "Base" or "Reject".
     var title: String
     /// Coaching notes for this branch specifically.
-    var teachingPoints: [String]
+    var teachingPoints: [String] = []
     /// Motion for this slice. Time is local to the node: each node starts at 0.
-    var tracks: [Track]
+    ///
+    /// SUPERSEDED BY `frames` (Play Editor v2, Phase A) and deleted in Phase E.
+    /// Both exist during the rebuild so the current editor keeps working; no
+    /// code reads both.
+    var tracks: [Track] = []
     /// Ordered outgoing edges. Order is the order they appear in the UI.
-    var edges: [ReadEdge]
+    var edges: [ReadEdge] = []
     /// Who holds the ball, and when. Sorted by start time.
-    var possessions: [Possession]
+    ///
+    /// Under v2 this is DERIVED from the frames' actions rather than authored —
+    /// see `FrameSequence.derivedPossessions`. The model is unchanged, which is
+    /// the point: everything downstream of possession keeps working.
+    var possessions: [Possession] = []
+    /// V2: this read's frames, in order. Empty on every play authored before
+    /// the rebuild.
+    var frames: [PlayFrame] = []
 
     init(id: UUID = UUID(),
          title: String,
          teachingPoints: [String] = [],
          tracks: [Track] = [],
          edges: [ReadEdge] = [],
-         possessions: [Possession] = []) {
+         possessions: [Possession] = [],
+         frames: [PlayFrame] = []) {
         self.id = id
         self.title = title
         self.teachingPoints = teachingPoints
         self.tracks = tracks
         self.edges = edges
         self.possessions = possessions
+        self.frames = frames
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, teachingPoints, tracks, edges, possessions, frames
+    }
+
+    /// Hand-written so a blob stored before v2 decodes with no frames rather
+    /// than failing outright — the same additive idiom `Keyframe` and
+    /// `ReadEdge` already use.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        teachingPoints = try c.decodeIfPresent([String].self, forKey: .teachingPoints) ?? []
+        tracks = try c.decodeIfPresent([Track].self, forKey: .tracks) ?? []
+        edges = try c.decodeIfPresent([ReadEdge].self, forKey: .edges) ?? []
+        possessions = try c.decodeIfPresent([Possession].self, forKey: .possessions) ?? []
+        frames = try c.decodeIfPresent([PlayFrame].self, forKey: .frames) ?? []
     }
 
     var sortedPossessions: [Possession] { possessions.sorted { $0.start < $1.start } }
@@ -1095,6 +1134,10 @@ struct PlayDiagram: Identifiable, Codable, Hashable {
     /// Selected colour theme, by name. Stored on the diagram so a play keeps
     /// the look it was authored for; export can still override per output.
     var themeName: String
+    /// V2: ONE pace setting per play — every action's duration comes from its
+    /// path length ÷ the pace for its kind. Optional so pre-rebuild blobs
+    /// decode; `effectivePace` is what code should read.
+    var pace: PlayPace?
 
     var createdAt: Date
     var updatedAt: Date
