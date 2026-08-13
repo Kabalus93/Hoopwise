@@ -307,12 +307,14 @@ enum PlayFrameExporter {
                 PlayDiagram.segmentPosition(of: id, segment: currentIndex, localTime: t,
                                             steps: steps, entities: diagram.entities)
             }
-            if case .inFlight(let from, let to, let progress, _) = state {
-                let at = CGPoint(x: from.x + (to.x - from.x) * CGFloat(progress),
-                                 y: from.y + (to.y - from.y) * CGFloat(progress))
+            if case .inFlight(let flight, let progress) = state {
+                // The SAME curve the canvas draws and the ball flies. This used
+                // to re-lerp the endpoints itself, which dropped the shot's
+                // parabola and its easing — the exported frame disagreed with
+                // the screen it was rendered from.
                 layer.setLineWidth(width * 0.7)
-                layer.move(to: projection.project(at))
-                layer.addLine(to: projection.project(to))
+                layer.addPath(projection.project(path: MovementGeometry.line(
+                    points: flight.remainingPolyline(from: progress), kind: .run)))
                 layer.strokePath()
                 layer.setLineWidth(width)
             }

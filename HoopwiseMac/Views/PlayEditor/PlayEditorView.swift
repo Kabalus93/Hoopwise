@@ -168,6 +168,13 @@ struct PlayEditorView: View {
             .toggleStyle(.button)
             .help("Show movement paths (P)")
 
+            Toggle(isOn: $model.showAllPaths) {
+                Label("All Paths", systemImage: "square.stack.3d.down.right")
+            }
+            .toggleStyle(.button)
+            .disabled(!model.showMovementPaths || model.isPresentation)
+            .help("Show every path at once, ignoring the playhead. Off, a path is on screen only while its own action runs.")
+
             Toggle(isOn: $model.possessionEnabled) {
                 Label("Sticky Ball", systemImage: "hand.raised.fill")
             }

@@ -388,6 +388,124 @@ enum BallRelease: Codable, Hashable {
     case shot(target: CGPoint)
 }
 
+/// THE flight curve. One value answers both questions — "where is the ball at
+/// this instant" and "what arc do I draw" — because it answers them with the
+/// same function.
+///
+/// It exists because they used to be answered separately: the resolver
+/// interpolated between TUCK-ADJUSTED endpoints while the renderer drew
+/// CENTRE-to-CENTRE, so the ball flew a constant `ballHeldOffsetFeet` (1.9 ft
+/// by default) off its own drawn arc, and a third copy in the frame exporter
+/// ignored the shot's parabola entirely. Anything that draws a flight or places
+/// the ball in one now samples `position(atProgress:)`; the drawn path is that
+/// same function sampled, so the two cannot drift apart by construction.
+///
+/// THE TUCK IS A HELD-STATE AFFECTATION. A held ball sits BESIDE its holder;
+/// a flying ball belongs on its arc. So the offset is blended out over
+/// `tuckBlendSeconds` at the release and back in at the catch — the ball leaves
+/// a hand and arrives at a hand without ever teleporting by the offset, and
+/// spends the whole middle of the flight exactly on the centre-line curve.
+struct BallFlight: Equatable {
+    /// Holder CENTRE at release.
+    var from: CGPoint
+    /// Receiver centre at arrival, or the rim for a shot.
+    var to: CGPoint
+    /// The held offset in force at each end, blended out/in across the flight.
+    var releaseTuck: CGVector
+    var catchTuck: CGVector
+    var isShot: Bool
+    /// Seconds. Blending is expressed in real time, not progress: a 0.1s ramp
+    /// must mean the same thing on a short pass and a long one.
+    var duration: Double
+    /// Parabola height at midpoint, in court feet. Zero for a pass — a pass is
+    /// a straight line at constant velocity.
+    var arcFeet: CGFloat
+
+    /// Shot arc height. A shot rises; a pass does not.
+    static let shotArcFeet: CGFloat = 1.6
+    /// How long the held-ball tuck takes to blend away at each end.
+    static let tuckBlendSeconds: Double = 0.1
+
+    init(from: CGPoint, to: CGPoint,
+         releaseTuck: CGVector = .zero, catchTuck: CGVector = .zero,
+         isShot: Bool, duration: Double, arcFeet: CGFloat) {
+        self.from = from
+        self.to = to
+        self.releaseTuck = releaseTuck
+        self.catchTuck = catchTuck
+        self.isShot = isShot
+        self.duration = duration
+        self.arcFeet = arcFeet
+    }
+
+    /// Effective blend, clamped so the two ramps cannot overlap on a flight
+    /// shorter than twice the nominal blend.
+    private var blendSeconds: Double { min(Self.tuckBlendSeconds, duration / 2) }
+
+    /// Cosine ramp: 1 at the hand, 0 at `blendSeconds`, with zero slope at both
+    /// ends so the join into the arc has no corner in it.
+    private func tuckWeight(secondsFromHand: Double) -> CGFloat {
+        let blend = blendSeconds
+        guard blend > 0 else { return 0 }
+        guard secondsFromHand > 0 else { return 1 }
+        guard secondsFromHand < blend else { return 0 }
+        return CGFloat(0.5 * (1 + cos(.pi * secondsFromHand / blend)))
+    }
+
+    /// THE position function. Everything — the ball on the canvas, the drawn
+    /// arc, presentation, export — comes through here.
+    func position(atProgress progress: Double) -> CGPoint {
+        let p = min(max(progress, 0), 1)
+        // A PASS is linear: constant velocity is the whole point of deriving
+        // duration from distance. A SHOT decelerates, because a shot does.
+        let eased = isShot ? Easing.easeOut.apply(p) : p
+        var x = from.x + (to.x - from.x) * CGFloat(eased)
+        var y = from.y + (to.y - from.y) * CGFloat(eased)
+        if arcFeet != 0 {
+            y -= CGFloat(sin(eased * .pi)) * arcFeet
+        }
+        let seconds = p * duration
+        let leaving = tuckWeight(secondsFromHand: seconds)
+        let arriving = tuckWeight(secondsFromHand: duration - seconds)
+        x += releaseTuck.dx * leaving + catchTuck.dx * arriving
+        y += releaseTuck.dy * leaving + catchTuck.dy * arriving
+        return CGPoint(x: x, y: y)
+    }
+
+    var startPoint: CGPoint { position(atProgress: 0) }
+    var endPoint: CGPoint { position(atProgress: 1) }
+
+    /// Progress values a polyline must include: the uniform samples plus the
+    /// two blend boundaries, so a chord never cuts the corner where the tuck
+    /// ramp meets the arc.
+    private func sampleProgress(from start: Double, samples: Int) -> [Double] {
+        let lower = min(max(start, 0), 1)
+        var values: [Double] = []
+        let count = max(2, samples)
+        for step in 0...count {
+            values.append(lower + (1 - lower) * Double(step) / Double(count))
+        }
+        if duration > 0 {
+            let blend = blendSeconds / duration
+            for boundary in [blend, 1 - blend] where boundary > lower && boundary < 1 {
+                values.append(boundary)
+            }
+        }
+        return values.sorted()
+    }
+
+    /// The whole arc in court feet, for drawing.
+    func polyline(samples: Int = 24) -> [CGPoint] {
+        sampleProgress(from: 0, samples: samples).map { position(atProgress: $0) }
+    }
+
+    /// The part still AHEAD of the ball at `progress` — presentation draws only
+    /// this, and the frame exporter must draw the same thing.
+    func remainingPolyline(from progress: Double, samples: Int = 16) -> [CGPoint] {
+        sampleProgress(from: progress, samples: samples).map { position(atProgress: $0) }
+    }
+}
+
 /// The ball's state at a moment.
 ///
 /// TOTAL: every time resolves to one of these. There is no gap and no nil.
@@ -399,12 +517,17 @@ enum BallRelease: Codable, Hashable {
 enum BallState: Equatable {
     /// Held by an entity; position derives from the holder.
     case held(holderId: UUID)
-    /// Travelling. Endpoints are already resolved, so nothing is recomputed
-    /// downstream and the two calculations cannot drift apart.
-    case inFlight(from: CGPoint, to: CGPoint, progress: Double, isShot: Bool)
+    /// Travelling. Carries the CURVE, not loose endpoints: a caller cannot get
+    /// the flight's timing without also getting the geometry that draws it.
+    case inFlight(BallFlight, progress: Double)
     /// Sitting still at a resolved point: before the first possession, after a
     /// shot completes, or anywhere else nothing else applies.
     case atRest(CGPoint)
+
+    var flight: BallFlight? {
+        if case .inFlight(let flight, _) = self { return flight }
+        return nil
+    }
 }
 
 // MARK: - Read Tree
@@ -549,16 +672,6 @@ struct ReadNode: Identifiable, Codable, Hashable {
                    heldOffsetFeet: CGFloat = 0,
                    entityExists: ((UUID) -> Bool)? = nil,
                    positionOf: (UUID, Double) -> CGPoint) -> BallState {
-        // Flight endpoints use the SAME held offset as the held state, so the
-        // ball does not pop sideways by the offset at release and again at the
-        // catch. The sampling test caught a 3.3ft jump from exactly that.
-        func heldPoint(_ id: UUID, _ t: Double) -> CGPoint {
-            let centre = positionOf(id, t)
-            guard heldOffsetFeet != 0 else { return centre }
-            let direction = holderDirection(id, at: t, positionOf: positionOf)
-            return CGPoint(x: centre.x + direction.dx * heldOffsetFeet,
-                           y: centre.y + direction.dy * heldOffsetFeet)
-        }
         // Phantom holders are dropped rather than resolved against.
         let sorted = entityExists.map { validPossessions(resolving: $0) } ?? sortedPossessions
         guard !sorted.isEmpty else { return .atRest(ballHome) }
@@ -577,37 +690,24 @@ struct ReadNode: Identifiable, Codable, Hashable {
         // once a pass completed, a later shot was never evaluated and the ball
         // fell through to the receiver's position instead of flying to the rim.
         var lastResolved: CGPoint?
-        for (index, possession) in sorted.enumerated() {
+        for possession in sorted {
             guard let releaseTime = possession.end,
-                  let release = possession.release,
-                  time > releaseTime else { continue }
+                  time > releaseTime,
+                  let flight = ballFlight(after: possession,
+                                          among: sorted,
+                                          passSpeed: passSpeed,
+                                          shotSpeed: shotSpeed,
+                                          heldOffsetFeet: heldOffsetFeet,
+                                          positionOf: positionOf)
+            else { continue }
 
-            let from = heldPoint(possession.holderId, releaseTime)
-
-            switch release {
-            case .pass(let toId):
-                let arrival = sorted.dropFirst(index + 1).first?.start
-                    ?? (releaseTime + Double(hypot(positionOf(toId, releaseTime).x - from.x,
-                                                   positionOf(toId, releaseTime).y - from.y))
-                        / max(passSpeed, 1))
-                let to = heldPoint(toId, arrival)
-                if time <= arrival {
-                    let span = max(arrival - releaseTime, 0.0001)
-                    return .inFlight(from: from, to: to,
-                                     progress: (time - releaseTime) / span, isShot: false)
-                }
-                lastResolved = to
-
-            case .shot(let target):
-                let distance = Double(hypot(target.x - from.x, target.y - from.y))
-                let duration = max(0.12, distance / max(shotSpeed, 1))
-                if time <= releaseTime + duration {
-                    return .inFlight(from: from, to: target,
-                                     progress: (time - releaseTime) / duration, isShot: true)
-                }
-                // A completed shot leaves the ball at the rim.
-                lastResolved = target
+            if time <= releaseTime + flight.duration {
+                let progress = (time - releaseTime) / max(flight.duration, 0.0001)
+                return .inFlight(flight, progress: progress)
             }
+            // Where the flight actually ended — the receiver's tucked hand, or
+            // the rim. Taken from the curve so rest and flight agree.
+            lastResolved = flight.endPoint
         }
 
         if let lastResolved { return .atRest(lastResolved) }
@@ -615,9 +715,84 @@ struct ReadNode: Identifiable, Codable, Hashable {
         // Held to the end, or an unreleased possession: rest with the last
         // holder rather than falling through to nothing.
         if let last = sorted.last {
-            return .atRest(heldPoint(last.holderId, time))
+            return .atRest(heldPosition(last.holderId, at: time,
+                                        heldOffsetFeet: heldOffsetFeet,
+                                        positionOf: positionOf))
         }
         return .atRest(ballHome)
+    }
+
+    /// Where a held ball sits: BESIDE the holder, not on top of him.
+    func heldPosition(_ holderId: UUID, at time: Double,
+                      heldOffsetFeet: CGFloat,
+                      positionOf: (UUID, Double) -> CGPoint) -> CGPoint {
+        let centre = positionOf(holderId, time)
+        let tuck = heldTuck(holderId, at: time, heldOffsetFeet: heldOffsetFeet,
+                            positionOf: positionOf)
+        return CGPoint(x: centre.x + tuck.dx, y: centre.y + tuck.dy)
+    }
+
+    /// The held-ball offset as a vector, so a flight can blend it away rather
+    /// than baking it into its endpoints.
+    private func heldTuck(_ holderId: UUID, at time: Double,
+                          heldOffsetFeet: CGFloat,
+                          positionOf: (UUID, Double) -> CGPoint) -> CGVector {
+        guard heldOffsetFeet != 0 else { return .zero }
+        let direction = holderDirection(holderId, at: time, positionOf: positionOf)
+        return CGVector(dx: direction.dx * heldOffsetFeet,
+                        dy: direction.dy * heldOffsetFeet)
+    }
+
+    /// THE flight builder. `ballState`, `arrivalTime` and `releases` all come
+    /// through here, so the arc the coach sees, the position the ball takes and
+    /// the arrival the timeline reports are one derivation.
+    ///
+    /// ARRIVAL IS AUTHORED, NOT RECOMPUTED: a pass lands when the receiver's
+    /// possession begins, and distance ÷ speed is only the fallback for a pass
+    /// nothing receives. The two used to disagree the moment an attach was
+    /// retimed — the ball flew to one point and the line was drawn to another.
+    func ballFlight(after possession: Possession,
+                    among possessions: [Possession]? = nil,
+                    passSpeed: Double,
+                    shotSpeed: Double,
+                    heldOffsetFeet: CGFloat,
+                    positionOf: (UUID, Double) -> CGPoint) -> BallFlight? {
+        guard let releaseTime = possession.end, let release = possession.release
+        else { return nil }
+        let ordered = possessions ?? sortedPossessions
+        let from = positionOf(possession.holderId, releaseTime)
+        let releaseTuck = heldTuck(possession.holderId, at: releaseTime,
+                                   heldOffsetFeet: heldOffsetFeet, positionOf: positionOf)
+
+        switch release {
+        case .pass(let toId):
+            let receiverAt = positionOf(toId, releaseTime)
+            let distance = Double(hypot(receiverAt.x - from.x, receiverAt.y - from.y))
+            let derived = releaseTime + max(0.08, distance / max(passSpeed, 1))
+            let arrival = ordered.first { $0.start > releaseTime }?.start ?? derived
+            let duration = max(0.0001, arrival - releaseTime)
+            return BallFlight(from: from,
+                              to: positionOf(toId, arrival),
+                              releaseTuck: releaseTuck,
+                              catchTuck: heldTuck(toId, at: arrival,
+                                                  heldOffsetFeet: heldOffsetFeet,
+                                                  positionOf: positionOf),
+                              isShot: false,
+                              duration: duration,
+                              arcFeet: 0)
+
+        case .shot(let target):
+            let distance = Double(hypot(target.x - from.x, target.y - from.y))
+            // Nothing catches a shot, so it keeps no arriving tuck — it comes
+            // to rest exactly at the rim it was aimed at.
+            return BallFlight(from: from,
+                              to: target,
+                              releaseTuck: releaseTuck,
+                              catchTuck: .zero,
+                              isShot: true,
+                              duration: max(0.12, distance / max(shotSpeed, 1)),
+                              arcFeet: BallFlight.shotArcFeet)
+        }
     }
 
     /// Resolved ball position. Total by construction — see `ballState`.
@@ -633,22 +808,11 @@ struct ReadNode: Identifiable, Codable, Hashable {
                          entityExists: entityExists,
                          positionOf: positionOf) {
         case .held(let holderId):
-            let centre = positionOf(holderId, time)
-            let direction = holderDirection(holderId, at: time, positionOf: positionOf)
-            // BESIDE the holder, not on top of him.
-            return CGPoint(x: centre.x + direction.dx * heldOffsetFeet,
-                           y: centre.y + direction.dy * heldOffsetFeet)
-        case .inFlight(let from, let to, let progress, let isShot):
-            // A PASS is linear. Constant velocity is the whole point of
-            // deriving duration from distance, and easing one would make the
-            // ball drift slowly out of the passer's hands.
-            // A SHOT decelerates, because that is how a shot behaves.
-            let eased = isShot ? Easing.easeOut.apply(progress) : progress
-            let x = from.x + (to.x - from.x) * CGFloat(eased)
-            let y = from.y + (to.y - from.y) * CGFloat(eased)
-            guard isShot else { return CGPoint(x: x, y: y) }
-            let arc = sin(eased * .pi) * 1.6
-            return CGPoint(x: x, y: y - CGFloat(arc))
+            return heldPosition(holderId, at: time, heldOffsetFeet: heldOffsetFeet,
+                                positionOf: positionOf)
+        case .inFlight(let flight, let progress):
+            // THE shared curve — the same call the drawn arc is sampled from.
+            return flight.position(atProgress: progress)
         case .atRest(let point):
             return point
         }
@@ -690,22 +854,19 @@ struct ReadNode: Identifiable, Codable, Hashable {
         return (1, 0)
     }
 
-    /// When a released ball arrives, derived from distance and speed.    /// When a released ball arrives, derived from distance and speed.
+    /// When a released ball arrives. Derived from the flight, so the timeline's
+    /// breakpoint, the inspector's "Flight" figure and the ball on the canvas
+    /// are the same number by construction.
     func arrivalTime(of possession: Possession,
                      passSpeed: Double,
                      shotSpeed: Double,
                      positionOf: (UUID, Double) -> CGPoint) -> Double? {
-        guard let releaseTime = possession.end, let release = possession.release else { return nil }
-        let from = positionOf(possession.holderId, releaseTime)
-        switch release {
-        case .pass(let toId):
-            let to = positionOf(toId, releaseTime)
-            let distance = Double(hypot(to.x - from.x, to.y - from.y))
-            return releaseTime + max(0.08, distance / max(passSpeed, 1))
-        case .shot(let target):
-            let distance = Double(hypot(target.x - from.x, target.y - from.y))
-            return releaseTime + max(0.12, distance / max(shotSpeed, 1))
-        }
+        guard let releaseTime = possession.end,
+              let flight = ballFlight(after: possession, passSpeed: passSpeed,
+                                      shotSpeed: shotSpeed, heldOffsetFeet: 0,
+                                      positionOf: positionOf)
+        else { return nil }
+        return releaseTime + flight.duration
     }
 
     /// Whether this entity holds the ball at `time` — the holder's own movement
@@ -797,27 +958,26 @@ struct ReadNode: Identifiable, Codable, Hashable {
         }
     }
 
-    /// Releases with their derived arrival, for drawing pass and shot lines.
+    /// Releases with the CURVE each one draws.
     ///
     /// The line derives from possession rather than being drawn separately, so
-    /// there is one source of truth for "the ball went from here to there".
+    /// there is one source of truth for "the ball went from here to there" —
+    /// and it hands back the same `BallFlight` the resolver samples, so a
+    /// renderer cannot draw an arc the ball does not fly.
     func releases(passSpeed: Double,
                   shotSpeed: Double,
+                  heldOffsetFeet: CGFloat = 0,
                   positionOf: (UUID, Double) -> CGPoint)
-    -> [(from: CGPoint, to: CGPoint, release: BallRelease, departure: Double, arrival: Double)] {
-        var result: [(CGPoint, CGPoint, BallRelease, Double, Double)] = []
+    -> [(flight: BallFlight, release: BallRelease, departure: Double, arrival: Double)] {
+        var result: [(BallFlight, BallRelease, Double, Double)] = []
         for possession in sortedPossessions {
-            guard let departure = possession.end, let release = possession.release else { continue }
-            guard let arrival = arrivalTime(of: possession, passSpeed: passSpeed,
-                                            shotSpeed: shotSpeed, positionOf: positionOf)
+            guard let departure = possession.end, let release = possession.release,
+                  let flight = ballFlight(after: possession, passSpeed: passSpeed,
+                                          shotSpeed: shotSpeed,
+                                          heldOffsetFeet: heldOffsetFeet,
+                                          positionOf: positionOf)
             else { continue }
-            let from = positionOf(possession.holderId, departure)
-            let to: CGPoint
-            switch release {
-            case .pass(let toId): to = positionOf(toId, arrival)
-            case .shot(let target): to = target
-            }
-            result.append((from, to, release, departure, arrival))
+            result.append((flight, release, departure, departure + flight.duration))
         }
         return result
     }
@@ -895,8 +1055,8 @@ struct ReadNode: Identifiable, Codable, Hashable {
                 holder = holderId
                 kind = holderTravels(holderId, from: a, to: b, positionOf: positionOf,
                                      threshold: moveThresholdFeet) ? .dribble : .rest
-            case .inFlight(_, _, _, let isShot):
-                kind = isShot ? .flightShot : .flightPass
+            case .inFlight(let flight, _):
+                kind = flight.isShot ? .flightShot : .flightPass
                 holder = sorted.last { ($0.end ?? .infinity) <= mid }?.holderId
             case .atRest:
                 kind = .loose

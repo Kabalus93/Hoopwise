@@ -73,6 +73,12 @@ final class PlayEditorModel: ObservableObject {
 
     @Published var diagramName: String = "Untitled Play"
     @Published var showMovementPaths = true
+    /// ESCAPE HATCH for the edit-mode path window: renders every path at every
+    /// time, the way the editor used to unconditionally. Deliberately NOT
+    /// persisted and deliberately off by default — it is the rare full-map
+    /// view, not a mode to live in, and a play should never open unreadable
+    /// because of a toggle left on inside another play last week.
+    @Published var showAllPaths = false
     @Published var snapEnabled = true
     @Published var snapInterval: Double = 0.25
     /// Keyframes selected in the timeline, as (entityId, keyframeId).
@@ -1902,9 +1908,12 @@ final class PlayEditorModel: ObservableObject {
         switch state {
         case .held(let holderId):
             return "held by \(label(holderId))"
-        case .inFlight(let from, let to, let progress, let isShot):
-            return String(format: "%@ (%.1f,%.1f) -> (%.1f,%.1f) progress %.2f",
-                          isShot ? "shot" : "inFlight", from.x, from.y, to.x, to.y, progress)
+        case .inFlight(let flight, let progress):
+            let at = flight.position(atProgress: progress)
+            return String(format: "%@ (%.1f,%.1f) -> (%.1f,%.1f) progress %.2f  ball (%.2f,%.2f)",
+                          flight.isShot ? "shot" : "inFlight",
+                          flight.from.x, flight.from.y, flight.to.x, flight.to.y,
+                          progress, at.x, at.y)
         case .atRest(let point):
             return String(format: "atRest (%.2f, %.2f)", point.x, point.y)
         }

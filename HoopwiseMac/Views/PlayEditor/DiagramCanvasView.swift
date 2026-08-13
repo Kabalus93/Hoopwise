@@ -104,6 +104,26 @@ struct DiagramCanvasView: View {
 
     // MARK: - Motion
 
+    /// The style the PATH LAYER draws with. Identical to the render style
+    /// except that "Show all paths" lifts the edit window — the escape hatch
+    /// for the rare moment you want the whole map at once.
+    private var pathStyle: RenderStyle {
+        var style = model.renderStyle
+        if model.showAllPaths { style.editPathWindow = nil }
+        return style
+    }
+
+    /// Tracks exempt from the edit window: the selected entity, the one being
+    /// dragged, and the one being bent. What you are editing is on screen the
+    /// whole time you are editing it, whatever the playhead says.
+    private var pinnedTracks: Set<UUID> {
+        var pinned: Set<UUID> = []
+        if let id = model.selectedEntityId { pinned.insert(id) }
+        if let id = dragEntityId { pinned.insert(id) }
+        if let id = bendTarget?.entityId { pinned.insert(id) }
+        return pinned
+    }
+
     /// Movement lines with heads, built in COURT FEET then projected.
     ///
     /// Lines, arrowheads and screen bars lie on the floor plane, so they go
@@ -112,7 +132,7 @@ struct DiagramCanvasView: View {
     /// an oblique court.
     private func drawMotionPaths(_ projection: CourtProjection, into context: inout GraphicsContext) {
         guard model.showMovementPaths else { return }
-        let style = model.renderStyle
+        let style = pathStyle
         let steps = model.activeSteps
         // BOTH modes consume the shared path layer — the read-boundary gate
         // and the one-arrowhead rule are enforced inside visibleTrackPaths,
@@ -128,7 +148,8 @@ struct DiagramCanvasView: View {
                 guard let entity = model.entity(id), !model.isHidden(id) else { return false }
                 if case .ball = entity.kind, model.possessionEnabled { return false }
                 return true
-            })
+            },
+            pinnedTracks: pinnedTracks)
         if style.consumeBehindMotion {
             drawPresentationPaths(visible, projection, into: &context)
         } else {
@@ -196,12 +217,13 @@ struct DiagramCanvasView: View {
         // segment under the playhead, so there is one flight, and stroking it
         // per step compounded through the blur into a darker line.
         if model.possessionEnabled {
-            if case .inFlight(_, let to, _, _) = model.ballState(at: model.playhead),
-               let ballAt = model.ballPosition(at: model.playhead) {
-                var flight = Path()
-                flight.move(to: projection.project(ballAt))
-                flight.addLine(to: projection.project(to))
-                brush.stroke(flight, with: .color(stroke),
+            if case .inFlight(let flight, let progress) = model.ballState(at: model.playhead) {
+                // Sampled from the SAME curve the ball is on — a straight line
+                // to the endpoint used to cut the corner of every shot arc.
+                let ahead = MovementGeometry.line(
+                    points: flight.remainingPolyline(from: progress), kind: .run)
+                brush.stroke(Path(projection.project(path: ahead)),
+                             with: .color(stroke),
                              style: StrokeStyle(lineWidth: width * 0.7,
                                                 lineCap: .round))
             }
@@ -263,29 +285,23 @@ struct DiagramCanvasView: View {
               let step = steps.first(where: { $0.node.id == model.activeNodeId })
         else { return }
         let releases = step.node.releases(passSpeed: model.look.passSpeedFeetPerSecond,
-                                          shotSpeed: model.look.shotSpeedFeetPerSecond) { id, t in
+                                          shotSpeed: model.look.shotSpeedFeetPerSecond,
+                                          heldOffsetFeet: model.look.ballHeldOffsetFeet) { id, t in
             model.resolvedPosition(of: id, at: step.startsAt + t)
         }
+        // A flight is an action like any other: it appears with its release and
+        // goes once the catch has settled. Selecting the ball pins them all.
+        let ballPinned = model.diagram.ball.map { pinnedTracks.contains($0.id) } ?? false
+        let local = model.playhead - step.startsAt
         for item in releases {
-            let tint = Color(hex: model.theme.ballHex)
-            switch item.release {
-            case .pass:
-                drawReleaseLine([item.from, item.to], tint: tint,
-                                projection: projection, into: &context)
-            case .shot:
-                // Shallow parabola toward the rim, sampled in court feet so
-                // it projects with the floor.
-                var points: [CGPoint] = []
-                for sample in 0...20 {
-                    let f = CGFloat(sample) / 20
-                    let x = item.from.x + (item.to.x - item.from.x) * f
-                    let y = item.from.y + (item.to.y - item.from.y) * f
-                    let arc = sin(Double(f) * .pi) * 1.6
-                    points.append(CGPoint(x: x, y: y - CGFloat(arc)))
-                }
-                drawReleaseLine(points, tint: tint,
-                                projection: projection, into: &context)
-            }
+            guard ballPinned || PathConsumption.withinEditWindow(
+                local, start: item.departure, end: item.arrival, style: pathStyle)
+            else { continue }
+            // The SAME curve the ball flies — sampled, not re-derived. The
+            // shot's parabola used to be written out a second time here, and
+            // the ball flew 1.9 ft off it.
+            drawReleaseLine(item.flight.polyline(), tint: Color(hex: model.theme.ballHex),
+                            projection: projection, into: &context)
         }
     }
 
@@ -488,8 +504,8 @@ struct DiagramCanvasView: View {
             fromCourt = model.resolvedPosition(of: holderId, at: model.playhead)
         case .atRest(let point):
             fromCourt = point
-        case .inFlight(let from, _, _, _):
-            fromCourt = from
+        case .inFlight(let flight, let progress):
+            fromCourt = flight.position(atProgress: progress)
         }
         let fromView = projection.project(fromCourt)
         // Snapped: the line goes to the rim or the receiver, not the raw

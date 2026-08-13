@@ -79,6 +79,30 @@ struct RenderStyle: Equatable {
     /// a corner-three drop near the baseline must not become a shot.
     var rimSnapFeet: CGFloat = 2.5
 
+    /// EDIT MODE ONLY: how long before and after its own action a path is on
+    /// screen. Nil renders every path at every time — which is the escape
+    /// hatch ("Show all paths"), and also presentation, which windows through
+    /// consumption instead and must not be double-gated.
+    ///
+    /// Drawing the whole play at once is unreadable the moment a play has more
+    /// than two actions in it: nine routes over one court, none of them
+    /// belonging to the moment under the playhead. Windowed, scrubbing makes
+    /// actions bloom and fade in the order they happen, which is the thing the
+    /// author is actually checking.
+    var editPathWindow: EditPathWindow?
+
+    /// The padding either side of an action, in seconds.
+    struct EditPathWindow: Equatable {
+        /// Appears this early — the announcement, so a path is on screen
+        /// fractionally before the movement it describes.
+        var lead: Double
+        /// Lingers this long after the action ends, so the eye can land on
+        /// where it finished rather than watching it vanish on arrival.
+        var linger: Double
+
+        static let standard = EditPathWindow(lead: 0.3, linger: 0.2)
+    }
+
     static let edit = RenderStyle(
         name: "Edit",
         pathStrokeHex: "",              // edit paths use entity colours
@@ -95,7 +119,8 @@ struct RenderStyle: Equatable {
         ballScaleFactor: 0.68,
         courtFloorHex: nil,
         courtLineHex: nil,
-        allowsGhostTrails: true)
+        allowsGhostTrails: true,
+        editPathWindow: .standard)
 
     static let presentation = RenderStyle(
         name: "Presentation",
@@ -139,6 +164,16 @@ enum PathConsumption {
     ///   appearStart ≤ t < segStart            draw-on, tip-first
     ///   segStart ≤ t < segEnd                 consumed: only [t-tuck, end] ahead
     ///   t ≥ segEnd                            nothing (fully consumed)
+    /// Whether `t` falls inside an action's padded window. THE edit-mode
+    /// visibility rule — track segments and possession flight lines both ask
+    /// this, so a play cannot show one kind of action out of its moment while
+    /// windowing the other.
+    static func withinEditWindow(_ t: Double, start: Double, end: Double,
+                                 style: RenderStyle) -> Bool {
+        guard let window = style.editPathWindow else { return true }
+        return t >= start - window.lead && t <= end + window.linger
+    }
+
     static func visibleSegment(track: Track,
                                from: Keyframe,
                                to: Keyframe,
@@ -146,6 +181,7 @@ enum PathConsumption {
                                style: RenderStyle,
                                readStart: Double = 0,
                                readEnd: Double = .infinity,
+                               pinned: Bool = false,
                                samples: Int = 26) -> VisibleSegment? {
         // READ BOUNDARY = PATH RESET. A path is scoped to its read and cannot
         // render while another read's window is active. The boundary instant
@@ -155,6 +191,11 @@ enum PathConsumption {
         // the boundary, consumption end and boundary coincide by construction.
         guard t < readEnd else { return nil }
         guard style.consumeBehindMotion else {
+            // EDIT MODE: the whole segment, but only while its own action is
+            // current. `pinned` is the selection exception — what you are
+            // editing stays on screen whatever the playhead says.
+            guard pinned || withinEditWindow(t, start: from.t, end: to.t, style: style)
+            else { return nil }
             return fullSegment(track: track, from: from, to: to, samples: samples)
         }
         let segStart = from.t
@@ -288,14 +329,21 @@ enum PathConsumption {
     ///     sprout heads. A track whose final visible segment is a screen ends
     ///     in its T-bar and gets no arrow.
     ///
+    ///   - EDIT WINDOW: in edit style a segment renders only while its own
+    ///     action is current (see `RenderStyle.editPathWindow`), UNLESS its
+    ///     track is pinned.
+    ///
     /// `onlyNodeId` restricts output to one read — edit mode shows just the
     /// selected read. `includeTrack` filters tracks (hidden layers, the
-    /// possession-driven ball).
+    /// possession-driven ball). `pinnedTracks` are exempt from the edit window:
+    /// the selected entity and one being dragged show their whole route,
+    /// because that is what the author is looking at.
     static func visibleTrackPaths(steps: [PlayDiagram.BranchStep],
                                   at time: Double,
                                   style: RenderStyle,
                                   onlyNodeId: UUID? = nil,
-                                  includeTrack: (UUID) -> Bool = { _ in true })
+                                  includeTrack: (UUID) -> Bool = { _ in true },
+                                  pinnedTracks: Set<UUID> = [])
         -> (pieces: [TrackPathPiece], heads: [TrackArrowhead]) {
         var pieces: [TrackPathPiece] = []
         var heads: [TrackArrowhead] = []
@@ -313,7 +361,8 @@ enum PathConsumption {
                                                        from: frames[index],
                                                        to: frames[index + 1],
                                                        at: localT, style: style,
-                                                       readEnd: readEnd)
+                                                       readEnd: readEnd,
+                                                       pinned: pinnedTracks.contains(track.entityId))
                     else { continue }
                     pieces.append(TrackPathPiece(entityId: track.entityId,
                                                  stepIndex: stepIndex,
