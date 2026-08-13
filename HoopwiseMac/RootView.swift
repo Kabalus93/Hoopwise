@@ -72,6 +72,11 @@ struct RootView: View {
     /// window's undo stack, and Cmd-Z after navigation dereferenced freed
     /// memory. Window lifetime plus purge-on-teardown removes the class.
     @StateObject private var editorModel = PlayEditorModel(diagram: PlayEditorModel.newDiagram())
+    /// Sidebar collapse PERSISTS, like every other pane the coach positions.
+    /// It was plain @State, so collapsing it for room on the court lasted until
+    /// quit and no further. Note this is app-wide, not editor-only: every Mac
+    /// page now reopens the way it was left.
+    @AppStorage("settings.sidebarCollapsed") private var sidebarCollapsed = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     /// App-wide Esc-dismisses-sheets rule; lives as long as the window.
     @State private var presentationKeys = PresentationKeyDispatcher()
@@ -100,7 +105,11 @@ struct RootView: View {
                 UserDefaults.standard.set(newValue.rawValue, forKey: "settings.lastPage")
             }
         }
+        .onChange(of: columnVisibility) { _, visibility in
+            sidebarCollapsed = visibility == .detailOnly
+        }
         .onAppear {
+            columnVisibility = sidebarCollapsed ? .detailOnly : .all
             presentationKeys.install()
             assistantEngine.configure(dataManager: dataManager)
             WhistleBubbleController.shared.attach(engine: assistantEngine)
