@@ -54,7 +54,12 @@ struct PlayEditorView: View {
                 // edge because nothing clipped the column.
                 .clipped()
             }
-            .frame(minHeight: 340)
+            // THE COURT IS THE DOCUMENT. VSplitView splits its ideal heights,
+            // so an unbounded timeline pane took half the window and spent most
+            // of it on empty track below the last lane. Capping it hands the
+            // difference to the canvas without touching the layout's shape —
+            // the divider still drags, this only decides where it starts.
+            .frame(minHeight: 340, idealHeight: 720)
 
             HStack(spacing: 0) {
                 ReadTreeView(model: model)
@@ -62,7 +67,7 @@ struct PlayEditorView: View {
                 Divider()
                 TimelineView(model: model)
             }
-            .frame(minHeight: 170, idealHeight: 210)
+            .frame(minHeight: 150, idealHeight: timelineIdealHeight, maxHeight: 340)
         }
         .toolbar { toolbarContent }
         .navigationTitle(model.diagramName)
@@ -116,6 +121,15 @@ struct PlayEditorView: View {
         // NO key handling here — Space, Delete, Escape, arrows and the tool
         // letters all live in EditorKeyDispatcher. Handlers on focusable
         // subviews are the focus-fragility class this replaced.
+    }
+
+    /// What the timeline actually needs: ruler plus one lane per layer plus the
+    /// camera lane. A fixed 210 meant a three-layer play still reserved room
+    /// for eight and paid for it in court. Bounded at both ends — the divider
+    /// is still the coach's to drag.
+    private var timelineIdealHeight: CGFloat {
+        let lanes = CGFloat(model.diagram.entities.count + 1)
+        return min(340, max(150, 34 * lanes + 62))
     }
 
     // MARK: - Toolbar
@@ -235,7 +249,10 @@ struct PlayEditorView: View {
                         .player(team: .defense, number: nil, role: nil))
             stripButton("Ball", "basketball.fill", "B", .ball)
             Divider().frame(width: 22)
-            stripButton("Screen", "rectangle.fill", "S", .screen)
+            // No letter for Screen: S toggles Sticky Ball, which is what the
+            // Play menu documents and what the dispatcher does. The button
+            // claimed "(S)" and pressing it toggled possession instead.
+            stripButton("Screen", "rectangle.fill", nil, .screen)
             stripButton("Cone", "triangle.fill", "C", .cone)
             Spacer()
         }
@@ -245,7 +262,7 @@ struct PlayEditorView: View {
     }
 
     private func stripButton(_ title: String, _ icon: String,
-                             _ key: String, _ kind: DiagramEntityKind?) -> some View {
+                             _ key: String?, _ kind: DiagramEntityKind?) -> some View {
         let isActive = model.placementKind == kind
         let available = kind.map { model.canPlace($0) } ?? true
         return Button {
@@ -261,7 +278,9 @@ struct PlayEditorView: View {
         }
         .buttonStyle(.plain)
         .disabled(!available)
-        .help(available ? "\(title) (\(key))" : "Only one ball per diagram")
+        .help(available
+              ? (key.map { "\(title) (\($0))" } ?? title)
+              : "Only one ball per diagram")
     }
 
     private func groupLabel(_ text: String) -> some View {
@@ -271,43 +290,26 @@ struct PlayEditorView: View {
             .fixedSize()
     }
 
+    /// Transport readout: position over the PLAY's length, never the ruler's.
+    /// It used to show the timeline extent, so a 2.4s read read as "6.00s".
     private var scrubber: some View {
         HStack(spacing: 5) {
             Slider(value: Binding(
-                get: { model.playhead },
+                get: { min(model.playhead, model.playbackDuration) },
                 set: { model.stop(); model.playhead = $0 }),
-                   in: 0...model.timelineDuration)
+                   in: 0...model.playbackDuration)
             .frame(width: 130)
-            Text(String(format: "%.2fs", model.playhead))
+            Text(String(format: "%.2f / %.2fs", model.playhead, model.playbackDuration))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
-                .frame(width: 44, alignment: .leading)
+                .frame(width: 84, alignment: .leading)
         }
-        .help("Scrub the playhead")
+        .help("Scrub the playhead. The figure on the right is the length of the read being played.")
     }
 
-    /// Tool button with a visible armed state.
-    ///
-    /// `kind == nil` is Select — arming nothing. There was previously no Select
-    /// tool at all and no way to tell which tool was live.
-    private func toolButton(_ title: String, _ icon: String,
-                            _ key: String, _ kind: DiagramEntityKind?) -> some View {
-        let isActive = model.placementKind == kind
-        let available = kind.map { model.canPlace($0) } ?? true
-        return Button {
-            model.placementKind = kind
-            model.activeToolName = title
-        } label: {
-            Label(title, systemImage: icon)
-                .labelStyle(.iconOnly)
-                .frame(width: 24, height: 20)
-                .foregroundStyle(isActive ? Color.white : (available ? .primary : Color.secondary))
-                .background(isActive ? Color.accentColor : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 5))
-        }
-        .disabled(!available)
-        .help(available ? "\(title) (\(key))" : "Only one ball per diagram")
-    }
+    // DELETED: `toolButton`, the pre-tool-strip toolbar variant. Zero
+    // references — `stripButton` replaced it when tools moved to the canvas
+    // edge, and it survived as a second copy of the same lying tooltip.
 
     // MARK: - Inspector
 

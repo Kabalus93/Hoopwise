@@ -33,6 +33,13 @@ struct HoopwiseMacApp: App {
             // Court editor commands, so every shortcut is discoverable rather
             // than only living in a tooltip.
             CommandMenu("Play") {
+                // ⌘N is New Session app-wide, so the editor's own "new" needs
+                // its own binding rather than a tooltip claiming one it never
+                // had.
+                Button("New Play…") {
+                    NotificationCenter.default.post(name: .macEditorNewPlay, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: [.command, .option])
                 Button("Save to Playbook") {
                     NotificationCenter.default.post(name: .macEditorSave, object: nil)
                 }
@@ -108,6 +115,7 @@ extension Notification.Name {
     static let macOpenSession = Notification.Name("MacOpenSession")
     static let macOpenAthlete = Notification.Name("MacOpenAthlete")
     static let macDismissPresentedSurface = Notification.Name("MacDismissPresentedSurface")
+    static let macEditorNewPlay = Notification.Name("MacEditorNewPlay")
     static let macEditorExportFrame = Notification.Name("MacEditorExportFrame")
     static let macEditorExportSheet = Notification.Name("MacEditorExportSheet")
 }

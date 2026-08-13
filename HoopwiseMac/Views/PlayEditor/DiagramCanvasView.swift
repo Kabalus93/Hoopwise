@@ -55,8 +55,56 @@ struct DiagramCanvasView: View {
             .onTapGesture { location in
                 handleTap(at: location, projection: projection)
             }
+            // ON-CANVAS EDITING for things that live on the canvas. Converting a
+            // shot to a pass was inspector-only — a dropdown in a side panel
+            // editing an arc the coach is looking at three columns away. The
+            // menu reads the hover position the canvas already publishes, so it
+            // acts on whatever the pointer is over.
+            .contextMenu { canvasMenu }
         }
         .background(Color(NSColor.underPageBackgroundColor))
+    }
+
+    // MARK: - Context menu
+
+    /// What a right-click offers, decided by what the pointer is over: a flight
+    /// arc, an entity, or bare floor.
+    @ViewBuilder
+    private var canvasMenu: some View {
+        if let court = model.cursorCourtPoint,
+           let release = model.releaseEvent(nearCourtPoint: court) {
+            Text(release.label)
+            Divider()
+            if release.kind == .releaseShot {
+                Menu("Convert to Pass…") {
+                    ForEach(model.diagram.entities.filter(\.isPlayer)) { player in
+                        Button(player.label ?? "Player") {
+                            model.convertShotToPass(event: release, receiverId: player.id)
+                        }
+                    }
+                }
+            } else {
+                Button("Convert to Shot") { model.convertPassToShot(event: release) }
+            }
+            Divider()
+            Button("Delete Flight", role: .destructive) {
+                model.selectedKeyframeIds = [release.id]
+                model.deleteSelectedKeyframesEverywhere()
+            }
+        } else if let id = model.cursorEntityId, let entity = model.entity(id) {
+            Text(entity.label.map { "Layer \($0)" } ?? "Layer")
+            Divider()
+            Button("Keyframe in Place") { model.toggleKeyframeInPlace(id) }
+            Button("Clear All Keyframes", role: .destructive) { model.clearTrack(id) }
+            Divider()
+            Button("Delete", role: .destructive) {
+                model.selectedEntityId = id
+                model.deleteSelectedEntity()
+            }
+        } else {
+            Button("Keyframe All Layers Here") { model.keyframeAllLayersInPlace() }
+            Toggle("Show All Paths", isOn: $model.showAllPaths)
+        }
     }
 
     // MARK: - Court

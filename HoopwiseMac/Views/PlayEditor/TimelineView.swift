@@ -180,6 +180,23 @@ struct TimelineView: View {
             .frame(width: width + trackLeadPad + trackTrailPad, height: rulerHeight)
             .contentShape(Rectangle())
             .overlay(alignment: .leading) {
+                // PAST THE END OF THE PLAY. The ruler runs longer than the read
+                // so there is somewhere to author into; shading it keeps that
+                // headroom visible instead of letting the extra seconds read as
+                // part of the play (which is what made "6.00s" over a 2.4s read
+                // look plausible).
+                let end = model.playbackDuration
+                if end < duration - 0.05 {
+                    let x = tickX(end, width: width, duration: duration)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.10))
+                        .frame(width: max(0, tickX(duration, width: width, duration: duration) - x),
+                               height: rulerHeight)
+                        .offset(x: x)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .leading) {
                 // Work-area band.
                 if let area = model.workArea {
                     let x0 = tickX(area.lowerBound, width: width, duration: duration)
@@ -394,13 +411,16 @@ struct TimelineView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                // Inline rename on double-click, for every layer that HAS a
+                // name — props included. Restricting it to players was why two
+                // cones could only ever both be called "Cone".
                 .simultaneousGesture(TapGesture(count: 2).onEnded {
-                    guard entity.isPlayer else { return }
+                    guard isRenamable(entity) else { return }
                     inlineRenameDraft = entity.label ?? ""
                     inlineRenameId = entity.id
                 })
                 .contextMenu {
-                    if entity.isPlayer {
+                    if isRenamable(entity) {
                         Button("Rename…") {
                             renameDraft = entity.label ?? ""
                             renamingEntity = entity
@@ -689,16 +709,26 @@ struct TimelineView: View {
             .allowsHitTesting(false)
     }
 
+    /// Layer names must DISTINGUISH: two rows both reading "Cone" is not a
+    /// name, it is a category. Props carry their auto-assigned number.
     private func laneTitle(_ entity: DiagramEntity) -> String {
+        let suffix = entity.label.map { $0.isEmpty ? "" : " \($0)" } ?? ""
         switch entity.kind {
         case .player(let team, _, _):
             let side = team == .offense ? "O" : "D"
             return "\(side)\(entity.label ?? "")"
         case .ball:       return "Ball"
-        case .screen:     return "Screen"
-        case .cone:       return "Cone"
+        case .screen:     return "Screen\(suffix)"
+        case .cone:       return "Cone\(suffix)"
         case .annotation: return entity.label ?? "Note"
         }
+    }
+
+    /// Everything but the ball carries a name worth editing; the ball is THE
+    /// ball and renaming it would only make the possession model harder to read.
+    private func isRenamable(_ entity: DiagramEntity) -> Bool {
+        if case .ball = entity.kind { return false }
+        return true
     }
 
     private func laneColor(_ entity: DiagramEntity) -> Color {

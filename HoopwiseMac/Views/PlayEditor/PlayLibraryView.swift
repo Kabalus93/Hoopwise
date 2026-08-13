@@ -14,6 +14,12 @@ struct PlayLibraryView: View {
     @State private var renaming: Entry?
     @State private var draftName = ""
     @State private var confirmingDelete: Entry?
+    /// New plays are NAMED ON CREATE. Three "Untitled Play" rows in the list is
+    /// not a naming scheme — nothing in the row distinguishes them, and the
+    /// rename that would fix it is two levels into a context menu.
+    @State private var namingNewPlay = false
+    @State private var newPlayName = ""
+    @FocusState private var newPlayFieldFocused: Bool
 
     struct Entry: Identifiable, Hashable {
         let id: UUID          // diagram id
@@ -37,12 +43,18 @@ struct PlayLibraryView: View {
         .onReceive(model.$diagram.debounce(for: .seconds(1.4), scheduler: RunLoop.main)) { _ in
             reload()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .macEditorNewPlay)) { _ in
+            newPlay()
+        }
         .alert("Rename Play", isPresented: Binding(
             get: { renaming != nil },
             set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $draftName)
             Button("Cancel", role: .cancel) { renaming = nil }
             Button("Rename") { commitRename() }
+        }
+        .sheet(isPresented: $namingNewPlay) {
+            newPlaySheet.dismissesOnPresentationEscape { namingNewPlay = false }
         }
         .alert("Delete Play?", isPresented: Binding(
             get: { confirmingDelete != nil },
@@ -66,7 +78,9 @@ struct PlayLibraryView: View {
                 Image(systemName: "plus")
             }
             .buttonStyle(.borderless)
-            .help("New Play (⌘N)")
+            // ⌘N belongs to New Session app-wide; this used to claim it and do
+            // nothing of the sort. ⌥⌘N is the Play menu's real binding.
+            .help("New Play (⌥⌘N)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -125,6 +139,51 @@ struct PlayLibraryView: View {
         }
     }
 
+    // MARK: - New play
+
+    private var newPlaySheet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New Play").font(.headline)
+            TextField("Play name", text: $newPlayName)
+                .focused($newPlayFieldFocused)
+                .onSubmit(commitNewPlay)
+            Text("You can rename it any time from the play list.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button("Cancel") { namingNewPlay = false }
+                Spacer()
+                Button("Create", action: commitNewPlay)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(newPlayName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(18)
+        .frame(width: 340)
+        // Focus lands in the field so the suggested name can be typed over
+        // immediately — the whole point of asking.
+        .onAppear { newPlayFieldFocused = true }
+    }
+
+    /// "Play 4" where 1–3 are taken. A suggestion the coach can accept with
+    /// Return, not a name they have to live with.
+    private func suggestedPlayName() -> String {
+        let taken = Set(entries.map(\.name))
+        var index = entries.count + 1
+        while taken.contains("Play \(index)") { index += 1 }
+        return "Play \(index)"
+    }
+
+    private func commitNewPlay() {
+        let name = newPlayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        namingNewPlay = false
+        // Save whatever is open before switching, so nothing is lost.
+        model.save()
+        model.load(PlayEditorModel.newDiagram(), name: name)
+        model.save()
+        reload()
+    }
+
     // MARK: - Actions
 
     private func reload() {
@@ -141,12 +200,8 @@ struct PlayLibraryView: View {
     }
 
     private func newPlay() {
-        // Save whatever is open before switching, so nothing is lost.
-        model.save()
-        let diagram = PlayEditorModel.newDiagram()
-        model.load(diagram, name: "Untitled Play")
-        model.save()
-        reload()
+        newPlayName = suggestedPlayName()
+        namingNewPlay = true
     }
 
     private func open(_ entry: Entry) {
@@ -198,7 +253,9 @@ struct PlayLibraryView: View {
         confirmingDelete = nil
         dataManager.deletePlayDiagram(id: entry.id)
         if entry.id == model.currentDiagramId {
-            model.load(PlayEditorModel.newDiagram(), name: "Untitled Play")
+            // The editor always holds a diagram, so deleting the open play
+            // leaves a fresh one — named, not another "Untitled Play".
+            model.load(PlayEditorModel.newDiagram(), name: suggestedPlayName())
         }
         reload()
     }

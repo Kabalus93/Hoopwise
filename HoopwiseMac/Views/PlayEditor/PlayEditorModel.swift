@@ -178,6 +178,21 @@ final class PlayEditorModel: ObservableObject {
         activeBranch?.duration ?? (activeNode?.duration ?? 0)
     }
 
+    /// THE PLAY'S LENGTH: how long the active read/path actually runs.
+    ///
+    /// Distinct from `timelineDuration`, and the distinction is the point. The
+    /// transport used to report the TIMELINE's extent — so a 2.4s read played
+    /// "6.00s", three and a half seconds of which was nothing happening, and
+    /// playback sat there running them. Anything the coach reads as "how long
+    /// is this play" comes from here; only the authoring surface uses the
+    /// padded extent, and the ruler shades the difference so it is visible
+    /// rather than implied.
+    var playbackDuration: Double {
+        max(0.1, branchDuration)
+    }
+
+    /// The AUTHORING extent: the play plus headroom to place keyframes past
+    /// its current end, with a floor so an empty diagram still has a ruler.
     var timelineDuration: Double {
         max(Self.minimumTimelineDuration, branchDuration + 1)
     }
@@ -243,7 +258,7 @@ final class PlayEditorModel: ObservableObject {
         guard canPlace(kind) else { return }
         registerUndo("Place Entity")
         let entity = DiagramEntity(kind: kind,
-                                   label: label,
+                                   label: label ?? nextPropLabel(for: kind),
                                    homePosition: diagram.space.clamp(courtPoint))
         diagram.entities.append(entity)
         selectedEntityId = entity.id
@@ -259,6 +274,28 @@ final class PlayEditorModel: ObservableObject {
         // Everything else gets a keyframe at the playhead so it is immediately
         // part of the animation rather than a static prop.
         setKeyframe(for: entity.id, at: playhead, position: entity.homePosition)
+    }
+
+    /// Static props are NUMBERED on creation, so two cones are "Cone 1" and
+    /// "Cone 2" rather than two identical "Cone" rows in the layer list with no
+    /// way to tell which is which. Players keep their coach-typed number.
+    ///
+    /// The number is the smallest one not currently in use, so deleting Cone 1
+    /// and adding another gives Cone 1 back rather than climbing to Cone 4.
+    private func nextPropLabel(for kind: DiagramEntityKind) -> String? {
+        let existing: [DiagramEntity]
+        switch kind {
+        case .cone:
+            existing = diagram.entities.filter { if case .cone = $0.kind { return true }; return false }
+        case .screen:
+            existing = diagram.entities.filter { if case .screen = $0.kind { return true }; return false }
+        default:
+            return nil
+        }
+        let taken = Set(existing.compactMap { $0.label.flatMap(Int.init) })
+        var candidate = 1
+        while taken.contains(candidate) { candidate += 1 }
+        return "\(candidate)"
     }
 
     func deleteSelectedEntity() {
@@ -761,9 +798,9 @@ final class PlayEditorModel: ObservableObject {
         }
     }
 
-    func clearPossessions() {
-        mutateActiveNode { $0.possessions.removeAll() }
-    }
+    // DELETED: `clearPossessions()`. Zero call sites, and it mutated the
+    // diagram without registering undo — a wipe of the whole ball story that
+    // Cmd-Z could not have brought back if anything had ever called it.
 
     /// Ball position honouring possession when enabled. NEVER nil.
     func ballPosition(at time: Double) -> CGPoint? {
@@ -1761,6 +1798,56 @@ final class PlayEditorModel: ObservableObject {
         diagram.updatedAt = Date()
     }
 
+    /// The flight whose drawn arc passes within `tolerance` COURT FEET of a
+    /// point — the hit test behind the canvas context menu.
+    ///
+    /// Feet, not pixels, for the same reason entity hit testing is: a pixel
+    /// radius changes meaning with zoom and tilt.
+    func releaseEvent(nearCourtPoint point: CGPoint, toleranceFeet: CGFloat = 1.6)
+    -> PossessionEvent? {
+        guard possessionEnabled,
+              let step = activeSteps.first(where: { $0.node.id == activeNodeId })
+        else { return nil }
+        let releases = step.node.releases(passSpeed: look.passSpeedFeetPerSecond,
+                                          shotSpeed: look.shotSpeedFeetPerSecond,
+                                          heldOffsetFeet: look.ballHeldOffsetFeet) { [weak self] id, t in
+            self?.resolvedPosition(of: id, at: step.startsAt + t) ?? .zero
+        }
+        let events = possessionEvents
+        var best: (event: PossessionEvent, distance: CGFloat)?
+        for item in releases {
+            // Only what is actually ON SCREEN can be clicked: a menu for an arc
+            // the coach cannot see would be a mystery, not an affordance.
+            let local = playhead - step.startsAt
+            let onScreen = showAllPaths || PathConsumption.withinEditWindow(
+                local, start: item.departure, end: item.arrival, style: renderStyle)
+            guard onScreen else { continue }
+            let points = item.flight.polyline()
+            var nearest = CGFloat.greatestFiniteMagnitude
+            for index in 0..<(points.count - 1) {
+                nearest = min(nearest, Self.distance(point, from: points[index],
+                                                     to: points[index + 1]))
+            }
+            guard nearest <= toleranceFeet else { continue }
+            let departure = step.startsAt + item.departure
+            guard let event = events.first(where: {
+                ($0.kind == .releasePass || $0.kind == .releaseShot)
+                && abs($0.time - departure) < 0.01
+            }) else { continue }
+            if best == nil || nearest < best!.distance { best = (event, nearest) }
+        }
+        return best?.event
+    }
+
+    private static func distance(_ point: CGPoint, from a: CGPoint, to b: CGPoint) -> CGFloat {
+        let dx = b.x - a.x, dy = b.y - a.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else { return hypot(point.x - a.x, point.y - a.y) }
+        var t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared
+        t = min(max(t, 0), 1)
+        return hypot(point.x - (a.x + dx * t), point.y - (a.y + dy * t))
+    }
+
     func holderLabel(of event: PossessionEvent) -> String {
         guard let node = diagram.node(event.nodeId),
               let possession = node.sortedPossessions.first(where: { $0.id == event.possessionId })
@@ -1842,7 +1929,8 @@ final class PlayEditorModel: ObservableObject {
     /// of describing symptoms.
     var debugReadout: String {
         var lines: [String] = []
-        lines.append(String(format: "t = %.3f s   (duration %.2f)", playhead, timelineDuration))
+        lines.append(String(format: "t = %.3f s   (play %.2f · ruler %.2f)",
+                            playhead, playbackDuration, timelineDuration))
         lines.append("tool: \(activeToolName)   possession: \(possessionEnabled ? "on" : "off")")
         lines.append("camera: \(Int(renderElevation))°  theme: \(theme.name)")
 
@@ -1935,7 +2023,7 @@ final class PlayEditorModel: ObservableObject {
         }
         if let area = workArea {
             if !area.contains(playhead) { playhead = area.lowerBound }
-        } else if playhead >= timelineDuration - 0.05 {
+        } else if playhead >= playbackDuration - 0.05 {
             playhead = 0
         }
         isPlaying = true
@@ -1966,8 +2054,9 @@ final class PlayEditorModel: ObservableObject {
         if let area = workArea {
             // Loop the work area rather than stopping.
             if playhead >= area.upperBound { playhead = area.lowerBound }
-        } else if playhead >= timelineDuration {
-            playhead = timelineDuration
+        } else if playhead >= playbackDuration {
+            // Playback ends where the PLAY ends, not where the ruler does.
+            playhead = playbackDuration
             stop()
         }
         if !diagram.camera.isStatic {
