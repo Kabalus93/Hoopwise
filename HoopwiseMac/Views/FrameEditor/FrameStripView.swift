@@ -15,8 +15,11 @@ struct FrameStripView: View {
     @FocusState private var captionFocused: Bool
     @State private var draggingIndex: Int?
 
-    private let cardWidth: CGFloat = 148
-    private let cardHeight: CGFloat = 74
+    /// Cards carry a live thumbnail, so they are wider than tall and the strip
+    /// stays short — every point it does not take is court.
+    private let cardWidth: CGFloat = 126
+    private let cardHeight: CGFloat = 92
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,14 +35,15 @@ struct FrameStripView: View {
                         addButton
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 5)
                 }
                 .onChange(of: model.frameIndex) { _, index in
-                    withAnimation(.easeOut(duration: 0.18)) { proxy.scrollTo(index, anchor: .center) }
+                    // 180ms, and none at all under Reduce Motion.
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                        proxy.scrollTo(index, anchor: .center)
+                    }
                 }
             }
-            Divider()
-            captionRow
         }
         .background(.regularMaterial)
     }
@@ -88,7 +92,16 @@ struct FrameStripView: View {
             .help("Ghost the previous frame's end formation (O)")
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.vertical, 3)
+        .alert("Branch After Frame \(model.frameIndex + 1)", isPresented: $askingBranch) {
+            TextField("If the defender…", text: $branchCondition)
+            Button("Cancel", role: .cancel) { askingBranch = false }
+            Button("Add Read") {
+                model.addRead(after: model.frameIndex, condition: branchCondition)
+            }
+        } message: {
+            Text("The new read continues from where this frame leaves everyone.")
+        }
     }
 
     private func readTitle(_ read: ReadNode) -> String {
@@ -108,37 +121,24 @@ struct FrameStripView: View {
 
     private func card(index: Int, frame: PlayFrame) -> some View {
         let isCurrent = index == model.frameIndex
-        return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
+        return VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                FrameThumbnail(model: model, index: index)
+                    .frame(height: 52)
                 Text("\(index + 1)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(isCurrent ? Color.white : .secondary)
-                    .frame(width: 18, height: 18)
-                    .background(isCurrent ? Color.accentColor : Color.secondary.opacity(0.22),
+                    .frame(width: 16, height: 16)
+                    .background(isCurrent ? Color.accentColor : Color.secondary.opacity(0.35),
                                 in: Circle())
-                Spacer(minLength: 0)
-                if !frame.validActions.isEmpty {
-                    Text("\(frame.validActions.count)")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
+                    .padding(3)
             }
-            Text(model.summary(of: frame))
-                .font(.caption2)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-            if !frame.caption.isEmpty {
-                Text(frame.caption)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Divider().opacity(0.4)
+            captionField(index: index, frame: frame, isCurrent: isCurrent)
+                .frame(height: 22)
         }
-        .padding(7)
-        .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
-        .background(isCurrent ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.10),
+        .frame(width: cardWidth, height: cardHeight)
+        .background(isCurrent ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.10),
                     in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
@@ -146,6 +146,7 @@ struct FrameStripView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { model.selectFrame(index) }
+        .help(model.summary(of: frame))
         .onDrag {
             draggingIndex = index
             return NSItemProvider(object: NSString(string: "\(index)"))
@@ -160,6 +161,29 @@ struct FrameStripView: View {
         }
     }
 
+    /// The caption lives ON the card — edit in place, per the spec, and no
+    /// separate row eating court height.
+    @ViewBuilder
+    private func captionField(index: Int, frame: PlayFrame, isCurrent: Bool) -> some View {
+        if isCurrent {
+            TextField("Caption…", text: Binding(
+                get: { model.frames.indices.contains(index) ? model.frames[index].caption : "" },
+                set: { model.setCaption($0, at: index) }))
+            .textFieldStyle(.plain)
+            .font(.system(size: 10))
+            .focused($captionFocused)
+            .onSubmit { captionFocused = false }
+            .padding(.horizontal, 6)
+        } else {
+            Text(frame.caption.isEmpty ? model.summary(of: frame) : frame.caption)
+                .font(.system(size: 10))
+                .foregroundStyle(frame.caption.isEmpty ? .tertiary : .secondary)
+                .lineLimit(1)
+                .padding(.horizontal, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var addButton: some View {
         Button(action: model.addFrame) {
             VStack(spacing: 4) {
@@ -167,7 +191,7 @@ struct FrameStripView: View {
                     .font(.system(size: 15, weight: .medium))
                 Text("Frame").font(.caption2)
             }
-            .frame(width: 66, height: cardHeight)
+            .frame(width: 58, height: cardHeight)
             .foregroundStyle(.secondary)
             .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
             .overlay {
@@ -180,36 +204,6 @@ struct FrameStripView: View {
         .help("Add a frame continuing from this one (N)")
     }
 
-    // MARK: - Caption
-
-    /// The caption is the frame's coaching text and is edited in place. It
-    /// commits on Return or when focus leaves — one undo step either way.
-    private var captionRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "text.alignleft")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-            TextField("What happens in frame \(model.frameIndex + 1)…",
-                      text: Binding(
-                        get: { model.currentFrame?.caption ?? "" },
-                        set: { model.setCaption($0, at: model.frameIndex) }))
-            .textFieldStyle(.plain)
-            .font(.callout)
-            .focused($captionFocused)
-            .onSubmit { captionFocused = false }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .alert("Branch After Frame \(model.frameIndex + 1)", isPresented: $askingBranch) {
-            TextField("If the defender…", text: $branchCondition)
-            Button("Cancel", role: .cancel) { askingBranch = false }
-            Button("Add Read") {
-                model.addRead(after: model.frameIndex, condition: branchCondition)
-            }
-        } message: {
-            Text("The new read continues from where this frame leaves everyone.")
-        }
-    }
 }
 
 /// Drag-to-reorder. Dropping on a card moves the dragged frame to that slot.

@@ -19,20 +19,30 @@ struct FrameEditorView: View {
     @State private var showingNewPlay = false
     @State private var newPlayName = ""
     @FocusState private var newPlayFocused: Bool
+    @State private var replayHints = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                toolStrip
-                FrameCanvasView(model: model, placementKind: placementKind) {
-                    // Sticky placement: a whole lineup goes down without
-                    // re-picking the tool.
-                }
-                .frame(minWidth: 460, minHeight: 320)
+            // THE CANVAS IS THE DOCUMENT: the palette floats ON it rather than
+            // taking a column, and nothing else competes for width.
+            FrameCanvasView(model: model, placementKind: placementKind) {
+                // Sticky placement: a whole lineup goes down without
+                // re-picking the tool.
             }
+            .frame(minWidth: 460, minHeight: 320)
+            .overlay(alignment: .topLeading) { floatingPalette.padding(12) }
+            .overlay(alignment: .bottom) {
+                FrameCoachMarks(forceShow: replayHints) { replayHints = false }
+                    .padding(.bottom, 14)
+                    .transition(.opacity)
+            }
+            .overlay(alignment: .topLeading) { hud }
             Divider()
+            // Sized to what the strip needs — every point it does not take is
+            // court, and the canvas-share bar is measured against the window.
             FrameStripView(model: model)
-                .frame(height: 176)
+                .frame(height: 130)
         }
         .toolbar { toolbar }
         .navigationTitle(model.diagramName)
@@ -71,39 +81,87 @@ struct FrameEditorView: View {
 
     // MARK: - Tools
 
-    /// Four tools, and three of them only place things. Authoring is dragging.
-    private var toolStrip: some View {
-        VStack(spacing: 4) {
-            toolButton("Select", "cursorarrow", isOn: placementKind == nil
-                       && model.armedTool == .select) {
+    /// Floating palette, Apple-pro style: a compact material capsule ON the
+    /// canvas. Every tooltip names the GESTURE, not just the tool — the hand
+    /// test found the screen tool only by going looking, so each control now
+    /// says what dragging it does.
+    private var floatingPalette: some View {
+        VStack(spacing: 3) {
+            paletteButton("Select", "cursorarrow",
+                          help: "Select · drag a player to draw a cut",
+                          isOn: placementKind == nil && model.armedTool == .select) {
                 placementKind = nil
                 model.armedTool = .select
             }
-            toolButton("Screen", "rectangle.compress.vertical",
-                       isOn: model.armedTool == .screen) {
+            paletteButton("Screen", "rectangle.compress.vertical",
+                          help: "Screen (S) · or hold ⌥ and drag a player",
+                          isOn: model.armedTool == .screen) {
                 placementKind = nil
                 model.armedTool = model.armedTool == .screen ? .select : .screen
             }
-            Divider().frame(width: 22)
-            toolButton("Offense", "person.fill",
-                       isOn: isPlacing(.offense)) {
+            Divider().frame(width: 20)
+            paletteButton("Offense", "person.fill",
+                          help: "Place an offensive player · click the court",
+                          isOn: isPlacing(.offense)) {
                 model.armedTool = .select
                 placementKind = .player(team: .offense, number: nil, role: nil)
             }
-            toolButton("Defense", "person.fill.badge.minus",
-                       isOn: isPlacing(.defense)) {
+            paletteButton("Defense", "person.fill.badge.minus",
+                          help: "Place a defender · click the court",
+                          isOn: isPlacing(.defense)) {
                 model.armedTool = .select
                 placementKind = .player(team: .defense, number: nil, role: nil)
             }
-            toolButton("Ball", "basketball.fill", isOn: isPlacingBall) {
+            paletteButton("Ball", "basketball.fill",
+                          help: "Place the ball · then drag it to a player to pass, or to the rim to shoot",
+                          isOn: isPlacingBall) {
                 model.armedTool = .select
                 placementKind = .ball
             }
-            Spacer()
+            Divider().frame(width: 20)
+            paletteButton("Hints", "questionmark",
+                          help: "Show the gesture hints again",
+                          isOn: replayHints) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
+                    replayHints.toggle()
+                }
+            }
         }
-        .padding(.vertical, 8)
-        .frame(width: 40)
-        .background(.regularMaterial)
+        .padding(5)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.07))
+        }
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+    }
+
+    private func paletteButton(_ title: String, _ icon: String, help: String,
+                               isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .frame(width: 26, height: 24)
+                .foregroundStyle(isOn ? Color.white : .primary)
+                .background(isOn ? Color.accentColor : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    /// The HUD, positioned at whatever is selected. Springs in, and stands
+    /// still under Reduce Motion.
+    @ViewBuilder
+    private var hud: some View {
+        if let subject = model.hudSubject, let anchor = model.hudAnchor {
+            FrameHUDView(model: model, subject: subject)
+                .fixedSize()
+                .offset(x: max(12, anchor.x + 18), y: max(12, anchor.y - 20))
+                .transition(.scale(scale: 0.94).combined(with: .opacity))
+                .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                           value: model.hudAnchor)
+                .allowsHitTesting(true)
+        }
     }
 
     private func isPlacing(_ team: CourtTeam) -> Bool {
@@ -116,24 +174,23 @@ struct FrameEditorView: View {
         return false
     }
 
-    private func toolButton(_ title: String, _ icon: String, isOn: Bool,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 13))
-                .frame(width: 28, height: 26)
-                .foregroundStyle(isOn ? Color.white : .primary)
-                .background(isOn ? Color.accentColor : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .help(title)
-    }
+    // The column tool strip is gone: the palette floats on the canvas now.
 
     // MARK: - Toolbar
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigation) {
+            // BREADCRUMB: the editor takes the window, so the way back has to
+            // be visible rather than a shortcut you remember.
+            Button {
+                NotificationCenter.default.post(name: .macExpandSidebar, object: nil)
+            } label: {
+                Label("Library", systemImage: "sidebar.leading")
+            }
+            .help("Show the app sidebar")
+        }
+
         ToolbarItemGroup(placement: .primaryAction) {
             Menu {
                 Button("New Play…") {

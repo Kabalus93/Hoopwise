@@ -116,6 +116,7 @@ extension Notification.Name {
     static let macOpenAthlete = Notification.Name("MacOpenAthlete")
     static let macDismissPresentedSurface = Notification.Name("MacDismissPresentedSurface")
     static let macEditorNewPlay = Notification.Name("MacEditorNewPlay")
+    static let macExpandSidebar = Notification.Name("MacExpandSidebar")
     static let macEditorExportFrame = Notification.Name("MacEditorExportFrame")
     static let macEditorExportSheet = Notification.Name("MacEditorExportSheet")
 }

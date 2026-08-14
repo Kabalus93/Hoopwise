@@ -539,6 +539,101 @@ final class FrameEditorModel: ObservableObject {
         }
     }
 
+    // MARK: - HUD
+    //
+    // The context panel appears AT the selection, so what you can do to a thing
+    // is next to the thing. It is also how gestures announce themselves: an
+    // entity's HUD names the drags available on it, which is what stopped the
+    // screen tool from having to be found in a palette.
+
+    /// View-space point the HUD hangs off, published by the canvas.
+    @Published var hudAnchor: CGPoint?
+
+    /// What the HUD is about.
+    enum HUDSubject: Equatable {
+        case action(UUID)
+        case entity(UUID)
+    }
+
+    var hudSubject: HUDSubject? {
+        if let id = selectedActionId { return .action(id) }
+        if let id = selectedEntityId { return .entity(id) }
+        return nil
+    }
+
+    var selectedAction: PlayAction? {
+        guard let id = selectedActionId else { return nil }
+        return currentFrame?.actions.first { $0.id == id }
+    }
+
+    /// How long the selected action takes — derived, and worth showing because
+    /// nothing in this model lets you type it.
+    func duration(of action: PlayAction) -> Double {
+        currentFrame?.duration(of: action, from: startFormation,
+                               pace: diagram.effectivePace, rim: diagram.rimPoint) ?? 0
+    }
+
+    /// Changes how fast a movement is run. The only timing control there is,
+    /// and it belongs on the action rather than in a panel.
+    func setPace(_ tier: PaceTier?, for actionId: UUID) {
+        guard frames.indices.contains(frameIndex) else { return }
+        mutate("Change Pace") { sequence in
+            guard let index = sequence.frames[frameIndex].actions
+                .firstIndex(where: { $0.id == actionId }) else { return }
+            sequence.frames[frameIndex].actions[index].pace = tier
+        }
+    }
+
+    /// A misdrop must not require redoing the gesture — the same rule the
+    /// keyframe editor's convert had, now on the HUD at the arc itself.
+    func convertSelectedFlight() {
+        guard let action = selectedAction, frames.indices.contains(frameIndex) else { return }
+        switch action.kind {
+        case .shot:
+            // To a pass: the nearest other player to where the ball ended up.
+            guard let holder = holderAtFrameStart else { return }
+            let others = diagram.entities.filter { $0.isPlayer && $0.id != holder }
+            guard let receiver = others.min(by: { a, b in
+                let pa = startFormation[a.id] ?? .zero, pb = startFormation[b.id] ?? .zero
+                let rim = diagram.rimPoint
+                return hypot(pa.x - rim.x, pa.y - rim.y) < hypot(pb.x - rim.x, pb.y - rim.y)
+            }) else { return }
+            replaceSelectedFlight(with: PlayAction(kind: .pass, actorId: action.actorId,
+                                                   target: .player(receiver.id)))
+        case .pass:
+            replaceSelectedFlight(with: PlayAction(kind: .shot, actorId: action.actorId,
+                                                   target: .point(diagram.rimPoint)))
+        default:
+            break
+        }
+    }
+
+    private func replaceSelectedFlight(with action: PlayAction) {
+        mutate(action.kind.displayName) { sequence in
+            sequence.frames[frameIndex].actions.removeAll { $0.kind.releasesPossession }
+            sequence.frames[frameIndex].actions.append(action)
+            sequence.reresolve()
+        }
+        selectedActionId = action.id
+    }
+
+    /// The gestures available on a thing, in words. THIS IS THE DISCOVERABILITY
+    /// FIX: ⌥-drag and the screen tool used to exist only in a palette you had
+    /// to go looking in.
+    func gestureHints(for subject: HUDSubject) -> [String] {
+        switch subject {
+        case .entity(let id):
+            guard let entity = diagram.entity(id) else { return [] }
+            guard entity.isPlayer else { return ["Drag to move"] }
+            var hints = [holderAtFrameStart == id ? "Drag to dribble" : "Drag to cut",
+                         "⌥-drag to screen"]
+            if holderAtFrameStart == id { hints.append("Drag the ball to pass or shoot") }
+            return hints
+        case .action:
+            return ["Drag the line to bend it", "⌫ to delete"]
+        }
+    }
+
     func deleteSelectedAction() {
         guard let id = selectedActionId, frames.indices.contains(frameIndex) else { return }
         mutate("Delete Action") { sequence in

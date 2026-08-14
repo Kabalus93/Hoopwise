@@ -105,16 +105,31 @@ struct RootView: View {
                 selection = s
             }
         }
-        .onChange(of: selection) { _, newValue in
+        .onChange(of: selection) { oldValue, newValue in
             if let newValue {
                 UserDefaults.standard.set(newValue.rawValue, forKey: "settings.lastPage")
             }
+            // THE EDITOR TAKES THE WINDOW. Entering it collapses the sidebar
+            // (the breadcrumb in its toolbar brings it back); leaving restores
+            // whatever the coach had set everywhere else. The editor's collapse
+            // is not a preference, so it must not overwrite one.
+            if newValue == .frameEditor {
+                withAnimation(.easeInOut(duration: 0.2)) { columnVisibility = .detailOnly }
+            } else if oldValue == .frameEditor {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    columnVisibility = sidebarCollapsed ? .detailOnly : .all
+                }
+            }
         }
         .onChange(of: columnVisibility) { _, visibility in
+            guard selection != .frameEditor else { return }
             sidebarCollapsed = visibility == .detailOnly
         }
+        .onReceive(NotificationCenter.default.publisher(for: .macExpandSidebar)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) { columnVisibility = .all }
+        }
         .onAppear {
-            columnVisibility = sidebarCollapsed ? .detailOnly : .all
+            columnVisibility = (selection == .frameEditor || sidebarCollapsed) ? .detailOnly : .all
             presentationKeys.install()
             assistantEngine.configure(dataManager: dataManager)
             WhistleBubbleController.shared.attach(engine: assistantEngine)

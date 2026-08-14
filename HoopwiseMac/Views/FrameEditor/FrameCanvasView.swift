@@ -17,6 +17,10 @@ struct FrameCanvasView: View {
 
     @State private var drag: DragState?
     @State private var hoverCourt: CGPoint?
+    /// The edit court is a LIGHT/DARK PAIR tuned for legibility, not the
+    /// diagram's stored presentation theme — that one is the published video
+    /// look and Phase D still renders it untouched.
+    @Environment(\.colorScheme) private var colorScheme
 
     private struct DragState {
         var grab: FrameEditorModel.Grab
@@ -51,30 +55,55 @@ struct FrameCanvasView: View {
             .gesture(dragGesture(transform))
             .onTapGesture { location in
                 handleTap(transform.courtPoint(location))
+                model.hudAnchor = hudAnchor(transform)
+            }
+            .onChange(of: model.selectedActionId) { _, _ in
+                model.hudAnchor = hudAnchor(transform)
+            }
+            .onChange(of: model.selectedEntityId) { _, _ in
+                model.hudAnchor = hudAnchor(transform)
+            }
+            .onChange(of: model.frameIndex) { _, _ in
+                model.hudAnchor = hudAnchor(transform)
             }
         }
         .background(Color(NSColor.underPageBackgroundColor))
+    }
+
+    /// Where the HUD hangs: the selected action's midpoint, or the selected
+    /// entity's puck. In VIEW space, because that is where the panel lives.
+    private func hudAnchor(_ transform: CourtTransform) -> CGPoint? {
+        if let action = model.selectedAction {
+            let points = model.drawnPoints(of: action)
+            guard points.count > 1 else { return nil }
+            let mid = points[points.count / 2]
+            return transform.viewPoint(mid)
+        }
+        if let id = model.selectedEntityId, let point = model.startFormation[id] {
+            return transform.viewPoint(point)
+        }
+        return nil
     }
 
     // MARK: - Court
 
     private func drawCourt(_ transform: CourtTransform, into context: inout GraphicsContext) {
         let paths = CourtGeometry(space: model.diagram.space).paths()
-        let theme = CourtTheme.all.first { $0.name == model.diagram.themeName } ?? .print
+        let court = EditCourtPalette(colorScheme)
         for region in paths.fillRegions {
             let color: Color
             switch region.role {
-            case .floor:  color = Color(hex: theme.floorHex)
-            case .paint:  color = Color(hex: theme.paintHex)
-            default:      color = Color(hex: theme.lineHex).opacity(0.05)
+            case .floor:  color = court.floor
+            case .paint:  color = court.paint
+            default:      color = court.line.opacity(0.05)
             }
             context.fill(Path(transform.viewPath(region.path)), with: .color(color))
         }
         context.stroke(Path(transform.viewPath(paths.solid)),
-                       with: .color(Color(hex: theme.lineHex).opacity(0.9)),
+                       with: .color(court.line.opacity(0.9)),
                        style: StrokeStyle(lineWidth: 1.6, lineJoin: .round))
         context.stroke(Path(transform.viewPath(paths.dashed)),
-                       with: .color(Color(hex: theme.lineHex).opacity(0.55)),
+                       with: .color(court.line.opacity(0.5)),
                        style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
     }
 
@@ -313,6 +342,30 @@ struct FrameCanvasView: View {
         var candidate = 1
         while existing.contains(candidate) { candidate += 1 }
         return "\(candidate)"
+    }
+}
+
+// MARK: - The edit court, light and dark
+
+/// Both appearances are first-class, and the edit court is tuned for
+/// LEGIBILITY rather than for looking like the published video: high contrast
+/// between floor, paint and lines at small sizes, because the strip draws this
+/// same court at thumbnail scale. The presentation palette is untouched.
+struct EditCourtPalette {
+    let floor: Color
+    let paint: Color
+    let line: Color
+
+    init(_ scheme: ColorScheme) {
+        if scheme == .dark {
+            floor = Color(hex: "#22262E")
+            paint = Color(hex: "#2E3947")
+            line = Color(hex: "#F2F4F8")
+        } else {
+            floor = Color(hex: "#FBFAF7")
+            paint = Color(hex: "#E7EBF2")
+            line = Color(hex: "#2B3038")
+        }
     }
 }
 
