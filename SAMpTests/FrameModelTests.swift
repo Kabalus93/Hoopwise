@@ -306,6 +306,33 @@ final class FrameModelTests: XCTestCase {
         XCTAssertEqual(play.duration, PlayFrame.emptyFrameDuration, accuracy: 0.0001)
     }
 
+    // MARK: - What a drag means
+    //
+    // These exist because the inference shipped BROKEN and the Phase B
+    // acceptance did not catch it: the scripted run supplied `screenFor:`
+    // explicitly, so it exercised the model and never the thing the ⌥ gesture
+    // actually depends on. Setting a screen on OPEN FLOOR — the normal case,
+    // where no teammate is under the drop point — came out a cut.
+
+    func testDragOnAPlayerIsACut() {
+        XCTAssertEqual(PlayActionKind.inferred(asScreen: false, actorHoldsBall: false), .cut)
+    }
+
+    func testDragOnTheBallHandlerIsADribble() {
+        XCTAssertEqual(PlayActionKind.inferred(asScreen: false, actorHoldsBall: true), .dribble)
+    }
+
+    /// THE REGRESSION. The modifier decides, on its own, with nobody under the
+    /// drop point and nothing else to go on.
+    func testOptionDragIsAScreenEvenOnOpenFloor() {
+        XCTAssertEqual(PlayActionKind.inferred(asScreen: true, actorHoldsBall: false), .screen)
+    }
+
+    /// …and it outranks holding the ball: a ball-handler can set a screen.
+    func testOptionDragBeatsTheDribbleInference() {
+        XCTAssertEqual(PlayActionKind.inferred(asScreen: true, actorHoldsBall: true), .screen)
+    }
+
     // MARK: - Round trip
 
     func testFrameSequenceRoundTrips() throws {

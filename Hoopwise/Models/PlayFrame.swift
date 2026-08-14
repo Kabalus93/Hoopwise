@@ -59,6 +59,19 @@ enum PlayActionKind: String, Codable, CaseIterable, Hashable {
         case .shot:    return "Shot"
         }
     }
+
+    /// THE RULE FOR WHAT A DRAG ON A PLAYER MEANS. Pure, and shared, so the
+    /// inference the whole authoring model rests on can be tested without a
+    /// window — which is exactly what it was not, and why it shipped broken:
+    /// ⌥-drag reached the editor as "screen", but the editor decided the kind
+    /// from whether a TEAMMATE happened to be under the drop point, so setting
+    /// a screen on open floor — the normal case — came out a cut.
+    ///
+    /// The modifier decides. Who the screen is FOR is metadata, and may be nil.
+    static func inferred(asScreen: Bool, actorHoldsBall: Bool) -> PlayActionKind {
+        if asScreen { return .screen }
+        return actorHoldsBall ? .dribble : .cut
+    }
 }
 
 /// What an action is aimed at. A pass and a handoff name a player; a shot names

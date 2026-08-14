@@ -465,17 +465,21 @@ final class FrameEditorModel: ObservableObject {
 
     /// Dragging a PLAYER. Holding the ball makes it a dribble, the screen tool
     /// makes it a screen, otherwise it is a cut — inferred, never picked.
-    func authorMove(actor: UUID, to court: CGPoint, screenFor: UUID? = nil) {
+    /// `asScreen` is the GESTURE's verdict — ⌥ held, or the screen tool armed.
+    /// It decides the kind on its own.
+    ///
+    /// `screenFor` is metadata about a screen, NOT the trigger for one. It used
+    /// to be both, and that was the bug: the canvas passed whatever entity was
+    /// under the drop point, which is nil whenever the screener is dropped on
+    /// open floor — the normal way to set a screen — so ⌥-drag produced a CUT
+    /// unless you happened to land on top of a teammate.
+    func authorMove(actor: UUID, to court: CGPoint,
+                    asScreen: Bool = false, screenFor: UUID? = nil) {
         guard frames.indices.contains(frameIndex) else { return }
         let clamped = diagram.space.clamp(court)
-        let kind: PlayActionKind
-        if armedTool == .screen || screenFor != nil {
-            kind = .screen
-        } else if holderAtFrameStart == actor {
-            kind = .dribble
-        } else {
-            kind = .cut
-        }
+        let kind = PlayActionKind.inferred(
+            asScreen: asScreen || armedTool == .screen || screenFor != nil,
+            actorHoldsBall: holderAtFrameStart == actor)
         let action = PlayAction(kind: kind, actorId: actor,
                                 target: .point(clamped), path: [clamped],
                                 screenForId: screenFor)
@@ -491,6 +495,25 @@ final class FrameEditorModel: ObservableObject {
         }
         selectedActionId = action.id
         selectedEntityId = actor
+    }
+
+    /// Who a screen is set FOR: the teammate the screener ended up next to.
+    ///
+    /// A coach drops the screener on the SPOT, not on the man, so this looks
+    /// for the nearest teammate within a body's width or two rather than
+    /// requiring a direct hit. Nil is fine — an unattributed screen still
+    /// renders as a screen.
+    func screenTarget(near court: CGPoint, excluding actor: UUID,
+                      withinFeet: CGFloat = 7) -> UUID? {
+        var best: (UUID, CGFloat)?
+        for placement in startFormation.placements where placement.entityId != actor {
+            guard let entity = diagram.entity(placement.entityId), entity.isPlayer else { continue }
+            let distance = hypot(court.x - placement.position.x,
+                                 court.y - placement.position.y)
+            guard distance <= withinFeet else { continue }
+            if best == nil || distance < best!.1 { best = (placement.entityId, distance) }
+        }
+        return best?.0
     }
 
     /// Dragging the BALL onto a player is a pass; onto the rim, a shot.

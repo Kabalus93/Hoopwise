@@ -27,6 +27,10 @@ struct FrameCanvasView: View {
         var current: CGPoint
         var bendingActionId: UUID?
         var didInsertBend = false
+        /// Captured when the drag BEGINS. Reading the modifier at drop time is
+        /// a race — the coach can lift ⌥ before the mouse button — and the live
+        /// preview needs to know as it draws, not afterwards.
+        var isScreen = false
     }
 
     private let puckRadiusFeet: CGFloat = 1.6
@@ -229,7 +233,7 @@ struct FrameCanvasView: View {
         switch drag.grab {
         case .entity(let id):
             from = model.startFormation[id] ?? .zero
-            kind = model.armedTool == .screen ? .screen
+            kind = drag.isScreen ? .screen
                 : (model.holderAtFrameStart == id ? .dribble : .cut)
         case .ball:
             guard let ball = model.ballPointAtFrameStart else { return }
@@ -279,11 +283,13 @@ struct FrameCanvasView: View {
                     let grab = model.grab(at: start)
                     // Grabbing a path BENDS it; grabbing a player or the ball
                     // authors a new action.
+                    let screening = NSEvent.modifierFlags.contains(.option)
+                        || model.armedTool == .screen
                     if case .action(let id) = grab {
                         model.selectedActionId = id
                         drag = DragState(grab: grab, current: court, bendingActionId: id)
                     } else {
-                        drag = DragState(grab: grab, current: court)
+                        drag = DragState(grab: grab, current: court, isScreen: screening)
                     }
                 }
                 drag?.current = court
@@ -300,11 +306,18 @@ struct FrameCanvasView: View {
                 guard state.bendingActionId == nil else { return }
                 switch state.grab {
                 case .entity(let id):
-                    // ⌥-drag is the screen modifier, as specced.
-                    let screening = NSEvent.modifierFlags.contains(.option)
+                    // ⌥-drag is the screen modifier, as specced. Held at the
+                    // START or still held at the DROP both count — the coach
+                    // should not lose a screen because of when they reached for
+                    // the key.
+                    let screening = state.isScreen
+                        || NSEvent.modifierFlags.contains(.option)
                         || model.armedTool == .screen
                     model.authorMove(actor: id, to: court,
-                                     screenFor: screening ? model.entity(at: court) : nil)
+                                     asScreen: screening,
+                                     screenFor: screening
+                                        ? model.screenTarget(near: court, excluding: id)
+                                        : nil)
                 case .ball:
                     model.authorBallDrop(at: court)
                 default:
