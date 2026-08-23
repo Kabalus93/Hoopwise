@@ -403,6 +403,25 @@ extension PlayDiagram {
         frameSequence(for: rootNodeId, startingFrom: homeFormation)
     }
 
+    /// WHO THE BALL WAS PLACED ON — the root read's opening holder.
+    ///
+    /// Possession has to start somewhere, and the coach's gesture for saying so
+    /// is dropping the ball next to a player. It lives on the DIAGRAM rather
+    /// than in the editor because playback, print and the playbook thumbnail
+    /// all need the same answer from a stored play nobody is editing.
+    var ballPlacedWith: UUID? {
+        guard let ball else { return nil }
+        var best: (UUID, CGFloat)?
+        for placement in homeFormation.placements {
+            guard let entity = entity(placement.entityId), entity.isPlayer else { continue }
+            let distance = hypot(ball.homePosition.x - placement.position.x,
+                                 ball.homePosition.y - placement.position.y)
+            guard distance <= 4 else { continue }
+            if best == nil || distance < best!.1 { best = (placement.entityId, distance) }
+        }
+        return best?.0
+    }
+
     /// Every root-to-leaf run, flattened into frames.
     ///
     /// This is v2's `branches()`, and it is markedly simpler: a run is the
@@ -451,12 +470,14 @@ extension PlayDiagram {
                 return (steps, running, sequence.formation(enteringFrame: min(count, node.frames.count)))
             }
 
+            // The base continuation first — see `frameRuns` for why a read
+            // played to its own end is itself a way the play unfolds. The two
+            // enumerations must agree about what a play's runs ARE; that is
+            // the whole reason this is duplicated here rather than diverging.
+            let whole = take(node.frames.count)
+            result.append(FrameBranch(steps: prefix + whole.steps, conditions: conditions))
             let branchEdges = node.edges.filter { $0.kind == .branch }
-            guard !branchEdges.isEmpty else {
-                let taken = take(node.frames.count)
-                result.append(FrameBranch(steps: prefix + taken.steps, conditions: conditions))
-                return
-            }
+            guard !branchEdges.isEmpty else { return }
 
             let seen = visited.union([node.id])
             for edge in branchEdges {
@@ -478,5 +499,101 @@ extension PlayDiagram {
         walk(root, prefix: [], conditions: [],
              startFormation: homeFormation, clock: 0, visited: [])
         return result
+    }
+
+    /// Every root-to-leaf run, each FLATTENED into one sequence.
+    ///
+    /// `frameBranches` hands back steps that remember which read they came
+    /// from and when; a RUN is the same walk collapsed into a single
+    /// `FrameSequence`. Phase D's three consumers — playback, the printed play
+    /// card, the playbook thumbnail — all want that shape, because after the
+    /// flattening there is nothing branch-shaped left: a chained play is
+    /// literally the single-read case, so none of them can handle a chain
+    /// differently from a straight play by accident.
+    func frameRuns(limit: Int = PlayDiagram.defaultBranchLimit) -> [FrameRun] {
+        guard let root = rootNode else { return [] }
+        var result: [FrameRun] = []
+
+        func finish(frames: [PlayFrame], frameNodeIds: [UUID],
+                    nodeIds: [UUID], conditions: [String]) {
+            // RE-RESOLVED over the concatenation. A read's stored end
+            // formations are a cache valid inside its OWN sequence; spliced
+            // after a parent's frames they describe a play that never happened.
+            var sequence = FrameSequence(startFormation: homeFormation,
+                                         frames: frames,
+                                         pace: effectivePace,
+                                         rim: rimPoint)
+            sequence.reresolve()
+            result.append(FrameRun(nodeIds: nodeIds,
+                                   conditions: conditions,
+                                   sequence: sequence,
+                                   frameNodeIds: frameNodeIds,
+                                   openingHolder: ballPlacedWith))
+        }
+
+        func walk(_ node: ReadNode, frames: [PlayFrame], frameNodeIds: [UUID],
+                  nodeIds: [UUID], conditions: [String], visited: Set<UUID>) {
+            guard result.count < limit, !visited.contains(node.id) else { return }
+            // THE PLAY AS AUTHORED IS A RUN. A read's branches are what
+            // happens INSTEAD, so the node played to its own end is always one
+            // of the ways the play unfolds — and it is the first one, because
+            // it is the play. Without it a single branch silently truncated
+            // the base play at the branch point: the Triangle Offense's pass
+            // and shot could not be played back at all, because the only leaf
+            // the walk could reach was the read.
+            finish(frames: frames + node.frames,
+                   frameNodeIds: frameNodeIds + node.frames.map { _ in node.id },
+                   nodeIds: nodeIds + [node.id],
+                   conditions: conditions)
+            let branchEdges = node.edges.filter { $0.kind == .branch }
+            guard !branchEdges.isEmpty else { return }
+            let seen = visited.union([node.id])
+            for edge in branchEdges {
+                guard let child = self.node(edge.targetId) else { continue }
+                // "After frame N" — the parent plays 0...N inclusive.
+                let through = edge.afterFrameIndex.map { $0 + 1 } ?? node.frames.count
+                let taken = Array(node.frames.prefix(max(0, through)))
+                walk(child,
+                     frames: frames + taken,
+                     frameNodeIds: frameNodeIds + taken.map { _ in node.id },
+                     nodeIds: nodeIds + [node.id],
+                     conditions: conditions + [edge.condition ?? ""],
+                     visited: seen)
+            }
+        }
+
+        walk(root, frames: [], frameNodeIds: [], nodeIds: [], conditions: [], visited: [])
+        return result
+    }
+}
+
+// MARK: - A run
+
+/// One complete way the play unfolds, as a single flat sequence of frames.
+struct FrameRun: Identifiable {
+    /// The reads walked, root first.
+    var nodeIds: [UUID]
+    /// The conditions that select this run, parent-first. Empty for the run
+    /// through a play with no reads.
+    var conditions: [String]
+    /// Every frame of the run end to end, opening on the home formation and
+    /// re-resolved over the concatenation.
+    var sequence: FrameSequence
+    /// Which read each frame came from — parallel to `sequence.frames`, so a
+    /// printed card can label where a branch takes over.
+    var frameNodeIds: [UUID]
+    /// Who the ball was placed on. Playback needs it for the same reason
+    /// authoring does: the derivation cannot infer the first holder from an
+    /// action only a holder could have performed.
+    var openingHolder: UUID?
+
+    /// The leaf read identifies the run.
+    var id: UUID { nodeIds.last ?? UUID() }
+
+    /// What selects this run, in words. Empty conditions are dropped rather
+    /// than printed as blanks.
+    var conditionSummary: String {
+        conditions.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .joined(separator: " → ")
     }
 }

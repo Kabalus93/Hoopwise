@@ -42,6 +42,13 @@ struct FrameCanvasView: View {
             let transform = CourtTransform(space: model.diagram.space, in: rect, padding: 18)
 
             Canvas { context, _ in
+                // PLAYBACK IS A DIFFERENT DRAWING, not the authoring one with
+                // bits hidden: the published look has its own court, its own
+                // brush and no notation at all.
+                if model.isPlayingBack {
+                    drawPresentation(transform, into: &context)
+                    return
+                }
                 drawCourt(transform, into: &context)
                 drawOnionSkin(transform, into: &context)
                 drawActions(transform, into: &context)
@@ -50,6 +57,7 @@ struct FrameCanvasView: View {
             }
             .contentShape(Rectangle())
             .onContinuousHover { phase in
+                guard !model.isPlayingBack else { hoverCourt = nil; return }
                 if case .active(let location) = phase {
                     hoverCourt = transform.courtPoint(location)
                 } else {
@@ -58,6 +66,7 @@ struct FrameCanvasView: View {
             }
             .gesture(dragGesture(transform))
             .onTapGesture { location in
+                guard !model.isPlayingBack else { return }
                 handleTap(transform.courtPoint(location))
                 model.hudAnchor = hudAnchor(transform)
             }
@@ -109,6 +118,142 @@ struct FrameCanvasView: View {
         context.stroke(Path(transform.viewPath(paths.dashed)),
                        with: .color(court.line.opacity(0.5)),
                        style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+    }
+
+    // MARK: - Presentation (Phase D)
+    //
+    // THE PUBLISHED LOOK, UNCHANGED. Every decision still comes out of
+    // `RenderStyle.presentation` — terracotta brush at 0.6x puck diameter with
+    // 0.35x blur, flat #FFFF70 discs with no numbers, #FE1A2C ball at 0.4x,
+    // black court, white lines, paths that live ahead of motion only. What is
+    // different from the keyframe editor's version is the geometry source
+    // (`FramePlayback`, from actions) and that there is no camera to project
+    // through: v2 is plan view, so the homography is gone and with it the
+    // billboarding it existed to correct.
+
+    private func drawPresentation(_ transform: CourtTransform,
+                                  into context: inout GraphicsContext) {
+        guard let run = model.activeRun else { return }
+        let style = RenderStyle.presentation
+        let time = model.playhead
+
+        drawPresentationCourt(transform, style: style, into: &context)
+        drawPresentationPaths(run, at: time, transform, style: style, into: &context)
+        drawPresentationEntities(run, at: time, transform, style: style, into: &context)
+    }
+
+    private func drawPresentationCourt(_ transform: CourtTransform,
+                                       style: RenderStyle,
+                                       into context: inout GraphicsContext) {
+        let paths = CourtGeometry(space: model.diagram.space).paths()
+        let floor = Color(hex: style.courtFloorHex ?? "#000000")
+        let line = Color(hex: style.courtLineHex ?? "#FFFFFF")
+        context.fill(Path(transform.viewPath(paths.floor)), with: .color(floor))
+        context.stroke(Path(transform.viewPath(paths.solid)),
+                       with: .color(line),
+                       style: StrokeStyle(lineWidth: 1.8, lineJoin: .round))
+        context.stroke(Path(transform.viewPath(paths.dashed)),
+                       with: .color(line.opacity(0.85)),
+                       style: StrokeStyle(lineWidth: 1.4))
+    }
+
+    /// The brush layer. Everything paints into ONE blurred context — blur
+    /// applied AFTER trimming, so the consumed edge stays soft — while players,
+    /// ball and court lines stay sharp outside it.
+    private func drawPresentationPaths(_ run: FrameRun, at time: Double,
+                                       _ transform: CourtTransform,
+                                       style: RenderStyle,
+                                       into context: inout GraphicsContext) {
+        let stroke = Color(hex: style.pathStrokeHex)
+        let width = transform.length(puckRadiusFeet * 2) * style.pathWidthPuckFactor
+        let blurRadius = width * style.pathBlurFactor
+
+        var brush = context
+        brush.addFilter(.blur(radius: blurRadius))
+        // Heads composite through a LIGHTER blur so they stay soft-edged but
+        // structurally crisp — a full path blur ate the direction entirely.
+        var headBrush = context
+        headBrush.addFilter(.blur(radius: blurRadius * 0.5))
+        let brushStyle = StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
+
+        let ballId = model.diagram.ball?.id
+        let visible = FramePlayback.visiblePaths(
+            in: run.sequence, at: time, style: style,
+            include: { id in id != ballId })
+
+        for piece in visible.pieces {
+            // ONE UNIFORM BRUSH. The semantic cut/dribble/screen distinction
+            // stays in the DATA and in the edit overlay; the travelling ball is
+            // what reads as a pass.
+            let line = MovementGeometry.line(points: piece.points, kind: .run)
+            brush.stroke(Path(transform.viewPath(line)),
+                         with: .color(stroke), style: brushStyle)
+        }
+
+        for head in visible.heads {
+            if head.isScreen {
+                // A screen ends in its bar and takes no arrow.
+                let bar = MovementGeometry.brushScreenBar(
+                    at: head.at, angle: head.angle,
+                    halfWidthFeet: transform.courtFeet(width))
+                headBrush.stroke(Path(transform.viewPath(bar)),
+                                 with: .color(stroke), style: brushStyle)
+                continue
+            }
+            // A SOLID filled chevron survives blur; the hooked V smeared into a
+            // directionless blob under the gaussian pass.
+            let chevron = MovementGeometry.filledChevronHead(
+                at: head.at, angle: head.angle,
+                strokeWidthFeet: transform.courtFeet(width))
+            let projected = Path(transform.viewPath(chevron))
+            headBrush.fill(projected, with: .color(stroke))
+            headBrush.stroke(projected, with: .color(stroke),
+                             style: StrokeStyle(lineWidth: width * 0.4,
+                                                lineCap: .round, lineJoin: .round))
+        }
+
+        // The ball's REMAINING flight, consumed behind it. Sampled from the
+        // SAME curve the ball is on — a straight line to the endpoint cuts the
+        // corner off every shot arc.
+        if case .inFlight(let flight, let progress) = run.sequence.ballState(
+            at: time, ballHome: model.ballHomePoint, openingHolder: run.openingHolder) {
+            let ahead = MovementGeometry.line(
+                points: flight.remainingPolyline(from: progress), kind: .run)
+            brush.stroke(Path(transform.viewPath(ahead)),
+                         with: .color(stroke),
+                         style: StrokeStyle(lineWidth: width * 0.7, lineCap: .round))
+        }
+    }
+
+    private func drawPresentationEntities(_ run: FrameRun, at time: Double,
+                                          _ transform: CourtTransform,
+                                          style: RenderStyle,
+                                          into context: inout GraphicsContext) {
+        let fill = Color(hex: style.playerFillHex)
+        let radius = transform.length(puckRadiusFeet)
+        // Far to near, so a nearer player overlaps a farther one. That is
+        // depth, not the order entities happen to sit in the array.
+        let players = model.diagram.entities
+            .filter(\.isPlayer)
+            .map { ($0, run.sequence.position(of: $0.id, at: time)) }
+            .sorted { $0.1.y > $1.1.y }
+
+        for (_, court) in players {
+            let centre = transform.viewPoint(court)
+            context.fill(Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius,
+                                                width: radius * 2, height: radius * 2)),
+                         with: .color(fill))
+        }
+
+        guard model.diagram.ball != nil else { return }
+        let ballPoint = run.sequence.ballPosition(at: time,
+                                                  ballHome: model.ballHomePoint,
+                                                  openingHolder: run.openingHolder)
+        let centre = transform.viewPoint(ballPoint)
+        let ballRadius = radius * style.ballScaleFactor
+        context.fill(Path(ellipseIn: CGRect(x: centre.x - ballRadius, y: centre.y - ballRadius,
+                                            width: ballRadius * 2, height: ballRadius * 2)),
+                     with: .color(Color(hex: style.ballHex)))
     }
 
     // MARK: - Onion skin
@@ -277,6 +422,7 @@ struct FrameCanvasView: View {
     private func dragGesture(_ transform: CourtTransform) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
+                guard !model.isPlayingBack else { return }
                 let court = model.diagram.space.clamp(transform.courtPoint(value.location))
                 if drag == nil {
                     let start = transform.courtPoint(value.startLocation)

@@ -329,18 +329,10 @@ final class FrameEditorModel: ObservableObject {
     /// a holder can perform, but that action cannot be authored until something
     /// knows who the holder is — so the opening dribble came out a cut, and the
     /// pass and shot silently refused to author at all.
-    private func ballPlacedWith() -> UUID? {
-        guard let ball = diagram.ball else { return nil }
-        var best: (UUID, CGFloat)?
-        for placement in diagram.homeFormation.placements {
-            guard let entity = diagram.entity(placement.entityId), entity.isPlayer else { continue }
-            let distance = hypot(ball.homePosition.x - placement.position.x,
-                                 ball.homePosition.y - placement.position.y)
-            guard distance <= 4 else { continue }
-            if best == nil || distance < best!.1 { best = (placement.entityId, distance) }
-        }
-        return best?.0
-    }
+    ///
+    /// It lives on the DIAGRAM (Phase D) because playback, print and the
+    /// playbook thumbnail need the same answer from a play nobody is editing.
+    private func ballPlacedWith() -> UUID? { diagram.ballPlacedWith }
 
     var possessions: [Possession] { sequence.derivedPossessions(startingWith: openingHolder) }
 
@@ -686,6 +678,118 @@ final class FrameEditorModel: ObservableObject {
         if case .ball = entity.kind { return "Ball" }
         return entity.label ?? "—"
     }
+
+    // MARK: - Playback
+    //
+    // Phase D. Playback is a MODE, not a second editor: entering it swaps the
+    // canvas to the published presentation look and the frame strip for a thin
+    // scrub bar, and leaving it lands the coach on the frame they were
+    // watching. Timing is entirely derived — there is nothing here to author,
+    // which is why the only chrome is a bar with frame boundaries on it.
+
+    /// Whether the editor is showing the play rather than the frame.
+    @Published var isPlayingBack = false
+    /// Whether the clock is running. Paused playback stays in playback mode.
+    @Published var isRunning = false
+    /// Absolute seconds along the active run.
+    @Published var playhead: Double = 0
+
+    private var playbackTimer: AnyCancellable?
+    private var lastTick: Date?
+
+    /// Every way the play can unfold, flattened. Recomputed on demand: a run is
+    /// cheap and a cached one is a copy of the diagram waiting to go stale.
+    var runs: [FrameRun] { diagram.frameRuns() }
+
+    /// The run playback follows: the one through the read being authored, so
+    /// pressing Space shows the branch you are looking at rather than whichever
+    /// leaf the walk reached first.
+    var activeRun: FrameRun? {
+        let all = runs
+        return all.first { $0.nodeIds.contains(activeNodeId) } ?? all.first
+    }
+
+    var playbackDuration: Double { activeRun?.sequence.duration ?? 0 }
+
+    /// Absolute start time of each frame in the active run — the scrub bar's
+    /// ticks, and the only time ruler v2 has.
+    var frameBoundaries: [Double] { activeRun?.sequence.frameStartTimes ?? [] }
+
+    func togglePlayback() { isRunning ? pausePlayback() : startPlayback() }
+
+    /// Space. Enters playback mode if it is not on, and restarts from the top
+    /// once the play has run out — pressing play at the end means play again.
+    func startPlayback() {
+        guard playbackDuration > 0 else { return }
+        if !isPlayingBack {
+            isPlayingBack = true
+            // Start from THIS frame, not from zero: the coach pressed play
+            // while looking at frame 3 because frame 3 is what they are
+            // checking. From the last frame, that would be nothing at all —
+            // so a play started at the end goes back to the top.
+            let starts = frameBoundaries
+            playhead = starts.indices.contains(frameIndex) ? starts[frameIndex] : 0
+        }
+        if playhead >= playbackDuration - 0.02 { playhead = 0 }
+        isRunning = true
+        lastTick = Date()
+        playbackTimer = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.tick() }
+    }
+
+    func pausePlayback() {
+        isRunning = false
+        playbackTimer?.cancel()
+        playbackTimer = nil
+        lastTick = nil
+    }
+
+    /// Esc, or the Done control. Leaves the coach on the frame under the
+    /// playhead — you stop the play where you were watching it, and that is the
+    /// frame you want to fix.
+    func exitPlayback() {
+        pausePlayback()
+        guard isPlayingBack else { return }
+        isPlayingBack = false
+        let landing = frameIndex(inRunAt: playhead)
+        if frames.indices.contains(landing) { frameIndex = landing }
+    }
+
+    /// Which frame of the ACTIVE RUN contains `time`. A run splices reads
+    /// together, so this is a run index; it coincides with the authoring index
+    /// only while the active read is the root.
+    func frameIndex(inRunAt time: Double) -> Int {
+        activeRun?.sequence.frameIndex(at: time) ?? 0
+    }
+
+    /// ←/→ under playback step FRAME BOUNDARIES, not seconds: the boundaries
+    /// are the moments the coach means, and they are the same ones the scrub
+    /// bar ticks. A small epsilon keeps a press at a boundary from finding
+    /// itself.
+    func previousBoundary(before time: Double) -> Double {
+        frameBoundaries.last { $0 < time - 0.03 } ?? 0
+    }
+
+    func nextBoundary(after time: Double) -> Double {
+        frameBoundaries.first { $0 > time + 0.03 } ?? playbackDuration
+    }
+
+    private func tick() {
+        // Wall-clock delta rather than a fixed step, so playback runs at real
+        // speed even when the timer coalesces under load.
+        let now = Date()
+        let delta = lastTick.map { now.timeIntervalSince($0) } ?? (1.0 / 60.0)
+        lastTick = now
+        playhead += delta
+        if playhead >= playbackDuration {
+            playhead = playbackDuration
+            pausePlayback()
+        }
+    }
+
+    /// Where the ball rests before anything is authored — the placement point.
+    var ballHomePoint: CGPoint { diagram.ball?.homePosition ?? diagram.rimPoint }
 
     /// One line of what this frame does, for the strip and for evidence.
     func summary(of frame: PlayFrame) -> String {

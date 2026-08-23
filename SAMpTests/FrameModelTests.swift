@@ -401,8 +401,18 @@ final class FrameModelTests: XCTestCase {
         diagram.pace = .default
 
         let branches = diagram.frameBranches()
-        XCTAssertEqual(branches.count, 2)
-        for branch in branches {
+        // THREE, and the third is the play itself. Amended in Phase D: a read's
+        // branches are what happens INSTEAD, so the base played to its own end
+        // is also a way the play unfolds — and it was the missing one. Playback
+        // found it: pressing Play on this diagram showed two frames of the base
+        // play followed by a read, because the walk could only reach leaves and
+        // the base's own last two frames were on no leaf at all.
+        XCTAssertEqual(branches.count, 3)
+        let base = branches.first { $0.conditions.isEmpty }
+        XCTAssertEqual(base?.steps.count, 4, "the base run is the four frames as authored")
+        XCTAssertEqual(base?.steps.allSatisfy { $0.nodeId == rootId }, true)
+
+        for branch in branches where !branch.conditions.isEmpty {
             // Two parent frames (0 and 1) then the child's one.
             XCTAssertEqual(branch.steps.count, 3)
             XCTAssertEqual(branch.steps[0].nodeId, rootId)
@@ -446,7 +456,10 @@ final class FrameModelTests: XCTestCase {
                                   rootNodeId: rootId)
         diagram.pace = .default
 
-        guard let branch = diagram.frameBranches().first else { return XCTFail("no branch") }
+        // The run WITH a condition — the base play is now a run of its own
+        // (Phase D), and it never reaches the child at all.
+        guard let branch = diagram.frameBranches().first(where: { !$0.conditions.isEmpty })
+        else { return XCTFail("no branch") }
         // The child's frame stores the formation it inherited: O1 at (12,20),
         // not back at his home position.
         let inherited = branch.steps[1].frame.endFormation[o1]

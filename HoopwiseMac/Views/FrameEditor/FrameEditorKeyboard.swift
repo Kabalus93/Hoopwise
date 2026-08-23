@@ -33,6 +33,35 @@ final class FrameEditorKeyDispatcher {
         // Command belongs to the menus, undo included.
         if flags.contains(.command) { return .pass("command-menu") }
 
+        // SPACE PLAYS, from anywhere. It is consumed here rather than left to a
+        // button's keyEquivalent for the reason the dispatcher exists at all:
+        // a default button would otherwise catch it and the editor's meaning of
+        // Space would depend on what happened to have focus.
+        if event.keyCode == 49 {
+            model.togglePlayback()
+            return .consumed("toggle-playback")
+        }
+
+        // PLAYBACK IS A MODE, and it answers to a smaller keyboard: scrubbing
+        // and leaving. Authoring keys would act on frames the coach cannot see.
+        if model.isPlayingBack {
+            switch event.keyCode {
+            case 53:    // Esc
+                model.exitPlayback()
+                return .consumed("exit-playback")
+            case 123:   // ←
+                model.pausePlayback()
+                model.playhead = model.previousBoundary(before: model.playhead)
+                return .consumed("previous-boundary")
+            case 124:   // →
+                model.pausePlayback()
+                model.playhead = model.nextBoundary(after: model.playhead)
+                return .consumed("next-boundary")
+            default:
+                return .pass("playback-unmapped")
+            }
+        }
+
         switch event.keyCode {
         case 123:   // ←
             model.previousFrame()

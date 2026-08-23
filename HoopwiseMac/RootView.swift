@@ -47,6 +47,7 @@ struct RootView: View {
     @State private var selection: SidebarSection? = {
         let env = ProcessInfo.processInfo.environment
         if env["HOOPWISE_DEMO_SCENARIO"] != nil { return .courtEditor }
+        if env["HOOPWISE_FRAME_DEMO"] != nil { return .frameEditor }
         if env["HOOPWISE_DEMO_DIR_LOG"] != nil || env["HOOPWISE_DEMO_DIR_SEARCH"] != nil {
             return .athletes
         }

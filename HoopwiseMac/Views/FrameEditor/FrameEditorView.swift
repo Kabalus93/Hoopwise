@@ -31,19 +31,33 @@ struct FrameEditorView: View {
                 // re-picking the tool.
             }
             .frame(minWidth: 460, minHeight: 320)
-            .overlay(alignment: .topLeading) { floatingPalette.padding(12) }
-            .overlay(alignment: .bottom) {
-                FrameCoachMarks(forceShow: replayHints) { replayHints = false }
-                    .padding(.bottom, 14)
-                    .transition(.opacity)
+            .overlay(alignment: .topLeading) {
+                if !model.isPlayingBack { floatingPalette.padding(12) }
             }
-            .overlay(alignment: .topLeading) { hud }
+            .overlay(alignment: .bottom) {
+                if !model.isPlayingBack {
+                    FrameCoachMarks(forceShow: replayHints) { replayHints = false }
+                        .padding(.bottom, 14)
+                        .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .topLeading) { if !model.isPlayingBack { hud } }
             Divider()
-            // Sized to what the strip needs — every point it does not take is
-            // court, and the canvas-share bar is measured against the window.
-            FrameStripView(model: model)
-                .frame(height: 130)
+            // PLAYBACK REPLACES THE STRIP, it does not sit beside it: the play
+            // is the document while it runs, and two rows of chrome would take
+            // the court back that Phase C spent its effort winning.
+            if model.isPlayingBack {
+                FrameScrubBar(model: model)
+                    .transition(reduceMotion ? .identity : .move(edge: .bottom))
+            } else {
+                // Sized to what the strip needs — every point it does not take
+                // is court, and the canvas-share bar is measured against the
+                // window.
+                FrameStripView(model: model)
+                    .frame(height: 130)
+            }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: model.isPlayingBack)
         .toolbar { toolbar }
         .navigationTitle(model.diagramName)
         .navigationSubtitle(subtitle)
@@ -192,6 +206,13 @@ struct FrameEditorView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
+            Button { model.togglePlayback() } label: {
+                Label(model.isRunning ? "Pause" : "Play",
+                      systemImage: model.isRunning ? "pause.fill" : "play.fill")
+            }
+            .disabled(model.playbackDuration <= 0)
+            .help(model.isRunning ? "Pause (Space)" : "Play the whole read (Space)")
+
             Menu {
                 Button("New Play…") {
                     newPlayName = "Play \(dataManager.allPlayDiagrams().count + 1)"
@@ -209,21 +230,27 @@ struct FrameEditorView: View {
             }
             .help("Switch play, or start a new one")
 
-            Button { model.previousFrame() } label: {
-                Label("Previous Frame", systemImage: "chevron.left")
-            }
-            .disabled(model.frameIndex == 0)
-            .help("Previous frame (←)")
+            // THE FRAME STEPPER IS AUTHORING CHROME. During playback it would
+            // count frames of the read being edited while the canvas shows a
+            // RUN — a different, spliced list — so it is not merely useless
+            // there, it is wrong. The scrub bar owns navigation instead.
+            if !model.isPlayingBack {
+                Button { model.previousFrame() } label: {
+                    Label("Previous Frame", systemImage: "chevron.left")
+                }
+                .disabled(model.frameIndex == 0)
+                .help("Previous frame (←)")
 
-            Text("\(model.frameIndex + 1)/\(max(1, model.frameCount))")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+                Text("\(model.frameIndex + 1)/\(max(1, model.frameCount))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
 
-            Button { model.nextFrame() } label: {
-                Label("Next Frame", systemImage: "chevron.right")
+                Button { model.nextFrame() } label: {
+                    Label("Next Frame", systemImage: "chevron.right")
+                }
+                .disabled(model.frameIndex >= model.frameCount - 1)
+                .help("Next frame (→)")
             }
-            .disabled(model.frameIndex >= model.frameCount - 1)
-            .help("Next frame (→)")
         }
     }
 

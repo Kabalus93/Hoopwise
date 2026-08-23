@@ -16,6 +16,13 @@ import os
 ///   HOOPWISE_FRAME_DEMO=triangle    author the play
 ///   HOOPWISE_FRAME_DEMO_FRAME=<n>   park on a frame (1-based) for a screenshot
 ///   HOOPWISE_FRAME_DEMO_READ=1      switch to the branched read
+///   HOOPWISE_FRAME_DEMO_PLAY=<t>    enter PLAYBACK and park the playhead at t
+///                                   seconds — Phase D's evidence hook. It
+///                                   parks rather than runs because a moving
+///                                   clock cannot be screenshotted twice the
+///                                   same way, and the whole point of pinning
+///                                   an instant is that the picture is
+///                                   reproducible.
 @MainActor
 enum FrameDemoScenario {
 
@@ -39,6 +46,58 @@ enum FrameDemoScenario {
             model.selectFrame(number - 1)
         }
         report(model)
+        if let raw = env["HOOPWISE_FRAME_DEMO_PLAY"], let time = Double(raw) {
+            model.isPlayingBack = true
+            model.playhead = min(max(time, 0), model.playbackDuration)
+            reportPlayback(model)
+        }
+    }
+
+    /// What the path layer actually produces at the parked instant, in text.
+    ///
+    /// The screenshot shows the look; this shows the RULES behind it — which
+    /// paths exist, how much of each survives consumption, where the one head
+    /// sits, and what the ball is doing. A picture cannot tell you that a path
+    /// is being consumed rather than merely short.
+    private static func reportPlayback(_ model: FrameEditorModel) {
+        guard let run = model.activeRun else {
+            return logger.notice("PLAYBACK no run")
+        }
+        let time = model.playhead
+        logger.notice("PLAYBACK t=\(String(format: "%.2f", time), privacy: .public) of \(String(format: "%.2f", model.playbackDuration), privacy: .public) frames=\(run.sequence.frames.count, privacy: .public) frame=\(model.frameIndex(inRunAt: time) + 1, privacy: .public)")
+        logger.notice("PLAYBACK boundaries=\(model.frameBoundaries.map { String(format: "%.2f", $0) }.joined(separator: ","), privacy: .public)")
+        let visible = FramePlayback.visiblePaths(in: run.sequence, at: time,
+                                                 style: .presentation,
+                                                 include: { $0 != model.diagram.ball?.id })
+        for piece in visible.pieces {
+            var drawn: CGFloat = 0
+            for index in 0..<(piece.points.count - 1) {
+                drawn += hypot(piece.points[index + 1].x - piece.points[index].x,
+                               piece.points[index + 1].y - piece.points[index].y)
+            }
+            let full = piece.points.isEmpty ? 0 : drawn
+            logger.notice("  PATH \(model.label(of: piece.actorId), privacy: .public) \(piece.kind.rawValue, privacy: .public) visible=\(String(format: "%.1f", full), privacy: .public)ft span=\(String(format: "%.2f", piece.startsAt), privacy: .public)+\(String(format: "%.2f", piece.duration), privacy: .public)")
+        }
+        for piece in visible.pieces {
+            let a = piece.points.first ?? .zero
+            let b = piece.points.last ?? .zero
+            logger.notice("  ENDS \(model.label(of: piece.actorId), privacy: .public) (\(String(format: "%.1f", a.x), privacy: .public),\(String(format: "%.1f", a.y), privacy: .public))→(\(String(format: "%.1f", b.x), privacy: .public),\(String(format: "%.1f", b.y), privacy: .public))")
+        }
+        for entity in model.diagram.entities where entity.isPlayer {
+            let point = run.sequence.position(of: entity.id, at: time)
+            logger.notice("  AT \(model.label(of: entity.id), privacy: .public) (\(String(format: "%.1f", point.x), privacy: .public),\(String(format: "%.1f", point.y), privacy: .public))")
+        }
+        logger.notice("  HEADS \(visible.heads.count, privacy: .public) (screens=\(visible.heads.filter(\.isScreen).count, privacy: .public))")
+        let state = run.sequence.ballState(at: time, ballHome: model.ballHomePoint,
+                                           openingHolder: run.openingHolder)
+        switch state {
+        case .held(let id):
+            logger.notice("  BALL held by \(model.label(of: id), privacy: .public)")
+        case .inFlight(let flight, let progress):
+            logger.notice("  BALL in flight \(flight.isShot ? "shot" : "pass", privacy: .public) progress=\(String(format: "%.2f", progress), privacy: .public) duration=\(String(format: "%.2f", flight.duration), privacy: .public)")
+        case .atRest(let point):
+            logger.notice("  BALL at rest (\(String(format: "%.1f", point.x), privacy: .public), \(String(format: "%.1f", point.y), privacy: .public))")
+        }
     }
 
     /// One interaction, named for the log.
