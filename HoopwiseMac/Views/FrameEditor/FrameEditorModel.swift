@@ -120,31 +120,16 @@ final class FrameEditorModel: ObservableObject {
 
     var node: ReadNode? { diagram.node(activeNodeId) }
 
-    /// Formation this read opens on: home positions for the root, or whatever
-    /// the parent's branch frame left behind.
-    func formationEntering(_ nodeId: UUID, visited: Set<UUID> = []) -> Formation {
-        guard nodeId != diagram.rootNodeId, !visited.contains(nodeId) else {
-            return diagram.homeFormation
-        }
-        guard let parent = diagram.nodes.first(where: { node in
-            node.edges.contains { $0.targetId == nodeId && $0.kind == .branch }
-        }), let edge = parent.edges.first(where: { $0.targetId == nodeId }) else {
-            return diagram.homeFormation
-        }
-        var parentSequence = FrameSequence(
-            startFormation: formationEntering(parent.id, visited: visited.union([nodeId])),
-            frames: parent.frames, pace: diagram.effectivePace, rim: diagram.rimPoint)
-        parentSequence.reresolve()
-        let through = edge.afterFrameIndex.map { $0 + 1 } ?? parent.frames.count
-        return parentSequence.formation(enteringFrame: max(0, through))
+    /// Formation this read opens on. Lives on the DIAGRAM (Phase D) so the
+    /// printed play card can ask it of a stored play with no editor attached.
+    func formationEntering(_ nodeId: UUID) -> Formation {
+        diagram.formationEntering(nodeId)
     }
 
     /// THE sequence being authored.
     var sequence: FrameSequence {
-        FrameSequence(startFormation: formationEntering(activeNodeId),
-                      frames: node?.frames ?? [],
-                      pace: diagram.effectivePace,
-                      rim: diagram.rimPoint)
+        diagram.frameSequence(for: activeNodeId,
+                              startingFrom: formationEntering(activeNodeId))
     }
 
     var frames: [PlayFrame] { node?.frames ?? [] }
@@ -300,25 +285,8 @@ final class FrameEditorModel: ObservableObject {
     /// holding it when the parent's branch frame ended — otherwise the child
     /// read starts with nobody holding anything and its pass cannot be drawn,
     /// which is exactly what happened on the first acceptance run.
-    func openingHolder(for nodeId: UUID, visited: Set<UUID> = []) -> UUID? {
-        guard nodeId != diagram.rootNodeId, !visited.contains(nodeId) else {
-            return ballPlacedWith()
-        }
-        guard let parent = diagram.nodes.first(where: { node in
-            node.edges.contains { $0.targetId == nodeId && $0.kind == .branch }
-        }), let edge = parent.edges.first(where: { $0.targetId == nodeId }) else {
-            return ballPlacedWith()
-        }
-        var parentSequence = FrameSequence(
-            startFormation: formationEntering(parent.id, visited: visited.union([nodeId])),
-            frames: parent.frames, pace: diagram.effectivePace, rim: diagram.rimPoint)
-        parentSequence.reresolve()
-        let through = edge.afterFrameIndex.map { $0 + 1 } ?? parent.frames.count
-        let starts = parentSequence.frameStartTimes
-        let handover = starts.indices.contains(through)
-            ? starts[through] : parentSequence.duration
-        let parentOpening = openingHolder(for: parent.id, visited: visited.union([nodeId]))
-        return parentSequence.holder(at: handover, startingWith: parentOpening)
+    func openingHolder(for nodeId: UUID) -> UUID? {
+        diagram.openingHolder(for: nodeId)
     }
 
     /// Who the ball was PLACED on — the root read's opening holder.
@@ -790,6 +758,42 @@ final class FrameEditorModel: ObservableObject {
 
     /// Where the ball rests before anything is authored — the placement point.
     var ballHomePoint: CGPoint { diagram.ball?.homePosition ?? diagram.rimPoint }
+
+    // MARK: - Save to Playbook (Phase D)
+    //
+    // The diagram AUTOSAVES continuously; this is a different act — publishing
+    // the play into the coach's library with the words that make it findable.
+    // Hence no close prompt and no data-loss warning: nothing is ever unsaved,
+    // and the edited dot means "unpublished metadata", not "unsaved work".
+
+    static let families = ["Horns", "1-4 High", "SLOB", "BLOB", "Press Break", "Custom"]
+
+    @Published var playFamily: String =
+        UserDefaults.standard.string(forKey: "lastPlayFamily") ?? "Horns"
+    @Published var playTags: String = ""
+    @Published var playNote: String = ""
+    @Published var savedToPlaybook = false
+
+    func saveToPlaybook() {
+        save()
+        let tags = playTags.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        // THUMBNAIL IS FRAME 1 of the base play — the set-up, which is how a
+        // coach recognises a play on a shelf. A mid-play snapshot shows five
+        // men mid-cut and every play looks alike.
+        let thumbnail = FrameThumbnailRenderer.renderAndSave(diagram: diagram,
+                                                             playId: diagram.playId)
+        dataManager?.updatePlayMetadata(playId: diagram.playId,
+                                        name: diagramName,
+                                        family: playFamily,
+                                        tags: tags,
+                                        note: playNote,
+                                        thumbnailPath: thumbnail)
+        UserDefaults.standard.set(playFamily, forKey: "lastPlayFamily")
+        savedToPlaybook = true
+        isDirty = false
+    }
 
     /// One line of what this frame does, for the strip and for evidence.
     func summary(of frame: PlayFrame) -> String {

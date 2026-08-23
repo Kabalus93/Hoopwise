@@ -16,6 +16,7 @@ import os
 ///   HOOPWISE_FRAME_DEMO=triangle    author the play
 ///   HOOPWISE_FRAME_DEMO_FRAME=<n>   park on a frame (1-based) for a screenshot
 ///   HOOPWISE_FRAME_DEMO_READ=1      switch to the branched read
+///   HOOPWISE_FRAME_DEMO_CARD=<path> render the printed play card to <path>
 ///   HOOPWISE_FRAME_DEMO_PLAY=<t>    enter PLAYBACK and park the playhead at t
 ///                                   seconds — Phase D's evidence hook. It
 ///                                   parks rather than runs because a moving
@@ -46,10 +47,40 @@ enum FrameDemoScenario {
             model.selectFrame(number - 1)
         }
         report(model)
+        if let path = env["HOOPWISE_FRAME_DEMO_CARD"] {
+            exportCard(model, to: path)
+        }
         if let raw = env["HOOPWISE_FRAME_DEMO_PLAY"], let time = Double(raw) {
             model.isPlayingBack = true
             model.playhead = min(max(time, 0), model.playbackDuration)
             reportPlayback(model)
+        }
+    }
+
+    /// Renders the play card headlessly — the print half of Phase D's evidence.
+    /// A save panel cannot be driven without Accessibility, and the thing worth
+    /// verifying is the DOCUMENT, not the panel.
+    private static func exportCard(_ model: FrameEditorModel, to path: String) {
+        let input = PlayCardDocument.makeInput(diagram: model.diagram,
+                                               title: model.diagramName,
+                                               family: "Horns",
+                                               coachName: "Luther")
+        // The Mac app is SANDBOXED, so an arbitrary path outside the container
+        // fails to open — the export panel is what grants access in the real
+        // flow. A headless run writes into the container's temp directory and
+        // logs where, which an outside agent can read off disk.
+        let url = path == "container"
+            ? FileManager.default.temporaryDirectory.appendingPathComponent("play-card.pdf")
+            : URL(fileURLWithPath: path)
+        do {
+            let url = try PlayCardDocument.render(input, to: url)
+            let frames = input.sections.reduce(0) { $0 + $1.sequence.frames.count }
+            logger.notice("CARD wrote \(url.path, privacy: .public) sections=\(input.sections.count, privacy: .public) frames=\(frames, privacy: .public)")
+            for section in input.sections {
+                logger.notice("  SECTION \(section.condition ?? "base", privacy: .public) frames=\(section.sequence.frames.count, privacy: .public) from=\(section.firstFrameNumber, privacy: .public)")
+            }
+        } catch {
+            logger.notice("CARD failed \(String(describing: error), privacy: .public)")
         }
     }
 

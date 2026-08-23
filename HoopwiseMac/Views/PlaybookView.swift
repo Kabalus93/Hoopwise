@@ -83,10 +83,21 @@ struct PlaybookMacView: View {
                             .padding(.horizontal, 4).padding(.vertical, 1)
                             .background(.quaternary, in: .capsule)
                     }
-                    Text("\(row.diagram.nodeCount) read\(row.diagram.nodeCount == 1 ? "" : "s")")
-                        .font(.system(size: 8)).foregroundStyle(.secondary)
-                    Text(String(format: "%.1fs", row.diagram.totalDuration))
-                        .font(.system(size: 8)).foregroundStyle(.secondary)
+                    // A FRAME PLAY DESCRIBES ITSELF IN FRAMES. `nodeCount` and
+                    // `totalDuration` describe the keyframe model, and both
+                    // read zero for a play authored in v2 — a card claiming
+                    // "1 read · 0.0s" about a real four-frame play.
+                    if row.diagram.hasFrames {
+                        Text("\(row.diagram.frameCount) frame\(row.diagram.frameCount == 1 ? "" : "s")")
+                            .font(.system(size: 8)).foregroundStyle(.secondary)
+                        Text(String(format: "%.1fs", row.diagram.frameDuration))
+                            .font(.system(size: 8)).foregroundStyle(.secondary)
+                    } else {
+                        Text("\(row.diagram.nodeCount) read\(row.diagram.nodeCount == 1 ? "" : "s")")
+                            .font(.system(size: 8)).foregroundStyle(.secondary)
+                        Text(String(format: "%.1fs", row.diagram.totalDuration))
+                            .font(.system(size: 8)).foregroundStyle(.secondary)
+                    }
                 }
                 if let tags = play?.tags, !tags.isEmpty {
                     Text(tags.prefix(3).joined(separator: " · "))

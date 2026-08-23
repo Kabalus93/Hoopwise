@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 /// Play Editor v2 — the frame authoring surface.
 ///
@@ -17,6 +19,7 @@ struct FrameEditorView: View {
     @State private var keys = FrameEditorKeyDispatcher()
     @State private var placementKind: DiagramEntityKind?
     @State private var showingNewPlay = false
+    @State private var showingPublish = false
     @State private var newPlayName = ""
     @FocusState private var newPlayFocused: Bool
     @State private var replayHints = false
@@ -84,6 +87,9 @@ struct FrameEditorView: View {
         }
         .sheet(isPresented: $showingNewPlay) {
             newPlaySheet.dismissesOnPresentationEscape { showingNewPlay = false }
+        }
+        .sheet(isPresented: $showingPublish) {
+            publishSheet.dismissesOnPresentationEscape { showingPublish = false }
         }
     }
 
@@ -213,6 +219,18 @@ struct FrameEditorView: View {
             .disabled(model.playbackDuration <= 0)
             .help(model.isRunning ? "Pause (Space)" : "Play the whole read (Space)")
 
+            Button { showingPublish = true } label: {
+                Label("Save to Playbook", systemImage: "books.vertical")
+            }
+            .disabled(model.frameCount == 0)
+            .help("File this play in the playbook, with its family and tags")
+
+            Button { exportPlayCard() } label: {
+                Label("Print Card", systemImage: "doc.richtext")
+            }
+            .disabled(model.frameCount == 0)
+            .help("Export a printable play card (PDF)")
+
             Menu {
                 Button("New Play…") {
                     newPlayName = "Play \(dataManager.allPlayDiagrams().count + 1)"
@@ -271,6 +289,74 @@ struct FrameEditorView: View {
         .padding(18)
         .frame(width: 340)
         .onAppear { newPlayFocused = true }
+    }
+
+    /// PUBLISHING, not saving. The diagram autosaves continuously — there is
+    /// never unsaved work here — so this sheet is about the WORDS that make a
+    /// play findable later: which family it belongs to, what to call it, and
+    /// what the coach wants to remember about it.
+    private var publishSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Save to Playbook").font(.headline)
+
+            LabeledContent("Name") {
+                TextField("Play name", text: $model.diagramName)
+            }
+            LabeledContent("Family") {
+                Picker("", selection: $model.playFamily) {
+                    ForEach(FrameEditorModel.families, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+            }
+            LabeledContent("Tags") {
+                TextField("comma separated", text: $model.playTags)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Note").font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $model.playNote)
+                    .font(.body)
+                    .frame(height: 64)
+                    .overlay { RoundedRectangle(cornerRadius: 5).strokeBorder(.quaternary) }
+            }
+
+            Text("Thumbnail: frame 1 — the set-up is how a play is recognised.")
+                .font(.caption).foregroundStyle(.secondary)
+
+            HStack {
+                Button("Cancel") { showingPublish = false }
+                Spacer()
+                Button("Save") {
+                    model.saveToPlaybook()
+                    showingPublish = false
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.diagramName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(18)
+        .frame(width: 400)
+    }
+
+    /// EXPORT IS A SAVE PANEL, not a share sheet: this file goes to a printer
+    /// or into a folder of the coach's own play sheets, and the Mac idiom for
+    /// "give me the file" is choosing where it lands.
+    private func exportPlayCard() {
+        let input = PlayCardDocument.makeInput(
+            diagram: model.diagram,
+            title: model.diagramName,
+            family: model.playFamily.isEmpty ? nil : model.playFamily,
+            coachName: dataManager.coach.name)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = PlayCardDocument.filename(for: input) + ".pdf"
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try PlayCardDocument.render(input, to: url)
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.runModal()
+        }
     }
 
     private func commitNewPlay() {

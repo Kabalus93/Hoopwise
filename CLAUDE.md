@@ -511,6 +511,86 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   only after the snapshot you want rendered is already on disk, or the
   renders come from the stale one.
 
+## Play Editor v2 Phase D (August 2026) — playback, print, playbook
+- PLAYBACK CONSUMES FRAMES. `FramePlayback` (Models/, both targets) re-expresses
+  the presentation consumption rules on ACTIONS: draw-on tip-first, consumed
+  behind motion, tail tucked in FEET, hold guard, one head. The look is
+  unchanged because every knob is still `RenderStyle.presentation`; only the
+  geometry source moved. Two simplifications are structural, not shortcuts — an
+  action is traversed by ARC LENGTH so the tuck is `feet / length` of progress
+  rather than a backwards time-walk, and an action IS the whole movement so
+  ONE ARROWHEAD needs no enforcing.
+- `BallDerivation` (Models/) is ReadNode's ball code extracted verbatim: a pure
+  function of `[Possession]` plus a position resolver, so frames and reads
+  answer "where is the ball" with ONE implementation. ReadNode's methods are
+  one-line forwards. v2 uses `HeldBallOffset.fixed` (1.9ft, matching what the
+  editor draws) rather than v1's direction-of-travel offset — both ends of a
+  pass shift by the same vector, so the flight length equals the
+  centre-to-centre distance the frame model priced its duration from and the
+  two cannot drift. A SHOT is priced hand-to-rim while its frame is priced
+  centre-to-rim; the gap is bounded by offset ÷ shot pace (~0.07s), nothing
+  follows a shot, and a test pins the bound.
+- THE BASE PLAY IS A RUN. A read's branches are what happens INSTEAD, so a node
+  played to its own end is itself a way the play unfolds — and it is emitted
+  first. Before Phase D a single branch silently truncated the play at the
+  branch point and its later frames were on no leaf at all, so they could not be
+  played back or printed. Fixed in `frameRuns` AND `frameBranches`; they must
+  agree about what a play's runs are.
+- PLAYBACK IS A MODE, not a second editor: Space enters it anywhere (through the
+  key dispatcher, so no default button can steal Space), the frame strip is
+  replaced by a thin scrub bar whose ticks are FRAME BOUNDARIES — the only time
+  ruler v2 has, because nothing here is authorable in time — ←/→ step
+  boundaries, scrubbing pauses, Esc lands on the frame you were watching. The
+  authoring frame stepper is HIDDEN during playback: it counts frames of the
+  read being edited while the canvas shows a spliced RUN.
+- PRINT IS THE EDITOR'S SHAREABLE ARTIFACT, replacing video export.
+  `PlayCardDocument` (Services/, both targets) on `PDFDocumentRenderer`: A4,
+  2x2 frames per page, captions under each, bilingual header, ink and hairlines
+  with ONE accent on the ball. It draws the AUTHORING notation, not the
+  presentation brush — a card is read, not watched, and the coach needs to see
+  that this line is a screen and that one a dribble.
+- A READ PRINTS AS ITS OWN SECTION, headed by its condition and carrying only
+  its own frames. Printing whole runs reprints the shared entry once per read.
+  Frame numbering continues across sections so "frame five" means one thing.
+- `FrameCardRenderer` (Utilities/, both targets) draws ONE frame into a
+  CGContext and is shared by the printed card and the playbook thumbnail — the
+  same picture at two sizes. The canvas works y-DOWN and CoreGraphics documents
+  are y-UP, so geometry is drawn inside one flipped state and TEXT outside it.
+  `FrameNotation` moved to Utilities for the same reason: print and canvas must
+  not disagree about what a dashed line means.
+- THUMBNAIL IS FRAME 1, not the midpoint. A play is recognised by its SET-UP;
+  the keyframe editor rendered the middle instant, which is the moment every
+  play looks alike. `FrameThumbnailRenderer` is in Services, not beside the
+  editor, because it draws a play rather than a view — and so it can be tested.
+- Playbook cards read `frameCount` / `frameDuration` for a v2 play;
+  `nodeCount` / `totalDuration` describe the keyframe model and read ZERO for a
+  play authored in frames.
+- DEBUG evidence hooks (Mac, env-gated, subsystem "hoopwise.demo"):
+  `HOOPWISE_FRAME_DEMO_PLAY=<t>` parks playback at an instant and logs what the
+  path layer produces there (visible feet per path, head count, ball state);
+  `HOOPWISE_FRAME_DEMO_CARD=container` renders the card into the sandbox
+  container. The Mac app is SANDBOXED with only user-selected file access, so a
+  headless export cannot write anywhere an outside agent can read — the play
+  card's real verification is `PlayCardDocumentTests`, which renders and
+  inspects the PDF.
+
+## PDF layer defects found in Phase D (both pre-existing, both shipped)
+The document layer had NO tests until Phase D. The first one that touched it
+found two bugs, and both were in code that renders documents sent to clients.
+- USE AFTER SCOPE in `PDFTextStyle.attributes()`: `CTParagraphStyleSetting`
+  stores a RAW POINTER, and the settings were built inside `withUnsafeBytes`
+  closures and then handed to `CTParagraphStyleCreate` AFTER those closures
+  returned. CoreText read stack memory that was out of scope. It "worked"
+  because the bytes were usually still there. The create now happens INSIDE
+  both scopes.
+- `PDFDocumentRenderer` was implicitly `@MainActor` (the project sets
+  `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`), which made its DEINIT isolated;
+  releasing one aborted in malloc via `swift_task_deinitOnExecutorImpl`.
+  Constructing a renderer and dropping it was enough to kill a test process,
+  which is why this layer had no tests. It is now `nonisolated` — rendering a
+  document is not main-thread work and pinning it there was never intended.
+  `PlayCardDocumentTests.testARendererCanBeCreatedAndReleased` pins it.
+
 ## Export decisions
 - PDF: draw with CoreGraphics into CGPDFContext. NOT ImageRenderer —
   it silently rasterizes any view containing materials, blurs, or images,

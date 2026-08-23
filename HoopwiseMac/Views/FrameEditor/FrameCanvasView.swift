@@ -528,38 +528,6 @@ struct EditCourtPalette {
     }
 }
 
-// MARK: - Notation
-
-/// How each action kind is DRAWN. The coaching conventions, as data.
-///
-/// Dribble keeps the shared geometry's WAVE rather than a zigzag: the wave is
-/// this codebase's documented dribble convention and is what presentation
-/// already renders, and a second dribble look would be a divergence with
-/// nothing behind it.
-struct FrameNotation {
-    var geometry: PathKind
-    var headKind: PathKind
-    var dash: [CGFloat]
-    var usesBallColour: Bool
-
-    static func `for`(_ kind: PlayActionKind) -> FrameNotation {
-        switch kind {
-        case .cut:
-            return FrameNotation(geometry: .run, headKind: .run, dash: [], usesBallColour: false)
-        case .dribble:
-            return FrameNotation(geometry: .dribble, headKind: .run, dash: [], usesBallColour: false)
-        case .screen:
-            return FrameNotation(geometry: .run, headKind: .screen, dash: [], usesBallColour: false)
-        case .pass:
-            return FrameNotation(geometry: .run, headKind: .run, dash: [7, 5], usesBallColour: true)
-        case .handoff:
-            return FrameNotation(geometry: .run, headKind: .run, dash: [3, 3], usesBallColour: true)
-        case .shot:
-            return FrameNotation(geometry: .run, headKind: .run, dash: [10, 6], usesBallColour: true)
-        }
-    }
-}
-
 // MARK: - Court transform helpers
 //
 // `point`, `inverse`, `length` and `affine` already live on CourtTransform and

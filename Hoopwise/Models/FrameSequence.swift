@@ -390,6 +390,68 @@ extension PlayDiagram {
         })
     }
 
+    /// How many frames this play has, across every read. What a playbook card
+    /// says about a v2 play — `totalDuration` and `nodeCount` describe the
+    /// keyframe model and read zero for a play authored in frames.
+    var frameCount: Int { nodes.reduce(0) { $0 + $1.frames.count } }
+
+    /// How long the play RUNS: the base play end to end. Not the longest run —
+    /// a card that advertised the longest branch would describe a play the
+    /// coach has to read into rather than the one they call.
+    var frameDuration: Double {
+        guard let root = rootNode else { return 0 }
+        var sequence = frameSequence(for: root.id, startingFrom: homeFormation)
+        sequence.reresolve()
+        return sequence.duration
+    }
+
+    /// Whether this play was authored in frames at all — the playbook shows v1
+    /// and v2 plays side by side until Phase E.
+    var hasFrames: Bool { frameCount > 0 }
+
+    /// The formation a read OPENS on: home positions for the root, or whatever
+    /// the parent's branch frame left behind.
+    ///
+    /// On the diagram rather than in the editor (Phase D) because the printed
+    /// play card asks it of a stored play with no editor attached — and because
+    /// it is a fact about the play, not about editing it.
+    func formationEntering(_ nodeId: UUID, visited: Set<UUID> = []) -> Formation {
+        guard nodeId != rootNodeId, !visited.contains(nodeId) else { return homeFormation }
+        guard let parent = nodes.first(where: { node in
+            node.edges.contains { $0.targetId == nodeId && $0.kind == .branch }
+        }), let edge = parent.edges.first(where: { $0.targetId == nodeId }) else {
+            return homeFormation
+        }
+        var parentSequence = FrameSequence(
+            startFormation: formationEntering(parent.id, visited: visited.union([nodeId])),
+            frames: parent.frames, pace: effectivePace, rim: rimPoint)
+        parentSequence.reresolve()
+        let through = edge.afterFrameIndex.map { $0 + 1 } ?? parent.frames.count
+        return parentSequence.formation(enteringFrame: max(0, through))
+    }
+
+    /// A READ INHERITS THE BALL the way it inherits the formation: the root
+    /// takes it from where the ball was placed, a branch from whoever was
+    /// holding it when the parent's branch frame ended. Without it a child read
+    /// opens with nobody holding anything and its pass cannot be drawn at all.
+    func openingHolder(for nodeId: UUID, visited: Set<UUID> = []) -> UUID? {
+        guard nodeId != rootNodeId, !visited.contains(nodeId) else { return ballPlacedWith }
+        guard let parent = nodes.first(where: { node in
+            node.edges.contains { $0.targetId == nodeId && $0.kind == .branch }
+        }), let edge = parent.edges.first(where: { $0.targetId == nodeId }) else {
+            return ballPlacedWith
+        }
+        var parentSequence = FrameSequence(
+            startFormation: formationEntering(parent.id, visited: visited.union([nodeId])),
+            frames: parent.frames, pace: effectivePace, rim: rimPoint)
+        parentSequence.reresolve()
+        let through = edge.afterFrameIndex.map { $0 + 1 } ?? parent.frames.count
+        let starts = parentSequence.frameStartTimes
+        let handover = starts.indices.contains(through) ? starts[through] : parentSequence.duration
+        let parentOpening = openingHolder(for: parent.id, visited: visited.union([nodeId]))
+        return parentSequence.holder(at: handover, startingWith: parentOpening)
+    }
+
     /// One read's frames as a sequence, opening on `formation`.
     func frameSequence(for nodeId: UUID, startingFrom formation: Formation) -> FrameSequence {
         FrameSequence(startFormation: formation,

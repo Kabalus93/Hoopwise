@@ -132,23 +132,40 @@ struct PDFTextStyle {
                      color: CGColor(gray: 0.4, alpha: 1))
     }
 
+    /// USE AFTER SCOPE, FIXED (Phase D). `CTParagraphStyleSetting` stores a RAW
+    /// POINTER to the value; `withUnsafeBytes(of:)` only guarantees that
+    /// pointer inside its own closure. The previous shape appended the setting
+    /// from inside the closure and then called `CTParagraphStyleCreate` after
+    /// it returned, so CoreText read two pointers into stack memory that had
+    /// already gone out of scope.
+    ///
+    /// It "worked" for a year because the stack usually still held the right
+    /// bytes. It was found the first time this layer was exercised under a test
+    /// process, where it aborted in malloc — and it was never the play card's
+    /// bug: the attendance statement and the training agreement, the two
+    /// documents that go to clients, were built on it.
+    ///
+    /// The pointers must be live AT THE MOMENT OF THE CALL, so the create
+    /// happens INSIDE both scopes. CTParagraphStyleCreate copies the values, so
+    /// nothing has to outlive it.
     fileprivate func attributes() -> [NSAttributedString.Key: Any] {
-        var settings = [CTParagraphStyleSetting]()
         var alignmentValue = alignment
-        withUnsafeBytes(of: &alignmentValue) { raw in
-            settings.append(CTParagraphStyleSetting(
-                spec: .alignment,
-                valueSize: MemoryLayout<CTTextAlignment>.size,
-                value: raw.baseAddress!))
-        }
         var spacing = lineSpacing
-        withUnsafeBytes(of: &spacing) { raw in
-            settings.append(CTParagraphStyleSetting(
-                spec: .lineSpacingAdjustment,
-                valueSize: MemoryLayout<CGFloat>.size,
-                value: raw.baseAddress!))
+        let paragraph: CTParagraphStyle = withUnsafePointer(to: &alignmentValue) { alignmentPointer in
+            withUnsafePointer(to: &spacing) { spacingPointer in
+                let settings = [
+                    CTParagraphStyleSetting(
+                        spec: .alignment,
+                        valueSize: MemoryLayout<CTTextAlignment>.size,
+                        value: UnsafeRawPointer(alignmentPointer)),
+                    CTParagraphStyleSetting(
+                        spec: .lineSpacingAdjustment,
+                        valueSize: MemoryLayout<CGFloat>.size,
+                        value: UnsafeRawPointer(spacingPointer))
+                ]
+                return CTParagraphStyleCreate(settings, settings.count)
+            }
         }
-        let paragraph = CTParagraphStyleCreate(settings, settings.count)
 
         return [
             kCTFontAttributeName as NSAttributedString.Key: font,
@@ -183,7 +200,18 @@ struct PDFTableColumn {
 /// block does not fit in the remaining height, a page break happens before it,
 /// so blocks are never split mid-element. Tables are the exception — they split
 /// by row and repeat their header.
-final class PDFDocumentRenderer {
+/// NONISOLATED, DELIBERATELY. The project compiles with
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, which made this class — pure
+/// CoreGraphics and CoreText, not a pixel of UI — implicitly main-actor
+/// isolated, and with it its deinit. An isolated deinit routes through
+/// `swift_task_deinitOnExecutorImpl`, and in the test process that aborted in
+/// malloc the moment a renderer was released: constructing one and dropping it
+/// was enough. It is why this layer had no tests until Phase D — the first test
+/// that touched it could not survive its own teardown.
+///
+/// Rendering a document is not main-thread work and pinning it there was never
+/// intended; saying so out loud fixes the crash and makes the layer testable.
+nonisolated final class PDFDocumentRenderer {
     let pageSize: CGSize
     let margins: PDFMargins
 
@@ -415,6 +443,23 @@ final class PDFDocumentRenderer {
         if let dash { context.setLineDash(phase: 0, lengths: dash) }
         context.addPath(path)
         context.strokePath()
+        context.restoreGState()
+    }
+
+    /// Hands the raw context to `body` with the origin at the BOTTOM-LEFT of
+    /// `rect` — top-down box in, PDF coordinates out — with the graphics state
+    /// saved and restored around it.
+    ///
+    /// `draw(path:in:)` covers a stroked path and nothing else, which is enough
+    /// for a table rule and not enough for a court: a diagram fills regions,
+    /// strokes hairlines, fills pucks and sets type, all in one coordinate
+    /// space. This is the hook the play card uses, and the reason it exists
+    /// here rather than as a second renderer.
+    func draw(in rect: CGRect, _ body: (CGContext) -> Void) {
+        guard let context else { return }
+        context.saveGState()
+        context.translateBy(x: rect.minX, y: flipped(rect.minY + rect.height))
+        body(context)
         context.restoreGState()
     }
 
