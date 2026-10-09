@@ -1,0 +1,1100 @@
+{
+  "_schema_version": "1.0",
+  "_source": "酷讯 Unified Session Structure - drill set for the 30/30/30 session (Warm-up routine + games, Skills block, Constrained game block)",
+  "_instructions": {
+    "import": "Hoopwise > Drill Library > Import. Drills already present by name are skipped by the app's dedupe step.",
+    "tags": "Search the library for unified-structure, block-warmup, block-skills or block-game to filter by session block."
+  },
+  "drills": [
+    {
+      "name": "Full Court Dribble Progression",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Routine opener of the unified session. Every player has a ball and travels baseline to baseline, one dribble type per trip, in the same order every session so the moves become automatic.",
+      "instructions": [
+        "Each player takes a ball and lines up on the baseline in 2-4 lines",
+        "Trip 1: regular dribble, right hand down, left hand back",
+        "Trip 2: skip dribble, one bounce per skip, switch hands on the way back",
+        "Trip 3: in-and-out dribble, fake the crossover and keep the ball in the same hand",
+        "Trip 4: alternate dribble, crossover on every bounce, left to right to left",
+        "Add the age-group moves: between the legs, behind the back, retreat dribble, hesitation",
+        "Once the group is ready, finish the last trips with a layup at the far basket"
+      ],
+      "keyPoints": [
+        "Eyes up, never on the ball",
+        "Fingertips, not the palm",
+        "Dribble below the waist with knees bent",
+        "Same order every session so the routine becomes second nature",
+        "Coach walks the lines and corrects one player at a time"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 1,
+      "maxPlayers": 16,
+      "variations": [
+        "U6/U8: walking speed; on the whistle jump stop into triple threat",
+        "U10+: add between the legs and behind the back",
+        "U12+: add change of pace (slow to fast) and the retreat dribble",
+        "Race format: the last two trips are relays against another line"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "routine",
+        "dribbling",
+        "ball-handling",
+        "full-court"
+      ]
+    },
+    {
+      "name": "Layup Progression",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Routine finishing ladder of the unified session, run basket to basket. Progresses from footwork without a dribble to finishing against obstacles.",
+      "instructions": [
+        "Step 1: no dribble, carry the ball high in the shooting hand with the arm extended, run full court and finish a layup",
+        "Step 2: no dribble, run full court moving the ball around the waist, then finish a layup",
+        "Step 3: dribble basket to basket and finish a layup, right side with the right hand",
+        "Step 4: same on the left side with the left hand",
+        "Step 5: add obstacles, cones or chairs to weave around before the finish",
+        "Step 6: add a passive defender standing in the lane, then a live chasing defender"
+      ],
+      "keyPoints": [
+        "Outside hand shoots, inside foot jumps: right hand off the left foot",
+        "Knee drives up on the shooting side",
+        "Ball goes up high with a soft touch off the glass",
+        "Run through the layup, no slowing down at the rim",
+        "Both hands every session, the weak side gets equal reps"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones",
+        "Chairs"
+      ],
+      "minPlayers": 1,
+      "maxPlayers": 16,
+      "variations": [
+        "U6: lower rim, coach hands the ball at the elbow of the lane",
+        "U8/U10: add the reverse layup and the opposite hand finish",
+        "U12+: euro step, floater, power layup through contact",
+        "Timed team challenge: total makes in 2 minutes"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "routine",
+        "layups",
+        "finishing",
+        "footwork",
+        "full-court"
+      ]
+    },
+    {
+      "name": "Shooting Routine Ladder",
+      "category": "shooting",
+      "difficulty": "beginner",
+      "durationMinutes": 6,
+      "description": "Routine shooting block that closes the warm-up routine. Short and identical every session, built from close-range form shooting up to the game spots of the age group.",
+      "instructions": [
+        "Rung 1: one-hand form shooting from 1 meter, 5 makes on each side of the rim",
+        "Rung 2: two-hand form shooting from the block, 5 makes on each side",
+        "Rung 3: three spots (left elbow, free throw line, right elbow), 3 makes each, partner rebounds",
+        "Rung 4 (U10+): catch and shoot from a partner pass with 1-2 step footwork",
+        "Rung 5 (U12+): one-dribble pull-up from each spot"
+      ],
+      "keyPoints": [
+        "Elbow under the ball, wrist snapped, hold the follow-through",
+        "Feet set before the catch",
+        "Legs give the power, arms give the direction",
+        "Count makes, not attempts",
+        "Partner rebounds and returns a chest or bounce pass"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Hoop"
+      ],
+      "minPlayers": 1,
+      "maxPlayers": 12,
+      "variations": [
+        "U6: shoot at a lowered rim or into a hoop held by the coach",
+        "Competition: first pair to 15 makes",
+        "Pressure: miss two in a row and restart the rung"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "routine",
+        "shooting",
+        "form"
+      ]
+    },
+    {
+      "name": "Pass and Tag",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 6,
+      "description": "Warm-up chase game with one ball. Taggers can only tag while holding the ball and cannot move with it, so they must pass to hunt. Develops passing speed, court vision and communication.",
+      "instructions": [
+        "Mark a playing area, half court for 8-10 players",
+        "Two taggers share one ball, everyone else is a runner",
+        "The tagger holding the ball may pivot but not run or dribble",
+        "Taggers pass to each other to get close to a runner and tag by touching with the ball held in both hands, no throwing at runners",
+        "A tagged runner joins the taggers",
+        "Last runner standing wins, restart with two new taggers"
+      ],
+      "keyPoints": [
+        "Taggers must talk and call names before passing",
+        "Runners read the ball and move away from the receiver's side",
+        "Pass to where the teammate will be, not where they are",
+        "Coach shrinks the area if runners escape too easily"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 16,
+      "variations": [
+        "U6: taggers may take two steps with the ball",
+        "Two balls once there are five or more taggers",
+        "U10+: runners must dribble a ball while escaping"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "passing",
+        "court-vision",
+        "communication",
+        "fun"
+      ]
+    },
+    {
+      "name": "Police and Thieves",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 6,
+      "description": "Dribble tag game. Thieves dribble inside the area while the police try to knock the ball away. Teaches dribbling under pressure with the eyes up.",
+      "instructions": [
+        "Half court, every thief has a ball, one or two police without a ball",
+        "Thieves dribble continuously, a thief who stops dribbling or steps out is caught",
+        "Police catch a thief by knocking the ball away or touching it",
+        "Caught thieves go to jail at the free throw line and do 10 crossovers",
+        "A free thief can release a jailed teammate with a high five while still dribbling",
+        "Switch the police every 60-90 seconds"
+      ],
+      "keyPoints": [
+        "Eyes up to see the police coming",
+        "Protect the ball with the body and the off arm",
+        "Low, hard dribble when a police officer is close",
+        "Change direction, do not just run faster"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 16,
+      "variations": [
+        "U6: police hold a ball too and must dribble",
+        "Weak hand only round",
+        "U12+: police may steal and keep the ball"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "dribbling",
+        "pressure",
+        "fun"
+      ]
+    },
+    {
+      "name": "Ten Passes",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 6,
+      "description": "Possession game with no dribbling. A team scores a point by completing ten passes in a row while the other team tries to steal, deflect or force a bad pass.",
+      "instructions": [
+        "Two teams of 3-6 in a half court, one ball, no baskets used",
+        "Offense counts passes out loud, ten consecutive passes equals one point",
+        "No dribbling, the ball holder may pivot",
+        "A steal, a deflection to the floor or out of bounds gives the ball to the other team and the count restarts",
+        "Defense may not grab the ball out of the hands",
+        "First team to 3 points wins"
+      ],
+      "keyPoints": [
+        "Receivers move to open space after passing, no standing",
+        "Pass fakes before passes",
+        "Catch with two hands and face the ball",
+        "Defense pressures the ball and denies the nearest receiver"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 16,
+      "variations": [
+        "U6/U8: five passes to score, defender must stay one arm away",
+        "Maximum 3 seconds with the ball, same rule as the game block",
+        "Every teammate must touch the ball before the point counts",
+        "Allow one dribble only to escape a trap"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "passing",
+        "court-vision",
+        "spacing",
+        "fun"
+      ]
+    },
+    {
+      "name": "Dribble Knockout",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 5,
+      "description": "Everyone dribbles inside a marked area and tries to knock the other balls out while protecting their own. Builds ball protection and awareness in chaos.",
+      "instructions": [
+        "All players dribble inside the three-point arc or the center circle depending on numbers",
+        "On the whistle, players knock other balls out of the area while keeping their own dribble",
+        "A player whose ball leaves the area or who stops dribbling is out and does 10 pound dribbles on the side",
+        "Shrink the area as players are eliminated",
+        "Last player dribbling wins"
+      ],
+      "keyPoints": [
+        "Keep the body between the ball and the nearest opponent",
+        "Head up and scan constantly",
+        "Low dribble when attacked, higher dribble when free",
+        "No pushing or grabbing"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 4,
+      "maxPlayers": 16,
+      "variations": [
+        "Weak hand only",
+        "Two-ball version for U12+",
+        "Teams: the last team with a player still dribbling wins"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "dribbling",
+        "ball-protection",
+        "pressure",
+        "fun"
+      ]
+    },
+    {
+      "name": "Sharks and Minnows Dribble",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 6,
+      "description": "Minnows dribble across the court while sharks try to knock their ball away. Caught minnows become sharks. Classic dribbling under pressure game for young groups.",
+      "instructions": [
+        "Minnows line up on one sideline with a ball each, one or two sharks start in the middle without a ball",
+        "On the signal, minnows dribble to the opposite sideline",
+        "Sharks knock balls away or tag the ball, caught minnows drop their ball and become sharks",
+        "Repeat until one minnow remains"
+      ],
+      "keyPoints": [
+        "Change speed and direction to beat the shark",
+        "Eyes up to find the gaps",
+        "Protect the ball on the shark's side",
+        "Sharks work together to close space"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 16,
+      "variations": [
+        "U6: sharks walk only",
+        "Minnows must use the weak hand",
+        "U10+: sharks also dribble a ball"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "dribbling",
+        "pressure",
+        "fun"
+      ]
+    },
+    {
+      "name": "Relay Dribble Races",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 6,
+      "description": "Team relay races down and back using the routine dribble moves, finished with a layup. Adds competition to the end of the warm-up routine.",
+      "instructions": [
+        "Split into 2-4 even teams in lines on the baseline",
+        "Coach calls the dribble type: regular, skip, in and out or crossover",
+        "First player dribbles to the far basket, makes a layup, dribbles back and hands off",
+        "A missed layup must be rebounded and made before returning",
+        "First team seated wins the round, change the dribble type each round"
+      ],
+      "keyPoints": [
+        "Control before speed, a lost ball costs more time than a slower dribble",
+        "Layups made, not thrown",
+        "Teammates cheer and call the next player"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 4,
+      "maxPlayers": 16,
+      "variations": [
+        "Weak hand round",
+        "Add a cone slalom",
+        "U12+: finish with a pull-up jumper"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "dribbling",
+        "layups",
+        "competition",
+        "fun"
+      ]
+    },
+    {
+      "name": "Red Light Green Light Dribble",
+      "category": "warmup",
+      "difficulty": "beginner",
+      "durationMinutes": 5,
+      "description": "Coach-controlled stop and go dribbling game for the youngest groups. Teaches dribble control, stopping in balance and reacting to a signal.",
+      "instructions": [
+        "All players have a ball and start on the baseline facing the coach",
+        "Green light: dribble forward with the called hand",
+        "Red light: jump stop and hold the ball in triple threat",
+        "Yellow light: dribble in place, low and hard",
+        "Anyone who travels, loses the ball or moves on red goes back three steps",
+        "First to reach the coach wins"
+      ],
+      "keyPoints": [
+        "Jump stop with two feet, knees bent",
+        "Triple threat position on every red light",
+        "Eyes on the coach, not on the ball"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 4,
+      "maxPlayers": 16,
+      "variations": [
+        "Blue light: switch hands with a crossover",
+        "U10+: purple light for a spin or between the legs",
+        "Players take turns calling the lights"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-warmup",
+        "game",
+        "dribbling",
+        "control",
+        "u6",
+        "u8",
+        "fun"
+      ]
+    },
+    {
+      "name": "Skill Review Challenge",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "Opening format of the skills block. The skill introduced last session is run again as a short station or point challenge so players recall it before anything new is added.",
+      "instructions": [
+        "Name the skill from last session and ask one player to demonstrate it",
+        "Run the skill in 2-3 stations for 3 minutes each, one station per basket or cone group",
+        "Score each rep: 1 point for correct technique, 2 points for correct technique at speed",
+        "Coach corrects one detail per player, not the whole technique",
+        "Finish with a 60-second whole-group challenge using the skill"
+      ],
+      "keyPoints": [
+        "Review before new content, every session",
+        "Players explain the key point in their own words",
+        "If fewer than half the group executes correctly, the new skill waits and the review continues"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 16,
+      "variations": [
+        "Pair players as coach and athlete, then switch roles",
+        "Record the group score and try to beat it next session"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "review",
+        "retention"
+      ]
+    },
+    {
+      "name": "Triple Threat Introduction",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "Teaches the triple threat stance on the catch: balanced, ball protected at the hip, ready to shoot, pass or drive. First skill of the roadmap for every age group.",
+      "instructions": [
+        "Demonstrate: feet shoulder width, knees bent, ball on the shooting side hip, eyes on the rim",
+        "Shadow: players mirror the coach without a ball, then with a ball",
+        "Catch into triple threat: partner passes, receiver jump stops and freezes in triple threat for 2 seconds",
+        "Add the three options one at a time: shot fake, pass fake, rip through to drive",
+        "Add the jab step for U8 and older",
+        "Finish with Triple Threat Finishes or 1v1 from Triple Threat"
+      ],
+      "keyPoints": [
+        "The ball never rests in front of the chest where it can be slapped",
+        "The pivot foot stays planted until the drive",
+        "Eyes up on the catch to see the defender and the teammates",
+        "Fast rip through below the knees"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 16,
+      "variations": [
+        "U6: freeze game, coach calls shoot, pass or drive and players shadow the move",
+        "U10+: catch on the move coming off a cut",
+        "Add a passive defender with the hands up"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "triple-threat",
+        "fundamentals",
+        "footwork"
+      ]
+    },
+    {
+      "name": "Triple Threat Finishes",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "From a triple threat catch at the wing or elbow, players attack the basket and finish with a different layup each round. Links the stance to scoring.",
+      "instructions": [
+        "Lines at both wings, coach or partner passes to the catch spot",
+        "Catch in triple threat, pause one count, then attack",
+        "Round 1: direct drive, regular layup with the strong hand",
+        "Round 2: crossover drive, layup with the other hand",
+        "Round 3: jab step and go",
+        "Round 4: free choice of finish: regular, opposite hand, reverse, scoop, or euro step and floater for U12+",
+        "The rebounder passes back out to the next player"
+      ],
+      "keyPoints": [
+        "The first step is long and low, past the imaginary defender's hip",
+        "Push the ball out ahead on the first dribble, not beside the body",
+        "Finish with the hand away from the defender",
+        "Eyes on the target, not on the defender"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones",
+        "Chairs"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 12,
+      "variations": [
+        "Add a chair as the defender to drive around",
+        "Passive defender who slides but cannot block",
+        "Score 2 for a make with the weak hand"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "triple-threat",
+        "finishing",
+        "layups"
+      ]
+    },
+    {
+      "name": "1v1 from Triple Threat",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Competitive application of the triple threat. The attacker receives the ball in triple threat and tries to score against one defender with a dribble limit.",
+      "instructions": [
+        "Attacker at the wing, defender in stance one arm away, coach or the line passes the ball",
+        "The attacker must freeze in triple threat for one count before attacking",
+        "Maximum 3 dribbles to score: 2 for U6, 4 for U12+",
+        "A score is 1 point, a stop gives the defender 1 point",
+        "Winner stays for a maximum of 3 rounds, then both rotate"
+      ],
+      "keyPoints": [
+        "Read the defender's feet and attack the front foot",
+        "Use the jab or a fake before the drive",
+        "Defender stays low with active hands, no reaching",
+        "The one count in triple threat is mandatory"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 12,
+      "variations": [
+        "U6: defender keeps the hands behind the back",
+        "Start from different spots: top, wing, corner",
+        "Team scoring: line versus line"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "triple-threat",
+        "1v1",
+        "competition",
+        "finishing"
+      ]
+    },
+    {
+      "name": "Jump Stop and Pivot",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Teaches stopping in balance with the ball and protecting it with front and reverse pivots. Foundation for the triple threat and for not travelling.",
+      "instructions": [
+        "Players dribble toward a cone and jump stop with both feet landing together",
+        "Hold the ball in triple threat for one count",
+        "Front pivot 180 degrees on the left foot, then on the right foot",
+        "Reverse pivot 180 degrees on each foot",
+        "Add a partner who shadows as a defender and tries to touch the ball",
+        "Finish with a pass out of the pivot to the next player in line"
+      ],
+      "keyPoints": [
+        "Both feet land together, knees bent, chest up",
+        "The pivot foot heel lifts, the toes stay planted",
+        "Ball protected far from the defender with the elbows out",
+        "Head up looking for a teammate during the pivot"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 16,
+      "variations": [
+        "U6: jump stop on the whistle while dribbling anywhere in the area",
+        "Coach calls front or reverse",
+        "U10+: pivot and shoot"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "footwork",
+        "pivot",
+        "fundamentals"
+      ]
+    },
+    {
+      "name": "Partner Passing Series",
+      "category": "skills",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Chest, bounce and overhead passes in pairs, stationary then on the move. Standard passing block for the skills section at U6 to U10.",
+      "instructions": [
+        "Pairs 3-4 meters apart: 10 chest passes, 10 bounce passes, 10 overhead passes",
+        "Step toward the target on every pass",
+        "Receiver shows two hands as a target and calls for the ball",
+        "On the move: both players jog the length of the court passing back and forth",
+        "Add a third player as a passive defender in the middle for the last round"
+      ],
+      "keyPoints": [
+        "Thumbs down on the follow-through of the chest pass",
+        "The bounce pass lands two thirds of the way to the receiver",
+        "Pass to the hands, never above the head for young players",
+        "Catch with the eyes on the ball and two hands"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 16,
+      "variations": [
+        "U10+: one-hand push pass",
+        "Pass on the move to a cutting partner",
+        "Count consecutive clean passes and restart at a drop"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "passing",
+        "fundamentals"
+      ]
+    },
+    {
+      "name": "Give and Go",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 10,
+      "description": "The first two-player play of the roadmap: pass, cut hard to the basket and receive the return pass for a layup. Progresses from 2v0 to 2v2.",
+      "instructions": [
+        "Player 1 at the top with the ball, player 2 at the wing",
+        "Player 1 passes to the wing and cuts hard to the basket in front of the imaginary defender",
+        "Player 2 returns the pass for a layup",
+        "Switch roles and sides after each rep",
+        "Add one defender on the cutter for 2v1, then a defender on each for 2v2"
+      ],
+      "keyPoints": [
+        "Cut immediately after the pass, do not watch the ball",
+        "Fake away then cut toward the basket",
+        "The passer leads the cutter with a bounce or chest pass",
+        "Call the name before the return pass"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 12,
+      "variations": [
+        "U6: the coach is the wing passer",
+        "U10+: backdoor cut if the defender overplays",
+        "Finish with a jump stop and shot instead of a layup"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "passing",
+        "cutting",
+        "give-and-go",
+        "2v2"
+      ]
+    },
+    {
+      "name": "Defensive Stance and Mirror",
+      "category": "defense",
+      "difficulty": "beginner",
+      "durationMinutes": 8,
+      "description": "Introduces the defensive stance and the lateral slide through a mirror game. Players learn to stay low and move their feet before any live 1v1 defense.",
+      "instructions": [
+        "Demonstrate the stance: feet wider than the shoulders, knees bent, back straight, hands active",
+        "Slides: sideline to sideline and back without crossing the feet",
+        "Mirror: pairs face each other without a ball, the leader moves sideways and the mirror copies for 20 seconds, then switch",
+        "Add a ball: the leader dribbles, the mirror slides to stay in front",
+        "Live for 10 seconds: the dribbler tries to reach the sideline, the defender stays in front"
+      ],
+      "keyPoints": [
+        "Stay low, the head stays at the same height while sliding",
+        "Push off the trail foot, do not hop",
+        "Hands up and active, no reaching for the ball",
+        "Nose on the ball for young players"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 16,
+      "variations": [
+        "Coach points the directions for the whole group",
+        "U10+: zig-zag slides full court",
+        "U12+: start the mirror with a closeout"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "defense",
+        "stance",
+        "footwork"
+      ]
+    },
+    {
+      "name": "Change of Direction Series",
+      "category": "skills",
+      "difficulty": "intermediate",
+      "durationMinutes": 10,
+      "description": "Crossover, between the legs and behind the back at cones, then against a passive defender. Skills block progression for U10 and older once the warm-up moves are automatic.",
+      "instructions": [
+        "Three cones in a line, 4 meters apart, from the baseline toward the far basket",
+        "Round 1: crossover at each cone, finish with a layup",
+        "Round 2: between the legs at each cone",
+        "Round 3: behind the back at each cone",
+        "Round 4: free choice, a partner stands at each cone as a passive defender",
+        "Round 5: hesitation then explode past the cone"
+      ],
+      "keyPoints": [
+        "The change of speed makes the change of direction work",
+        "Low and hard on the move dribble",
+        "Shoulders go past the cone before the next dribble",
+        "Eyes up through every move"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 16,
+      "variations": [
+        "U12+: add a retreat dribble before the move",
+        "Two-ball version for advanced groups",
+        "Race two lines side by side"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "dribbling",
+        "ball-handling",
+        "change-of-direction"
+      ]
+    },
+    {
+      "name": "Catch and Shoot Footwork",
+      "category": "shooting",
+      "difficulty": "intermediate",
+      "durationMinutes": 10,
+      "description": "Teaches the 1-2 step and the hop into the shot off a pass. Skills block item for U10 and older once form shooting is stable.",
+      "instructions": [
+        "Shooter at the elbow, passer at the top with the ball",
+        "Shooter steps to the ball, catches inside foot then outside foot (1-2 step) and shoots",
+        "5 makes, then switch to the hop: both feet land together on the catch",
+        "Move to the wing and repeat both footworks",
+        "Add a cut from the block to the wing before the catch"
+      ],
+      "keyPoints": [
+        "Hands ready, shooting hand behind the ball before the catch",
+        "Feet pointed at the rim on the landing",
+        "Catch low and rise into the shot in one motion",
+        "Hold the follow-through"
+      ],
+      "equipmentNeeded": [
+        "Basketball"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 12,
+      "variations": [
+        "Shot fake and one-dribble pull-up",
+        "Competition: first to 10 makes",
+        "U12+: add a closeout defender"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "shooting",
+        "footwork",
+        "catch-and-shoot"
+      ]
+    },
+    {
+      "name": "Finishing Package",
+      "category": "skills",
+      "difficulty": "intermediate",
+      "durationMinutes": 10,
+      "description": "Euro step, floater, power layup and reverse layup from a wing drive. Skills block content for U12 and older, building on the warm-up layup progression.",
+      "instructions": [
+        "Lines at both wings, a cone at the elbow as the help defender",
+        "Round 1: euro step around the cone, finish with the outside hand",
+        "Round 2: floater over the cone from free throw line distance",
+        "Round 3: power layup, two-foot jump stop into the cone, finish strong with two hands",
+        "Round 4: reverse layup on the baseline drive",
+        "Round 5: live against a help defender who chooses to step up or stay"
+      ],
+      "keyPoints": [
+        "Decide early, read the help defender before the second dribble",
+        "Euro step: long first step one way, second step the other way",
+        "Floater: high release, soft wrist, land balanced",
+        "Power layup: chin the ball, shoulders square to the basket"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Cones",
+        "Pad"
+      ],
+      "minPlayers": 2,
+      "maxPlayers": 12,
+      "variations": [
+        "Weak hand rounds",
+        "Add a trailing defender",
+        "Score 2 for a make through contact, coach bumps with a pad"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "finishing",
+        "layups",
+        "footwork"
+      ]
+    },
+    {
+      "name": "3v0 Pass and Cut",
+      "category": "offense",
+      "difficulty": "intermediate",
+      "durationMinutes": 10,
+      "description": "Three players learn spacing, pass and cut, and filling the open spot without defense, then against three defenders. Team skill for U10 and older.",
+      "instructions": [
+        "Three players spaced: top, left wing, right wing",
+        "The top passes to a wing and cuts to the basket, if no return pass the cutter fills the open wing",
+        "The weak side wing replaces to the top",
+        "Continue for 30 seconds, then the coach calls shot and the player with the ball scores",
+        "Add three defenders playing passive, then live"
+      ],
+      "keyPoints": [
+        "Pass, cut, fill: nobody stands still",
+        "Stay spaced 4-5 meters apart",
+        "Cut hard to the rim with the hands ready",
+        "Receiver squares up in triple threat on every catch"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 3,
+      "maxPlayers": 12,
+      "variations": [
+        "U8: 2v0 version with the coach as the third player",
+        "Live version with a limit of 2 dribbles",
+        "Score only off a cut"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-skills",
+        "passing",
+        "cutting",
+        "spacing",
+        "team-play",
+        "3v3"
+      ]
+    },
+    {
+      "name": "3v3 Game: 3-Second Possession",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 25,
+      "description": "Regular 3v3 game where each player may keep the ball for a maximum of three seconds. Forces quick decisions, passing and movement. Standard game block rule for U6 to U10.",
+      "instructions": [
+        "Teams of 3, half court for one game, full court when two groups are available",
+        "Normal basketball rules adapted to the age group",
+        "Each player may hold or dribble the ball for a maximum of 3 seconds, the coach counts out loud",
+        "Reaching 3 seconds is a turnover, the defense takes the ball at the top",
+        "Scores count normally, play 4-5 minute periods and rotate the teams"
+      ],
+      "keyPoints": [
+        "Catch in triple threat and decide immediately",
+        "Teammates move to get open before the count reaches 2",
+        "Coach counts loud and in rhythm, no silent counts",
+        "Celebrate good passes as much as scores"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 12,
+      "variations": [
+        "U6: 4 seconds for the first weeks",
+        "A pass must precede every shot",
+        "Make it take it",
+        "Add the session's skill as a bonus point"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-game",
+        "game",
+        "scrimmage",
+        "3v3",
+        "decision-making",
+        "passing"
+      ]
+    },
+    {
+      "name": "Game: Pass Before You Shoot",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 25,
+      "description": "Regular game, 3v3 to 5v5, where a team must complete a minimum number of passes before any shot. Builds patience, spacing and ball movement.",
+      "instructions": [
+        "Set the minimum: 3 passes for U8 and U10, 4 for U12 and older",
+        "The coach counts passes out loud, a shot before the minimum is a turnover",
+        "A steal or out of bounds resets the count",
+        "Fast break layups are allowed only if the team passed at least once in transition",
+        "Play normal periods and rotate"
+      ],
+      "keyPoints": [
+        "Move after passing, a pass to a standing player is a wasted pass",
+        "Reverse the ball to the other side at least once",
+        "Coach counts loud so players hear the rhythm"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 15,
+      "variations": [
+        "Every player must touch the ball before a shot",
+        "U12+: only weak hand passes count",
+        "A pass that leads to a layup counts double"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-game",
+        "game",
+        "scrimmage",
+        "passing",
+        "spacing",
+        "team-play"
+      ]
+    },
+    {
+      "name": "Game: Weak Hand Only",
+      "category": "offense",
+      "difficulty": "intermediate",
+      "durationMinutes": 20,
+      "description": "Regular game where every dribble and layup must be taken with the weak hand. The strong hand may only pass and catch. Builds the off hand under game pressure.",
+      "instructions": [
+        "Each player declares the weak hand before the game",
+        "Any dribble or layup with the strong hand is a turnover",
+        "Passing and shooting from distance use the normal technique",
+        "Play 3v3 or 4v4 periods of 4 minutes"
+      ],
+      "keyPoints": [
+        "Protect the ball with the strong hand and the body",
+        "Slow down, control before speed",
+        "Layup with the weak hand off the correct foot"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 15,
+      "variations": [
+        "U8/U10: weak hand dribble only, any hand to finish",
+        "Weak hand bonus: a weak hand layup counts 2"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-game",
+        "game",
+        "scrimmage",
+        "dribbling",
+        "weak-hand",
+        "finishing"
+      ]
+    },
+    {
+      "name": "Game: No Dribble",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 20,
+      "description": "Regular game with no dribbling allowed. Forces passing, cutting, pivoting and spacing. Direct link to the Ten Passes warm-up game.",
+      "instructions": [
+        "No dribbles, a dribble is a turnover",
+        "The ball holder may pivot and fake",
+        "Receivers must cut or fill open space to get the ball",
+        "Normal scoring, 3v3 or 4v4 half court, 4-minute periods"
+      ],
+      "keyPoints": [
+        "Pivot to protect the ball, do not panic",
+        "Cut to the ball or to the rim, no standing",
+        "Pass fakes before passes against pressure"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 15,
+      "variations": [
+        "Allow one dribble to attack the rim",
+        "U6/U8: only bounce passes allowed for one period"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-game",
+        "game",
+        "scrimmage",
+        "passing",
+        "cutting",
+        "pivot"
+      ]
+    },
+    {
+      "name": "Game: Skill Bonus Point",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 25,
+      "description": "Regular game in which the skill taught in the skills block earns an extra point every time it is used correctly. Transfers the session's teaching into the game.",
+      "instructions": [
+        "Announce the bonus skill before the game, for example a score from a jab step and go, a layup after a give and go, or a stop with a jump stop",
+        "Play the normal rules for the age group",
+        "Each correct use of the skill, scored or not, is a bonus point called out by the coach",
+        "Review the bonus count at the end of each period"
+      ],
+      "keyPoints": [
+        "Coach names the skill out loud every time it appears",
+        "Players ask what the bonus is before each period",
+        "Only one bonus skill per session"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 15,
+      "variations": [
+        "Bonus for a defensive skill: stance, slide, closeout",
+        "Double bonus if the skill leads directly to a score"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-game",
+        "game",
+        "scrimmage",
+        "transfer",
+        "decision-making"
+      ]
+    },
+    {
+      "name": "Game: Layups Only",
+      "category": "offense",
+      "difficulty": "beginner",
+      "durationMinutes": 20,
+      "description": "Regular game where only layups count. Forces attacking the rim, cutting and finishing on both sides. For U6 to U10 and for groups that settle for long shots.",
+      "instructions": [
+        "Only layups and shots inside the key count",
+        "Any outside shot is a turnover",
+        "Normal rules otherwise, 3v3 or 4v4"
+      ],
+      "keyPoints": [
+        "Attack the rim with the first step",
+        "Use the layup progression finishes: regular, opposite hand, reverse",
+        "Defense protects the paint, offense passes to the cutter"
+      ],
+      "equipmentNeeded": [
+        "Basketball",
+        "Pinnies"
+      ],
+      "minPlayers": 6,
+      "maxPlayers": 15,
+      "variations": [
+        "Weak hand layup counts 2",
+        "U10+: reverse layup counts 2"
+      ],
+      "tags": [
+        "unified-structure",
+        "block-game",
+        "game",
+        "scrimmage",
+        "finishing",
+        "layups"
+      ]
+    }
+  ]
+}

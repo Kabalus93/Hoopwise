@@ -860,7 +860,7 @@ class SwiftDataManager: ObservableObject {
         }
         
         // Drills
-        for drill in DrillItem.samples {
+        for drill in DrillItem.samples + DrillItem.unifiedSessionDrills {
             let sdDrill = SDDrill.from(drill)
             modelContext.insert(sdDrill)
         }
@@ -3371,7 +3371,7 @@ class SwiftDataManager: ObservableObject {
             let existingNames = Set(existingDrills.map { $0.name.lowercased() })
             
             var addedCount = 0
-            for sampleDrill in DrillItem.samples {
+            for sampleDrill in DrillItem.samples + DrillItem.unifiedSessionDrills {
                 if !existingNames.contains(sampleDrill.name.lowercased()) {
                     let sdDrill = SDDrill.from(sampleDrill)
                     modelContext.insert(sdDrill)

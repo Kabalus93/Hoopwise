@@ -96,11 +96,11 @@ U18/Senior:
 - Sessions: 90-120 min
 - Key skills: Game film analysis, situational plays, mental preparation
 
-SESSION STRUCTURE (adapt times to age):
-1. Warm-up (10-15%): Dynamic stretching, ball handling
-2. Skill work (30-40%): Technical drills
-3. Game-based learning (30-40%): Small-sided games, scrimmages
-4. Cool-down (10%): Static stretching, recap
+SESSION STRUCTURE (酷讯 Unified Session Structure - every session, every age group, 90 minutes as three equal blocks; scale all three blocks equally for shorter sessions):
+1. Warm-up (30 min): the SAME routine every session so it becomes second nature - Full Court Dribble Progression (regular, skip, in-and-out, alternate dribble), Layup Progression (no-dribble extended-hand run, ball around the waist, dribble basket to basket, with obstacles), Shooting Routine Ladder. Time left over goes to one small competitive game (Pass and Tag, Police and Thieves, Ten Passes, Dribble Knockout, Sharks and Minnows Dribble, Relay Dribble Races). Put the routine drills and the game in warmupDrills.
+2. Skills (30 min): first review the previous session's skill (Skill Review Challenge), then introduce the next skill on the age-group roadmap only if the group is ready, then compete with it (1v1 from Triple Threat, Give and Go live, etc.). Put these in mainDrills. Progress one or two skills per session, in roadmap order.
+3. Game (30 min): a regular basketball game (3v3 for U6-U8, 3v3/4v4 for U10, 4v4/5v5 for U12+) with one or two coach constraints tied to the session's skill: 3-second individual possession, minimum passes before a shot, no dribble, layups only, weak hand only, skill bonus point. Put the game and its constraint in cooldownActivities (that field is the Game block).
+Never add a separate cool-down block; the session ends with the game.
 
 Always include:
 - Specific drill names and descriptions

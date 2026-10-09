@@ -74,14 +74,17 @@ You MUST respond with ONLY valid JSON matching this exact structure (no markdown
   "cooldownDrills": [
     {
       "name": "string - drill name",
-      "durationMinutes": number - 5-10,
+      "durationMinutes": number - 20-30 (this is the Game block),
       "description": "string - brief drill description"
     }
   ],
   "coachNotes": "string - key coaching points and reminders for this session"
 }
 
-Include 2-3 warmup drills, 3-5 main drills, and 1-2 cooldown drills.`;
+Follow the 酷讯 Unified Session Structure: three equal blocks (30 + 30 + 30 for a 90 minute session; scale equally for other durations).
+- warmupDrills = the Warm-up block: the same routine every session (Full Court Dribble Progression, Layup Progression, Shooting Routine Ladder) plus one small competitive game if time remains (Pass and Tag, Police and Thieves, Ten Passes, Dribble Knockout, Relay Dribble Races). 3-4 items.
+- mainDrills = the Skills block: Skill Review Challenge of the previous session's skill, then the next roadmap skill for the age group, then a compete format (1v1 from Triple Threat, Give and Go live). 3 items.
+- cooldownDrills = the Game block: ONE regular game with a coach constraint tied to the session's skill (3-second individual possession, pass before you shoot, no dribble, layups only, weak hand only, skill bonus point). 1 item, 25-30 minutes. There is no separate cool-down; the session ends with the game.`;
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",

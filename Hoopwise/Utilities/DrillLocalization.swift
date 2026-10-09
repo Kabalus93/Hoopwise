@@ -87,7 +87,37 @@ struct DrillLocalization {
         "2 Man Hammer Pass": "双人锤子传球",
         "Handoff & Help Drill": "手递手与协防训练",
         "Zoom Reads Drill": "快速阅读训练",
-        "Press Breaker Drill": "破紧逼训练"
+        "Press Breaker Drill": "破紧逼训练",
+
+        // Batch 6 - Unified Session Structure (酷讯 统一课程结构)
+        "Full Court Dribble Progression": "全场运球进阶",
+        "Layup Progression": "上篮进阶",
+        "Shooting Routine Ladder": "投篮例行进阶",
+        "Pass and Tag": "传球抓人",
+        "Police and Thieves": "警察抓小偷",
+        "Ten Passes": "十次传球",
+        "Dribble Knockout": "运球淘汰赛",
+        "Sharks and Minnows Dribble": "鲨鱼与小鱼运球",
+        "Relay Dribble Races": "运球接力赛",
+        "Red Light Green Light Dribble": "红灯绿灯运球",
+        "Skill Review Challenge": "技能复习挑战",
+        "Triple Threat Introduction": "三威胁入门",
+        "Triple Threat Finishes": "三威胁终结",
+        "1v1 from Triple Threat": "三威胁一对一",
+        "Jump Stop and Pivot": "急停与转身",
+        "Partner Passing Series": "双人传球系列",
+        "Give and Go": "传切配合",
+        "Defensive Stance and Mirror": "防守姿势与镜像",
+        "Change of Direction Series": "变向系列",
+        "Catch and Shoot Footwork": "接球投篮步法",
+        "Finishing Package": "终结技术包",
+        "3v0 Pass and Cut": "三打零传切",
+        "3v3 Game: 3-Second Possession": "三对三比赛：3秒持球",
+        "Game: Pass Before You Shoot": "比赛：投篮前先传球",
+        "Game: Weak Hand Only": "比赛：只用弱侧手",
+        "Game: No Dribble": "比赛：禁止运球",
+        "Game: Skill Bonus Point": "比赛：技能加分",
+        "Game: Layups Only": "比赛：只算上篮"
     ]
     
     // MARK: - Category Translations
@@ -190,7 +220,10 @@ struct DrillLocalization {
         "Ladder": "敏捷梯",
         "Hurdles": "跨栏",
         "Shooting Machine": "投篮机",
-        "Pad": "护垫"
+        "Pad": "护垫",
+        "Hoop": "篮筐",
+        "Chairs": "椅子",
+        "Pinnies": "训练背心"
     ]
     
     // MARK: - Helper Methods
@@ -295,6 +328,7 @@ struct DrillContentLocalization {
         all.merge(DrillContentBatch4.descriptions) { _, new in new }
         all.merge(DrillContentBatch5.descriptions) { _, new in new }
         all.merge(DrillContentBatch5.additionalDescriptions) { _, new in new }
+        all.merge(DrillContentBatch6.descriptions) { _, new in new }
         return all
     }
     
@@ -307,6 +341,7 @@ struct DrillContentLocalization {
         all.merge(DrillContentBatch4.instructions) { _, new in new }
         all.merge(DrillContentBatch5.instructions) { _, new in new }
         all.merge(DrillContentBatch5.additionalInstructions) { _, new in new }
+        all.merge(DrillContentBatch6.instructions) { _, new in new }
         return all
     }
     
@@ -319,6 +354,7 @@ struct DrillContentLocalization {
         all.merge(DrillContentBatch4.keyPoints) { _, new in new }
         all.merge(DrillContentBatch5.keyPoints) { _, new in new }
         all.merge(DrillContentBatch5.additionalKeyPoints) { _, new in new }
+        all.merge(DrillContentBatch6.keyPoints) { _, new in new }
         return all
     }
     
@@ -331,6 +367,7 @@ struct DrillContentLocalization {
         all.merge(DrillContentBatch4.variations) { _, new in new }
         all.merge(DrillContentBatch5.variations) { _, new in new }
         all.merge(DrillContentBatch5.additionalVariations) { _, new in new }
+        all.merge(DrillContentBatch6.variations) { _, new in new }
         return all
     }
     
