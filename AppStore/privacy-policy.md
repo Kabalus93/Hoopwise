@@ -1,114 +1,83 @@
-# Privacy Policy for Hoopwise
+# Hoopwise Privacy Policy
 
-**Last Updated: January 22, 2026**
+**Last updated: [publication date]**
 
-## Introduction
+Hoopwise is a coaching app for basketball coaches and academies. It is
+published by [legal name] ("we"). This policy explains what happens to the
+information you put into Hoopwise.
 
-Hoopwise ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.
+## The short version
 
-## Information We Collect
+- We do not collect any data from the app. We cannot see your athletes,
+  sessions, contracts or photos.
+- There is no account to create and no sign-in.
+- There are no ads, no analytics, and no tracking.
 
-### Information You Provide
-- **Account Information**: Email address and password when you create an account
-- **Organization Data**: Organization name and settings
-- **Student Information**: Names, photos, birth dates/school grades, physical measurements, parent/guardian contact details
-- **Session Data**: Training sessions, attendance records, drill plans
-- **Program Data**: Training programs, phases, and curriculum
+## Where your information is stored
 
-### Automatically Collected Information
-- **Device Information**: Device type, operating system version
-- **Usage Data**: App features used, session duration
-- **Crash Reports**: Technical data to improve app stability
+Everything you enter in Hoopwise is stored in two places only:
 
-## How We Use Your Information
+1. **On your device**, inside the app's private storage.
+2. **In your own iCloud account**, if you are signed in to iCloud. Hoopwise
+   uses Apple's iCloud private database to sync your data between your
+   devices. That database belongs to your Apple ID. We have no access to it.
 
-We use the information we collect to:
-- Provide and maintain the Hoopwise application
-- Sync your data across devices
-- Improve our services and user experience
-- Send important notifications about your account
-- Respond to your support requests
+Information is encrypted in transit to iCloud by Apple. Apple's handling of
+iCloud data is described at https://www.apple.com/legal/privacy/.
 
-## Data Storage and Security
+Widgets and the Lock Screen Live Activity show information from the app on
+your own device only. You can turn them off in iOS at any time.
 
-- All data is stored securely using Supabase cloud infrastructure
-- Data is encrypted in transit using TLS/SSL
-- We implement Row Level Security (RLS) to ensure organizations can only access their own data
-- Photos are stored in secure cloud storage with access controls
+## Information about athletes, including minors
 
-## Data Sharing
+Coaches use Hoopwise to record information about the athletes they train,
+many of whom are children. This can include names, photos, birth dates or
+school grades, physical measurements, attendance, guardian contact details,
+contract and payment records, and media-consent records.
 
-We do **NOT**:
-- Sell your personal information to third parties
-- Share student data with advertisers
-- Use your data for targeted advertising
+The coach or academy using the app decides what to record and is responsible
+for having the right to record it, including any consent required from a
+parent or guardian. Hoopwise stores this information only on that coach's
+devices and in that coach's iCloud. We never receive it.
 
-We **MAY** share data:
-- Within your organization (with other coaches/staff you invite)
-- With service providers who help us operate the app (e.g., Supabase for hosting)
-- If required by law or legal process
+The attendance statement Hoopwise can export contains one athlete and one
+contract only, and never includes a photo. It is shared only when the coach
+chooses to send it.
 
-## Children's Privacy
+## Device permissions
 
-Hoopwise is designed for coaches and organizations managing student athletes. We collect student information (including minors) solely for coaching and administrative purposes. This data is:
-- Controlled by the coach/organization
-- Protected by organization-level access controls
-- Not used for any purpose other than the coaching service
+Hoopwise asks for these permissions only when you use the related feature:
 
-Parents/guardians may contact us to review or delete their child's information.
+| Permission | Used for |
+|---|---|
+| Camera | Taking an athlete's profile photo |
+| Photo library | Choosing an athlete's profile photo, and saving images you export |
+| Microphone and speech recognition | Dictating session notes. Speech is processed by Apple's speech recognition service under Apple's privacy terms. |
 
-## Your Rights
+You can change any permission in the iOS Settings app.
 
-You have the right to:
-- **Access**: Request a copy of your data
-- **Correct**: Update inaccurate information
-- **Delete**: Request deletion of your account and data
-- **Export**: Download your data in a portable format
+## Network connections
 
-To exercise these rights, contact us at: [your-email@domain.com]
+Apart from iCloud sync, Hoopwise may load stock basketball images from
+Unsplash (images.unsplash.com) for decorative headers. Like any web request,
+this reveals your device's IP address to Unsplash. No information about you
+or your athletes is sent. Links to videos open in their own app or in Safari,
+under that service's terms.
 
-## Data Retention
+## Deleting your information
 
-- Active accounts: Data retained while account is active
-- Deleted accounts: Data permanently deleted within 30 days
-- Backup copies: Removed within 90 days of deletion request
+- Delete any athlete, session, contract or other record inside the app.
+- Deleting the app removes the data stored on that device.
+- To remove the synced copy, open Settings → [your name] → iCloud →
+  Manage Account Storage → Hoopwise → Delete Data.
 
-## Third-Party Services
+Because we hold no copy, there is nothing for us to delete on our side.
 
-Hoopwise uses the following third-party services:
-- **Supabase**: Cloud database and authentication (https://supabase.com/privacy)
-- **Apple Services**: App distribution, in-app purchases (https://apple.com/privacy)
+## Changes to this policy
 
-## Changes to This Policy
+If this policy changes, the new version will be published at this address
+with a new "Last updated" date.
 
-We may update this Privacy Policy from time to time. We will notify you of any changes by:
-- Updating the "Last Updated" date
-- Sending an in-app notification for significant changes
+## Contact
 
-## Contact Us
-
-If you have questions about this Privacy Policy or our data practices, please contact us:
-
-**Email**: [your-email@domain.com]
-**Website**: [your-website.com]
-
----
-
-## App Store Privacy Label
-
-For the App Store privacy "nutrition label", you'll need to declare:
-
-### Data Used to Track You
-- None
-
-### Data Linked to You
-- Contact Info (email for account)
-- User Content (student data, session data)
-- Identifiers (user ID)
-
-### Data Not Linked to You
-- Diagnostics (crash logs)
-
----
-
-*This privacy policy template should be reviewed by a legal professional before publishing.*
+Questions about this policy: [contact email]

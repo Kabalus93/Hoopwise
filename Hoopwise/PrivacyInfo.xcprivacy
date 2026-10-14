@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Privacy manifest for the iOS app. App Store Connect rejects uploads that
+	call a required-reason API without declaring why (ITMS-91053).
+
+	No tracking and no collected data: everything the app stores lives on the
+	device and in the coach's own iCloud private database, which the developer
+	cannot read.
+
+	Required-reason APIs actually called by the app (re-audit when adding code):
+	- UserDefaults: app-only preferences and device-local attention state.
+	  No App Group suite is used; the widget reads JSON files, not defaults.
+	- File timestamps: ImageCacheManager reads contentModificationDate on files
+	  inside its own cache directory to evict old entries; DrillMediaStorage
+	  reads attributesOfItem on files the app itself wrote.
+	-->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

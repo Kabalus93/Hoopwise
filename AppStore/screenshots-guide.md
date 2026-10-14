@@ -3,17 +3,20 @@
 ## Required Screenshot Sizes
 
 ### iPhone (Required)
+App Store Connect needs ONE iPhone set: 6.9" is preferred, 6.5" is accepted.
+Smaller sizes are scaled down from it automatically.
 | Device | Resolution | Display Size |
 |--------|------------|--------------|
-| iPhone 15 Pro Max / 14 Pro Max | 1290 x 2796 px | 6.7" |
-| iPhone 15 Pro / 14 Pro | 1179 x 2556 px | 6.1" |
-| iPhone 8 Plus (if supporting older) | 1242 x 2208 px | 5.5" |
+| iPhone 17 Pro Max / 16 Pro Max | 1320 x 2868 px | 6.9" |
+| iPhone 11 Pro Max / XS Max (fallback) | 1242 x 2688 px | 6.5" |
 
-### iPad (Required if universal app)
-| Device | Resolution |
-|--------|------------|
-| iPad Pro 12.9" (6th gen) | 2048 x 2732 px |
-| iPad Pro 11" | 1668 x 2388 px |
+### iPad (Required, because the app targets iPhone AND iPad)
+| Device | Resolution | Display Size |
+|--------|------------|--------------|
+| iPad Pro 13" (M4) | 2064 x 2752 px | 13" |
+
+If the iPad layout is not ready to be shown, make the app iPhone-only
+(TARGETED_DEVICE_FAMILY = 1) before the first upload instead of skipping these.
 
 ## Screenshot Count
 - **Minimum**: 3 screenshots per device size
@@ -56,8 +59,8 @@
 **Caption (EN)**: "Real-Time Attendance"
 **Caption (中文)**: "实时考勤追踪"
 - Show attendance view during a session
-- Display present/absent/late status indicators
-- Show quick-tap attendance marking
+- Show the four attendance states: present, excused, absent, unmarked
+- Show the per-row money line ("Deducts 1 session" / "No session deducted")
 
 ### Screenshot 6: Programs & Curriculum
 **Caption (EN)**: "Structured Training Programs"
@@ -81,7 +84,7 @@
 
 ### Don'ts ❌
 - Don't show empty states
-- Don't include personal/real student data
+- Don't include personal/real student data — the real roster is minors; use demo names only
 - Don't use cluttered screens
 - Don't show error messages or loading states
 - Don't use placeholder text like "Lorem ipsum"
@@ -121,7 +124,7 @@ Consider using these tools to add device frames and captions:
 
 ## Localized Screenshots
 
-Since Clutch supports Chinese and English, consider uploading localized screenshots:
+Since Hoopwise supports Chinese and English, consider uploading localized screenshots:
 
 1. Set device language to Chinese
 2. Capture all screenshots
@@ -157,7 +160,7 @@ Create appealing demo data:
 - [ ] All required device sizes have screenshots
 - [ ] Screenshots are high resolution (no blur)
 - [ ] No personal/real data visible
-- [ ] App name visible in status bar matches "Clutch"
+- [ ] Any app name visible in a screenshot reads "Hoopwise"
 - [ ] Time shown is clean (9:41 AM is Apple's traditional time)
 - [ ] Battery shows 100% or near full
 - [ ] No low battery warnings
