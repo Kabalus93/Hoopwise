@@ -638,6 +638,23 @@ found two bugs, and both were in code that renders documents sent to clients.
   smart-group threshold. Dismissal is per-edge (keys embed the edge).
   Items age out at their deadline; display cap AttentionRules.displayCap
   is a safety rail — if a rule alone produces >5 items, tune the rule.
+- RARE BY CONSTRUCTION (October 2026, Luther: "every single thing appears
+  in it"). The list carries ONLY five rules; the red card appears only when
+  one fires:
+  1. Attendance not taken — any session that ENDED within
+     recoveryWindowHours (48h) with zero marks, whatever its status (not
+     only auto-closed), unless it did not happen. Partial roll calls are
+     not flagged.
+  2. Bundle running out — private bundle with ≤ renewalRemaining (1) left
+     and a session inside 7 days; once per contract.
+  3. Re-engage — more than two consecutive marked misses (3+, excused
+     counts); edge-triggered, 14-day cooldown, shown 48h.
+  4. Note follow-up — only ON its due date (24h), never ahead.
+  5. Reminders — only once due, shown 48h.
+  RETIRED from attention: plan needed (visible on the session itself) and
+  new student with no first session. Their Kind cases stay so adapters
+  compile. Do not re-add a rule without asking: each one must cost
+  something real if missed.
 - iOS has NO snooze/dismiss controls (UI freeze) — the engine and Mac
   Today have them; the iOS card benefits from the filtering only. Adding
   iOS controls is an OPEN FREEZE QUESTION, not sanctioned.

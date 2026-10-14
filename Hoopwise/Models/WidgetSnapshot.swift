@@ -75,21 +75,23 @@ enum AttentionRules {
     /// An auto-closed session younger than this surfaces ONE roll-call
     /// recovery item; older, it stops asking forever.
     static let recoveryWindowHours = 48
-    /// "Plan needed" fires only for sessions starting within this window.
+    /// RETIRED October 2026: "plan needed" no longer reaches attention.
     static let planWindowHours = 48
-    /// Renewal window: bundle at or below this remaining…
-    static let renewalRemaining = 2
+    /// Renewal window: bundle at or below this remaining (the last paid
+    /// session, or none left)…
+    static let renewalRemaining = 1
     /// …with a session scheduled within this many days (the conversation
     /// moment; that session is the deadline). Fires once per contract.
     static let renewalSessionWindowDays = 7
-    /// "New student, no first session" applies only this soon after enrollment.
+    /// RETIRED October 2026: "new student, no first session" no longer
+    /// reaches attention.
     static let newStudentWindowDays = 14
     /// Re-engage fires on the EDGE of this many consecutive missed
-    /// (marked-absent) sessions…
+    /// (marked absent or excused) sessions — "missed more than two"…
     static let reengageConsecutiveMisses = 3
     /// …at most once per athlete per cooldown.
     static let reengageCooldownDays = 14
-    /// Note follow-ups surface when due within this window.
+    /// RETIRED October 2026: follow-ups surface on their due date, not ahead.
     static let followUpWindowHours = 48
     /// Display cap — a safety rail, not a target. If one rule alone
     /// regularly produces more than ~5 items, tune the rule, never the cap.

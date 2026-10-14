@@ -275,27 +275,24 @@ enum AttentionEngine {
             return formatter.string(from: date)
         }
 
-        // 1. Plan needed — imminent sessions with an empty plan.
-        let planHorizon = now.addingTimeInterval(TimeInterval(AttentionRules.planWindowHours * 3600))
-        for session in dataManager.sessionEvents
-        where session.status == .scheduled
-            && session.startTime > now && session.startTime <= planHorizon
-            && session.curriculum.totalDrillCount == 0 {
-            items.append(Item(
-                key: "plan:\(session.id)@\(Int(session.startTime.timeIntervalSince1970))",
-                kind: .planNeeded, category: .plan,
-                title: isChinese ? "排课 · \(session.title)" : "Plan · \(session.title)",
-                subtitle: isChinese ? "开课前完成计划" : "Session starts \(relative(session.startTime, from: now))",
-                urgency: session.startTime.timeIntervalSince(now) < 24 * 3600 ? 2 : 1,
-                deadline: session.startTime,
-                sessionId: session.id))
-        }
+        // October 2026 — RARE BY CONSTRUCTION. The card is red and sits on
+        // the home screen, so it may only carry what costs something if it
+        // is missed: attendance never taken, a student drifting away, a
+        // bundle about to run out, and deadlines the coach set personally.
+        // Retired from the list (enum cases kept so adapters still compile):
+        // .planNeeded — an empty plan is visible on the session itself;
+        // .newStudent — scheduling a newcomer is routine, not an alarm.
 
-        // 2. Roll-call recovery — auto-closed within the window, unrecorded.
+        // 1. Attendance not taken — a session that has ENDED inside the
+        // window with not one mark recorded. Any status counts (scheduled,
+        // in progress, completed, auto-closed) except one that did not
+        // happen. Partially marked sessions are not flagged: the coach was
+        // there and chose what to record.
         let recoveryCutoff = now.addingTimeInterval(
             -TimeInterval(AttentionRules.recoveryWindowHours * 3600))
         for session in dataManager.sessionEvents
-        where SessionLifecycle.wasAutoClosed(session)
+        where !SessionLifecycle.didNotHappen(session)
+            && session.endTime <= now
             && session.endTime >= recoveryCutoff
             && session.actualAttendeeIds.isEmpty
             && session.excusedAbsences.isEmpty
@@ -303,7 +300,7 @@ enum AttentionEngine {
             items.append(Item(
                 key: "recovery:\(session.id)",
                 kind: .rollCallRecovery, category: .closeOut,
-                title: isChinese ? "补记点名 · \(session.title)" : "Record roll call · \(session.title)",
+                title: isChinese ? "未点名 · \(session.title)" : "Take attendance · \(session.title)",
                 subtitle: dayStamp(session.date),
                 urgency: 2,
                 deadline: session.endTime.addingTimeInterval(
@@ -311,8 +308,9 @@ enum AttentionEngine {
                 sessionId: session.id))
         }
 
-        // 3. Renewal window — bundle low AND a session inside 7 days (the
-        // conversation moment). Fires once per contract, on the edge.
+        // 2. Bundle running out — at most one prepaid session left AND a
+        // session inside 7 days (the conversation moment). Fires once per
+        // contract, on the edge.
         let renewalHorizon = now.addingTimeInterval(
             TimeInterval(AttentionRules.renewalSessionWindowDays * 24 * 3600))
         for contract in dataManager.contracts
@@ -338,29 +336,9 @@ enum AttentionEngine {
             }
         }
 
-        // 4. New student, no first session — recent enrollees only; a
-        // months-old never-scheduled student is a report row, not a nag.
-        let newCutoff = now.addingTimeInterval(
-            -TimeInterval(AttentionRules.newStudentWindowDays * 24 * 3600))
-        for student in dataManager.students where student.createdAt >= newCutoff {
-            let hasUpcoming = dataManager.sessionEvents.contains { session in
-                session.status == .scheduled && session.startTime > now
-                    && AttendanceMath.expectedIds(of: session, programs: dataManager.programs)
-                        .contains(student.id)
-            }
-            guard !hasUpcoming else { continue }
-            items.append(Item(
-                key: "newstudent:\(student.id)",
-                kind: .newStudent, category: .reEngage,
-                title: isChinese ? "安排首课 · \(student.name)" : "Schedule first session · \(student.name)",
-                subtitle: isChinese ? "新学员，还没有课" : "Enrolled \(relative(student.createdAt, from: now)), nothing scheduled",
-                urgency: 1,
-                deadline: student.createdAt.addingTimeInterval(
-                    TimeInterval(AttentionRules.newStudentWindowDays * 24 * 3600)),
-                studentId: student.id))
-        }
-
-        // 5. Attendance drop THIS WEEK — edge-triggered with cooldown.
+        // 3. Re-engage — missed MORE THAN TWO marked sessions in a row
+        // (excused counts: a run of notified absences still means the
+        // conversation is due). Edge-triggered, once per cooldown.
         for student in dataManager.students {
             let misses = AttendanceMath.consecutiveMisses(
                 for: student.id, in: dataManager.sessionEvents, asOf: now)
@@ -386,15 +364,13 @@ enum AttentionEngine {
                 studentId: student.id))
         }
 
-        // 6. Note follow-up due — only because the field exists on
-        // ParentalTouchpoint; if it were absent this rule would not.
-        let followHorizon = now.addingTimeInterval(
-            TimeInterval(AttentionRules.followUpWindowHours * 3600))
+        // 4. Note follow-up — a date the coach set personally. Surfaces on
+        // the day it falls due, not before.
         for student in dataManager.students {
             for touchpoint in student.parentalTouchpoints
             where touchpoint.followUpNeeded {
                 guard let due = touchpoint.followUpDate,
-                      due <= followHorizon,
+                      due <= now,
                       due.addingTimeInterval(24 * 3600) > now else { continue }
                 items.append(Item(
                     key: "followup:\(student.id):\(dayStamp(due))",
@@ -407,22 +383,19 @@ enum AttentionEngine {
             }
         }
 
-        // 7. Reminders — coach-created deadlines keep flowing through, but
-        // only inside the window; they age out of ATTENTION a week after
-        // due (they still live in the reminders list itself).
+        // 5. Reminders — coach-created deadlines, once they are due. They
+        // leave ATTENTION 48h after due (they still live in the reminders
+        // list itself); upcoming ones belong to that list, not to an alarm.
         for reminder in dataManager.reminders where !reminder.isCompleted {
-            let overdue = reminder.dueDate <= now
-            guard reminder.dueDate <= followHorizon,
-                  reminder.dueDate.addingTimeInterval(7 * 24 * 3600) > now else { continue }
+            guard reminder.dueDate <= now,
+                  reminder.dueDate.addingTimeInterval(48 * 3600) > now else { continue }
             items.append(Item(
                 key: "reminder:\(reminder.id)",
-                kind: .reminderDue, category: overdue ? .closeOut : .plan,
+                kind: .reminderDue, category: .closeOut,
                 title: reminder.title,
-                subtitle: overdue
-                    ? (isChinese ? "已逾期" : "Overdue")
-                    : (isChinese ? "待办" : "Due \(relative(reminder.dueDate, from: now))"),
-                urgency: overdue ? 2 : 1,
-                deadline: reminder.dueDate.addingTimeInterval(7 * 24 * 3600),
+                subtitle: isChinese ? "已到期" : "Due \(relative(reminder.dueDate, from: now))",
+                urgency: 2,
+                deadline: reminder.dueDate.addingTimeInterval(48 * 3600),
                 reminderId: reminder.id))
         }
 
