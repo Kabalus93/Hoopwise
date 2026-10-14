@@ -1,490 +1,412 @@
 import SwiftUI
+import PDFKit
 #if canImport(UIKit)
 import UIKit
 #endif
 
-// MARK: - Program Localization Helper
-struct ProgramReportLocalization {
-    let isChinese: Bool
-    
-    init() {
-        self.isChinese = LocalizationManager.shared.currentLanguage == .chinese
-    }
-    
-    var trainingProgram: String { isChinese ? "训练计划" : "TRAINING PROGRAM" }
-    var weeks: String { isChinese ? "周" : "WEEKS" }
-    var phases: String { isChinese ? "阶段" : "PHASES" }
-    var perWeek: String { isChinese ? "每周" : "PER WEEK" }
-    var trainingPhases: String { isChinese ? "训练阶段" : "TRAINING PHASES" }
-    var focus: String { isChinese ? "训练重点" : "FOCUS" }
-    var goals: String { isChinese ? "学习目标" : "GOALS" }
-    var whatToExpect: String { isChinese ? "家长须知" : "WHAT TO EXPECT" }
-    var skillDev: String { isChinese ? "技能发展" : "Skill Development" }
-    var skillDevDesc: String { isChinese ? "系统化篮球技能提升" : "Progressive basketball skill building" }
-    var passion: String { isChinese ? "运动热情" : "Love for the Game" }
-    var passionDesc: String { isChinese ? "培养对篮球的热爱" : "Building passion for basketball" }
-    var teamwork: String { isChinese ? "团队合作" : "Teamwork" }
-    var teamworkDesc: String { isChinese ? "协作与沟通能力培养" : "Cooperation & communication skills" }
-    var shareWithParents: String { isChinese ? "分享给家长" : "Share with Parents" }
-    var close: String { isChinese ? "关闭" : "Close" }
-    var parentNotice: String { isChinese ? "家长通知" : "Parent Notice" }
-    var wks: String { isChinese ? "周" : "wks" }
-    var phase: String { isChinese ? "阶段" : "Phase" }
-}
+// MARK: - Parent Program Guide
+//
+// October 2026 (Luther's request, a sanctioned exception to the iOS UI
+// freeze — see CLAUDE.md): the old "Parent Notice" was a screenshot of a
+// dark in-app card, fixed at 380×750, with generic copy. It is replaced by
+// ProgramGuideDocument — a real document rendered from the program's data —
+// and this screen, which previews it, lets the coach edit the parent-facing
+// wording, and shares it as an A4 PDF or a long image for WeChat.
+//
+// The type keeps its old name and initializer so the call site in
+// FlightyProgramDetailView is unchanged.
 
-// MARK: - Parent Program Summary View (Dark Aesthetic)
 struct ParentProgramSummaryView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.dismiss) private var dismiss
-    
+
     let program: Program
-    let selectedPhase: MicroCycle?
-    
-    @State private var isGeneratingImage = false
-    @State private var generatedImage: UIImage?
-    @State private var showingShareSheet = false
-    
-    private let loc = ProgramReportLocalization()
-    
-    private var phases: [MicroCycle] {
+
+    @State private var notes: ProgramGuideNotes
+    @State private var academyName: String
+    @State private var pdfURL: URL?
+    @State private var revision = 0
+    @State private var gaps: [String] = []
+    @State private var errorMessage: String?
+    @State private var showingEditor = false
+    @State private var shareItem: GuideShareItem?
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    /// `selectedPhase` is accepted for source compatibility; the guide always
+    /// covers the whole program, because a parent needs the progression.
+    init(program: Program, selectedPhase: MicroCycle? = nil) {
+        self.program = program
+        _notes = State(initialValue: ProgramGuideStore.notes(for: program.id))
+        _academyName = State(initialValue: ProgramGuideStore.academyName)
+    }
+
+    /// Re-read from the manager so edits made elsewhere are picked up.
+    private var currentProgram: Program {
+        dataManager.programs.first { $0.id == program.id } ?? program
+    }
+
+    private var programPhases: [MicroCycle] {
         dataManager.microCycles
             .filter { $0.programId == program.id }
             .sorted { $0.phaseNumber < $1.phaseNumber }
     }
-    
-    private var accent: Color {
-        Color(hex: program.colorHex)
-    }
-    
-    init(program: Program, selectedPhase: MicroCycle? = nil) {
-        self.program = program
-        self.selectedPhase = selectedPhase
-    }
-    
+
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Preview of the report
-                        ProgramReportCard(
-                            program: program,
-                            phases: phases,
-                            selectedPhase: selectedPhase,
-                            accent: accent,
-                            loc: loc
-                        )
-                        .scaleEffect(0.9)
-                        .frame(height: 680)
-                        
-                        // Share button
-                        Button(action: generateAndShare) {
-                            HStack(spacing: 12) {
-                                if isGeneratingImage {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                                } else {
-                                    Image(systemName: "square.and.arrow.up")
-                                        .font(.system(size: 18, weight: .semibold))
-                                }
-                                Text(loc.shareWithParents)
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(accent)
-                            .cornerRadius(14)
-                        }
-                        .disabled(isGeneratingImage)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 30)
-                    }
+        NavigationStack {
+            VStack(spacing: 0) {
+                if !gaps.isEmpty {
+                    gapBanner
                 }
+                preview
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                shareBar
             }
-            .navigationTitle(loc.parentNotice)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle(isChinese ? "家长版计划指南" : "Parent Guide")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(loc.close) { dismiss() }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isChinese ? "关闭" : "Close") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button(isChinese ? "编辑文字" : "Edit Wording") { showingEditor = true }
                 }
             }
         }
-        .sheet(isPresented: $showingShareSheet) {
-            if let image = generatedImage {
-                ProgramShareSheet(items: [image])
+        .task { regenerate() }
+        .sheet(isPresented: $showingEditor) {
+            ProgramGuideEditor(program: currentProgram,
+                               phases: programPhases,
+                               notes: $notes,
+                               academyName: $academyName,
+                               isChinese: isChinese) {
+                ProgramGuideStore.save(notes, for: program.id)
+                ProgramGuideStore.academyName = academyName
+                regenerate()
             }
         }
+        .sheet(item: $shareItem) { item in
+            ProgramShareSheet(items: [item.url])
+        }
     }
-    
-    private func generateAndShare() {
-        isGeneratingImage = true
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            let reportView = ProgramReportCard(
-                program: program,
-                phases: phases,
-                selectedPhase: selectedPhase,
-                accent: accent,
-                loc: loc
-            )
-            
-            let controller = UIHostingController(rootView: reportView)
-            let size = CGSize(width: 380, height: 750)
-            controller.view.bounds = CGRect(origin: .zero, size: size)
-            controller.view.backgroundColor = .clear
-            
-            let renderer = UIGraphicsImageRenderer(size: size)
-            let image = renderer.image { _ in
-                controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
+
+    // MARK: Preview
+
+    @ViewBuilder
+    private var preview: some View {
+        if let pdfURL {
+            GuidePDFPreview(url: pdfURL, revision: revision)
+        } else if let errorMessage {
+            ContentUnavailableView(isChinese ? "无法生成指南" : "Could not create the guide",
+                                   systemImage: "exclamationmark.triangle",
+                                   description: Text(errorMessage))
+        } else {
+            ProgressView()
+        }
+    }
+
+    /// Says what is still generic, and opens the editor. The guide is only as
+    /// specific as the program's own words.
+    private var gapBanner: some View {
+        Button {
+            showingEditor = true
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "text.badge.plus")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isChinese ? "让指南更具体" : "Make the guide specific")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(gaps.joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
-            
-            generatedImage = image
-            isGeneratingImage = false
-            showingShareSheet = true
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: Share
+
+    private var shareBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                if let pdfURL { shareItem = GuideShareItem(url: pdfURL) }
+            } label: {
+                Label("PDF", systemImage: "doc.richtext")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+
+            Button {
+                shareLongImage()
+            } label: {
+                Label(isChinese ? "长图（微信）" : "Long Image", systemImage: "photo")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .controlSize(.large)
+        .disabled(pdfURL == nil)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    // MARK: Rendering
+
+    private func makeInput() -> ProgramGuideDocument.Input {
+        ProgramGuideDocument.makeInput(program: currentProgram,
+                                       dataManager: dataManager,
+                                       notes: notes,
+                                       academyName: academyName,
+                                       isChinese: isChinese)
+    }
+
+    private func regenerate() {
+        let input = makeInput()
+        gaps = ProgramGuideDocument.gaps(in: input)
+        do {
+            pdfURL = try ProgramGuideDocument.renderPDF(input)
+            revision += 1
+            errorMessage = nil
+        } catch {
+            pdfURL = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func shareLongImage() {
+        do {
+            let url = try ProgramGuideDocument.renderLongImage(makeInput())
+            shareItem = GuideShareItem(url: url)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }
 
-// MARK: - Program Report Card (Dark Theme - Matches StudentParentReport)
-struct ProgramReportCard: View {
+private struct GuideShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+// MARK: - PDF preview
+
+/// PDFKit view of the rendered file. The file is rewritten in place on every
+/// edit, so `revision` tells the view when to reload it.
+private struct GuidePDFPreview: UIViewRepresentable {
+    let url: URL
+    let revision: Int
+
+    func makeUIView(context: Context) -> PDFView {
+        let view = PDFView()
+        view.autoScales = true
+        view.displayMode = .singlePageContinuous
+        view.displayDirection = .vertical
+        view.backgroundColor = .systemGroupedBackground
+        view.document = PDFDocument(url: url)
+        context.coordinator.revision = revision
+        return view
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {
+        guard context.coordinator.revision != revision else { return }
+        context.coordinator.revision = revision
+        view.document = PDFDocument(url: url)
+        view.autoScales = true
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var revision = -1
+    }
+}
+
+// MARK: - Wording editor
+
+/// The parent-facing words. Fields start from the program's own data where
+/// it exists (introduction, phase names and descriptions); a value equal to
+/// that data is not stored as an override, so later edits to the program
+/// still flow through. Empty optional sections are left out of the guide.
+private struct ProgramGuideEditor: View {
+    @Environment(\.dismiss) private var dismiss
+
     let program: Program
     let phases: [MicroCycle]
-    let selectedPhase: MicroCycle?
-    let accent: Color
-    let loc: ProgramReportLocalization
-    
+    @Binding var notes: ProgramGuideNotes
+    @Binding var academyName: String
+    let isChinese: Bool
+    let onSave: () -> Void
+
+    @State private var draft = ProgramGuideNotes()
+    @State private var academyDraft = ""
+    @State private var purposeDraft = ""
+    @State private var titleDrafts: [String: String] = [:]
+    @State private var summaryDrafts: [String: String] = [:]
+
     var body: some View {
-        VStack(spacing: 0) {
-            headerSection
-            VStack(spacing: 10) {
-                statsRow
-                if let phase = selectedPhase {
-                    phaseDetailSection(phase)
-                } else {
-                    phasesListSection
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(isChinese ? "学院或球队名称" : "Academy or club name", text: $academyDraft)
+                } header: {
+                    Text(isChinese ? "抬头" : "Letterhead")
+                } footer: {
+                    Text(isChinese ? "所有计划共用。留空则使用教练姓名。" : "Shared by all programs. Leave empty to use the coach's name.")
                 }
-                expectationsSection
-                footerSection
-            }
-            .padding(12)
-            .background(AppTheme.neutral850)
-        }
-        .frame(width: 380, height: 750)
-        .background(AppTheme.neutral900)
-        .cornerRadius(20)
-    }
-    
-    // MARK: - Header
-    private var headerSection: some View {
-        VStack(spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("HOOPWISE ACADEMY")
-                        .font(.system(size: 9, weight: .bold)).tracking(1)
-                        .foregroundColor(.white.opacity(0.5))
-                    Text(loc.trainingProgram)
-                        .font(.system(size: 10, weight: .bold)).tracking(0.8)
-                        .foregroundColor(accent)
+
+                Section {
+                    TextEditor(text: $purposeDraft)
+                        .frame(minHeight: 100)
+                } header: {
+                    Text(isChinese ? "关于本计划" : "About this program")
+                } footer: {
+                    Text(isChinese ? "用家长听得懂的话说明这个计划的目的。" : "In plain words for parents: what this program is for and who it suits.")
                 }
-                Spacer()
-                Text(formattedDate)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
-            }
-            
-            HStack(spacing: 14) {
-                // Mascot icon
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(colors: [accent, accent.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 64, height: 64)
-                    Image(systemName: program.mascot.icon)
-                        .font(.system(size: 28))
-                        .foregroundColor(.white)
-                }
-                .shadow(color: accent.opacity(0.4), radius: 8, x: 0, y: 4)
-                
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(program.name)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                    HStack(spacing: 6) {
-                        Text(program.ageGroup.displayName)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.white.opacity(0.5))
-                        Text("•").foregroundColor(.white.opacity(0.3))
-                        Text(program.programType.displayName)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(accent)
+
+                ForEach(phases) { phase in
+                    Section {
+                        TextField(isChinese ? "阶段名称" : "Phase name",
+                                  text: binding(for: phase, in: $titleDrafts))
+                        TextEditor(text: binding(for: phase, in: $summaryDrafts))
+                            .frame(minHeight: 80)
+                    } header: {
+                        Text(isChinese ? "第\(phase.phaseNumber)阶段" : "Phase \(phase.phaseNumber)")
+                    } footer: {
+                        Text(isChinese
+                             ? "给阶段起一个有意义的名字，并说明它为什么重要、会培养什么。练习重点和示例活动来自阶段的目标和训练内容。"
+                             : "A meaningful name, then why this phase matters and what it builds. Practice points and example activities come from the phase's objectives and drills.")
                     }
                 }
-                Spacer()
-            }
-        }
-        .padding(14)
-        .background(LinearGradient(colors: [AppTheme.neutral850, AppTheme.neutral900], startPoint: .top, endPoint: .bottom))
-    }
-    
-    private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.locale = Locale(identifier: loc.isChinese ? "zh_CN" : "en_US")
-        return formatter.string(from: Date())
-    }
-    
-    // MARK: - Stats Row
-    private var statsRow: some View {
-        HStack(spacing: 8) {
-            statCard(loc.weeks, "\(program.durationWeeks)", "calendar", AppTheme.avatarBlue)
-            statCard(loc.phases, "\(phases.count)", "flag.fill", AppTheme.successColor)
-            statCard(loc.perWeek, "\(program.recurringDays.count)x", "repeat", AppTheme.systemOrange)
-        }
-    }
-    
-    private func statCard(_ title: String, _ value: String, _ icon: String, _ color: Color) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 14)).foregroundColor(color)
-            Text(value).font(.system(size: 18, weight: .bold, design: .rounded)).foregroundColor(.white)
-            Text(title).font(.system(size: 8, weight: .bold)).foregroundColor(.white.opacity(0.4)).tracking(0.5)
-        }
-        .frame(maxWidth: .infinity).padding(.vertical, 10)
-        .background(AppTheme.neutral800).cornerRadius(10)
-    }
-    
-    // MARK: - Phases List
-    private var phasesListSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(loc.trainingPhases)
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.white.opacity(0.4))
-                .tracking(0.8)
-            
-            VStack(spacing: 6) {
-                ForEach(phases.prefix(8)) { phase in
-                    phaseRow(phase)
+
+                Section {
+                    TextEditor(text: $draft.sessionNote)
+                        .frame(minHeight: 70)
+                } header: {
+                    Text(isChinese ? "一节课的样子（补充说明）" : "Typical session (note)")
+                } footer: {
+                    Text(isChinese ? "时间分配和活动取自一节已计划的训练课。" : "Timings and activities are read from a planned session.")
                 }
-                if phases.count > 8 {
-                    Text("+\(phases.count - 8) more...")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 4)
+
+                Section {
+                    TextEditor(text: $draft.reviewNote)
+                        .frame(minHeight: 70)
+                } header: {
+                    Text(isChinese ? "进度与反馈" : "Progress and feedback")
+                } footer: {
+                    Text(isChinese ? "家长会在何时、以什么方式了解孩子的进度。" : "How and when parents will hear about their child's progress.")
+                }
+
+                Section {
+                    TextEditor(text: $draft.coachNote)
+                        .frame(minHeight: 90)
+                } header: {
+                    Text(isChinese ? "教练寄语" : "A note from the coach")
+                }
+
+                Section {
+                    TextEditor(text: $draft.homeActivity)
+                        .frame(minHeight: 70)
+                } header: {
+                    Text(isChinese ? "在家可以练" : "Try at home")
+                } footer: {
+                    Text(isChinese ? "留空的部分不会出现在指南里。" : "Empty sections are left out of the guide.")
                 }
             }
-        }
-        .padding(12)
-        .background(AppTheme.neutral800)
-        .cornerRadius(12)
-    }
-    
-    private func phaseRow(_ phase: MicroCycle) -> some View {
-        HStack(spacing: 10) {
-            // Phase number badge
-            ZStack {
-                Circle()
-                    .fill(accent)
-                    .frame(width: 24, height: 24)
-                Text("\(phase.phaseNumber)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            
-            // Title and focus
-            VStack(alignment: .leading, spacing: 2) {
-                Text(phase.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                
-                if !phase.focus.isEmpty {
-                    Text(phase.focus.prefix(2).map { $0.displayName }.joined(separator: " • "))
-                        .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.5))
-                        .lineLimit(1)
+            .navigationTitle(isChinese ? "编辑文字" : "Edit Wording")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isChinese ? "取消" : "Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isChinese ? "完成" : "Done") { save() }
+                        .fontWeight(.semibold)
                 }
             }
-            
-            Spacer()
-            
-            // Duration
-            Text("\(phase.durationWeeks) \(loc.wks)")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(4)
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(8)
-    }
-    
-    // MARK: - Phase Detail
-    private func phaseDetailSection(_ phase: MicroCycle) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Phase header
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 36, height: 36)
-                    Text("\(phase.phaseNumber)")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(loc.phase) \(phase.phaseNumber)")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(accent)
-                    Text(phase.title)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                
-                Spacer()
-                
-                Text("\(phase.durationWeeks) \(loc.wks)")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(accent)
-                    .cornerRadius(6)
-            }
-            
-            // Description
-            if let desc = phase.description {
-                Text(desc)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.6))
-                    .lineLimit(2)
-            }
-            
-            // Focus areas
-            if !phase.focus.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(loc.focus)
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(0.8)
-                    
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
-                        ForEach(phase.focus.prefix(4), id: \.self) { focus in
-                            HStack(spacing: 4) {
-                                Image(systemName: focus.icon)
-                                    .font(.system(size: 9))
-                                Text(focus.displayName)
-                                    .font(.system(size: 9, weight: .medium))
-                            }
-                            .foregroundColor(accent)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(accent.opacity(0.15))
-                            .cornerRadius(6)
-                        }
-                    }
-                }
-            }
-            
-            // Objectives
-            if !phase.objectives.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(loc.goals)
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white.opacity(0.4))
-                        .tracking(0.8)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(phase.objectives.prefix(4), id: \.self) { objective in
-                            HStack(alignment: .top, spacing: 6) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(AppTheme.successColor)
-                                Text(objective)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .lineLimit(2)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .background(AppTheme.neutral800)
-        .cornerRadius(12)
-    }
-    
-    // MARK: - Expectations
-    private var expectationsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(loc.whatToExpect)
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.white.opacity(0.4))
-                .tracking(0.8)
-            
-            expectationRow("figure.run", AppTheme.systemOrange, loc.skillDev, loc.skillDevDesc)
-            expectationRow("heart.fill", Color(hex: "#FF6B6B"), loc.passion, loc.passionDesc)
-            expectationRow("person.3.fill", AppTheme.avatarBlue, loc.teamwork, loc.teamworkDesc)
-        }
-        .padding(12)
-        .background(AppTheme.neutral800)
-        .cornerRadius(12)
-    }
-    
-    private func expectationRow(_ icon: String, _ color: Color, _ title: String, _ desc: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundColor(color)
-                .frame(width: 22, height: 22)
-                .background(color.opacity(0.2))
-                .cornerRadius(5)
-            
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-                Text(desc)
-                    .font(.system(size: 8))
-                    .foregroundColor(.white.opacity(0.5))
-            }
-            Spacer()
+            .onAppear(perform: load)
         }
     }
-    
-    // MARK: - Footer
-    private var footerSection: some View {
-        HStack {
-            Image(systemName: "basketball.fill")
-                .font(.system(size: 11))
-                .foregroundColor(accent)
-            Text(loc.isChinese ? "专业篮球训练" : "Professional Basketball Training")
-                .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.4))
-            Spacer()
-            Text("Hoopwise")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundColor(accent)
+
+    private func binding(for phase: MicroCycle, in store: Binding<[String: String]>) -> Binding<String> {
+        let key = phase.id.uuidString
+        return Binding(
+            get: { store.wrappedValue[key] ?? "" },
+            set: { store.wrappedValue[key] = $0 }
+        )
+    }
+
+    private func load() {
+        draft = notes
+        academyDraft = academyName
+        purposeDraft = notes.purpose.isEmpty ? (program.description ?? "") : notes.purpose
+        for phase in phases {
+            let key = phase.id.uuidString
+            titleDrafts[key] = notes.phaseTitles[key] ?? phase.title
+            summaryDrafts[key] = notes.phaseSummaries[key] ?? (phase.description ?? "")
         }
-        .padding(.top, 6)
+    }
+
+    private func save() {
+        var result = draft
+        let purpose = trimmed(purposeDraft)
+        result.purpose = purpose == trimmed(program.description ?? "") ? "" : purpose
+
+        var titles: [String: String] = [:]
+        var summaries: [String: String] = [:]
+        for phase in phases {
+            let key = phase.id.uuidString
+            let title = trimmed(titleDrafts[key] ?? "")
+            if !title.isEmpty && title != trimmed(phase.title) {
+                titles[key] = title
+            }
+            let summary = trimmed(summaryDrafts[key] ?? "")
+            if !summary.isEmpty && summary != trimmed(phase.description ?? "") {
+                summaries[key] = summary
+            }
+        }
+        result.phaseTitles = titles
+        result.phaseSummaries = summaries
+        result.sessionNote = trimmed(result.sessionNote)
+        result.reviewNote = trimmed(result.reviewNote)
+        result.coachNote = trimmed(result.coachNote)
+        result.homeActivity = trimmed(result.homeActivity)
+
+        notes = result
+        academyName = trimmed(academyDraft)
+        onSave()
+        dismiss()
+    }
+
+    private func trimmed(_ string: String) -> String {
+        string.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
 // MARK: - Share Sheet
+
 struct ProgramShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
-    
+
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

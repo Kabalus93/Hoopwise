@@ -206,6 +206,10 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   attendance control became a native iOS switch (present / absent) in place
   of the four-button strip. Approval covers that diff only. See "Attendance
   UI" for what the switch may and may not write.
+- THIRD sanctioned exception (October 2026, Luther's request): the iOS
+  "Parent Notice" screen (ParentProgramSummaryView) became the Parent Guide
+  screen — PDF preview, wording editor, PDF and long-image share. Approval
+  covers that diff only. See "Documents → ProgramGuideDocument".
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because
@@ -794,6 +798,26 @@ any attendance surface.
   rules, never plausible defaults. Two modes: blank-for-signing (empty
   consent boxes) and from-contract (stored consent state). Never
   pre-tick a consent form handed to a client.
+- ProgramGuideDocument (Services/, BOTH targets, October 2026) is the
+  parent-facing program guide, replacing a SwiftUI-card screenshot. ONE
+  composition renders two outputs: A4 PDF (paginated, vector) and a long
+  single-column JPEG for WeChat (same drawing code on one tall page, sized
+  by a measuring pass via PDFDocumentRenderer.cursorPosition, then
+  rasterized with ImageIO). Content comes from the program's own data:
+  phases (title via PhaseNaming, dates, focus, description, objectives),
+  example activities (phase.suggestedDrillIds, else the drills its
+  sessions used), a typical session read from a REAL planned session's
+  curriculum (with "from the plan for <date>"), and checkpoints = phase end
+  dates. NOTHING INVENTED: missing data omits the section. It states that
+  goals describe what the program teaches, not what a child achieved.
+  Academy/coach is the identity; Hoopwise is a footer credit.
+- Parent-facing wording (introduction override, phase title/summary
+  overrides, session note, progress note, coach's note, home activity,
+  academy name) is DEVICE-LOCAL in UserDefaults via ProgramGuideStore —
+  deliberately not synced, because syncing needs schema fields (rule 5).
+  An override equal to the program's own text is not stored, so later
+  program edits still flow through. If it must sync, that is a schema
+  decision for Luther, not a quiet addition.
 - Filenames: `Attendance_<name>_Contract<N>_<yyyy-MM-dd>.pdf` and
   `Agreement_<name>_Contract<N>_<yyyy-MM-dd>.pdf`.
 - Export UI: iOS contract sheet (system share sheet, for WeChat), Mac

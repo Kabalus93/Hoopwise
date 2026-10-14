@@ -235,6 +235,10 @@ nonisolated final class PDFDocumentRenderer {
     var contentHeight: CGFloat { pageSize.height - margins.top - margins.bottom }
     var remainingHeight: CGFloat { max(0, contentHeight - cursorY) }
     var currentPage: Int { pageIndex }
+    /// How far down the current page the content has reached, measured from
+    /// the top content edge. Lets a caller size a single tall page to exactly
+    /// what it drew (the program guide's long-image export).
+    var cursorPosition: CGFloat { cursorY }
 
     /// Top-down y to PDF's bottom-up y.
     private func flipped(_ topDownY: CGFloat) -> CGFloat {
