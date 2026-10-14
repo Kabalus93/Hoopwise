@@ -2307,6 +2307,15 @@ struct FlightySessionPageView: View {
                                 .font(.system(size: 11))
                                 .foregroundStyle(.tertiary)
                         }
+
+                        // The switch is off for unmarked, excused AND absent,
+                        // so the row says which one it is. Present needs no
+                        // caption: the switch is on.
+                        if attendanceState != .present {
+                            Text(attendanceState.label(isChinese: isChinese))
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(attendanceState.tint)
+                        }
                     }
                 }
             }
@@ -2314,10 +2323,9 @@ struct FlightySessionPageView: View {
             
             Spacer()
 
-            // Native iOS switch — universally understood as off/on so an
-            // unmarked student looks unmarked. The binding's get reads
-            // `actualAttendeeIds` live (no captured snapshot), and set uses
-            // the new value directly so taps always flip the intended way.
+            // Native iOS switch: on = present, flipping a present student off
+            // = absent. Untouched students stay unmarked. Excused and Clear
+            // are in the swipe actions and the long-press menu below.
             // Same control as the Take Attendance sheet.
             AttendanceMarkControl(mark: attendanceState) { newMark in
                 setAttendanceState(for: student.id, state: newMark)
@@ -2325,6 +2333,13 @@ struct FlightySessionPageView: View {
             .disabled(!accessMode.canTakeAttendance)
         }
         .contentShape(Rectangle())
+        .contextMenu {
+            if accessMode.canTakeAttendance {
+                AttendanceMarkMenu(mark: attendanceState) { newMark in
+                    setAttendanceState(for: student.id, state: newMark)
+                }
+            }
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         #if os(iOS)
@@ -6117,10 +6132,10 @@ struct LiveAttendanceSheet: View {
                     }
 
                     ForEach(students) { student in
-                        // Same control as the session attendance tab. This
-                        // screen used to be a binary toggle that could not
-                        // express "excused" at all, so a notified absence
-                        // recorded here consumed a session.
+                        // Same control as the session attendance tab: a
+                        // present/absent switch, with Excused and Clear in the
+                        // row's long-press menu. A notified absence must stay
+                        // recordable as excused, or it consumes a session.
                         AttendanceStudentRow(
                             student: student,
                             mark: currentMark(for: student.id),

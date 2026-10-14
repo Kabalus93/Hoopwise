@@ -202,6 +202,10 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   widget deep-link routing in MainTabView/SAMApp (tap-through to
   session/athlete). It is an explicit approval for that diff only, not
   precedent for general iOS edits.
+- SECOND sanctioned exception (October 2026, Luther's request): the
+  attendance control became a native iOS switch (present / absent) in place
+  of the four-button strip. Approval covers that diff only. See "Attendance
+  UI" for what the switch may and may not write.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because
@@ -691,6 +695,15 @@ found two bugs, and both were in code that renders documents sent to clients.
 - ONE shared control: `AttendanceMarkControl` / `AttendanceStudentRow` in
   Hoopwise/Components/AttendanceMarkControl.swift, with the `AttendanceMark`
   enum. Every iOS attendance surface uses it.
+- SINCE OCTOBER 2026 the control is a native SWITCH: on = present, flipping
+  a present student off = absent. The four-state model is unchanged. The
+  switch must NEVER write absent for a student nobody touched: off-and-
+  untouched stays UNMARKED, and the session row prints the state ("Not
+  marked" / "Excused" / "Absent") because all three render as switch-off.
+  Excused and Clear (to unmarked) live in `AttendanceMarkMenu` (long-press
+  on the row, both surfaces) and in the session tab's swipe actions. Do not
+  remove those paths: without them a notified absence can only be recorded
+  as absent, which consumes a session.
 - There used to be TWO surfaces with different capabilities: a binary
   present/absent toggle in the Take Attendance sheet and a three-way
   control in the session attendance tab. Which states could be recorded

@@ -64,50 +64,78 @@ enum AttendanceMark: String, CaseIterable, Identifiable {
     }
 }
 
-/// One four-state control, used by every attendance surface.
+/// The attendance control, used by every iOS attendance surface: a native
+/// switch. ON = present. Switching OFF records ABSENT.
 ///
-/// There used to be two: a binary present/absent toggle in the Take Attendance
-/// sheet and a three-way control in the session detail tab. Which states could
-/// be recorded depended on which screen was open — and the binary toggle could
-/// not express "excused" at all, so a notified absence recorded there consumed
-/// a session. Discovering that courtside is exactly when it costs money.
+/// The model keeps all FOUR states. The switch shows only present vs not:
+/// - A student nobody has touched stays UNMARKED (switch off). The switch
+///   never writes absent on its own — it records absent only when the coach
+///   flips a present student off. Unmarked is NOT absent; for a private
+///   bundle an absence deducts a session, so inferring one would invent a
+///   charge.
+/// - Excused, Absent-without-flipping, and Clear (back to unmarked) live in
+///   `AttendanceMarkMenu` (long-press on the row) and in the session tab's
+///   swipe actions. A notified absence must stay recordable as EXCUSED, or
+///   it would consume a session — the reason the old binary toggle was
+///   removed in the first place.
+///
+/// Decided October 2026 by the coach: the four-button strip was replaced by
+/// this switch (a sanctioned exception to the iOS UI freeze, see CLAUDE.md).
 struct AttendanceMarkControl: View {
     let mark: AttendanceMark
     var onChange: (AttendanceMark) -> Void
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(AttendanceMark.allCases) { candidate in
-                Button {
-                    guard candidate != mark else { return }
-                    onChange(candidate)
-                } label: {
-                    Image(systemName: candidate.icon)
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 34, height: 30)
-                        .background(background(for: candidate))
-                        .foregroundStyle(candidate == mark ? .white : candidate.tint)
-                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .strokeBorder(candidate.tint.opacity(candidate == mark ? 0 : 0.45),
-                                              style: StrokeStyle(lineWidth: 1,
-                                                                 dash: candidate == .unmarked ? [3, 2] : []))
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(candidate.label(isChinese: isChinese))
+    private var isPresent: Binding<Bool> {
+        Binding(
+            get: { mark == .present },
+            set: { isOn in
+                let next: AttendanceMark = isOn ? .present : .absent
+                guard next != mark else { return }
+                onChange(next)
             }
-        }
-        .sensoryFeedback(.impact(weight: .light), trigger: mark)
+        )
     }
 
-    private func background(for candidate: AttendanceMark) -> some ShapeStyle {
-        candidate == mark
-            ? AnyShapeStyle(candidate.tint)
-            : AnyShapeStyle(Color.clear)
+    var body: some View {
+        Toggle(isOn: isPresent) {
+            Text(AttendanceMark.present.label(isChinese: isChinese))
+        }
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .tint(.green)
+        .accessibilityValue(mark.label(isChinese: isChinese))
+        .sensoryFeedback(.impact(weight: .light), trigger: mark)
+    }
+}
+
+/// Every attendance state as menu items, for a row's long-press menu.
+/// This is how a coach reaches Excused, Absent and Clear without the switch.
+struct AttendanceMarkMenu: View {
+    let mark: AttendanceMark
+    var onChange: (AttendanceMark) -> Void
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        ForEach(AttendanceMark.allCases) { candidate in
+            Button {
+                onChange(candidate)
+            } label: {
+                Label(menuTitle(for: candidate), systemImage: candidate.icon)
+            }
+            .disabled(candidate == mark)
+        }
+    }
+
+    /// "Clear" is the action that returns a row to UNMARKED; the money
+    /// consequence is spelled out because two of the four states charge.
+    private func menuTitle(for candidate: AttendanceMark) -> String {
+        let name = candidate == .unmarked
+            ? (isChinese ? "清除" : "Clear")
+            : candidate.label(isChinese: isChinese)
+        return "\(name) · \(candidate.consequence(isChinese: isChinese))"
     }
 }
 
@@ -171,5 +199,9 @@ struct AttendanceStudentRow: View {
                               style: StrokeStyle(lineWidth: 1,
                                                  dash: mark == .unmarked ? [4, 3] : []))
         )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contextMenu {
+            AttendanceMarkMenu(mark: mark, onChange: onChange)
+        }
     }
 }
