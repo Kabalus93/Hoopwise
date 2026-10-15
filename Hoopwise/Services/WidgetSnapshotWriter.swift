@@ -386,7 +386,7 @@ enum WidgetSnapshotWriter {
         }
 
         for contract in dataManager.cachedContracts
-        where contract.kind == .privateBundle && contract.status == .active
+        where contract.hasSessionBalance && contract.status == .active
             && (contract.bundleRedemptionsRemaining ?? .max) <= AttentionRules.bundleLowRemaining {
             guard let student = dataManager.students.first(where: { $0.id == contract.studentId }),
                   !seen.contains(student.id) else { continue }

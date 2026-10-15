@@ -133,6 +133,11 @@ enum SheetGalleryDebug {
         case "addProgram":
             AddProgramOnboardingView { _ in }
 
+        case "classListImport":
+            // The import preview over HOOPWISE_CLASSLIST_PREVIEW's file.
+            ClassListImportView(preloadURL: ProcessInfo.processInfo
+                .environment["HOOPWISE_CLASSLIST_PREVIEW"].map { URL(fileURLWithPath: $0) })
+
         case "sessionPage":
             // The first program's earliest session, on its default Attendance
             // tab — the roster rows and their swipe actions.

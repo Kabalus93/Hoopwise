@@ -159,6 +159,7 @@
 				Services/AttendanceInference.swift,
 				Services/AttendanceStatementDocument.swift,
 				Services/AttentionEngine.swift,
+				Services/ClassListImport.swift,
 				Services/CloudSyncMonitor.swift,
 				Services/DrillPlanGenerator.swift,
 				Services/FrameThumbnailRenderer.swift,
@@ -208,6 +209,7 @@
 				Utilities/PinyinConverter.swift,
 				Utilities/PlatformModifiers.swift,
 				Utilities/RenderStyle.swift,
+				Utilities/XLSX.swift,
 			);
 			target = 2D8D35552FA6374E00F1AD64 /* HoopwiseMac */;
 		};

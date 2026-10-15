@@ -154,6 +154,7 @@ struct SAMApp: App {
         }
         exportStatementIfRequested()
         exportGuideIfRequested()
+        ClassListDebug.previewIfRequested(dataManager: dataManager)
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
         runOrphanCensusIfRequested()
         SessionInspectorDebug.runIfRequested(dataManager: dataManager)

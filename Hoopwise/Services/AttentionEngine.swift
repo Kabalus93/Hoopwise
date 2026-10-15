@@ -320,7 +320,7 @@ enum AttentionEngine {
         let renewalHorizon = now.addingTimeInterval(
             TimeInterval(AttentionRules.renewalSessionWindowDays * 24 * 3600))
         for contract in dataManager.contracts
-        where contract.kind == .privateBundle && contract.status == .active
+        where contract.hasSessionBalance && contract.status == .active
             && (contract.bundleRedemptionsRemaining ?? .max) <= AttentionRules.renewalRemaining {
             let student = dataManager.students.first { $0.id == contract.studentId }
             guard let student else { continue }

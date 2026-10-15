@@ -2959,6 +2959,36 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// ADDS a student to a program's roster without removing them from any
+    /// other — for students who attend more than one class (one child training
+    /// Monday and Wednesday on one shared balance). `setStudentEnrollment`
+    /// stays the writer for MOVING a student: it clears every other roster by
+    /// design. `student.programId` is the student's primary class; it is set
+    /// only when the student has none, so adding a second class never
+    /// re-homes them.
+    func addStudentEnrollment(studentId: UUID, programId: UUID) {
+        do {
+            let studentDescriptor = FetchDescriptor<SDStudent>(
+                predicate: #Predicate { $0.id == studentId })
+            guard let sdStudent = try modelContext.fetch(studentDescriptor).first else { return }
+            let programDescriptor = FetchDescriptor<SDProgram>(
+                predicate: #Predicate { $0.id == programId })
+            guard let sdProgram = try modelContext.fetch(programDescriptor).first else { return }
+            if sdStudent.programId == nil {
+                recordStudentRevision(sdStudent, reason: .manualEdit)
+                sdStudent.programId = programId
+                sdStudent.updatedAt = Date()
+            }
+            if !sdProgram.enrolledStudentIds.contains(studentId) {
+                sdProgram.enrolledStudentIds.append(studentId)
+                sdProgram.updatedAt = Date()
+            }
+            saveAndRefresh()
+        } catch {
+            debugLog("❌ addStudentEnrollment failed: \(error)")
+        }
+    }
+
     private func mutateDirectoryGroup(id: UUID, _ body: (SDDirectoryGroup) -> Void) {
         let descriptor = FetchDescriptor<SDDirectoryGroup>(
             predicate: #Predicate { $0.id == id })
@@ -3408,13 +3438,19 @@ class SwiftDataManager: ObservableObject {
     /// `updateContractsForAttendance` which selected by highest contract
     /// number and could charge a different bundle for the same session.
     ///
+    /// Group classes in a program charge GROUP session balances the same way
+    /// (October 2026); see the pool selection below.
+    ///
     /// A session is consumed when the student is PRESENT or recorded as an
     /// UNEXCUSED ABSENCE — agreement clause 4: cancellation inside 24 hours or
     /// non-attendance consumes the session. Excused and unmarked consume
     /// nothing.
     func redeemPrivateAttendance(sessionId: UUID, studentId: UUID) {
-        guard let event = cachedSessionEvents.first(where: { $0.id == sessionId }),
-              eventIsPrivate(event) else { return }
+        guard let event = cachedSessionEvents.first(where: { $0.id == sessionId }) else { return }
+        let isPrivate = eventIsPrivate(event)
+        // A group class charges only when it belongs to a program; a program-
+        // less, non-private session (a scrimmage, a camp) charges nobody.
+        guard isPrivate || event.programId != nil else { return }
 
         // A session that did not happen charges nobody. SkipSessionSheet
         // promises exactly this ("Skipped sessions won't count toward
@@ -3431,10 +3467,19 @@ class SwiftDataManager: ObservableObject {
             $0.studentId == studentId && $0.bundleSessionIds.contains(sessionId)
         }) else { return }
 
+        // Private sessions draw on private bundles. Group classes (October
+        // 2026) draw on group session balances — scoped to the class when the
+        // balance names a program, shared across classes when it names none
+        // ("课时与其他班共用"). The two pools never mix: a private lesson is
+        // never paid from a group balance or the reverse. FIFO either way.
         let bundles = cachedContracts
-            .filter { $0.studentId == studentId
-                      && $0.kind == .privateBundle
-                      && ($0.bundleRedemptionsRemaining ?? 0) > 0 }
+            .filter { contract in
+                guard contract.studentId == studentId,
+                      (contract.bundleRedemptionsRemaining ?? 0) > 0 else { return false }
+                if isPrivate { return contract.kind == .privateBundle }
+                guard contract.kind == .group, contract.hasSessionBalance else { return false }
+                return contract.programId == nil || contract.programId == event.programId
+            }
             .sorted { $0.effectiveBundlePurchaseDate < $1.effectiveBundlePurchaseDate }
 
         guard var oldest = bundles.first else { return }
@@ -3482,7 +3527,7 @@ class SwiftDataManager: ObservableObject {
     /// returns it.
     func refundSessionToBundle(sessionId: UUID, studentId: UUID) {
         for var contract in cachedContracts where contract.studentId == studentId
-                                                && contract.kind == .privateBundle
+                                                && contract.hasSessionBalance
                                                 && contract.bundleSessionIds.contains(sessionId) {
             contract.bundleSessionIds.removeAll { $0 == sessionId }
             updateContract(contract)

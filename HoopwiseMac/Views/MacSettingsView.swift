@@ -362,6 +362,7 @@ struct MacSettingsView: View {
             LabeledContent("Athletes", value: "\(dataManager.students.count)")
             LabeledContent("Sessions", value: "\(dataManager.sessionEvents.count)")
             LabeledContent("Programs", value: "\(dataManager.programs.count)")
+            ClassListMacSection()
         }
         .formStyle(.grouped)
         .padding()

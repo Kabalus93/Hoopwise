@@ -862,6 +862,38 @@ any attendance surface.
 - Export UI: iOS contract sheet (system share sheet, for WeChat), Mac
   ContractCard menu (NSSavePanel).
 
+## Group session balances and the class list (October 2026)
+- GROUP CLASSES NOW CHARGE. A `.group` contract with `bundleSize > 0` is a
+  prepaid SESSION BALANCE (`Contract.hasSessionBalance`); bundleSize 0 is an
+  enrollment with no balance, exactly as before. redeemPrivateAttendance (the
+  one authority, name kept) draws private sessions from private bundles and
+  group-program sessions from group balances — never across the two pools.
+  A balance with `programId == nil` is SHARED by every class the student
+  attends ("课时与其他班共用"); one naming a program serves only that class.
+  FIFO, present + unexcused absent, skip/delete refund — same rules.
+  Renewal attention and the widget pick read `hasSessionBalance`.
+  Covered by GroupBalanceTests.
+- MONTHS are entered as sessions at FOUR a month (one class a week) and count
+  down by attendance; the contract notes carry `ClassList.monthsMarker` so the
+  export prints them back in months. Luther's decision.
+- A student can be on SEVERAL class rosters: `addStudentEnrollment` ADDS
+  (student.programId = primary class, set only when nil);
+  `setStudentEnrollment` still MOVES (clears every other roster).
+- The coach's spreadsheet (上课名单.xlsx) imports and exports on BOTH
+  platforms (sixth sanctioned freeze exception): Services/ClassListImport.swift
+  — `ClassList.parse` (the sheet's own 人数/总人次 checks become issues),
+  `ClassList.plan` (pure; matches students by name/Chinese name, programs by
+  weekday + time + age; NEVER adds to an existing group balance, so a
+  re-import cannot double one), `applyClassListImport` / `undoClassListImport`
+  (all writes through the existing writers), `ClassList.export` (one sheet per
+  coach + 长期不来, same columns). iPhone: Athletes → + → Import/Export Class
+  List (Excel). Mac: Settings → Data. Utilities/XLSX.swift is the
+  dependency-free codec (zip + XML, CRC-32, deflate via Compression).
+- DEBUG: HOOPWISE_CLASSLIST_PREVIEW=<path> writes a READ-ONLY plan to the App
+  Group Library/Caches/classlist-preview.txt; HOOPWISE_SHOT=classListImport
+  shows the preview screen over that file. Real class lists hold children's
+  names — never commit one or use it as a fixture.
+
 ## Media consent
 - Stored as a LEDGER on SDContract (`consentsData`, `[MediaConsentEntry]`
   of purpose/granted/date/note), not booleans — clause 8 allows withdrawal

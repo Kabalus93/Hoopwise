@@ -27,6 +27,8 @@ struct StudentIntelligenceListView: View {
     @State private var sheetStudent: Student?
     @State private var showingAddStudent = false
     @State private var transferMode: StudentTransferView.Mode? = nil
+    @State private var showingClassListImport = false
+    @State private var classListExportFile: ClassListExportFile?
     @State private var expandedGroups: Set<String> = []
     @State private var currentVisibleGrade: String = ""
     @State private var userTappedGrade: String? = nil  // Track explicit user taps
@@ -327,6 +329,12 @@ struct StudentIntelligenceListView: View {
             .sheet(item: $transferMode) { mode in
                 StudentTransferView(initialMode: mode)
             }
+            .sheet(isPresented: $showingClassListImport) {
+                ClassListImportView()
+            }
+            .sheet(item: $classListExportFile) { file in
+                ProgramShareSheet(items: [file.url])
+            }
             .alert(
                 LocalizationManager.shared.currentLanguage == .chinese
                     ? "删除所选 \(selectedStudentIds.count) 名球员？"
@@ -394,6 +402,21 @@ struct StudentIntelligenceListView: View {
                         } label: {
                             Label("Import…", systemImage: "square.and.arrow.down")
                         }
+                        Divider()
+                        Button {
+                            showingClassListImport = true
+                        } label: {
+                            Label(LocalizationManager.shared.currentLanguage == .chinese
+                                  ? "导入上课名单（Excel）…" : "Import Class List (Excel)…",
+                                  systemImage: "tablecells.badge.ellipsis")
+                        }
+                        Button {
+                            exportClassList()
+                        } label: {
+                            Label(LocalizationManager.shared.currentLanguage == .chinese
+                                  ? "导出上课名单（Excel）…" : "Export Class List (Excel)…",
+                                  systemImage: "tablecells")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -402,6 +425,12 @@ struct StudentIntelligenceListView: View {
         }
     }
     
+    private func exportClassList() {
+        if let url = try? ClassListExport.file(dataManager: dataManager) {
+            classListExportFile = ClassListExportFile(url: url)
+        }
+    }
+
     // MARK: - Search Bar
     private var searchBarSection: some View {
         HStack(spacing: 10) {
@@ -5119,4 +5148,9 @@ struct VisibleGradePreferenceKey: PreferenceKey {
             value = next
         }
     }
+}
+
+private struct ClassListExportFile: Identifiable {
+    let id = UUID()
+    let url: URL
 }

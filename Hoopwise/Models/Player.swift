@@ -526,9 +526,19 @@ struct Contract: Identifiable, Codable, Hashable {
         kind.isBundle ? pricePerSession * Double(bundleSize) : 0
     }
 
-    /// Sessions left in a bundle, or nil for non-bundle kinds.
+    /// A prepaid SESSION BALANCE that attendance deducts from: a private
+    /// bundle, or (October 2026) a group contract carrying a prepaid count —
+    /// how academies sell group classes ("剩余课时"). A group contract with
+    /// `bundleSize == 0` is an enrollment with no balance, as before.
+    /// Months-based balances are converted to sessions at 4 a month (one
+    /// class a week) when they are entered.
+    var hasSessionBalance: Bool {
+        kind == .privateBundle || (kind == .group && bundleSize > 0)
+    }
+
+    /// Sessions left on a balance, or nil when the contract has none.
     var bundleRedemptionsRemaining: Int? {
-        guard kind.isBundle else { return nil }
+        guard hasSessionBalance else { return nil }
         return max(0, bundleSize - bundleSessionIds.count)
     }
 

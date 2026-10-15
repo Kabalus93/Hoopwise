@@ -121,9 +121,10 @@ enum SessionDedupe {
 
     /// Session ids that have actually consumed a PREPAID session.
     ///
-    /// Only `.privateBundle` contracts have slots to consume, and only they
-    /// are touched by `refundSessionToBundle` and reported by
-    /// `bundleRedemptionsRemaining`. Reading `bundleSessionIds` off every
+    /// Only contracts with a session balance (`hasSessionBalance`: private
+    /// bundles, and group contracts carrying a prepaid count) have slots to
+    /// consume, and only they are touched by `refundSessionToBundle` and
+    /// reported by `bundleRedemptionsRemaining`. Reading `bundleSessionIds` off every
     /// contract kind overstates the money at stake: the live store has group
     /// contracts (bundleSize 0, remaining n/a) carrying legacy entries in
     /// that array from the divergent redemption path that was removed, and
@@ -131,7 +132,7 @@ enum SessionDedupe {
     /// slot exists on either side.
     static func redeemedSessionIds(in contracts: [Contract]) -> Set<UUID> {
         Set(contracts
-            .filter { $0.kind == .privateBundle }
+            .filter(\.hasSessionBalance)
             .flatMap(\.bundleSessionIds))
     }
 
