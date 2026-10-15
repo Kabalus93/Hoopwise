@@ -133,6 +133,18 @@ enum SheetGalleryDebug {
         case "addProgram":
             AddProgramOnboardingView { _ in }
 
+        case "profileCamera":
+            ProfilePhotoCamera { _ in }
+
+        case "editStudent":
+            // The edit page of the first program's first enrolled student.
+            if let program = dm.programs.first,
+               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
+                EditStudentView(student: student, player: nil)
+            } else {
+                missing("editStudent: no enrolled student")
+            }
+
         case "groupContract":
             // An imported-shape group balance (shared, 12 left), NOT saved:
             // the sheet only renders it.

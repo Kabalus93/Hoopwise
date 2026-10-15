@@ -220,6 +220,13 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
 - SIXTH sanctioned exception (October 2026, Luther's request): the coach's
   class-list spreadsheet (上课名单.xlsx) is importable AND exportable on
   iPhone as well as Mac.
+- SEVENTH sanctioned exception (October 2026, Luther's request): the
+  profile-photo camera (Views/Components/ProfilePhotoCamera.swift — back
+  camera, full screen, the avatar circle as a mask, the photo cropped to that
+  circle's square, no edit step; replaces UIImagePickerController on the
+  add/edit-student paths) and the edit-student school grade as ONE menu row
+  instead of three chip grids. ProfilePhotoCropTests pins the crop; the
+  preview→sensor mapping needs a real device.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because

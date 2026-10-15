@@ -295,8 +295,11 @@ struct AddStudentView: View {
                 }
                 Button(LocalizationManager.shared.currentLanguage == .chinese ? "取消" : "Cancel", role: .cancel) {}
             }
-            .sheet(isPresented: $showingCameraPicker) {
-                CameraPicker(image: $capturedImage)
+            .fullScreenCover(isPresented: $showingCameraPicker) {
+                ProfilePhotoCamera { image in
+                    if let image { capturedImage = image }
+                    showingCameraPicker = false
+                }
             }
             .sheet(isPresented: $showingPhotoLibrary) {
                 ImagePicker(image: $capturedImage)
@@ -1650,6 +1653,7 @@ struct EditStudentView: View {
 
     // Profile Image
     @State private var showingImagePicker = false
+    @State private var showingProfileCamera = false
     @State private var showingPhotoSourceDialog = false
     #if os(iOS)
     @State private var selectedImage: UIImage?
@@ -1800,6 +1804,12 @@ struct EditStudentView: View {
             .sheet(isPresented: $showingImagePicker) {
                 ImagePicker(image: $selectedImage, sourceType: imagePickerSource)
             }
+            .fullScreenCover(isPresented: $showingProfileCamera) {
+                ProfilePhotoCamera { image in
+                    if let image { selectedImage = image }
+                    showingProfileCamera = false
+                }
+            }
             .confirmationDialog(
                 LocalizationManager.shared.currentLanguage == .chinese ? "添加照片" : "Add Photo",
                 isPresented: $showingPhotoSourceDialog,
@@ -1807,8 +1817,7 @@ struct EditStudentView: View {
             ) {
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button(LocalizationManager.shared.currentLanguage == .chinese ? "拍照" : "Take Photo") {
-                        imagePickerSource = .camera
-                        showingImagePicker = true
+                        showingProfileCamera = true
                     }
                 }
                 Button(LocalizationManager.shared.currentLanguage == .chinese ? "从图库选择" : "Choose from Library") {
@@ -2328,37 +2337,52 @@ struct EditStudentView: View {
                     .cornerRadius(12)
             }
 
-            // School Grade
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text(isChinese ? "年级" : "School Grade")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if let grade = selectedSchoolGrade {
-                        Text(isChinese ? "约 \(grade.estimatedAge) 岁" : "~ \(grade.estimatedAge) yrs")
-                            .font(.system(size: 12))
+            // School Grade — one field-shaped row and one menu, not three
+            // grids of fifteen chips (October 2026, Luther: the grids made a
+            // page that fits on one screen scroll).
+            VStack(alignment: .leading, spacing: 6) {
+                Text(isChinese ? "年级" : "School Grade")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Menu {
+                    gradeMenuSection(isChinese ? "幼儿园" : "Kindergarten", SchoolGrade.kindergartenGrades)
+                    gradeMenuSection(isChinese ? "小学" : "Primary School", SchoolGrade.primaryGrades)
+                    gradeMenuSection(isChinese ? "中学" : "Secondary School", SchoolGrade.highschoolGrades)
+                    if selectedSchoolGrade != nil {
+                        Divider()
+                        Button(role: .destructive) {
+                            selectedSchoolGrade = nil
+                        } label: {
+                            Label(isChinese ? "清除年级" : "Clear grade", systemImage: "xmark.circle")
+                        }
+                    }
+                } label: {
+                    HStack {
+                        if let grade = selectedSchoolGrade {
+                            Text(grade.displayName)
+                                .foregroundStyle(.primary)
+                            Text(isChinese ? "约 \(grade.estimatedAge) 岁" : "~\(grade.estimatedAge) yrs")
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Text(isChinese ? "未设置" : "Not set")
+                                .foregroundStyle(.tertiary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.tertiary)
                     }
+                    .font(.system(size: 16))
+                    // A Menu tints its label with the accent; the hierarchical
+                    // styles here must resolve against primary, like the text
+                    // fields above, or the row reads as a blue button.
+                    .foregroundStyle(Color.primary)
+                    .padding(14)
+                    .background(.quaternary)
+                    .cornerRadius(12)
                 }
-
-                gradeSection(
-                    title: isChinese ? "幼儿园" : "Kindergarten",
-                    grades: SchoolGrade.kindergartenGrades,
-                    color: .pink
-                )
-
-                gradeSection(
-                    title: isChinese ? "小学" : "Primary School",
-                    grades: SchoolGrade.primaryGrades,
-                    color: .blue
-                )
-
-                gradeSection(
-                    title: isChinese ? "中学" : "High School",
-                    grades: SchoolGrade.highschoolGrades,
-                    color: .purple
-                )
+                .tint(Color.primary)
+                .sensoryFeedback(.selection, trigger: selectedSchoolGrade)
             }
         }
         .padding(16)
@@ -2366,29 +2390,18 @@ struct EditStudentView: View {
         .cornerRadius(16)
     }
 
-    private func gradeSection(title: String, grades: [SchoolGrade], color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(color)
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                ForEach(grades, id: \.self) { grade in
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            selectedSchoolGrade = grade
-                        }
-                        HapticFeedback.impact(.light)
-                    }) {
-                        Text(grade.localizedShortName)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(selectedSchoolGrade == grade ? .white : AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(selectedSchoolGrade == grade ? color : AppTheme.surfaceColor)
-                            .cornerRadius(8)
+    @ViewBuilder
+    private func gradeMenuSection(_ title: String, _ grades: [SchoolGrade]) -> some View {
+        Section(title) {
+            ForEach(grades, id: \.self) { grade in
+                Button {
+                    selectedSchoolGrade = grade
+                } label: {
+                    if selectedSchoolGrade == grade {
+                        Label(grade.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(grade.displayName)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
