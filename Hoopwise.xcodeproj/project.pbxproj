@@ -10,7 +10,6 @@
 		2D8D33B32FA0B80800F1AD64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */; };
 		2D8D33B42FA0B80800F1AD64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */; };
 		2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		2D8D3AA42FA6582F00F1AD64 /* Configuration.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -499,7 +498,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2D8D3AA42FA6582F00F1AD64 /* Configuration.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -959,7 +957,7 @@
 				INFOPLIST_FILE = SAMWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SAMWidgets;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -992,7 +990,7 @@
 				INFOPLIST_FILE = SAMWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SAMWidgets;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

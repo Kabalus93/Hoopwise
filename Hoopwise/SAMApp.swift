@@ -41,13 +41,24 @@ struct SAMApp: App {
         #endif
     }
 
+    /// SheetGalleryDebug only exists in DEBUG; Release never reaches this
+    /// (debugSheetShot is nil there) but must still compile it.
+    @ViewBuilder
+    private func debugSheetRoot(shot: String) -> some View {
+        #if DEBUG
+        SheetGalleryDebug.root(shot: shot, dataManager: dataManager)
+        #else
+        EmptyView()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
                 if !isInitialized {
                     splashView
                 } else if let shot = debugSheetShot {
-                    SheetGalleryDebug.root(shot: shot, dataManager: dataManager)
+                    debugSheetRoot(shot: shot)
                 } else if !hasOnboarded {
                     OnboardingView {
                         hasOnboarded = true

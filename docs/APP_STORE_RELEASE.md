@@ -66,9 +66,9 @@ Audited and fine as is:
   crash today. Do not wire it up without adding the key.
 
 ## 3. Verify on the Mac before archiving
-1. **Widget minimum iOS.** The widget extension targets iOS 26.2 while the
-   app targets 26.1. Align them. Raising the app to 26.2 is the zero-code
-   option. Lowering the widget needs a build to prove it compiles.
+1. **Widget minimum iOS.** DONE 2026-10-15: the widget was lowered to 26.1
+   to match the app; it builds for simulator and device, and the archive
+   reports MinimumOSVersion 26.1 for both bundles.
 2. **No API keys in the iOS app.** The iOS target uses
    `Configuration.xcconfig` as its base configuration, and that file holds
    the Anthropic/Gemini/Groq keys. If it defines `INFOPLIST_KEY_*` entries
@@ -79,6 +79,14 @@ Audited and fine as is:
    ```
    Any API key in the output must be removed from the iOS target before
    uploading. The Whistle assistant is Mac-only, so iOS needs none.
+   CHECKED 2026-10-15: Info.plist was clean, but `Configuration.xcconfig`
+   ITSELF was in the iOS target's Copy Bundle Resources phase, so every iOS
+   build shipped the three keys as a readable file in the bundle. Removed
+   from the phase (it remains the base configuration). A re-archive contains
+   no xcconfig and no key prefix in any file, binaries included. Re-check
+   with `ls Hoopwise.app | grep xcconfig` on every archive. The keys that
+   shipped in earlier debug installs should be treated as exposed only if
+   such a build left the coach's own devices.
 3. **Build numbers match.** The app and the widget must share the same
    CURRENT_PROJECT_VERSION (both 2 today). Bump both on every upload.
 4. **Tests green.** ⌘U on the Hoopwise scheme, using the sequential
