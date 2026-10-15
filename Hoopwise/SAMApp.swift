@@ -149,6 +149,9 @@ struct SAMApp: App {
         isInitialized = true
 
         #if DEBUG
+        #if os(iOS)
+        ScreenshotStore.prune(dataManager: dataManager)
+        #endif
         if SheetGalleryDebug.requestedShot != nil {
             SheetGalleryDebug.seedIfEmpty(dataManager: dataManager)
         }

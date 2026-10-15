@@ -11,6 +11,25 @@ import XCTest
 @MainActor
 final class SessionNamingTests: XCTestCase {
 
+    /// The expected strings are English; the app-host's saved language is
+    /// whatever the simulator last ran in, so pin it for the test and restore.
+    private var savedLanguage: AppLanguage?
+
+    override func setUp() {
+        super.setUp()
+        MainActor.assumeIsolated {
+            savedLanguage = LocalizationManager.shared.currentLanguage
+            LocalizationManager.shared.currentLanguage = .english
+        }
+    }
+
+    override func tearDown() {
+        MainActor.assumeIsolated {
+            if let savedLanguage { LocalizationManager.shared.currentLanguage = savedLanguage }
+        }
+        super.tearDown()
+    }
+
     private let programId = UUID(uuidString: "A0000000-0000-0000-0000-00000000000A")!
     private let phaseId = UUID(uuidString: "C0000000-0000-0000-0000-00000000000C")!
     private let when = Date(timeIntervalSince1970: 1_700_000_000)

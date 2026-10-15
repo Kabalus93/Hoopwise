@@ -916,6 +916,28 @@ any attendance surface.
   shows the preview screen over that file. Real class lists hold children's
   names — never commit one or use it as a fixture.
 
+## App Store screenshots (October 2026)
+- THE SIMULATORS ARE SIGNED INTO LUTHER'S iCLOUD: the iPhone Air sim's
+  default.store holds the REAL roster (synced from CloudKit Development).
+  Anything an agent does in a normally-launched simulator reaches the
+  coach's phone. Never prune, seed or experiment in the synced store.
+- HOOPWISE_SCREENSHOT_STORE=1 (DEBUG, Hoopwise/ScreenshotStore.swift) opens
+  `screenshots.store` in the App Group with CloudKit OFF — a copy of the
+  synced store, pruned to demo data (students WITHOUT a Chinese name, the
+  programs they are on, their coaches), shifted so a demo class falls today,
+  and enriched once (named phases, 24-session balances, history, today's roll
+  call half-taken, two private bundles for Hub revenue). prune refuses to
+  run unless this unmirrored store is the one open.
+- SAMpUITests/AppStoreScreenshots captures the set; it is SKIPPED unless the
+  runner gets HOOPWISE_SCREENSHOTS=1, so ⌘U never runs it:
+  `TEST_RUNNER_HOOPWISE_SCREENSHOTS=1 TEST_RUNNER_HOOPWISE_LANG=en|zh
+  xcodebuild test-without-building … -only-testing:HoopwiseUITests/AppStoreScreenshots
+  -resultBundlePath r.xcresult` then `xcrun xcresulttool export attachments`.
+  Use the iPhone 17 Pro Max sim (1320×2868, the 6.9" size), status bar via
+  `simctl status_bar override --time 9:41 --batteryState discharging
+  --batteryLevel 100`, light appearance. Seed it by copying the Air sim's
+  App Group default.store* AS screenshots.store* (never as default.store).
+
 ## Media consent
 - Stored as a LEDGER on SDContract (`consentsData`, `[MediaConsentEntry]`
   of purpose/granted/date/note), not booleans — clause 8 allows withdrawal

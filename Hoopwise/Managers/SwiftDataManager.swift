@@ -468,6 +468,23 @@ class SwiftDataManager: ObservableObject {
         }
         #endif
 
+        #if DEBUG && os(iOS)
+        // App Store screenshots (HOOPWISE_SCREENSHOT_STORE=1): a SEPARATE
+        // file with CloudKit OFF. It starts as a copy of the synced store and
+        // is pruned to demo data by ScreenshotStore.prune — on a file that
+        // nothing mirrors, so pruning can never delete anything in iCloud or
+        // in the real store.
+        if let url = ScreenshotStore.url {
+            ScreenshotStore.seedIfNeeded()
+            let configuration = ModelConfiguration(schema: schema, url: url,
+                                                   allowsSave: true,
+                                                   cloudKitDatabase: .none)
+            modelContainer = try! ModelContainer(for: schema, configurations: [configuration])
+            ScreenshotStore.isActive = true
+            return
+        }
+        #endif
+
         // Use platform-specific local storage
         // iOS and macOS each have their own local data store
         // CloudKit private DB syncs SwiftData across the user's devices automatically

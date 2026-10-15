@@ -18,6 +18,12 @@ final class AttendanceSwipeUITests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchEnvironment["HOOPWISE_SHOT"] = "sessionPage"
+        // The simulators are signed into the coach's iCloud: these taps must
+        // land in the isolated demo store, never in the synced one.
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        // The assertions read English labels; the app's saved language is
+        // whatever the simulator last ran in.
+        app.launchArguments += ["-app_language", "en"]
         app.launch()
     }
 

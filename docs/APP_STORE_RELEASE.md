@@ -132,7 +132,12 @@ Production schemas are additive only. Whatever is deployed stays forever.
 4. App Privacy: "Data Not Collected".
 5. Age rating questionnaire: all "None" → 4+.
 6. Screenshots per `AppStore/screenshots-guide.md`, using demo data only.
-   The real roster is minors.
+   The real roster is minors. FIRST SET CAPTURED 2026-10-15: 6.9" iPhone,
+   English and Chinese, 8 each (home, attendance, parent guide, program,
+   calendar, athlete, hub, athletes), from the isolated demo store — see
+   CLAUDE.md "App Store screenshots" for the repeatable procedure. Still
+   owed: iPad 13" (or go iPhone-only, 1b), Chinese demo CONTENT for the
+   Chinese set, captions/frames.
 7. App Review notes from `AppStore/metadata.md`, after walking the four
    steps on a fresh install.
 8. Submit for review.

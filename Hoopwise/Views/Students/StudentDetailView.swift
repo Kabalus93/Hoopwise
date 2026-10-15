@@ -224,8 +224,10 @@ struct StudentDetailView: View {
 
             Divider().frame(height: 32)
 
-            // Bundles get a real "Left" count; PAYG and group are open-ended.
-            if let c = contract, c.kind == .privateBundle,
+            // Any session balance (private bundle, or a group contract with
+            // prepaid sessions) gets a real "Left" count — the same number the
+            // contract row below prints. PAYG and plain enrollment are open-ended.
+            if let c = contract, c.hasSessionBalance,
                let remaining = c.bundleRedemptionsRemaining {
                 quickStatItem(
                     value: "\(remaining)",
