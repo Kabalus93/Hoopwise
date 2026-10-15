@@ -142,6 +142,7 @@ struct SAMApp: App {
             SheetGalleryDebug.seedIfEmpty(dataManager: dataManager)
         }
         exportStatementIfRequested()
+        exportGuideIfRequested()
         AttentionDebugReport.runIfRequested(dataManager: dataManager)
         runOrphanCensusIfRequested()
         SessionInspectorDebug.runIfRequested(dataManager: dataManager)
@@ -231,6 +232,53 @@ struct SAMApp: App {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         _ = try? AttendanceStatementDocument.render(
             input, to: dir.appendingPathComponent("statement-debug.pdf"))
+    }
+
+    /// Headless Parent Guide export, same channel as the statement.
+    /// HOOPWISE_EXPORT_GUIDE="<programName>" (or "*" for the first program)
+    /// renders the PDF and the long image in English and Chinese through the
+    /// same makeInput/render calls the Parent Guide screen uses, into the App
+    /// Group's Library/Caches as guide-debug-{en,zh}.{pdf,jpg}. Append
+    /// ":stress" to fill every coach-written field with long text — passed
+    /// straight to makeInput, never saved — to exercise pagination.
+    @MainActor
+    private func exportGuideIfRequested() {
+        guard let spec = ProcessInfo.processInfo
+            .environment["HOOPWISE_EXPORT_GUIDE"] else { return }
+        let parts = spec.split(separator: ":", omittingEmptySubsequences: false)
+        let name = parts.first.map(String.init) ?? "*"
+        let stress = parts.dropFirst().contains("stress")
+        guard let program = name == "*" ? dataManager.programs.first
+                : dataManager.programs.first(where: { $0.name == name }),
+              let dir = WidgetShared.containerURL?
+                .appendingPathComponent("Library/Caches", isDirectory: true)
+        else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        var notes = ProgramGuideStore.notes(for: program.id)
+        if stress {
+            let zh = "孩子们会在每节课里反复练习运球、传球和投篮的基本动作，教练会根据每个孩子的情况调整难度，让每个人都能在挑战中进步，并且学会在团队里沟通、互相鼓励。"
+            let en = "Every session repeats the fundamentals — dribbling, passing and shooting — and the coach adjusts the difficulty for each child so everyone is stretched without being lost, and learns to talk and encourage teammates on court."
+            let long = (0..<4).map { _ in zh + " " + en }.joined(separator: "\n\n")
+            notes.purpose = long
+            notes.sessionNote = zh + en
+            notes.reviewNote = long
+            notes.coachNote = long
+            notes.homeActivity = zh + "\n" + en
+        }
+        for chinese in [false, true] {
+            let input = ProgramGuideDocument.makeInput(
+                program: program, dataManager: dataManager, notes: notes,
+                academyName: ProgramGuideStore.academyName, isChinese: chinese)
+            let tag = chinese ? "zh" : "en"
+            _ = try? ProgramGuideDocument.renderPDF(
+                input, to: dir.appendingPathComponent("guide-debug-\(tag).pdf"))
+            if let image = try? ProgramGuideDocument.renderLongImage(input) {
+                let target = dir.appendingPathComponent("guide-debug-\(tag).jpg")
+                try? FileManager.default.removeItem(at: target)
+                try? FileManager.default.copyItem(at: image, to: target)
+            }
+        }
     }
     #endif
 }

@@ -811,6 +811,11 @@ any attendance surface.
   dates. NOTHING INVENTED: missing data omits the section. It states that
   goals describe what the program teaches, not what a child achieved.
   Academy/coach is the identity; Hoopwise is a footer credit.
+- DEBUG headless export: launch iOS with env HOOPWISE_EXPORT_GUIDE="<program
+  name>" ("*" = first program; append ":stress" to fill every coach field
+  with long text, unsaved) → guide-debug-{en,zh}.{pdf,jpg} in the App Group
+  Library/Caches, through the same makeInput/render calls as the screen.
+  Simulator: `SIMCTL_CHILD_HOOPWISE_EXPORT_GUIDE='*' xcrun simctl launch …`.
 - Parent-facing wording (introduction override, phase title/summary
   overrides, session note, progress note, coach's note, home activity,
   academy name) is DEVICE-LOCAL in UserDefaults via ProgramGuideStore —

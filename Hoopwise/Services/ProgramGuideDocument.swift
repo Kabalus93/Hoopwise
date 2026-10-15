@@ -715,6 +715,14 @@ enum ProgramGuideDocument {
             }
         }
 
+        // The disclaimer qualifies GOALS; with none printed it would point
+        // at nothing.
+        let hasGoals = !input.programGoals.isEmpty
+            || input.phases.contains { !$0.objectives.isEmpty }
+        guard hasGoals else {
+            doc.spacer(28 * s)
+            return
+        }
         doc.spacer(16 * s)
         let disclaimer = isChinese
             ? "以上目标描述的是本计划要教的内容，并非孩子已经取得的成绩。"
@@ -819,8 +827,6 @@ enum ProgramGuideDocument {
     private static func drawCoachNote(_ doc: PDFDocumentRenderer, _ input: Input, _ layout: Layout) {
         guard let note = input.coachNote else { return }
         let s = layout.scale
-        sectionHeading(doc, "教练寄语", "A note from the coach", layout, minFollowing: 50)
-
         let pad = 16 * s
         let textStyle = style(10.5, layout, spacing: 3)
         let signatureStyle = style(9.5, layout, bold: true, color: secondary)
@@ -830,7 +836,15 @@ enum ProgramGuideDocument {
         let signatureHeight = signature.map { doc.measure($0, style: signatureStyle, width: width).height } ?? 0
         let total = pad * 2 + textHeight + (signatureHeight > 0 ? 8 * s + signatureHeight : 0)
 
-        if total <= doc.contentHeight {
+        // The panel cannot split, so the heading must travel with ALL of it:
+        // asking for less strands the heading at a page foot while the panel
+        // jumps to the next page. Heading + panel taller than a page → flow.
+        let headingAllowance = 40 * s
+        let boxed = total + headingAllowance <= doc.contentHeight
+        sectionHeading(doc, "教练寄语", "A note from the coach", layout,
+                       minFollowing: boxed ? total / s : 50)
+
+        if boxed {
             let panel = doc.reserve(height: total)
             fill(doc, panel, panelFill, radius: 8 * s)
             fill(doc, CGRect(x: panel.minX, y: panel.minY + pad, width: 3 * s, height: total - pad * 2), accent)
@@ -1120,7 +1134,15 @@ enum ProgramGuideDocument {
     private static func rangeString(_ start: Date?, _ end: Date?, isChinese: Bool) -> String? {
         switch (start, end) {
         case let (start?, end?):
-            return "\(dateString(start, isChinese: isChinese, year: false)) – \(dateString(end, isChinese: isChinese))"
+            // The year is printed once when both ends share it — on the end
+            // in English ("Oct 14 – Nov 10, 2026"), on the start in Chinese
+            // ("2026年10月14日 – 11月10日") — and on both ends across a new
+            // year, so a range like Oct–Jan never hides which October.
+            let sameYear = Calendar.current.isDate(start, equalTo: end, toGranularity: .year)
+            if isChinese {
+                return "\(dateString(start, isChinese: true)) – \(dateString(end, isChinese: true, year: !sameYear))"
+            }
+            return "\(dateString(start, isChinese: false, year: !sameYear)) – \(dateString(end, isChinese: false))"
         case let (start?, nil):
             return isChinese ? "\(dateString(start, isChinese: true)) 起" : "From \(dateString(start, isChinese: false))"
         default:
