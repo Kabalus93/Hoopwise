@@ -64,54 +64,132 @@ enum AttendanceMark: String, CaseIterable, Identifiable {
     }
 }
 
-/// The attendance control, used by every iOS attendance surface: a native
-/// switch. ON = present. Switching OFF records ABSENT.
+/// The attendance control, used by every iOS attendance surface: a
+/// THREE-POSITION switch. Left = excused, middle = not marked, right =
+/// present. (October 2026, the coach's design; a sanctioned exception to the
+/// iOS UI freeze, see CLAUDE.md.)
 ///
-/// The model keeps all FOUR states. The switch shows only present vs not:
-/// - A student nobody has touched stays UNMARKED (switch off). The switch
-///   never writes absent on its own — it records absent only when the coach
-///   flips a present student off. Unmarked is NOT absent; for a private
-///   bundle an absence deducts a session, so inferring one would invent a
-///   charge.
-/// - Excused, Absent-without-flipping, and Clear (back to unmarked) live in
-///   `AttendanceMarkMenu` (long-press on the row) and in the session tab's
-///   swipe actions. A notified absence must stay recordable as EXCUSED, or
-///   it would consume a session — the reason the old binary toggle was
-///   removed in the first place.
+/// There is no position for ABSENT. Absent is what the middle MEANS once roll
+/// call has started: `AttendanceInference` shows every still-middle student
+/// as absent as soon as anyone on the session is marked, and writes (charges)
+/// those absences an hour after class. Callers pass the EFFECTIVE mark, so an
+/// inferred or recorded absence sits in the middle with the row captioned
+/// "Absent".
 ///
-/// Decided October 2026 by the coach: the four-button strip was replaced by
-/// this switch (a sanctioned exception to the iOS UI freeze, see CLAUDE.md).
+/// The control itself only ever writes present, excused or unmarked.
+/// Tap a side to move there, tap the middle to return to not marked, or drag
+/// the knob; VoiceOver adjusts it with increment / decrement.
 struct AttendanceMarkControl: View {
     let mark: AttendanceMark
     var onChange: (AttendanceMark) -> Void
 
+    @State private var dragOffset: CGFloat?
+
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
-    private var isPresent: Binding<Bool> {
-        Binding(
-            get: { mark == .present },
-            set: { isOn in
-                let next: AttendanceMark = isOn ? .present : .absent
-                guard next != mark else { return }
-                onChange(next)
-            }
-        )
+    private static let width: CGFloat = 84
+    private static let height: CGFloat = 32
+    private static let knob: CGFloat = 28
+    /// Knob travel from the middle to either side.
+    private static let travel: CGFloat = (width - 4 - knob) / 2
+
+    /// -1 excused, 0 not marked (or absent), +1 present.
+    private var position: Int {
+        switch mark {
+        case .present:            return 1
+        case .excused:            return -1
+        case .unmarked, .absent:  return 0
+        }
+    }
+
+    private static func mark(at position: Int) -> AttendanceMark {
+        switch position {
+        case 1:  return .present
+        case -1: return .excused
+        default: return .unmarked
+        }
+    }
+
+    private var trackTint: Color {
+        switch position {
+        case 1:  return .green
+        case -1: return .orange
+        default: return Color(.tertiarySystemFill)
+        }
+    }
+
+    private func move(to newPosition: Int) {
+        let clamped = max(-1, min(1, newPosition))
+        let next = Self.mark(at: clamped)
+        // An absence (recorded or inferred) sits in the middle; landing on the
+        // middle again is not a change.
+        guard clamped != position else { return }
+        onChange(next)
     }
 
     var body: some View {
-        Toggle(isOn: isPresent) {
-            Text(AttendanceMark.present.label(isChinese: isChinese))
+        let knobX = dragOffset ?? CGFloat(position) * Self.travel
+
+        ZStack {
+            Capsule()
+                .fill(trackTint)
+            HStack {
+                Image(systemName: "clock")
+                    .opacity(position == -1 ? 0 : 0.55)
+                Spacer()
+                Image(systemName: "checkmark")
+                    .opacity(position == 1 ? 0 : 0.55)
+            }
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(position == 0 ? Color.secondary : Color.white)
+            .padding(.horizontal, 9)
+
+            Circle()
+                .fill(.white)
+                .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+                .frame(width: Self.knob, height: Self.knob)
+                .offset(x: knobX)
         }
-        .labelsHidden()
-        .toggleStyle(.switch)
-        .tint(.green)
-        .accessibilityValue(mark.label(isChinese: isChinese))
+        .frame(width: Self.width, height: Self.height)
+        .contentShape(Capsule())
+        .animation(.snappy(duration: 0.2), value: position)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    guard abs(value.translation.width) > 4 else { return }
+                    let start = CGFloat(position) * Self.travel
+                    dragOffset = max(-Self.travel, min(Self.travel, start + value.translation.width))
+                }
+                .onEnded { value in
+                    defer { dragOffset = nil }
+                    if abs(value.translation.width) <= 4 {
+                        // A tap: left third, middle third, right third.
+                        let x = value.location.x
+                        let third = Self.width / 3
+                        move(to: x < third ? -1 : (x > third * 2 ? 1 : 0))
+                    } else {
+                        let landed = (dragOffset ?? 0) / Self.travel
+                        move(to: Int(landed.rounded()))
+                    }
+                }
+        )
         .sensoryFeedback(.impact(weight: .light), trigger: mark)
+        .accessibilityElement()
+        .accessibilityIdentifier("attendanceControl")
+        .accessibilityLabel(isChinese ? "考勤" : "Attendance")
+        .accessibilityValue(mark.label(isChinese: isChinese))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: move(to: position + 1)
+            case .decrement: move(to: position - 1)
+            @unknown default: break
+            }
+        }
     }
 }
 
 /// Every attendance state as menu items, for a row's long-press menu.
-/// This is how a coach reaches Excused, Absent and Clear without the switch.
+/// Present, Excused and Clear, for a coach who prefers the long-press menu.
 struct AttendanceMarkMenu: View {
     let mark: AttendanceMark
     var onChange: (AttendanceMark) -> Void
@@ -119,7 +197,9 @@ struct AttendanceMarkMenu: View {
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
     var body: some View {
-        ForEach(AttendanceMark.allCases) { candidate in
+        // No explicit Absent: absent is what an unmarked student becomes once
+        // roll call has started (AttendanceInference), not something chosen.
+        ForEach([AttendanceMark.present, .excused, .unmarked]) { candidate in
             Button {
                 onChange(candidate)
             } label: {

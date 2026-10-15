@@ -150,6 +150,8 @@ enum AttentionEngine {
     struct AutomationResult {
         var closedNow = 0
         var amnestyClosed = 0
+        /// Inferred absences written this pass (AttendanceInference).
+        var absencesCharged = 0
     }
 
     private static var automationInFlight = false
@@ -183,6 +185,10 @@ enum AttentionEngine {
            now.timeIntervalSince(last) < 5 * 60 { return result }
         automationInFlight = true
         defer { automationInFlight = false }
+
+        // Inferred absences first (an hour after class), so a session that is
+        // auto-closed in the same pass is closed with its final marks.
+        result.absencesCharged = dataManager.chargeInferredAbsences(now: now)
 
         let grace = TimeInterval(AttentionRules.autoCloseGraceHours * 3600)
         let amnestyCutoff = now.addingTimeInterval(

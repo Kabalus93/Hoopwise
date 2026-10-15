@@ -41,6 +41,17 @@
                ReferencedContainer = "container:Hoopwise.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "054981882EE9F81400C56E5A"
+               BuildableName = "HoopwiseUITests.xctest"
+               BlueprintName = "HoopwiseUITests"
+               ReferencedContainer = "container:Hoopwise.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

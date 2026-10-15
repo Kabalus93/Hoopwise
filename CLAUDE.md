@@ -204,8 +204,8 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   precedent for general iOS edits.
 - SECOND sanctioned exception (October 2026, Luther's request): the
   attendance control became a native iOS switch (present / absent) in place
-  of the four-button strip. Approval covers that diff only. See "Attendance
-  UI" for what the switch may and may not write.
+  of the four-button strip. Superseded the same month by the FIFTH exception
+  (three-position switch, roster as a List) — see "Attendance UI".
 - THIRD sanctioned exception (October 2026, Luther's request): the iOS
   "Parent Notice" screen (ParentProgramSummaryView) became the Parent Guide
   screen — PDF preview, wording editor, PDF and long-image share. Approval
@@ -214,6 +214,12 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   page's hero tile (FlightyProgramDetailView.mascotTile) shows the age
   category ("U8") instead of the mascot SF Symbol; a coach-uploaded category
   icon still wins. Approval covers that diff only.
+- FIFTH sanctioned exception (October 2026, Luther's request): the
+  three-position attendance switch, inferred absence, and the session
+  roster as a List so swipes fire. See "Attendance UI".
+- SIXTH sanctioned exception (October 2026, Luther's request): the coach's
+  class-list spreadsheet (上课名单.xlsx) is importable AND exportable on
+  iPhone as well as Mac.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because
@@ -677,10 +683,19 @@ found two bugs, and both were in code that renders documents sent to clients.
 ## Attendance and bundle redemption — read before touching any of it
 - FOUR states, THREE stored arrays on SDSessionEvent: actualAttendeeIds,
   excusedAbsences, unexcusedAbsences. Membership in none means UNMARKED.
-  Unmarked is NOT absent. An unexcused absence consumes a bundle session
-  (agreement clause 4); a student whose attendance has not been taken yet
-  must consume nothing. Inferring absence from "not present" would invent
-  revenue, which is worse than the bug it would fix.
+  An unexcused absence consumes a bundle session (agreement clause 4).
+- INFERRED ABSENCE (October 2026, Luther's decision — REVERSES the earlier
+  absolute "unmarked is NOT absent"). Services/AttendanceInference.swift is
+  the ONLY place absence is inferred, inside four bounds that keep it from
+  inventing charges: (1) only once ROLL CALL STARTED — at least one student
+  on the session has an explicit mark; a class nobody marked stays unmarked
+  and the "Attendance not taken" alert fires instead; (2) SHOWN at once,
+  CHARGED one hour after class ends — `chargeInferredAbsences`, run first in
+  AttentionEngine.runAutomation, writes them as explicit unexcused absences
+  through the one redemption authority; (3) only sessions starting on/after
+  `effectiveFrom` (2026-10-15) — never retroactive; (4) never for a session
+  that did not happen. Covered by AttendanceInferenceTests. Do not infer
+  absence anywhere else.
 - ONE redemption authority: redeemPrivateAttendance. FIFO by
   effectiveBundlePurchaseDate. A client who buys a second bundle before
   exhausting the first expects sessions consumed in purchase order;
@@ -720,15 +735,22 @@ found two bugs, and both were in code that renders documents sent to clients.
 - ONE shared control: `AttendanceMarkControl` / `AttendanceStudentRow` in
   Hoopwise/Components/AttendanceMarkControl.swift, with the `AttendanceMark`
   enum. Every iOS attendance surface uses it.
-- SINCE OCTOBER 2026 the control is a native SWITCH: on = present, flipping
-  a present student off = absent. The four-state model is unchanged. The
-  switch must NEVER write absent for a student nobody touched: off-and-
-  untouched stays UNMARKED, and the session row prints the state ("Not
-  marked" / "Excused" / "Absent") because all three render as switch-off.
-  Excused and Clear (to unmarked) live in `AttendanceMarkMenu` (long-press
-  on the row, both surfaces) and in the session tab's swipe actions. Do not
-  remove those paths: without them a notified absence can only be recorded
-  as absent, which consumes a session.
+- SINCE OCTOBER 2026 the control is a THREE-POSITION switch: left =
+  excused, middle = not marked, right = present (Luther's design, the fifth
+  sanctioned freeze exception). There is NO absent position and no explicit
+  Absent action anywhere (menu, swipe, Mac segment): absent is what the
+  middle MEANS once roll call starts (AttendanceInference). Rows pass the
+  EFFECTIVE mark (`SessionEvent.effectiveAttendanceMark`) so an inferred or
+  recorded absence sits in the middle captioned "Absent". The control only
+  writes present / excused / unmarked.
+- The session tab's roster is a non-scrolling List sized to its rows,
+  because `.swipeActions` only fire on List rows. Until October 2026 it was a
+  LazyVStack and every documented swipe (Excuse, Clear, Refund) was INERT —
+  the long-press menu was the only working path. Each row height is rounded
+  UP to whole points when sizing the List, or the last divider clips and the
+  first row jitters. SAMpUITests/AttendanceSwipeUITests swipes real rows, so
+  a regression to a non-List container fails there. Remaining swipes:
+  Metrics (leading), Clear + Refund (trailing).
 - There used to be TWO surfaces with different capabilities: a binary
   present/absent toggle in the Take Attendance sheet and a three-way
   control in the session attendance tab. Which states could be recorded
@@ -746,6 +768,8 @@ found two bugs, and both were in code that renders documents sent to clients.
   sheet's "Sessions deducted" section.
 
 ## Mac attendance marking (decision REVERSED August 2026)
+(October 2026: the Mac row follows the three-position model too — segments
+Excused · — · Present, no Absent segment, inferred absence in the caption.)
 The earlier rule was "Mac does not mark attendance — phone for operations,
 Mac for authorship." Luther reversed it in the full-editability phase: Mac
 roll call now exists and MUST be exact parity — the four-state model

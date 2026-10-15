@@ -133,6 +133,20 @@ enum SheetGalleryDebug {
         case "addProgram":
             AddProgramOnboardingView { _ in }
 
+        case "sessionPage":
+            // The first program's earliest session, on its default Attendance
+            // tab — the roster rows and their swipe actions.
+            if let program = dm.programs.first,
+               let session = dm.sessionEvents
+                .filter({ $0.programId == program.id })
+                .min(by: { $0.startTime < $1.startTime }) {
+                NavigationStack {
+                    FlightySessionPageView(session: session, accessMode: .execution)
+                }
+            } else {
+                missing("sessionPage: no program session in the store")
+            }
+
         case "programDetail":
             // The first program's page: hero header, mascot/category tile.
             if let program = dm.programs.first {

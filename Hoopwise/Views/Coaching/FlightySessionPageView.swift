@@ -19,6 +19,9 @@ struct FlightySessionPageView: View {
     var embeddedInSplit: Bool = false
     
     @State private var selectedTab = 1  // Default to Attendance tab
+    /// Measured roster row heights; sizes the non-scrolling attendance List.
+    @State private var rosterRowHeights: [UUID: CGFloat] = [:]
+    @Environment(\.displayScale) private var displayScale
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var showingCancelConfirmation = false
@@ -1754,29 +1757,76 @@ struct FlightySessionPageView: View {
     @State private var showingAddAthleteSheet = false
     
     // MARK: - Attendance Tab
+
+    #if os(iOS)
+    /// The roster as a non-scrolling List sized to its rows. A List, because
+    /// `.swipeActions` only fire on List rows: in the old LazyVStack the
+    /// Excuse / Clear / Refund swipes were inert and the long-press menu was
+    /// the only way to reach them. Only the roster is a List — the hero above
+    /// stays in the page's ScrollView, where its glass and chips render as
+    /// designed. Rows report their height so the List is exactly as tall as
+    /// the stack it replaced.
+    private var attendanceRoster: some View {
+        let students = enrolledStudents
+        // Each row rounded UP to whole points, because that is how tall the
+        // List makes its cells. Summing the raw fractions left the frame a
+        // sliver short: the last divider was clipped, and the List kept a
+        // fraction of scroll range that it re-settled every layout pass (the
+        // first row visibly jittered).
+        let height = students.reduce(CGFloat(0)) { $0 + (rosterRowHeights[$1.id] ?? 66).rounded(.up) }
+        return List {
+            ForEach(students) { student in
+                attendanceRow(student: student)
+                    // The Divider used to be its own stacked element under each
+                    // row; reserve its hairline so the roster is as tall as before.
+                    .padding(.bottom, 1 / displayScale)
+                    .background(alignment: .bottom) {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            Divider()
+                        }
+                        .padding(.leading, 66)
+                    }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { newHeight in
+                        rosterRowHeights[student.id] = newHeight
+                    }
+                    .attendancePageRow(background: Color(.secondarySystemGroupedBackground))
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDisabled(true)
+        .contentMargins(.vertical, 0, for: .scrollContent)
+        .environment(\.defaultMinListRowHeight, 0)
+        .frame(height: height)
+    }
+
+    /// Below the roster: add athlete, session photo, bottom breathing room.
+    private var attendanceFooter: some View {
+        VStack(spacing: 8) {
+            if parentProgram != nil && accessMode.canEdit {
+                addAthleteButton
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+
+            sessionPhotoSection
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+            Spacer(minLength: 100)
+        }
+    }
+    #endif
+
     private var attendanceTab: some View {
         Group {
             #if os(iOS)
             VStack(spacing: 8) {
-                LazyVStack(spacing: 0) {
-                    ForEach(enrolledStudents) { student in
-                        attendanceRow(student: student)
-                        Divider().padding(.leading, 66)
-                    }
-                }
-                .background(Color(.secondarySystemGroupedBackground))
+                attendanceRoster
+                    .background(Color(.secondarySystemGroupedBackground))
 
-                if parentProgram != nil && accessMode.canEdit {
-                    addAthleteButton
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                }
-
-                sessionPhotoSection
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-
-                Spacer(minLength: 100)
+                attendanceFooter
             }
             #else
             VStack(spacing: 0) {
@@ -2267,12 +2317,10 @@ struct FlightySessionPageView: View {
     
     private func attendanceRow(student: Student) -> some View {
         let isPresent = session.actualAttendeeIds.contains(student.id)
-        let isExcused = session.excusedAbsences.contains(student.id)
-        let isExpected = session.attendeeIds.contains(student.id)
         
         // Four states from three stores. The default is UNMARKED — it used to
         // fall through to .absent, which now consumes a session.
-        let attendanceState: AttendanceMark = session.attendanceMark(for: student.id)
+        let attendanceState: AttendanceMark = session.effectiveAttendanceMark(for: student.id)
         let isRedeemed = dataManager.isSessionRedeemed(sessionId: session.id, studentId: student.id)
         
         return HStack(spacing: 10) {
@@ -2323,9 +2371,8 @@ struct FlightySessionPageView: View {
             
             Spacer()
 
-            // Native iOS switch: on = present, flipping a present student off
-            // = absent. Untouched students stay unmarked. Excused and Clear
-            // are in the swipe actions and the long-press menu below.
+            // Three-position switch: excused · not marked · present. Left in
+            // the middle once roll call starts = absent (AttendanceInference).
             // Same control as the Take Attendance sheet.
             AttendanceMarkControl(mark: attendanceState) { newMark in
                 setAttendanceState(for: student.id, state: newMark)
@@ -2350,20 +2397,13 @@ struct FlightySessionPageView: View {
                 Label(isChinese ? "数据" : "Metrics", systemImage: "chart.bar.fill")
             }
             .tint(Color.accentColor)
-
-            if isExpected {
-                Button {
-                    setAttendanceState(for: student.id, state: isExcused ? .unmarked : .excused)
-                } label: {
-                    Label(isChinese ? "请假" : "Excuse", systemImage: "calendar.badge.clock")
-                }
-                .tint(.orange)
-            }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             // "Clear" means UNMARKED. It used to map to .absent, which now
             // consumes a session — clearing must never charge the client.
-            if attendanceState != .unmarked {
+            // Offered for a RECORDED mark only: an inferred absence is
+            // already unmarked, so clearing it would do nothing.
+            if session.attendanceMark(for: student.id) != .unmarked {
                 Button(role: .destructive) {
                     setAttendanceState(for: student.id, state: .unmarked)
                 } label: {
@@ -6053,7 +6093,7 @@ struct LiveAttendanceSheet: View {
     let onSave: () -> Void
 
     private func currentMark(for studentId: UUID) -> AttendanceMark {
-        session.attendanceMark(for: studentId)
+        session.effectiveAttendanceMark(for: studentId)
     }
 
     /// Optimistic local update so the control responds immediately, then the
@@ -6132,9 +6172,10 @@ struct LiveAttendanceSheet: View {
                     }
 
                     ForEach(students) { student in
-                        // Same control as the session attendance tab: a
-                        // present/absent switch, with Excused and Clear in the
-                        // row's long-press menu. A notified absence must stay
+                        // Same control as the session attendance tab: the
+                        // three-position switch (excused · not marked ·
+                        // present); the middle reads absent once roll call
+                        // has started. A notified absence must stay
                         // recordable as excused, or it consumes a session.
                         AttendanceStudentRow(
                             student: student,
@@ -6174,6 +6215,17 @@ extension SessionEvent {
         if excusedAbsences.contains(studentId) { return .excused }
         if unexcusedAbsences.contains(studentId) { return .absent }
         return .unmarked
+    }
+
+    /// What the coach sees: the recorded mark, except that an unmarked
+    /// student reads ABSENT once roll call has started (AttendanceInference).
+    /// Display only — the absence is charged an hour after class.
+    func effectiveAttendanceMark(for studentId: UUID) -> AttendanceMark {
+        let recorded = attendanceMark(for: studentId)
+        if recorded == .unmarked, AttendanceInference.isInferredAbsent(studentId, in: self) {
+            return .absent
+        }
+        return recorded
     }
 }
 
@@ -7144,6 +7196,19 @@ struct EnableSwipeBackGesture: UIViewControllerRepresentable {
             }
             return nil
         }
+    }
+}
+#endif
+
+#if os(iOS)
+private extension View {
+    /// A full-bleed List row that draws exactly what the old stacked layout
+    /// drew: no insets, no system separator, no system background.
+    func attendancePageRow(background: Color = .clear) -> some View {
+        self
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(background)
     }
 }
 #endif

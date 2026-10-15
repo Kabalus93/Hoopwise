@@ -731,6 +731,7 @@ private struct RollCallTab: View {
                         MacAttendanceRow(
                             student: student,
                             state: state(for: student.id),
+                            inferredAbsent: AttendanceInference.isInferredAbsent(student.id, in: session),
                             consumes: consumesBundle(student.id),
                             onSet: { newState in
                                 dataManager.setStudentAttendanceState(
@@ -763,11 +764,16 @@ private struct RollCallTab: View {
     }
 }
 
-/// Four-state Mac attendance row: segmented state control plus the money
-/// consequence in words, because two of the four states charge the client.
+/// Mac attendance row, in parity with the iOS three-position switch:
+/// Excused · — · Present. There is no Absent choice — absent is what "—"
+/// means once roll call has started (AttendanceInference), shown in the
+/// caption and charged an hour after class. A recorded absence also sits on
+/// "—". The money consequence is stated in words because two states charge.
 private struct MacAttendanceRow: View {
     let student: Student
     let state: AttendanceTriState
+    /// Unmarked, but counts as absent because roll call has started.
+    let inferredAbsent: Bool
     let consumes: Bool
     let onSet: (AttendanceTriState) -> Void
 
@@ -779,18 +785,24 @@ private struct MacAttendanceRow: View {
                          size: 28)
             VStack(alignment: .leading, spacing: 1) {
                 Text(student.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
-                if consumes {
+                if consumes || isAbsent {
                     Text(consequenceText)
                         .font(.caption2)
-                        .foregroundStyle(chargesNow ? .orange : .secondary)
+                        .foregroundStyle(isAbsent ? .red : (chargesNow ? .orange : .secondary))
                 }
             }
             Spacer()
-            Picker("", selection: Binding(get: { state }, set: { onSet($0) })) {
+            Picker("", selection: Binding(
+                get: { state == .absent ? .unmarked : state },
+                set: { newValue in
+                    // A recorded absence already sits on "—"; choosing "—"
+                    // again is not a change (and must not silently clear it).
+                    guard !(newValue == .unmarked && state == .absent) else { return }
+                    onSet(newValue)
+                })) {
+                Text("Excused").tag(AttendanceTriState.excused)
                 Text("—").tag(AttendanceTriState.unmarked)
                 Text("Present").tag(AttendanceTriState.present)
-                Text("Excused").tag(AttendanceTriState.excused)
-                Text("Absent").tag(AttendanceTriState.absent)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -808,16 +820,20 @@ private struct MacAttendanceRow: View {
 
     private var chargesNow: Bool { state == .present || state == .absent }
 
+    private var isAbsent: Bool { state == .absent || inferredAbsent }
+
     private var consequenceText: String {
+        if inferredAbsent { return "Absent — deducted 1 hour after class" }
         switch state {
         case .present:  return "Deducts 1 session"
-        case .absent:   return "Deducts 1 session (unexcused)"
+        case .absent:   return "Absent · deducts 1 session"
         case .excused:  return "No session deducted"
         case .unmarked: return "Not marked — no session deducted"
         }
     }
 
     private var rowBackground: some ShapeStyle {
+        if inferredAbsent { return AnyShapeStyle(Color.red.opacity(0.10)) }
         switch state {
         case .present:  return AnyShapeStyle(Color.green.opacity(0.10))
         case .excused:  return AnyShapeStyle(Color.orange.opacity(0.10))

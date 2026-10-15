@@ -1971,6 +1971,29 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// Writes the absences `AttendanceInference` has made due: roster students
+    /// still unmarked an hour after a class whose roll call was started. Each
+    /// becomes an explicit unexcused absence and is charged through the one
+    /// redemption authority, exactly as if the coach had marked it. Idempotent
+    /// — a written absence is no longer unmarked. Returns how many it wrote.
+    @discardableResult
+    func chargeInferredAbsences(now: Date = Date()) -> Int {
+        var written = 0
+        for session in cachedSessionEvents {
+            let expected = AttendanceMath.expectedIds(of: session, programs: cachedPrograms)
+            let due = AttendanceInference.absencesToCharge(in: session, expected: expected, now: now)
+            guard !due.isEmpty else { continue }
+            mutateSession(id: session.id, reason: .manualEdit) { sd in
+                sd.unexcusedAbsences = Array(Set(sd.unexcusedAbsences).union(due))
+            }
+            if let fresh = sessionEvents.first(where: { $0.id == session.id }) {
+                updateContractsForAttendance(sessionEvent: fresh)
+            }
+            written += due.count
+        }
+        return written
+    }
+
     /// Shared plumbing for every field-level helper. Fetches the canonical
     /// row, records a revision snapshot for recoverability, runs the
     /// caller's mutation, stamps `updatedAt`, saves + refreshes caches.

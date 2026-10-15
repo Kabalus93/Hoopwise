@@ -156,6 +156,7 @@
 				Models/SyncLogStore.swift,
 				Models/SyncTypes.swift,
 				Models/WidgetSnapshot.swift,
+				Services/AttendanceInference.swift,
 				Services/AttendanceStatementDocument.swift,
 				Services/AttentionEngine.swift,
 				Services/CloudSyncMonitor.swift,
