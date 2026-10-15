@@ -1,9 +1,9 @@
 # Hoopwise Privacy Policy
 
-**Last updated: [publication date]**
+**Last updated: October 15, 2026**
 
 Hoopwise is a coaching app for basketball coaches and academies. It is
-published by [legal name] ("we"). This policy explains what happens to the
+published by Beidy Dubhe Franco Parra ("we"). This policy explains what happens to the
 information you put into Hoopwise.
 
 ## The short version
@@ -61,14 +61,15 @@ You can change any permission in the iOS Settings app.
 Apart from iCloud sync, Hoopwise may load stock basketball images from
 Unsplash (images.unsplash.com) for decorative headers. Like any web request,
 this reveals your device's IP address to Unsplash. No information about you
-or your athletes is sent. Links to videos open in their own app or in Safari,
-under that service's terms.
+or your athletes is sent. Drill videos hosted on YouTube play in YouTube's
+embedded player inside the app, which connects to YouTube under Google's
+terms; other video links open in their own app or in Safari.
 
 ## Deleting your information
 
 - Delete any athlete, session, contract or other record inside the app.
 - Deleting the app removes the data stored on that device.
-- To remove the synced copy, open Settings → [your name] → iCloud →
+- To remove the synced copy, open Settings → your name → iCloud →
   Manage Account Storage → Hoopwise → Delete Data.
 
 Because we hold no copy, there is nothing for us to delete on our side.
@@ -80,4 +81,4 @@ with a new "Last updated" date.
 
 ## Contact
 
-Questions about this policy: [contact email]
+Questions about this policy: beidydubhe@proton.me
