@@ -1276,9 +1276,9 @@ struct ContractEditSheet: View {
                     Text("Paid is the sum of the ledger; owed derives from bundle total minus paid. Travel fees stay separate by design.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if contract.kind == .privateBundle {
-                    Section("Bundle") {
-                        Stepper("Bundle size: \(bundleSize) sessions",
+                if contract.hasSessionBalance {
+                    Section(contract.kind == .group ? "Session balance" : "Bundle") {
+                        Stepper("\(contract.kind == .group ? "Balance" : "Bundle") size: \(bundleSize) sessions",
                                 value: $bundleSize,
                                 in: max(1, consumed)...100)
                         LabeledContent("Consumed",
@@ -1328,7 +1328,7 @@ struct ContractEditSheet: View {
             changes.append("enrolled \(copy.enrollmentDate.formatted(date: .numeric, time: .omitted))→\(enrollmentDate.formatted(date: .numeric, time: .omitted))")
             copy.enrollmentDate = enrollmentDate
         }
-        if contract.kind == .privateBundle, copy.bundleSize != bundleSize {
+        if contract.hasSessionBalance, copy.bundleSize != bundleSize {
             changes.append("bundle \(copy.bundleSize)→\(bundleSize)")
             copy.bundleSize = max(bundleSize, consumed)
         }

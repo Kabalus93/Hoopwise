@@ -140,7 +140,7 @@ enum ContractKind: String, Codable, CaseIterable {
         switch self {
         case .privatePayPerSession: return "Charged each time the student attends a private session."
         case .privateBundle:        return "Prepaid pack. Revenue counted in the month of purchase."
-        case .group:                return "Group sessions are billed by the company. Track attendance only."
+        case .group:                return "Group classes. With prepaid sessions, each class attended deducts one."
         }
     }
 }

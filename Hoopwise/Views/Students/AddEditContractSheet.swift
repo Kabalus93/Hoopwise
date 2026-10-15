@@ -4,7 +4,8 @@ import SwiftUI
 /// Three-kind contract form. Each kind exposes only its relevant fields:
 /// - `.privatePayPerSession`: price, enrollment date.
 /// - `.privateBundle`: price + bundle size + purchase date.
-/// - `.group`: program selection + enrollment date.
+/// - `.group`: the student's classes (from rosters) + an optional prepaid
+///   session balance.
 struct AddEditContractSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var dataManager: DataManager
@@ -22,6 +23,10 @@ struct AddEditContractSheet: View {
     @State private var payments: [ContractPayment]
     @State private var travelFeeAmount: Double
     @State private var travelFeeBasis: TravelFeeBasis
+    /// Group only: whether this contract carries a prepaid session balance,
+    /// and how many sessions are left on it.
+    @State private var groupHasBalance: Bool
+    @State private var groupRemaining: Int
     @State private var newPaymentAmount: Double = 0
     @State private var newPaymentDate: Date = Date()
     @State private var shareURL: URL?
@@ -43,7 +48,7 @@ struct AddEditContractSheet: View {
         case .privateBundle:
             return pricePerSession > 0 && bundleSize > 0
         case .group:
-            return programId != nil
+            return !groupHasBalance || groupRemaining >= 0
         }
     }
 
@@ -60,6 +65,26 @@ struct AddEditContractSheet: View {
         _payments = State(initialValue: existing?.payments ?? [])
         _travelFeeAmount = State(initialValue: existing?.travelFeeAmount ?? 0)
         _travelFeeBasis = State(initialValue: existing?.travelFeeBasis ?? .perContract)
+        let groupBalance = existing.flatMap { $0.kind == .group ? $0.bundleRedemptionsRemaining : nil }
+        _groupHasBalance = State(initialValue: groupBalance != nil)
+        _groupRemaining = State(initialValue: groupBalance ?? 10)
+    }
+
+    /// Sessions this contract has already deducted — the floor for its size.
+    /// A group contract that had no balance carries only legacy entries
+    /// (from a removed launch-time rewrite), which do not count.
+    private var usedSessions: Int {
+        guard let existing, existing.hasSessionBalance else { return 0 }
+        return existing.bundleSessionIds.count
+    }
+
+    /// The classes this student is on — derived from the rosters, the same
+    /// relation attendance uses.
+    private var studentClasses: [Program] {
+        dataManager.programs
+            .filter { $0.enrolledStudentIds.contains(studentId)
+                && $0.programType != .privateSessions && $0.status != .archived }
+            .sorted { $0.displayName < $1.displayName }
     }
 
     var body: some View {
@@ -70,8 +95,8 @@ struct AddEditContractSheet: View {
                 if kind != .group {
                     paymentsSection
                     travelSection
-                    redeemedSection
                 }
+                redeemedSection
                 documentsSection
                 notesSection
                 if existing != nil { dangerSection }
@@ -170,15 +195,16 @@ struct AddEditContractSheet: View {
 
         case .group:
             Section {
-                if groupPrograms.isEmpty {
-                    Text(isChinese ? "尚未创建团体训练计划。" : "No group programs available yet.")
+                if studentClasses.isEmpty {
+                    Text(isChinese ? "尚未加入任何班级。" : "Not on any class roster yet.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    Picker(isChinese ? "训练计划" : "Program", selection: $programId) {
-                        Text(isChinese ? "选择…" : "Select…").tag(UUID?.none)
-                        ForEach(groupPrograms) { program in
-                            Text(program.resolvedDisplayName(in: dataManager.programs)).tag(Optional(program.id))
+                    ForEach(studentClasses) { program in
+                        LabeledContent {
+                            Text(program.ageGroup.rawValue)
+                        } label: {
+                            Text(program.resolvedDisplayName(in: dataManager.programs))
                         }
                     }
                 }
@@ -186,11 +212,49 @@ struct AddEditContractSheet: View {
                            selection: $enrollmentDate,
                            displayedComponents: .date)
             } header: {
-                Text(isChinese ? "团体注册" : "Group enrollment")
+                Text(isChinese ? "班级" : "Classes")
             } footer: {
                 Text(isChinese
-                     ? "团体训练由公司收费。这里只统计自加入日期起出席与应计课时的对照。"
-                     : "Group sessions are billed by the company. We only count attendance from the joined date for cross-checking.")
+                     ? "来自班级名单。在班级页面中添加或移除学员。"
+                     : "From the class rosters. Add or remove the student on the class's page.")
+            }
+
+            Section {
+                Toggle(isChinese ? "预付课时" : "Prepaid sessions", isOn: $groupHasBalance)
+                if groupHasBalance {
+                    Stepper(value: $groupRemaining, in: 0...500) {
+                        LabeledContent(isChinese ? "剩余课时" : "Sessions left") {
+                            Text("\(groupRemaining)")
+                                .monospacedDigit()
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(groupRemaining <= 1 ? .orange : .primary)
+                        }
+                    }
+                    if usedSessions > 0 {
+                        LabeledContent(isChinese ? "已用" : "Used") {
+                            Text(isChinese
+                                 ? "\(usedSessions) / \(usedSessions + groupRemaining)"
+                                 : "\(usedSessions) of \(usedSessions + groupRemaining)")
+                                .monospacedDigit()
+                        }
+                    }
+                    Picker(isChinese ? "适用于" : "Counts for", selection: $programId) {
+                        Text(isChinese ? "所有班级（共用）" : "All their classes (shared)").tag(UUID?.none)
+                        ForEach(groupPrograms) { program in
+                            Text(program.resolvedDisplayName(in: dataManager.programs)).tag(Optional(program.id))
+                        }
+                    }
+                }
+            } header: {
+                Text(isChinese ? "课时余额" : "Session balance")
+            } footer: {
+                Text(groupHasBalance
+                     ? (isChinese
+                        ? "每次出席或无故缺席扣 1 课时；请假和未记录不扣。"
+                        : "Each class attended, or missed without notice, deducts one session. Excused and unmarked deduct nothing.")
+                     : (isChinese
+                        ? "无预付课时：只记录出勤。"
+                        : "No prepaid balance: attendance is recorded, nothing is deducted."))
             }
         }
     }
@@ -318,7 +382,7 @@ struct AddEditContractSheet: View {
     /// looks wrong — so the correction lives here too, not only in the session.
     @ViewBuilder
     private var redeemedSection: some View {
-        if let existing, existing.kind == .privateBundle, !existing.bundleSessionIds.isEmpty {
+        if let existing, existing.hasSessionBalance, !existing.bundleSessionIds.isEmpty {
             Section {
                 ForEach(existing.bundleSessionIds, id: \.self) { sessionId in
                     HStack {
@@ -434,47 +498,58 @@ struct AddEditContractSheet: View {
 
     // MARK: - Actions
 
+    /// Edits the EXISTING contract in place. It used to rebuild a fresh
+    /// Contract from the form's fields, which silently reset everything the
+    /// form does not show — the signed / jersey / ball dates, the consent
+    /// ledger, validity months, session length — and set a group contract's
+    /// session count to zero.
     private func save() {
         let nextNumber = (dataManager.contracts.filter { $0.studentId == studentId }
                             .map(\.contractNumber).max() ?? 0) + 1
-        let contractNumber = existing?.contractNumber ?? nextNumber
+        var contract = existing ?? Contract(
+            studentId: studentId,
+            contractNumber: nextNumber,
+            createdByCoachId: dataManager.loggedInCoachId)
 
-        var purchase: Date? = nil
-        var size = 0
-        var price = pricePerSession
-        var pid: UUID? = nil
+        contract.kind = kind
+        contract.enrollmentDate = enrollmentDate
+        contract.notes = notes.isEmpty ? nil : notes
+        contract.travelFeeBasis = travelFeeBasis
+        contract.updatedAt = Date()
 
         switch kind {
         case .privatePayPerSession:
-            break
+            contract.pricePerSession = pricePerSession
+            contract.bundleSize = 0
+            contract.bundlePurchaseDate = nil
+            contract.programId = nil
+            contract.payments = payments
+            contract.travelFeeAmount = travelFeeAmount
         case .privateBundle:
-            purchase = bundlePurchaseDate
-            size = bundleSize
+            contract.pricePerSession = pricePerSession
+            contract.bundleSize = bundleSize
+            contract.bundlePurchaseDate = bundlePurchaseDate
+            contract.programId = nil
+            contract.payments = payments
+            contract.travelFeeAmount = travelFeeAmount
         case .group:
-            price = 0
-            pid = programId
+            contract.pricePerSession = 0
+            contract.payments = []
+            contract.travelFeeAmount = 0
+            contract.programId = groupHasBalance ? programId : nil
+            if groupHasBalance {
+                if existing?.hasSessionBalance != true {
+                    // Starting a balance: entries left over from before it
+                    // existed are not deductions from it.
+                    contract.bundleSessionIds = []
+                }
+                contract.bundleSize = contract.bundleSessionIds.count + groupRemaining
+                contract.bundlePurchaseDate = contract.bundlePurchaseDate ?? enrollmentDate
+            } else {
+                contract.bundleSize = 0
+                contract.bundlePurchaseDate = nil
+            }
         }
-
-        let contract = Contract(
-            id: existing?.id ?? UUID(),
-            studentId: studentId,
-            contractNumber: contractNumber,
-            kind: kind,
-            enrollmentDate: enrollmentDate,
-            pricePerSession: price,
-            bundleSize: size,
-            bundlePurchaseDate: purchase,
-            bundleSessionIds: existing?.bundleSessionIds ?? [],
-            payments: kind == .group ? [] : payments,
-            travelFeeAmount: kind == .group ? 0 : travelFeeAmount,
-            travelFeeBasis: travelFeeBasis,
-            programId: pid,
-            notes: notes.isEmpty ? nil : notes,
-            createdByCoachId: existing?.createdByCoachId ?? dataManager.loggedInCoachId,
-            manualStatus: existing?.manualStatus,
-            createdAt: existing?.createdAt ?? Date(),
-            updatedAt: Date()
-        )
 
         if existing == nil {
             dataManager.addContract(contract)

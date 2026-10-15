@@ -873,6 +873,14 @@ any attendance surface.
   FIFO, present + unexcused absent, skip/delete refund — same rules.
   Renewal attention and the widget pick read `hasSessionBalance`.
   Covered by GroupBalanceTests.
+- iOS AddEditContractSheet SAVES IN PLACE (October 2026). It used to build a
+  fresh Contract from its fields, silently resetting what it does not show
+  (signed/jersey/ball dates, the consent ledger, validityMonths,
+  sessionMinutes) and zeroing a group contract's bundleSize. Never rebuild a
+  record from a form — copy the existing one and set the fields it edits
+  (the Mac editor already did). Its group section shows the student's
+  classes (from rosters), sessions left, "counts for" (shared or one class)
+  and the deducted sessions with Refund.
 - MONTHS are entered as sessions at FOUR a month (one class a week) and count
   down by attendance; the contract notes carry `ClassList.monthsMarker` so the
   export prints them back in months. Luther's decision.

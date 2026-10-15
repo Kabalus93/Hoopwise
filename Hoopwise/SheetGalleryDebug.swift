@@ -133,6 +133,19 @@ enum SheetGalleryDebug {
         case "addProgram":
             AddProgramOnboardingView { _ in }
 
+        case "groupContract":
+            // An imported-shape group balance (shared, 12 left), NOT saved:
+            // the sheet only renders it.
+            if let program = dm.programs.first,
+               let studentId = program.enrolledStudentIds.first {
+                AddEditContractSheet(studentId: studentId, existing: Contract(
+                    studentId: studentId, contractNumber: 99, kind: .group,
+                    bundleSize: 12, bundlePurchaseDate: fixedDate,
+                    notes: "Imported from 上课名单 on 2026-10-15: 12 sessions left."))
+            } else {
+                missing("groupContract: no enrolled student")
+            }
+
         case "classListImport":
             // The import preview over HOOPWISE_CLASSLIST_PREVIEW's file.
             ClassListImportView(preloadURL: ProcessInfo.processInfo

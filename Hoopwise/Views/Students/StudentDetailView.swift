@@ -387,11 +387,17 @@ struct StudentDetailView: View {
                 ? "\(used)/\(total) 已用 · \(symbol)\(Int(c.bundleAmount)) 套餐"
                 : "\(used)/\(total) used · \(symbol)\(Int(c.bundleAmount)) bundle"
         case .group:
-            let attended = dataManager.sessionsAttended(for: c)
-            let charged = dataManager.groupSessionsChargedByCompany(for: c)
-            return isChinese
-                ? "已出席 \(attended) · 应计 \(charged)"
-                : "\(attended) attended · \(charged) charged"
+            let classes = dataManager.programs
+                .filter { $0.enrolledStudentIds.contains(c.studentId)
+                    && $0.programType != .privateSessions && $0.status != .archived }
+                .map { $0.resolvedDisplayName(in: dataManager.programs) }
+                .sorted()
+                .joined(separator: isChinese ? "、" : ", ")
+            let where_ = classes.isEmpty ? (isChinese ? "未加入班级" : "No class") : classes
+            if let left = c.bundleRedemptionsRemaining {
+                return isChinese ? "剩余 \(left) 课时 · \(where_)" : "\(left) sessions left · \(where_)"
+            }
+            return where_
         }
     }
     
