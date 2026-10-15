@@ -65,6 +65,14 @@ Audited and fine as is:
   but its only caller (`fetchBasketballImages`) is never called. Not a
   crash today. Do not wire it up without adding the key.
 
+## 2b. Decided 2026-10-15
+- Version 2.1 (build 3) for app and widget; bump the build on every upload.
+- iPhone only for the first release (TARGETED_DEVICE_FAMILY = 1 on app and
+  widget). iPad and other platforms come later. In Pricing and Availability,
+  consider unticking "Make this app available" on Apple Silicon Macs and
+  Apple Vision Pro, since "Designed for iPhone" runs there by default.
+- CloudKit schema deployed Development → Production by the owner.
+
 ## 3. Verify on the Mac before archiving
 1. **Widget minimum iOS.** DONE 2026-10-15: the widget was lowered to 26.1
    to match the app; it builds for simulator and device, and the archive
