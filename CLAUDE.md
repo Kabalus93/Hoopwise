@@ -703,6 +703,12 @@ found two bugs, and both were in code that renders documents sent to clients.
   updateContractsForAttendance used to select by highest contract number
   and could charge a different bundle for the same session — it is gone.
   Do not add a second redemption call site.
+  A THIRD writer survived until October 2026: syncAllContractAttendance ran
+  on every loadAllData and overwrote the newest contract's bundleSessionIds
+  with every present-marked session (any kind, skipped included). Each
+  launch un-charged unexcused absences, re-charged skip refunds, charged
+  group classes to private bundles and double-charged FIFO. Deleted; tests
+  never caught it because they never call loadAllData.
 - Present and unexcused-absent consume. Excused and unmarked do not.
 - NOT RETROACTIVE, deliberately. Absences recorded before this change stay
   un-deducted. Silently reclaiming past sessions would move a client's

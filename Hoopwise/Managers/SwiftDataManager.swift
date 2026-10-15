@@ -573,8 +573,13 @@ class SwiftDataManager: ObservableObject {
         migrateLegacyAutoContractsToGroup()
         ensureDefaultContractsForAllStudents()
         
-        // Sync all contracts with actual attendance records (one-time reconciliation)
-        syncAllContractAttendance()
+        // syncAllContractAttendance() used to run here, on EVERY load, and
+        // overwrite the newest contract's bundleSessionIds with every session
+        // the student was marked present in — any kind, any program, skipped
+        // or not. It un-charged unexcused absences at each launch, re-charged
+        // skip refunds, charged group classes to private bundles and
+        // double-charged sessions FIFO had put on an older bundle. Removed
+        // October 2026: redeemPrivateAttendance is the ONE writer.
         
         // CloudKit handles sync automatically - no manual cloud pull needed
         lastSyncDate = Date()
@@ -3039,50 +3044,6 @@ class SwiftDataManager: ObservableObject {
         if created > 0 {
             debugLog("✅ Created \(created) default contracts for students without contracts")
         }
-    }
-    
-    /// Sync contract's attendedSessionIds with actual session event attendance
-    /// Call this to reconcile contracts with actual attendance records
-    func syncContractAttendance(for studentId: UUID) {
-        guard var contract = currentContract(for: studentId) else {
-            debugLog("⚠️ syncContractAttendance: No contract found for student \(studentId)")
-            return
-        }
-        
-        // Get ALL sessions where this student is in actualAttendeeIds
-        // If they're marked as attended, they attended - regardless of session status
-        let attendedSessions = cachedSessionEvents.filter { event in
-            event.actualAttendeeIds.contains(studentId)
-        }
-        
-        debugLog("📊 syncContractAttendance for \(studentId): found \(attendedSessions.count) attended sessions")
-        for session in attendedSessions {
-            debugLog("   - Session: \(session.title), status: \(session.status.rawValue), date: \(session.date)")
-        }
-        
-        // Update the contract's attended session IDs
-        let newIds = attendedSessions.map { $0.id }
-        if Set(newIds) != Set(contract.attendedSessionIds) {
-            contract.attendedSessionIds = newIds
-            updateContract(contract)
-            debugLog("📊 Updated contract for student \(studentId): \(newIds.count) sessions")
-        } else {
-            debugLog("📊 Contract already up-to-date for student \(studentId): \(contract.attendedSessionIds.count) sessions")
-        }
-    }
-    
-    /// Sync all contracts with their actual attendance records
-    func syncAllContractAttendance() {
-        debugLog("📊 syncAllContractAttendance: Starting sync for \(cachedContracts.count) contracts")
-        debugLog("📊 Total session events: \(cachedSessionEvents.count)")
-        
-        for contract in cachedContracts {
-            syncContractAttendance(for: contract.studentId)
-        }
-        
-        // Refresh caches after all updates
-        refreshCachesSync()
-        debugLog("📊 syncAllContractAttendance: Complete")
     }
     
     /// Get attended session details for a student's contract
