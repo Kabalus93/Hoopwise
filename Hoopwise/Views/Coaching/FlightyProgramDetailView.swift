@@ -580,11 +580,17 @@ struct FlightyProgramDetailView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 36, height: 36)
             } else {
-                Image(systemName: program.mascotIcon)
-                    .font(.title2.weight(.semibold))
+                // The age category itself, not its mascot symbol (Luther,
+                // October 2026). A coach-uploaded category icon still wins.
+                Text(program.ageGroup.rawValue)
+                    .font(.title3.weight(.heavy))
                     .foregroundStyle(categoryColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .padding(.horizontal, 6)
             }
         }
+        .frame(width: 60, height: 60)
     }
     
     private func compactStat(value: String, label: String, color: Color) -> some View {

@@ -210,6 +210,10 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   "Parent Notice" screen (ParentProgramSummaryView) became the Parent Guide
   screen — PDF preview, wording editor, PDF and long-image share. Approval
   covers that diff only. See "Documents → ProgramGuideDocument".
+- FOURTH sanctioned exception (October 2026, Luther's request): the program
+  page's hero tile (FlightyProgramDetailView.mascotTile) shows the age
+  category ("U8") instead of the mascot SF Symbol; a coach-uploaded category
+  icon still wins. Approval covers that diff only.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because

@@ -133,6 +133,14 @@ enum SheetGalleryDebug {
         case "addProgram":
             AddProgramOnboardingView { _ in }
 
+        case "programDetail":
+            // The first program's page: hero header, mascot/category tile.
+            if let program = dm.programs.first {
+                NavigationStack { FlightyProgramDetailView(program: program) }
+            } else {
+                missing("programDetail: no program in the store")
+            }
+
         case "expiredWarning":
             // The red "Expired" warning, on the client whose six-month term
             // lapsed in March. StudentQuickPeepView.contractInfoSection is the
