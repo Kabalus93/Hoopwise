@@ -587,7 +587,13 @@ extension SwiftDataManager {
 
         for student in plan.students {
             if student.isNew {
-                addStudent(Student(id: student.id, name: student.name, chineseName: student.name))
+                // The sheet's names are hanzi: hanzi is the Chinese name,
+                // the name is toned pinyin — the same pair AddStudentView
+                // stores when a coach types a Chinese name.
+                let romanized = PinyinConverter.romanizedHanziName(name: student.name, chineseName: nil)
+                addStudent(Student(id: student.id,
+                                   name: romanized?.name ?? student.name,
+                                   chineseName: romanized?.chineseName))
                 result.createdStudentIds.append(student.id)
             }
             guard let sessions = student.balanceSessions else { continue }

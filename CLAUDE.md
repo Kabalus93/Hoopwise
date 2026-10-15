@@ -904,6 +904,13 @@ any attendance surface.
   coach + 长期不来, same columns). iPhone: Athletes → + → Import/Export Class
   List (Excel). Mac: Settings → Data. Utilities/XLSX.swift is the
   dependency-free codec (zip + XML, CRC-32, deflate via Compression).
+- NAMES: the sheet's hanzi becomes the CHINESE NAME and the name field is
+  toned pinyin (the AddStudentView convention). `romanizeHanziNames` runs in
+  loadAllData and repairs records the first import wrote with hanzi in both
+  fields — only when the name is purely hanzi and the Chinese name is empty
+  or identical. PinyinConverter reads polyphonic SURNAMES from a table on the
+  first character (任 Rén, 曾 Zēng, 单 Shàn …); toPinyinPlain derives from it
+  so NameIndex search/sort agree with the displayed name.
 - DEBUG: HOOPWISE_CLASSLIST_PREVIEW=<path> writes a READ-ONLY plan to the App
   Group Library/Caches/classlist-preview.txt; HOOPWISE_SHOT=classListImport
   shows the preview screen over that file. Real class lists hold children's

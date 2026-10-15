@@ -572,6 +572,7 @@ class SwiftDataManager: ObservableObject {
         // has at least one tracking contract (now defaulting to group).
         migrateLegacyAutoContractsToGroup()
         ensureDefaultContractsForAllStudents()
+        if romanizeHanziNames() > 0 { refreshCachesSync() }
         
         // syncAllContractAttendance() used to run here, on EVERY load, and
         // overwrite the newest contract's bundleSessionIds with every session
@@ -907,6 +908,31 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    // MARK: - Hanzi-in-name repair (October 2026)
+    /// The class-list import first stored the sheet's hanzi in BOTH name
+    /// fields. The app's convention (AddStudentView) is toned pinyin as the
+    /// name and hanzi as the Chinese name. Idempotent; touches only records
+    /// whose name is purely hanzi and whose Chinese name is empty or the same.
+    @discardableResult
+    func romanizeHanziNames() -> Int {
+        var updated = 0
+        do {
+            for sd in try modelContext.fetch(FetchDescriptor<SDStudent>()) {
+                guard let fixed = PinyinConverter.romanizedHanziName(name: sd.name,
+                                                                     chineseName: sd.chineseName) else { continue }
+                recordStudentRevision(sd, reason: .manualEdit)
+                sd.name = fixed.name
+                sd.chineseName = fixed.chineseName
+                sd.updatedAt = Date()
+                updated += 1
+            }
+            if updated > 0 { try modelContext.save() }
+        } catch {
+            debugLog("❌ romanizeHanziNames failed: \(error)")
+        }
+        return updated
+    }
+
     // MARK: - Pinyin Tone Migration
     /// Updates existing student names from plain pinyin to pinyin with tone marks.
     /// Only updates names where the current name matches the plain pinyin of the Chinese name.

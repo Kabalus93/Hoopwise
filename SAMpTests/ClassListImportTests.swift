@@ -109,14 +109,14 @@ final class ClassListImportTests: XCTestCase {
         XCTAssertEqual(dm.students.count, 6)
         XCTAssertEqual(dm.programs.count, 3)
         XCTAssertEqual(dm.sessionEvents.count, 6)
-        let shared = try XCTUnwrap(dm.students.first { $0.name == "共享" })
+        let shared = try XCTUnwrap(dm.students.first { $0.chineseName == "共享" })
         let rosters = dm.programs.filter { $0.enrolledStudentIds.contains(shared.id) }
         XCTAssertEqual(rosters.count, 2, "a shared student is on both classes")
         let balance = try XCTUnwrap(dm.contracts.first { $0.studentId == shared.id })
         XCTAssertEqual(balance.kind, .group)
         XCTAssertEqual(balance.bundleRedemptionsRemaining, 20)
         XCTAssertNil(balance.programId, "one balance shared across classes")
-        let monthly = try XCTUnwrap(dm.students.first { $0.name == "小红" })
+        let monthly = try XCTUnwrap(dm.students.first { $0.chineseName == "小红" })
         let monthlyBalance = try XCTUnwrap(dm.contracts.first { $0.studentId == monthly.id })
         XCTAssertEqual(monthlyBalance.bundleRedemptionsRemaining, 32)
         XCTAssertTrue(monthlyBalance.notes?.contains(ClassList.monthsMarker) ?? false)
@@ -133,6 +133,34 @@ final class ClassListImportTests: XCTestCase {
         XCTAssertTrue(dm.programs.isEmpty)
         XCTAssertTrue(dm.sessionEvents.isEmpty)
         XCTAssertTrue(dm.contracts.filter { $0.kind == .group && $0.hasSessionBalance }.isEmpty)
+    }
+
+    func testImportedHanziBecomesTheChineseNameAndPinyinTheName() throws {
+        dm.applyClassListImport(try makePlan())
+        let student = try XCTUnwrap(dm.students.first { $0.chineseName == "小明" })
+        XCTAssertEqual(student.name, PinyinConverter.toPinyin("小明"))
+        XCTAssertFalse(PinyinConverter.containsChinese(student.name))
+    }
+
+    func testSurnamesUseTheirSurnameReading() {
+        XCTAssertEqual(PinyinConverter.toPinyin("任逸冕"), "Rén Yì Miǎn")
+        XCTAssertEqual(PinyinConverter.toPinyin("曾小明"), "Zēng Xiǎo Míng")
+        XCTAssertEqual(PinyinConverter.toPinyin("单宇"), "Shàn Yǔ")
+        XCTAssertEqual(PinyinConverter.toPinyin("张彦"), "Zhāng Yàn", "a non-polyphonic surname is untouched")
+    }
+
+    func testRepairMovesHanziOutOfTheNameFieldOnly() {
+        // What the first import wrote: hanzi in both fields.
+        XCTAssertEqual(PinyinConverter.romanizedHanziName(name: "小明", chineseName: "小明")?.chineseName, "小明")
+        XCTAssertNotNil(PinyinConverter.romanizedHanziName(name: "小明", chineseName: nil))
+        // A latin name, or a Chinese name that says something else, is the coach's.
+        XCTAssertNil(PinyinConverter.romanizedHanziName(name: "Maya Chen", chineseName: "陈玛雅"))
+        XCTAssertNil(PinyinConverter.romanizedHanziName(name: "小明", chineseName: "王小明"))
+
+        let legacy = Student(name: "共享", chineseName: "共享")
+        dm.addStudent(legacy)
+        XCTAssertEqual(dm.romanizeHanziNames(), 1)
+        XCTAssertEqual(dm.romanizeHanziNames(), 0, "idempotent")
     }
 
     func testReimportNeverDoublesABalance() throws {
