@@ -7,8 +7,23 @@ struct StudentQuickPeepView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
-    let student: Student
+    /// The student as handed in; `student` re-reads the store so an edit made
+    /// from this sheet shows here at once.
+    private let initialStudent: Student
     let sessionId: UUID?
+
+    init(student: Student, sessionId: UUID?) {
+        self.initialStudent = student
+        self.sessionId = sessionId
+    }
+
+    private var student: Student {
+        dataManager.students.first { $0.id == initialStudent.id } ?? initialStudent
+    }
+
+    /// Edit from inside a session (October 2026, Luther: no detour through
+    /// Student Intelligence mid-session). Same EditStudentView as the profile.
+    @State private var showingEditStudent = false
     
     private var isIPad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
@@ -322,6 +337,10 @@ struct StudentQuickPeepView: View {
             .navigationTitle(isChinese ? "学员速览" : "Quick Peep")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(isChinese ? "编辑学员" : "Edit Student") { showingEditStudent = true }
+                }
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "完成" : "Done") { dismiss() }
                         .fontWeight(.semibold)
@@ -346,6 +365,9 @@ struct StudentQuickPeepView: View {
                     }
                     .disabled(isExportingCard)
                 }
+            }
+            .sheet(isPresented: $showingEditStudent) {
+                EditStudentView(student: student, player: player)
             }
             .sheet(isPresented: $showingParentReport) {
                 ParentReportSheet(

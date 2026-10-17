@@ -185,6 +185,16 @@ enum SheetGalleryDebug {
                 missing("programDetail: no program in the store")
             }
 
+        case "quickPeep":
+            // The quick peep as a session opens it, with its Edit button.
+            if let program = dm.programs.first,
+               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
+                StudentQuickPeepView(student: student,
+                                     sessionId: dm.sessionEvents.first { $0.programId == program.id }?.id)
+            } else {
+                missing("quickPeep: no enrolled student")
+            }
+
         case "expiredWarning":
             // The red "Expired" warning, on the client whose six-month term
             // lapsed in March. StudentQuickPeepView.contractInfoSection is the

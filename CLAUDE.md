@@ -227,6 +227,12 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   add/edit-student paths) and the edit-student school grade as ONE menu row
   instead of three chip grids. ProfilePhotoCropTests pins the crop; the
   preview→sensor mapping needs a real device.
+- EIGHTH sanctioned exception (October 2026, Luther's request): the student
+  quick peep (Components/StudentQuickPeepView.swift) has an "Edit Student"
+  toolbar button that opens the same EditStudentView as the profile, so a
+  coach can fix a record mid-session. The peep re-reads the student from the
+  store, so the edit shows at once. Pinned by
+  AttendanceSwipeUITests.testQuickPeepFromSessionOffersEdit.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because

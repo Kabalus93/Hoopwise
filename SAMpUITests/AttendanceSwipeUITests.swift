@@ -75,4 +75,16 @@ final class AttendanceSwipeUITests: XCTestCase {
         app.buttons["Clear"].tap()
         XCTAssertTrue(waitForValue(control(in: firstRow()), "Not marked"))
     }
+
+    /// Tapping a student in the session opens the quick peep, and the peep
+    /// offers Edit — the coach never has to leave the session to fix a record.
+    func testQuickPeepFromSessionOffersEdit() {
+        let row = firstRow()
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)).tap()
+        let edit = app.navigationBars.buttons["Edit Student"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 8), "quick peep has no Edit button")
+        edit.tap()
+        XCTAssertTrue(app.staticTexts["BASIC INFORMATION"].waitForExistence(timeout: 8),
+                      "Edit did not open the student editor")
+    }
 }
