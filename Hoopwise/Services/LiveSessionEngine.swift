@@ -67,7 +67,8 @@ final class LiveSessionEngine: ObservableObject {
                drills: [LiveDrillItem],
                programName: String,
                programColorHex: String,
-               drillNames: [UUID: String]) {
+               drillNames: [UUID: String],
+               startsLiveActivity: Bool = true) {
         // Already running for the same session? No-op.
         if self.session?.id == session.id { return }
 
@@ -95,6 +96,9 @@ final class LiveSessionEngine: ObservableObject {
         startTimer()
 
         #if os(iOS)
+        // The Lock Screen activity follows SessionSeries.allowsLiveActivity;
+        // the caller passes its verdict (private sessions are a preference).
+        guard startsLiveActivity else { return }
         SessionLiveActivityManager.shared.startActivity(
             for: session,
             programName: programName,

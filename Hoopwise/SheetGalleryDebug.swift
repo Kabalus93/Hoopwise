@@ -185,6 +185,22 @@ enum SheetGalleryDebug {
                 missing("programDetail: no program in the store")
             }
 
+        case "upcomingSession":
+            // The next scheduled session: no Start button — it starts itself.
+            if let next = dm.sessionEvents
+                .filter({ $0.status == .scheduled && $0.startTime > Date() })
+                .min(by: { $0.startTime < $1.startTime }) {
+                NavigationStack {
+                    FlightySessionPageView(session: next, accessMode: .execution)
+                }
+            } else {
+                missing("upcomingSession: no scheduled session ahead")
+            }
+
+        case "rollCallCompleted":
+            // What Complete Session opens.
+            RollCallPhotoSheet(programColor: .accentColor, reason: .completed) { _ in }
+
         case "quickPeep":
             // The quick peep as a session opens it, with its Edit button.
             if let program = dm.programs.first,

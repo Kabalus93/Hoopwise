@@ -233,6 +233,23 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   coach can fix a record mid-session. The peep re-reads the student from the
   store, so the edit shows at once. Pinned by
   AttendanceSwipeUITests.testQuickPeepFromSessionOffersEdit.
+- NINTH sanctioned exception (October 2026, Luther's request): the live
+  session screen (LiveSessionView — drill timeline, End Session) is DELETED,
+  and there is no Start Session button. Sessions START BY THEMSELVES:
+  SessionStatusMonitor (both platforms, 30s tick) applies
+  SessionLifecycle .start to any session where
+  `SessionLifecycle.shouldAutoStart` holds — scheduled, start reached, end
+  not reached, not skipped/cancelled. Status only, never attendance, and
+  NEVER auto-complete (completion stays Complete Session, or the marked
+  auto-close at end + 12h). The in-app LiveSessionEngine survives as the
+  clock for the Lock Screen Live Activity (now gated by
+  SessionSeries.allowsLiveActivity), the tab-bar pill and the home card;
+  their taps open the SESSION PAGE. Complete Session ends the engine and
+  opens RollCallPhotoSheet (Views/Components, reason .completed) unless a
+  roll-call photo already exists. A past session that never ran is started
+  then completed by "Mark Completed" — `.complete` is only legal from
+  in progress, and that button used to save without changing the status.
+  Covered by AutoStartTests.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because

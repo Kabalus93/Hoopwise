@@ -45,68 +45,56 @@ class SessionStatusMonitor: ObservableObject {
     
     // MARK: - Check and Update Statuses
     //
-    // Session status is owned by the coach. The monitor only:
-    //   • reconciles scheduled local notifications for upcoming sessions, and
-    //   • (iOS) keeps the in-app live engine in sync if a session is *already*
-    //     marked .inProgress (e.g. coach tapped Start, then backgrounded).
+    // AUTO-START (October 2026, Luther: "sessions start automatically when
+    // the scheduled time arrives unless they are cancelled"). A scheduled
+    // session whose start has arrived and whose end has not becomes
+    // .inProgress through SessionLifecycle — a status change only; no
+    // attendance is written. Skipped and cancelled sessions never start.
     //
-    // It deliberately does NOT auto-flip status on time. A session that the
-    // coach never starts must remain .scheduled — silently completing it on
-    // wall-clock time corrupts attendance history (see: a session shows up
-    // as completed with phantom attendance even though the coach never ran
-    // it). The only writers of `.inProgress` and `.completed` are the
-    // explicit Start / Complete actions in `FlightySessionPageView`.
+    // It still NEVER auto-completes. The earlier wall-clock monitor completed
+    // sessions on time and left "completed" classes nobody ran, with
+    // phantom attendance; completion stays the coach's Complete Session
+    // (which opens the roll-call photo) or the attention engine's marked
+    // auto-close 12 hours after the end.
+    //
+    // On iOS the in-app engine follows the live session: it is brought up
+    // for the session running now (Lock Screen activity per
+    // SessionSeries.allowsLiveActivity, the pill and the home card), and
+    // ended once that session is no longer in progress.
     private func checkAndUpdateSessionStatuses() {
         guard let dataManager = dataManager else { return }
+        let now = Date()
+
+        for session in dataManager.sessionEvents
+        where SessionLifecycle.shouldAutoStart(session, at: now) {
+            var started = session
+            guard SessionLifecycle.apply(.start, to: &started) else { continue }
+            dataManager.updateSessionEvent(started)
+            debugLog("▶️ Auto-started session: \(session.title)")
+        }
 
         let sessions = dataManager.sessionEvents
+
+        #if os(iOS)
+        if let running = LiveSessionEngine.shared.session,
+           sessions.first(where: { $0.id == running.id })?.status != .inProgress {
+            LiveSessionEngine.shared.end()
+        }
+        if let live = sessions.first(where: {
+            $0.status == .inProgress && $0.startTime <= now && now < $0.endTime
+        }) {
+            startInAppEngine(for: live, dataManager: dataManager)
+        }
 
         // Reconcile scheduled local notifications with the current set of
         // upcoming sessions. Cheap: this just diffs already-pending requests
         // against future starts.
-        #if os(iOS)
         reconcileSessionStartNotifications(sessions: sessions)
         #endif
     }
-    
+
     // MARK: - Live Activity Integration
     #if os(iOS)
-    private func startLiveActivity(for session: SessionEvent, dataManager: DataManager) {
-        guard let programId = session.programId,
-              let program = dataManager.programs.first(where: { $0.id == programId }) else {
-            return
-        }
-        // Phase 2.2: an explicit rule, not a side effect of privateness being
-        // encoded as "no program". Group-shaped programs always raise one;
-        // private sessions are a preference, defaulting off.
-        guard SessionSeries.allowsLiveActivity(
-            session,
-            programs: dataManager.programs,
-            contracts: dataManager.contracts,
-            privateSessionsEnabled: SessionSeries.privateLiveActivityEnabled) else {
-            return
-        }
-        
-        // Build drill names dictionary
-        var drillNames: [UUID: String] = [:]
-        for drillId in session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds + session.curriculum.gameDrillIds {
-            if let drill = dataManager.drills.first(where: { $0.id == drillId }) {
-                drillNames[drillId] = drill.name
-            }
-        }
-        
-        SessionLiveActivityManager.shared.startActivity(
-            for: session,
-            programName: program.name,
-            accentColorHex: program.colorHex,
-            drillNames: drillNames
-        )
-    }
-    
-    private func endLiveActivity() {
-        SessionLiveActivityManager.shared.endActivity(showAttendanceReminder: true)
-    }
-
     /// Bring up the in-app `LiveSessionEngine` so the persistent pill at
     /// the top of `MainTabView` and the live screen reflect a session that
     /// auto-started while the app was backgrounded. Engine ignores the call
@@ -136,14 +124,13 @@ class SessionStatusMonitor: ObservableObject {
             drills: drills,
             programName: program?.resolvedDisplayName(in: dataManager.programs) ?? session.title,
             programColorHex: program?.colorHex ?? "#FF6B35",
-            drillNames: drillNames
+            drillNames: drillNames,
+            startsLiveActivity: SessionSeries.allowsLiveActivity(
+                session,
+                programs: dataManager.programs,
+                contracts: dataManager.contracts,
+                privateSessionsEnabled: SessionSeries.privateLiveActivityEnabled)
         )
-    }
-
-    private func endInAppEngineIfMatches(session: SessionEvent) {
-        if LiveSessionEngine.shared.session?.id == session.id {
-            LiveSessionEngine.shared.end()
-        }
     }
 
     /// Builds the drill ladder consumed by `LiveSessionEngine`. Mirrors what
@@ -264,33 +251,4 @@ class SessionStatusMonitor: ObservableObject {
         return f.string(from: date)
     }
     #endif
-    
-    // MARK: - Manual Session Control
-    func startSession(_ session: SessionEvent) {
-        guard let dataManager = dataManager else { return }
-        
-        var updatedSession = session
-        updatedSession.status = .inProgress
-        dataManager.updateSessionEvent(updatedSession)
-        
-        #if os(iOS)
-        startLiveActivity(for: updatedSession, dataManager: dataManager)
-        #endif
-        
-        debugLog("▶️ Manually started session: \(session.title)")
-    }
-    
-    func completeSession(_ session: SessionEvent) {
-        guard let dataManager = dataManager else { return }
-        
-        var updatedSession = session
-        updatedSession.status = .completed
-        dataManager.updateSessionEvent(updatedSession)
-        
-        #if os(iOS)
-        endLiveActivity()
-        #endif
-
-        debugLog("✅ Manually completed session: \(session.title)")
-    }
 }

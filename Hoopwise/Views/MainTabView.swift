@@ -15,7 +15,6 @@ struct MainTabView: View {
     @ObservedObject private var sessionMonitor = SessionStatusMonitor.shared
     @ObservedObject private var liveEngine = LiveSessionEngine.shared
     @SceneStorage("selectedTab") private var selectedTab: Int = 0
-    @State private var showingLiveSheet = false
     @State private var showingRollCallFromBanner = false
     @State private var widgetDeepLink: WidgetDeepLink?
 
@@ -58,18 +57,18 @@ struct MainTabView: View {
             }
             .tabViewStyle(.sidebarAdaptable)
 
-            // Persistent live-session pill. Appears across every tab while a
-            // run is active, so dismissing the live screen never hides the
-            // fact that a session is still running. Hidden while the live
-            // sheet is up to avoid double-rendering the same indicator.
-            if liveEngine.isActive, !showingLiveSheet, let live = liveEngine.session {
+            // Persistent live-session pill across every tab while a session
+            // is running. Tapping it opens THE SESSION PAGE — the separate
+            // live screen was removed (October 2026, Luther: "limiting rather
+            // than useful"); sessions start on their own at their time.
+            if liveEngine.isActive, let live = liveEngine.session {
                 LiveSessionPill(
                     session: live,
                     programColor: Color(hex: liveEngine.programColorHex),
                     remaining: liveEngine.sessionRemainingSeconds,
                     isPaused: liveEngine.isPaused
                 ) {
-                    showingLiveSheet = true
+                    openWidgetSession(live.id)
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 6)
@@ -80,16 +79,13 @@ struct MainTabView: View {
         .tint(Color.accentColor)
         .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
         .sensoryFeedback(.selection, trigger: selectedTab)
-        .fullScreenCover(isPresented: $showingLiveSheet) {
-            LiveSessionView { showingLiveSheet = false }
-        }
         .onChange(of: liveEngine.rollCallPromptPending) { _, pending in
-            // If the live screen is dismissed but the engine fires the
-            // 5-min reminder, surface a global sheet so it isn't missed.
-            if pending && !showingLiveSheet { showingRollCallFromBanner = true }
+            // The engine's 5-minute reminder: a global sheet so it is seen
+            // whichever tab is open.
+            if pending { showingRollCallFromBanner = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openLiveSession)) { _ in
-            if liveEngine.isActive { showingLiveSheet = true }
+            if let live = liveEngine.session { openWidgetSession(live.id) }
         }
         // Widget deep links (the one sanctioned freeze exception). onReceive
         // handles warm taps; onAppear drains a route queued during cold start,
@@ -118,7 +114,7 @@ struct MainTabView: View {
         .sheet(isPresented: $showingRollCallFromBanner, onDismiss: {
             liveEngine.dismissRollCallPrompt()
         }) {
-            RollCallPhotoSheet(programColor: Color(hex: liveEngine.programColorHex)) { image in
+            RollCallPhotoSheet(programColor: Color(hex: liveEngine.programColorHex), reason: .endingSoon) { image in
                 #if os(iOS)
                 if let s = liveEngine.session,
                    let path = PhotoCaptureManager.shared.saveAttendancePhoto(image, for: s.id) {

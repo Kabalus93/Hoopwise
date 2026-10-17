@@ -36,7 +36,6 @@ struct FlightySessionPageView: View {
     @State private var showingCardShareSheet = false
     @State private var cardExportError: String?
     @State private var drillPickerSection: CurriculumSection = .warmup
-    @State private var showingLiveSession = false
     @State private var selectedDrillForDetail: DrillItem?
     /// Open media viewer keyed to a (drillId, index) pair so the cover
     /// rebuilds correctly when the user taps different tiles.
@@ -52,6 +51,9 @@ struct FlightySessionPageView: View {
     @State private var showingManageStudents = false
     @State private var showingInlineDrillInputFor: CurriculumSection?
     @State private var showingSessionPhotoCapture = false
+    /// Which wording the roll-call photo sheet uses: the completion prompt,
+    /// or the coach adding a photo by hand.
+    @State private var rollCallReason: RollCallPhotoSheet.Reason = .manual
     @State private var showingSessionPhotoFullScreen = false
     @State private var isExportingSessionPhoto = false
     @State private var sessionPhotoExportToast: SessionPhotoExportToast?
@@ -190,15 +192,12 @@ struct FlightySessionPageView: View {
                         .disabled(isExportingCards || session.attendeeIds.isEmpty)
 
                         if session.status == .scheduled {
+                            // No "Start Session": sessions start on their own at
+                            // the scheduled time (SessionStatusMonitor). A past
+                            // session that never ran can be marked completed.
                             if session.endTime < Date() {
-                                // Past sessions can't be "started" — offer the
-                                // truthful end states instead.
                                 Button(action: completeSession) {
                                     Label(LocalizationManager.shared.currentLanguage == .chinese ? "标记已完成" : "Mark Completed", systemImage: "checkmark.circle.fill")
-                                }
-                            } else {
-                                Button(action: startSession) {
-                                    Label(LocalizationManager.shared.currentLanguage == .chinese ? "开始课程" : "Start Session", systemImage: "play.fill")
                                 }
                             }
 
@@ -307,26 +306,6 @@ struct FlightySessionPageView: View {
                 saveSession()
             }
         }
-        #if os(iOS)
-        .fullScreenCover(isPresented: $showingLiveSession) {
-            LiveSessionView {
-                showingLiveSession = false
-                // Pull final state out of the engine and into the local binding
-                if let finished = LiveSessionEngine.shared.session {
-                    session = finished
-                }
-            }
-        }
-        #else
-        .sheet(isPresented: $showingLiveSession) {
-            LiveSessionView {
-                showingLiveSession = false
-                if let finished = LiveSessionEngine.shared.session {
-                    session = finished
-                }
-            }
-        }
-        #endif
         #if os(iOS)
         .sheet(isPresented: $showingCardShareSheet) {
             if let url = exportedCardsURL {
@@ -739,22 +718,8 @@ struct FlightySessionPageView: View {
                 .padding(.top, 12)
             }
         case .scheduled:
-            if accessMode.canEdit {
-                Button {
-                    startSession()
-                } label: {
-                    Label(isChinese ? "开始课程" : "Start Session", systemImage: "play.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: 14))
-                .controlSize(.large)
-                .tint(Color.accentColor)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .sensoryFeedback(.success, trigger: session.status == .inProgress)
-            }
+            // Upcoming: nothing to press. It starts by itself at its time.
+            EmptyView()
         case .inProgress:
             if accessMode.canEdit {
                 Button {
@@ -1882,8 +1847,8 @@ struct FlightySessionPageView: View {
                 enrollStudentsFromAttendance(studentIds: studentIds)
             }
         }
-        .sheet(isPresented: $showingSessionPhotoCapture) {
-            RollCallPhotoSheet(programColor: programColor) { image in
+        .sheet(isPresented: $showingSessionPhotoCapture, onDismiss: { rollCallReason = .manual }) {
+            RollCallPhotoSheet(programColor: programColor, reason: rollCallReason) { image in
                 #if os(iOS)
                 if let path = PhotoCaptureManager.shared.saveAttendancePhoto(image, for: session.id) {
                     // Optimistic local update + field-level write. Avoids
@@ -3547,61 +3512,6 @@ struct FlightySessionPageView: View {
         )
     }
     
-    private func startSession() {
-        SessionLifecycle.apply(.start, to: &session)
-        saveSession()
-
-        let programName = parentProgram?.name ?? "Training Session"
-        let accentColor = parentProgram?.colorHex ?? "#007AFF"
-        let drills = buildLiveDrills(from: session)
-
-        var drillNames: [UUID: String] = [:]
-        for drillId in session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds + session.curriculum.gameDrillIds {
-            if let drill = dataManager.drills.first(where: { $0.id == drillId }) {
-                drillNames[drillId] = drill.name
-            }
-        }
-
-        // Owns the timer + Live Activity. The cover is just the presenter
-        // and can be dismissed without ending the run.
-        LiveSessionEngine.shared.start(
-            session: session,
-            drills: drills,
-            programName: programName,
-            programColorHex: accentColor,
-            drillNames: drillNames
-        )
-
-        showingLiveSession = true
-    }
-
-    private func buildLiveDrills(from session: SessionEvent) -> [LiveDrillItem] {
-        let curriculum = session.curriculum
-        var items: [LiveDrillItem] = []
-        let warmupCount = max(curriculum.warmupDrillIds.count, 1)
-        let skillCount  = max(curriculum.skillDrillIds.count, 1)
-        let gameCount   = max(curriculum.gameDrillIds.count, 1)
-        let warmupSec = curriculum.warmupDrillIds.isEmpty ? 0 : (curriculum.warmupMinutes * 60) / warmupCount
-        let skillSec  = curriculum.skillDrillIds.isEmpty  ? 0 : (curriculum.skillsMinutes * 60) / skillCount
-        let gameSec   = curriculum.gameDrillIds.isEmpty   ? 0 : (curriculum.gameMinutes * 60) / gameCount
-        for id in curriculum.warmupDrillIds {
-            if let d = dataManager.drills.first(where: { $0.id == id }) {
-                items.append(LiveDrillItem(drill: d, section: .warmup, durationSeconds: warmupSec))
-            }
-        }
-        for id in curriculum.skillDrillIds {
-            if let d = dataManager.drills.first(where: { $0.id == id }) {
-                items.append(LiveDrillItem(drill: d, section: .main, durationSeconds: skillSec))
-            }
-        }
-        for id in curriculum.gameDrillIds {
-            if let d = dataManager.drills.first(where: { $0.id == id }) {
-                items.append(LiveDrillItem(drill: d, section: .cooldown, durationSeconds: gameSec))
-            }
-        }
-        return items
-    }
-    
     private func skipSession(reason: SkipReason) {
         SessionLifecycle.apply(.skip(reason), to: &session)
         saveSession()
@@ -3637,17 +3547,31 @@ struct FlightySessionPageView: View {
         HapticFeedback.notification(.success)
     }
     
+    /// Completes the session and opens the roll-call photo prompt
+    /// (October 2026, Luther). A past session that never started (the app
+    /// was not open during its window) is started first, so the lifecycle's
+    /// scheduled → in progress → completed path is always the one taken —
+    /// .complete alone is only legal from in progress, and "Mark Completed"
+    /// on such a session used to save without changing anything.
     private func completeSession() {
-        SessionLifecycle.apply(.complete, to: &session)
+        if session.status == .scheduled {
+            SessionLifecycle.apply(.start, to: &session)
+        }
+        guard SessionLifecycle.apply(.complete, to: &session) else { return }
         saveSession()
-        
-        // Session consumption is now derived from SessionEvent records
-        // No need to call updateAttendedSessions - it's calculated automatically via sessionsConsumed(for:)
-        
-        // End Live Activity with attendance reminder
+
         #if os(iOS)
+        if LiveSessionEngine.shared.session?.id == session.id {
+            LiveSessionEngine.shared.end()
+        }
         Task { @MainActor in
             SessionLiveActivityManager.shared.endActivity(showAttendanceReminder: true)
+        }
+        // The roll-call photo: who was there, as a picture. Skipped if one
+        // was already taken (e.g. from the 5-minute reminder).
+        if session.attendancePhotoPath == nil {
+            rollCallReason = .completed
+            showingSessionPhotoCapture = true
         }
         #endif
     }

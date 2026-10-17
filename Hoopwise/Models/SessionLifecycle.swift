@@ -53,6 +53,17 @@ enum SessionLifecycle {
         status == .cancelled || status == .skipped
     }
 
+    /// AUTO-START (October 2026, Luther): a scheduled session starts by itself
+    /// once its start time arrives, while it has not yet ended, unless it was
+    /// skipped or cancelled. Status only — nothing about attendance. There is
+    /// no auto-complete: that stays the coach's Complete Session, or the
+    /// marked auto-close 12 hours after the end.
+    static func shouldAutoStart(_ session: SessionEvent, at now: Date) -> Bool {
+        session.status == .scheduled
+            && session.startTime <= now && now < session.endTime
+            && !didNotHappen(session)
+    }
+
     /// Stable machine-readable marker `autoClose` appends to notes —
     /// the same mechanism as "Skipped: …". Never localized: detection
     /// depends on the prefix.
