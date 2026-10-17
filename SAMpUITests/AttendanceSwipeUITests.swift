@@ -87,4 +87,22 @@ final class AttendanceSwipeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["BASIC INFORMATION"].waitForExistence(timeout: 8),
                       "Edit did not open the student editor")
     }
+
+    /// The leading swipe retakes the student's profile photo: it opens the
+    /// masked camera directly (no library, no Quick Measure).
+    func testLeadingSwipeOpensProfileCamera() {
+        let row = firstRow()
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+            .press(forDuration: 0.05,
+                   thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.5)))
+        let photo = app.buttons["Photo"]
+        XCTAssertTrue(photo.waitForExistence(timeout: 5), "leading swipe did not reveal Photo")
+        XCTAssertFalse(app.buttons["Metrics"].exists, "Quick Measure is no longer the swipe")
+        photo.tap()
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 8), "Photo did not open the camera")
+        XCTAssertFalse(app.staticTexts["Quick Measure"].exists)
+        cancel.tap()
+        XCTAssertTrue(firstRow().exists, "cancel should land back on the roster")
+    }
 }

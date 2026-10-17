@@ -250,6 +250,14 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   then completed by "Mark Completed" — `.complete` is only legal from
   in progress, and that button used to save without changing the status.
   Covered by AutoStartTests.
+- TENTH sanctioned exception (October 2026, Luther's request): the session
+  roster's LEADING swipe is "Photo" — the masked back camera
+  (ProfilePhotoCamera) straight to the shutter, no library; the capture
+  replaces the student's profileImageData + thumbnail via updateStudent.
+  It replaced the Metrics swipe (Quick Measure). StudentAvatarView now
+  reloads when thumbnailImageData changes — its cache is keyed by id alone,
+  so a retaken photo (here or in Edit Student) used to stay stale until
+  relaunch. Pinned by AttendanceSwipeUITests.testLeadingSwipeOpensProfileCamera.
 - LIVE ACTIVITY STARTS WITHOUT THE APP (October 2026, same exception): iOS
   cannot run app code at a set time and there is no push server, so the
   monitor ARMS the Lock Screen / Dynamic Island activity ahead of time —
@@ -804,7 +812,9 @@ found two bugs, and both were in code that renders documents sent to clients.
   UP to whole points when sizing the List, or the last divider clips and the
   first row jitters. SAMpUITests/AttendanceSwipeUITests swipes real rows, so
   a regression to a non-List container fails there. Remaining swipes:
-  Metrics (leading), Clear + Refund (trailing).
+  Photo (leading — opens ProfilePhotoCamera, replaces the profile picture;
+  it was Metrics/Quick Measure until October 2026), Clear + Refund
+  (trailing).
 - There used to be TWO surfaces with different capabilities: a binary
   present/absent toggle in the Take Attendance sheet and a three-way
   control in the session attendance tab. Which states could be recorded

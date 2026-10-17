@@ -27,7 +27,8 @@ struct FlightySessionPageView: View {
     @State private var showingCancelConfirmation = false
     @State private var showingSkipSheet = false
     @State private var skipReason: SkipReason = .holiday
-    @State private var selectedStudentForMeasurement: Student?
+    /// The student whose profile photo the leading swipe is retaking.
+    @State private var studentForPhoto: Student?
     @State private var selectedStudentForPeep: Student?
     @State private var showingDrillPicker = false
     @State private var showingStudentPicker = false
@@ -1815,9 +1816,17 @@ struct FlightySessionPageView: View {
             }
             #endif
         }
-        .sheet(item: $selectedStudentForMeasurement) { student in
-            QuickMeasurementView(student: student, sessionId: session.id)
+        #if os(iOS)
+        // Leading swipe → the masked back camera, straight to the shutter
+        // (no library, no edit step). The square photo replaces the
+        // student's profile picture on capture; cancel changes nothing.
+        .fullScreenCover(item: $studentForPhoto) { student in
+            ProfilePhotoCamera { image in
+                if let image { saveProfilePhoto(image, for: student.id) }
+                studentForPhoto = nil
+            }
         }
+        #endif
         .sheet(item: $selectedStudentForPeep) { student in
             StudentQuickPeepView(student: student, sessionId: session.id)
                 .presentationDetents([.large])
@@ -1871,6 +1880,21 @@ struct FlightySessionPageView: View {
         }
     }
     
+    #if os(iOS)
+    /// Same writes as Edit Student's photo path: full image + widget/list
+    /// thumbnail, through updateStudent. Reads the student fresh from the
+    /// store so the swipe never saves a stale copy over newer edits.
+    private func saveProfilePhoto(_ image: UIImage, for studentId: UUID) {
+        guard let data = image.jpegData(compressionQuality: 0.7),
+              var student = dataManager.students.first(where: { $0.id == studentId }) else { return }
+        student.profileImageData = data
+        student.thumbnailImageData = makeProfileThumbnailData(from: data)
+        student.updatedAt = Date()
+        dataManager.updateStudent(student)
+        HapticFeedback.notification(.success)
+    }
+    #endif
+
     private var addAthleteButton: some View {
         Button(action: { showingAddAthleteSheet = true }) {
             HStack(spacing: 12) {
@@ -2357,9 +2381,9 @@ struct FlightySessionPageView: View {
         #if os(iOS)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
-                selectedStudentForMeasurement = student
+                studentForPhoto = student
             } label: {
-                Label(isChinese ? "数据" : "Metrics", systemImage: "chart.bar.fill")
+                Label(isChinese ? "拍照" : "Photo", systemImage: "camera.fill")
             }
             .tint(Color.accentColor)
         }

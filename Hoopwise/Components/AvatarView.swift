@@ -163,6 +163,14 @@ struct StudentAvatarView: View {
         .onAppear {
             loadCachedImage()
         }
+        // A retaken photo (Edit Student, the session's Photo swipe) arrives
+        // as new thumbnail bytes on the same id. The cache is keyed by id
+        // alone, so without this the old face stayed until relaunch.
+        .onChange(of: student.thumbnailImageData) { _, _ in
+            ImageCacheManager.shared.clearImage(for: cacheId)
+            cachedImage = nil
+            loadCachedImage()
+        }
     }
     
     private func loadCachedImage() {
