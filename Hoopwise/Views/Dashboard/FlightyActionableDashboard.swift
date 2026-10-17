@@ -1583,13 +1583,13 @@ private struct AllPlayersRow: View {
             StudentAvatarView(student: student, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 HStack(spacing: 6) {
-                    if let chinese = student.chineseName, !chinese.isEmpty {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)

@@ -482,7 +482,7 @@ private struct ProgramDetailView: View {
                             .frame(width: 32, height: 32)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(student.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
-                            if let grade = student.schoolGrade {
+                            if let grade = student.currentSchoolGrade() {
                                 Text(grade.shortName).font(.caption2).foregroundStyle(.secondary)
                             }
                         }
@@ -639,7 +639,7 @@ struct ProgramRosterSheet: View {
                                          color: Color.avatarColor(student.avatarColor),
                                          size: 26)
                             Text(student.displayName)
-                            if let chinese = student.chineseName, chinese != student.displayName {
+                            if let chinese = student.secondaryNameLine {
                                 Text(chinese).foregroundStyle(.secondary)
                             }
                             Spacer()

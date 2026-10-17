@@ -5,7 +5,7 @@ import XCTest
 /// - The three-position switch: right = present, left = excused, middle =
 ///   not marked. It never writes absent.
 /// - The roster is a List (October 2026). In the old LazyVStack `.swipeActions`
-///   never fired; swiping a row here proves they now do.
+///   never fired; the leading Photo swipe here proves they now do.
 ///
 /// Launches through SheetGalleryDebug (HOOPWISE_SHOT=sessionPage), which
 /// opens the first program's earliest session on its Attendance tab and seeds
@@ -59,21 +59,22 @@ final class AttendanceSwipeUITests: XCTestCase {
         XCTAssertTrue(waitForValue(control, "Not marked"), "middle should be not marked")
     }
 
-    /// Swipes fire now (List rows), and Absent is not one of them.
-    func testSwipesFireAndOfferNoAbsent() {
+    /// Right-to-left offers nothing (October 2026): Clear duplicated the
+    /// switch's middle and Refund lives on the contract sheet. Absent was
+    /// never a swipe — it is inferred.
+    func testTrailingSwipeOffersNothing() {
         let row = firstRow()
         let toggle = control(in: row)
-        tap(toggle, at: 0.85)                      // something recorded → Clear exists
+        tap(toggle, at: 0.85)                      // a recorded mark
         XCTAssertTrue(waitForValue(toggle, "Present"))
         // Swipe from the name area, not the control (the control owns drags).
         row.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5))
             .press(forDuration: 0.05,
                    thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)))
-        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5),
-                      "trailing swipe did not reveal Clear")
-        XCTAssertFalse(app.buttons["Absent"].exists, "Absent is inferred, never swiped")
-        app.buttons["Clear"].tap()
-        XCTAssertTrue(waitForValue(control(in: firstRow()), "Not marked"))
+        XCTAssertFalse(app.buttons["Clear"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["Refund session"].exists)
+        XCTAssertFalse(app.buttons["Absent"].exists)
+        XCTAssertTrue(waitForValue(control(in: firstRow()), "Present"), "the mark is untouched")
     }
 
     /// Tapping a student in the session opens the quick peep, and the peep

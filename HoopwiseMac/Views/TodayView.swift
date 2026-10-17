@@ -612,7 +612,7 @@ private struct AthleteChip: View {
                 )
                 .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: 1) {
-                Text(student.name).font(.caption.weight(.semibold)).lineLimit(1)
+                Text(student.primaryDisplayName).font(.caption.weight(.semibold)).lineLimit(1)
                 if let contract, let remaining = contract.bundleRedemptionsRemaining {
                     Text("\(remaining) left")
                         .font(.caption2)
@@ -658,7 +658,7 @@ private struct ExpiringContractRow: View {
     let student: Student
     var body: some View {
         HStack {
-            Text(student.name).font(.caption.weight(.medium))
+            Text(student.primaryDisplayName).font(.caption.weight(.medium))
             Spacer()
             Text("\(contract.bundleRedemptionsRemaining ?? 0) left")
                 .font(.caption.weight(.semibold))

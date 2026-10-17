@@ -1718,7 +1718,7 @@ struct FlightyGameDetailView: View {
                     StudentAvatarView(student: student, size: 44)
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(student.name)
+                        Text(student.primaryDisplayName)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.black)
                         Text("Top Scorer")
@@ -1801,7 +1801,7 @@ struct FlightyGameDetailView: View {
                         HStack(spacing: 0) {
                             HStack(spacing: 8) {
                                 StudentAvatarView(student: student, size: 28)
-                                Text(student.name)
+                                Text(student.primaryDisplayName)
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.black)
                                     .lineLimit(1)
@@ -1860,7 +1860,7 @@ struct FlightyGameDetailView: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         if let student = dataManager.students.first(where: { $0.id == play.playerId }) {
-                            Text(student.name)
+                            Text(student.primaryDisplayName)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.black)
                         }
@@ -2191,11 +2191,11 @@ struct FlightyPlayerRow: View {
             }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.black)
                 
-                if let chinese = student.chineseName {
+                if let chinese = student.secondaryNameLine {
                     Text(chinese)
                         .font(.system(size: 11))
                         .foregroundColor(.gray)
@@ -2276,7 +2276,7 @@ struct FlightyPlayerSelectCard: View {
                     }
                 }
                 
-                Text(student.name.components(separatedBy: " ").first ?? student.name)
+                Text(student.primaryDisplayName.components(separatedBy: " ").first ?? student.primaryDisplayName)
                     .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
                     .foregroundColor(isSelected ? teamColor : .black)
                     .lineLimit(1)

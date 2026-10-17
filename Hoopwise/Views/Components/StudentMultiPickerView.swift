@@ -132,7 +132,7 @@ struct StudentMultiPickerView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(AppTheme.textPrimary)
                     
-                    if let chinese = student.chineseName, !chinese.isEmpty, chinese != student.name {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.textSecondary)

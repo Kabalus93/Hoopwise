@@ -222,9 +222,9 @@ struct UnifiedStudentCard: View {
             // Main info
             VStack(alignment: .leading, spacing: 4) {
                 // Language-aware name display
-                if LocalizationManager.shared.currentLanguage == .chinese && student.chineseName != nil {
+                if student.secondaryDisplayName != nil {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(student.chineseName!)
+                        Text(student.primaryDisplayName)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(AppTheme.textPrimary)
                         Text(student.name)
@@ -237,7 +237,7 @@ struct UnifiedStudentCard: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(AppTheme.textPrimary)
                         
-                        if let chinese = student.chineseName {
+                        if let chinese = student.secondaryNameLine {
                             Text(chinese)
                                 .font(.system(size: 13))
                                 .foregroundColor(AppTheme.textSecondary)
@@ -405,9 +405,9 @@ struct UnifiedStudentCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     // Language-aware name display
-                    if LocalizationManager.shared.currentLanguage == .chinese && student.chineseName != nil {
+                    if student.secondaryDisplayName != nil {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(student.chineseName!)
+                            Text(student.primaryDisplayName)
                                 .font(.system(size: 16, weight: .semibold))
                             Text(student.name)
                                 .font(.system(size: 13))
@@ -418,7 +418,7 @@ struct UnifiedStudentCard: View {
                             Text(student.name)
                                 .font(.system(size: 16, weight: .semibold))
                             
-                            if let chinese = student.chineseName {
+                            if let chinese = student.secondaryNameLine {
                                 Text(chinese)
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
@@ -906,9 +906,9 @@ struct UnifiedStudentCard: View {
             // Name and basic info
             VStack(spacing: 6) {
                 // Language-aware name display
-                if LocalizationManager.shared.currentLanguage == .chinese && student.chineseName != nil {
+                if student.secondaryDisplayName != nil {
                     VStack(spacing: 2) {
-                        Text(student.chineseName!)
+                        Text(student.primaryDisplayName)
                             .font(.title2)
                             .fontWeight(.bold)
                         Text(student.name)
@@ -921,7 +921,7 @@ struct UnifiedStudentCard: View {
                             .font(.title2)
                             .fontWeight(.bold)
                         
-                        if let chinese = student.chineseName {
+                        if let chinese = student.secondaryNameLine {
                             Text(chinese)
                                 .font(.title3)
                                 .foregroundColor(.secondary)

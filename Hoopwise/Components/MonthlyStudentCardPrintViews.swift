@@ -196,7 +196,7 @@ struct StudentCollectibleCardFrontView: View {
 
     private var frontDetailsStrip: some View {
         HStack(spacing: 0) {
-            frontDetailCell(label: loc.isChinese ? "年级" : "GRD", value: snapshot.student.schoolGrade?.localizedShortName ?? "—")
+            frontDetailCell(label: loc.isChinese ? "年级" : "GRD", value: snapshot.student.currentSchoolGrade()?.localizedShortName ?? "—")
             Rectangle().fill(Color.black.opacity(0.12)).frame(width: 1, height: 34)
             frontDetailCell(label: loc.isChinese ? "身高" : "HT", value: snapshot.heightString)
             Rectangle().fill(Color.black.opacity(0.12)).frame(width: 1, height: 34)

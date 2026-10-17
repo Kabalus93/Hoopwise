@@ -141,10 +141,13 @@ enum SchoolGrade: String, Codable, CaseIterable {
         }
     }
     
-    /// Creates an estimated birthdate based on school grade (September 1st of estimated birth year)
-    var estimatedBirthdate: Date {
-        let currentYear = Calendar.current.component(.year, from: Date())
-        let birthYear = currentYear - estimatedAge
+    /// Creates an estimated birthdate based on school grade (September 1st of
+    /// estimated birth year). The year counts from the SCHOOL year that is
+    /// running, not the calendar year: a P1 entered in March belongs to the
+    /// year that began last September. This date is also the anchor that
+    /// `Student.currentSchoolGrade` promotes from.
+    func estimatedBirthdate(asOf date: Date = Date()) -> Date {
+        let birthYear = SchoolGrade.schoolYearStart(of: date) - estimatedAge
         var components = DateComponents()
         components.year = birthYear
         components.month = 9
@@ -152,6 +155,19 @@ enum SchoolGrade: String, Codable, CaseIterable {
         return Calendar.current.date(from: components) ?? Date()
     }
     
+    /// Calendar year in which the school year containing `date` began.
+    /// School years start on 1 September.
+    static func schoolYearStart(of date: Date, calendar: Calendar = .current) -> Int {
+        let year = calendar.component(.year, from: date)
+        return calendar.component(.month, from: date) >= 9 ? year : year - 1
+    }
+
+    /// The grade a child is in when they were `age` on 1 September of the
+    /// running school year. Outside K1…H6 there is no grade to show.
+    static func forAgeAtSchoolYearStart(_ age: Int) -> SchoolGrade? {
+        allCases.first { $0.estimatedAge == age }
+    }
+
     /// Group grades for picker display
     static var kindergartenGrades: [SchoolGrade] {
         [.kindergarten1, .kindergarten2, .kindergarten3]
@@ -404,29 +420,77 @@ struct Student: Identifiable, Codable, Hashable {
     /// Display name based on current language setting
     /// In Chinese: Shows Chinese name (or English if no Chinese name)
     /// In English: Shows English name
-    var displayName: String {
-        if LocalizationManager.shared.currentLanguage == .chinese {
-            return chineseName ?? name
-        }
-        return name
+    var displayName: String { primaryDisplayName }
+
+    /// The Chinese name when it is present and says something the name
+    /// field does not. An empty string is absent, never a blank label.
+    private var distinctChineseName: String? {
+        guard let c = chineseName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !c.isEmpty, c != name else { return nil }
+        return c
     }
-    
+
     /// Primary name for display (Chinese name when in Chinese mode, English otherwise)
     var primaryDisplayName: String {
-        if LocalizationManager.shared.currentLanguage == .chinese {
-            return chineseName ?? name
+        if LocalizationManager.shared.currentLanguage == .chinese, let c = distinctChineseName {
+            return c
         }
         return name
     }
-    
+
     /// Secondary name for display (English name when in Chinese mode with Chinese name available)
     var secondaryDisplayName: String? {
-        if LocalizationManager.shared.currentLanguage == .chinese && chineseName != nil {
+        if LocalizationManager.shared.currentLanguage == .chinese && distinctChineseName != nil {
             return name
         }
         return nil
     }
+
+    /// The small line under `primaryDisplayName`, whatever the language:
+    /// Chinese mode with a Chinese name → the pinyin/English name; otherwise
+    /// the Chinese name when there is one. Nil when there is nothing to add.
+    var secondaryNameLine: String? {
+        if LocalizationManager.shared.currentLanguage == .chinese, distinctChineseName != nil {
+            return name
+        }
+        return distinctChineseName
+    }
     
+    /// Age on 1 September of the school year running at `date` — the age
+    /// that decides a school grade.
+    func ageAtSchoolYearStart(asOf date: Date = Date(), calendar: Calendar = .current) -> Int? {
+        guard let birthdate else { return nil }
+        var start = DateComponents()
+        start.year = SchoolGrade.schoolYearStart(of: date, calendar: calendar)
+        start.month = 9
+        start.day = 1
+        guard let septemberFirst = calendar.date(from: start) else { return nil }
+        return calendar.dateComponents([.year], from: birthdate, to: septemberFirst).year
+    }
+
+    /// The grade the student is in NOW. The stored `schoolGrade` is what the
+    /// coach picked on the day; picking it also wrote `birthdate` as
+    /// 1 September of the matching birth year, so the birthdate is the anchor
+    /// and every September moves the child up one grade without anyone
+    /// re-entering it. Nil when no grade was ever entered (age-based callers
+    /// estimate separately) or once the child is past H6. A grade with no
+    /// birthdate cannot be promoted and is returned as entered.
+    func currentSchoolGrade(asOf date: Date = Date()) -> SchoolGrade? {
+        guard let stored = schoolGrade else { return nil }
+        guard let age = ageAtSchoolYearStart(asOf: date) else { return stored }
+        if age < SchoolGrade.kindergarten1.estimatedAge { return .kindergarten1 }
+        return SchoolGrade.forAgeAtSchoolYearStart(age)
+    }
+
+    /// THE grade writer. A grade and its birthdate anchor are written
+    /// together — `currentSchoolGrade` promotes from the anchor, so a grade
+    /// stored without one would be read back as whatever the old birthdate
+    /// says. Clearing the grade leaves the birthdate alone.
+    mutating func setSchoolGrade(_ grade: SchoolGrade?, asOf date: Date = Date()) {
+        schoolGrade = grade
+        if let grade { birthdate = grade.estimatedBirthdate(asOf: date) }
+    }
+
     var age: Int? {
         guard let birthdate else { return nil }
         return Calendar.current.dateComponents([.year], from: birthdate, to: Date()).year

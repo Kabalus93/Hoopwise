@@ -224,8 +224,8 @@ struct AthletesView: View {
             case .recent:
                 return lhs.createdAt > rhs.createdAt
             case .schoolGrade:
-                let l = lhs.schoolGrade?.rawValue ?? ""
-                let r = rhs.schoolGrade?.rawValue ?? ""
+                let l = lhs.currentSchoolGrade()?.rawValue ?? ""
+                let r = rhs.currentSchoolGrade()?.rawValue ?? ""
                 return l < r
             case .attendance:
                 let la = sessionsAttended(lhs.id)
@@ -277,12 +277,12 @@ private struct AthleteRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(student.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
-                    if let cn = student.chineseName, !cn.isEmpty, cn != student.displayName {
+                    if let cn = student.secondaryNameLine {
                         Text(cn).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 HStack(spacing: 6) {
-                    if let grade = student.schoolGrade {
+                    if let grade = student.currentSchoolGrade() {
                         Text(grade.shortName)
                             .font(.caption2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
@@ -421,14 +421,14 @@ struct AthleteDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     Text(student.displayName).font(.system(size: 30, weight: .bold))
-                    if let cn = student.chineseName, !cn.isEmpty, cn != student.displayName {
+                    if let cn = student.secondaryNameLine {
                         Text(cn).font(.title3).foregroundStyle(.secondary)
                     }
                     Spacer()
                     gradeBadge
                 }
                 HStack(spacing: 12) {
-                    if let grade = student.schoolGrade {
+                    if let grade = student.currentSchoolGrade() {
                         Label(grade.displayName, systemImage: "graduationcap").labelStyle(.titleAndIcon)
                     }
                     if let age = student.age {

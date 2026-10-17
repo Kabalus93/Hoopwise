@@ -678,7 +678,7 @@ struct AddProgramOnboardingView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "person.fill")
                                         .foregroundStyle(.tertiary)
-                                    Text(s.name).font(.subheadline)
+                                    Text(s.primaryDisplayName).font(.subheadline)
                                     Spacer()
                                 }
                             }

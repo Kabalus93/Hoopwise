@@ -356,9 +356,7 @@ struct AthletePickerSheet: View {
                         .foregroundColor(AppTheme.textPrimary)
 
                     HStack(spacing: 8) {
-                        if let chinese = student.chineseName,
-                           !chinese.isEmpty,
-                           chinese != student.name {
+                        if let chinese = student.secondaryNameLine {
                             Text(chinese)
                                 .font(.system(size: 12))
                                 .foregroundColor(AppTheme.textSecondary)

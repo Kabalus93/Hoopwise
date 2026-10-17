@@ -943,30 +943,16 @@ struct StudentPerformanceGrader {
     /// Minimum peers with sufficient games for valid comparison
     static let minimumPeersRequired = 3
     
-    /// Estimate school grade from age (fallback when schoolGrade is nil)
-    static func estimateGradeFromAge(_ age: Int?) -> String? {
-        guard let age = age else { return nil }
-        if age <= 3 { return "K1" }
-        if age <= 4 { return "K2" }
-        if age <= 5 { return "K3" }
-        if age <= 6 { return "P1" }
-        if age <= 7 { return "P2" }
-        if age <= 8 { return "P3" }
-        if age <= 9 { return "P4" }
-        if age <= 10 { return "P5" }
-        if age <= 11 { return "P6" }
-        if age <= 12 { return "M1" }
-        if age <= 13 { return "M2" }
-        if age <= 14 { return "M3" }
-        return "H+"
-    }
-    
-    /// Get effective grade string for a student (explicit or age-estimated)
+    /// Get effective grade string for a student: the grade they are in NOW
+    /// (promoted every September from the one the coach entered), else the
+    /// grade their age puts them in. Both come from SchoolGrade, so an
+    /// entered P5 and a 10-year-old with only a birthdate are the same peers.
     static func effectiveGradeKey(for student: Student) -> String? {
-        if let grade = student.schoolGrade {
-            return grade.rawValue
+        if student.schoolGrade != nil {
+            return student.currentSchoolGrade()?.rawValue
         }
-        return estimateGradeFromAge(student.age)
+        guard let age = student.ageAtSchoolYearStart() else { return nil }
+        return SchoolGrade.forAgeAtSchoolYearStart(age)?.rawValue
     }
     
     /// Compute performance grade for a student based on school grade peers

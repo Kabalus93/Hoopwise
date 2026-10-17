@@ -764,7 +764,7 @@ struct AthleteCard: View {
             StudentAvatarView(student: student, size: 36)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
@@ -1512,7 +1512,7 @@ struct ProgramSkillTargetsSheet: View {
         HStack(spacing: 12) {
             StudentAvatarView(student: student, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.primary)
                 if let player = player {

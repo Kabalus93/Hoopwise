@@ -17,10 +17,10 @@ struct StudentNameView: View {
     }
     
     var body: some View {
-        if isChinese && student.chineseName != nil {
+        if student.secondaryDisplayName != nil {
             // Chinese mode with Chinese name available
             VStack(alignment: alignment, spacing: spacing) {
-                Text(student.chineseName!)
+                Text(student.primaryDisplayName)
                     .font(primaryFont)
                     .foregroundColor(primaryColor)
                     .lineLimit(1)
@@ -68,9 +68,9 @@ struct StudentNameCard: View {
     }
     
     var body: some View {
-        if isChinese && student.chineseName != nil && showSecondaryName {
+        if student.secondaryDisplayName != nil && showSecondaryName {
             VStack(alignment: .leading, spacing: 2) {
-                Text(student.chineseName!)
+                Text(student.primaryDisplayName)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(AppTheme.textPrimary)
                     .lineLimit(1)

@@ -484,7 +484,7 @@ struct SessionStudentPickerView: View {
             List {
                 ForEach(students) { student in
                     HStack {
-                        Text(student.name)
+                        Text(student.primaryDisplayName)
                         Spacer()
                         if selectedStudentId == student.id {
                             Image(systemName: "checkmark")

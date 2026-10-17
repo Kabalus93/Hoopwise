@@ -902,7 +902,7 @@ struct PlayerScoreButton: View {
             }
             
             // Name
-            Text(student.name.components(separatedBy: " ").first ?? "Player")
+            Text(student.primaryDisplayName.components(separatedBy: " ").first ?? "Player")
                 .font(.system(size: 11, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? teamColor : AppTheme.textPrimary)
                 .lineLimit(1)
@@ -976,7 +976,7 @@ struct PlayRow: View {
             // Player & Points
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(student?.name ?? "Unknown")
+                    Text(student?.primaryDisplayName ?? "Unknown")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(AppTheme.textPrimary)
                     Text("+\(play.points)")

@@ -470,7 +470,7 @@ struct CreateGameSheet: View {
     private func unassignedRow(student: Student) -> some View {
         HStack(spacing: 10) {
             StudentAvatarView(student: student, size: 28)
-            Text(student.name)
+            Text(student.primaryDisplayName)
                 .font(.body)
             Spacer()
             Menu {
@@ -528,7 +528,7 @@ struct CreateGameSheet: View {
                 } label: {
                     HStack(spacing: 10) {
                         StudentAvatarView(student: s, size: 28)
-                        Text(s.name).foregroundStyle(.primary)
+                        Text(s.primaryDisplayName).foregroundStyle(.primary)
                         Spacer()
                         if battleRoyalIds.contains(s.id) {
                             Image(systemName: "checkmark.circle.fill")

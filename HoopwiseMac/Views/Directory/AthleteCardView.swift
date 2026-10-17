@@ -21,7 +21,7 @@ struct AthleteDraft {
     init(student: Student, player: Player?) {
         name = student.name
         chineseName = student.chineseName ?? ""
-        schoolGrade = student.schoolGrade
+        schoolGrade = student.currentSchoolGrade()
         programId = student.programId
         if let info = player?.parentInfo {
             parentName = info.name
@@ -37,7 +37,9 @@ struct AthleteDraft {
         copy.name = name.trimmingCharacters(in: .whitespaces)
         let chinese = chineseName.trimmingCharacters(in: .whitespaces)
         copy.chineseName = chinese.isEmpty ? nil : chinese
-        copy.schoolGrade = schoolGrade
+        // Re-anchor only on a real change: the draft starts from the CURRENT
+        // grade, so an untouched picker must not rewrite the birthdate.
+        if schoolGrade != student.currentSchoolGrade() { copy.setSchoolGrade(schoolGrade) }
         copy.programId = programId
         copy.updatedAt = Date()
         return copy
@@ -59,7 +61,7 @@ struct AthleteDraft {
         var student = Student(name: name.trimmingCharacters(in: .whitespaces))
         let chinese = chineseName.trimmingCharacters(in: .whitespaces)
         student.chineseName = chinese.isEmpty ? nil : chinese
-        student.schoolGrade = schoolGrade
+        student.setSchoolGrade(schoolGrade)
         student.programId = programId
         return student
     }
@@ -166,13 +168,12 @@ struct AthleteCardView: View {
                     HStack(spacing: 10) {
                         Text(student.displayName)
                             .font(.system(size: 24, weight: .bold))
-                        if let chinese = student.chineseName, !chinese.isEmpty,
-                           chinese != student.displayName {
+                        if let chinese = student.secondaryNameLine {
                             Text(chinese).font(.title3).foregroundStyle(.secondary)
                         }
                     }
                     HStack(spacing: 8) {
-                        if let grade = student.schoolGrade {
+                        if let grade = student.currentSchoolGrade() {
                             chip(grade.displayName, systemImage: "graduationcap")
                         }
                         if let contract = dataManager.currentContract(for: student.id) {

@@ -870,7 +870,7 @@ private struct SessionRosterSheet: View {
                                          color: Color.avatarColor(student.avatarColor),
                                          size: 26)
                             Text(student.displayName)
-                            if let chinese = student.chineseName, chinese != student.displayName {
+                            if let chinese = student.secondaryNameLine {
                                 Text(chinese).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -1028,7 +1028,7 @@ private struct StatsTab: View {
                                     .foregroundStyle(.white)
                             )
                             .frame(width: 40, height: 40)
-                        Text(student.name).font(.subheadline.weight(.semibold))
+                        Text(student.primaryDisplayName).font(.subheadline.weight(.semibold))
                         Spacer()
                         Image(systemName: "star.fill").foregroundStyle(.yellow)
                     }

@@ -129,8 +129,8 @@ private struct TransferExportView: View {
                                       : "circle")
                                     .foregroundStyle(selectedIds.contains(student.id) ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(HierarchicalShapeStyle.tertiary))
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(student.name).foregroundStyle(.primary)
-                                    if let cn = student.chineseName, !cn.isEmpty {
+                                    Text(student.primaryDisplayName).foregroundStyle(.primary)
+                                    if let cn = student.secondaryNameLine {
                                         Text(cn).font(.subheadline).foregroundStyle(.secondary)
                                     }
                                 }
@@ -336,8 +336,8 @@ private struct TransferImportView: View {
                             Image(systemName: "person.fill")
                                 .foregroundStyle(.secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(s.name)
-                                if let cn = s.chineseName, !cn.isEmpty {
+                                Text(s.primaryDisplayName)
+                                if let cn = s.secondaryNameLine {
                                     Text(cn).font(.subheadline).foregroundStyle(.secondary)
                                 }
                             }

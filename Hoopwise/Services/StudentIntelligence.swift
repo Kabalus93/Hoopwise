@@ -665,8 +665,10 @@ class StudentIntelligence {
         let today = Date()
         let nextWeek = calendar.date(byAdding: .day, value: 7, to: today)!
         
-        // Birthday check
-        if let birthdate = student.birthdate {
+        // Birthday check. A student with a school grade has an ESTIMATED
+        // birthdate (1 September, the grade's anchor) — announcing it would
+        // invent a birthday, so only a real date counts.
+        if student.schoolGrade == nil, let birthdate = student.birthdate {
             let birthdayThisYear = calendar.date(bySetting: .year, value: calendar.component(.year, from: today), of: birthdate)!
             let daysUntilBirthday = calendar.dateComponents([.day], from: today, to: birthdayThisYear).day ?? 0
             

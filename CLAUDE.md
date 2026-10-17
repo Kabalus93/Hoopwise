@@ -258,6 +258,18 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   reloads when thumbnailImageData changes — its cache is keyed by id alone,
   so a retaken photo (here or in Edit Student) used to stay stale until
   relaunch. Pinned by AttendanceSwipeUITests.testLeadingSwipeOpensProfileCamera.
+- ELEVENTH sanctioned exception (October 2026, Luther's request): in
+  Chinese, a student's CHINESE NAME is the big line and pinyin the small one,
+  everywhere (iOS + Mac), as Student Intelligence already did. Views read
+  `Student.primaryDisplayName` + `secondaryNameLine`; never hand-pick
+  `name`/`chineseName` for a student label. An empty or identical Chinese
+  name counts as absent (it used to render a blank name). NOT done: the
+  home-screen widgets — the widget process cannot read the app language
+  (standard UserDefaults "app_language", not the App Group); fixing it means
+  an optional language field in the widget snapshot. Exports, search and
+  NameIndex collation are unchanged. Pinned by StudentNameLinesTests.
+- The session roster's right-to-left swipe (Clear, Refund) was removed the
+  same month at Luther's request — see "Attendance UI".
 - LIVE ACTIVITY STARTS WITHOUT THE APP (October 2026, same exception): iOS
   cannot run app code at a set time and there is no push server, so the
   monitor ARMS the Lock Screen / Dynamic Island activity ahead of time —
@@ -330,6 +342,23 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   also exceeds the type-checker's budget at line 560 ("unable to
   type-check this expression in reasonable time") — decompose it during
   the port rather than working around it.
+
+## School grades promote themselves (October 2026)
+- The stored `schoolGrade` is what the coach PICKED; `Student.currentSchoolGrade()`
+  is what every reader shows — it advances one grade each 1 September. No
+  schema change: picking a grade writes `birthdate` as 1 September of the
+  matching birth year (`SchoolGrade.estimatedBirthdate(asOf:)`, counted from
+  the running SCHOOL year — it used the calendar year, so a grade entered in
+  spring was a year off), and that anchor is what promotion reads.
+- `Student.setSchoolGrade` is THE writer (grade + anchor together): iOS add/
+  edit, Mac add sheet and athlete card. A grade written without its anchor
+  is read back as whatever the old birthdate says. Mac card re-anchors only
+  when the picker actually changed. Past H6 → no grade.
+- Student Intelligence peers (`effectiveGradeKey`) use the promoted grade, or
+  the grade the AGE puts a child in, on ONE scale (it used to mix H1 and an
+  invented "M1"). Its birthday milestone skips grade-anchored birthdates —
+  1 September is an estimate, not a birthday. Covered by
+  SchoolGradePromotionTests.
 
 ## Mac directory pattern (August 2026)
 - DirectoryView (HoopwiseMac/Views/Directory/) is the Contacts skeleton:
@@ -813,8 +842,9 @@ found two bugs, and both were in code that renders documents sent to clients.
   first row jitters. SAMpUITests/AttendanceSwipeUITests swipes real rows, so
   a regression to a non-List container fails there. Remaining swipes:
   Photo (leading — opens ProfilePhotoCamera, replaces the profile picture;
-  it was Metrics/Quick Measure until October 2026), Clear + Refund
-  (trailing).
+  it was Metrics/Quick Measure until October 2026). NO trailing swipe since
+  October 2026 (Luther: redundant) — Clear duplicated the switch's middle
+  and the long-press menu; Refund lives on the contract sheet only.
 - There used to be TWO surfaces with different capabilities: a binary
   present/absent toggle in the Take Attendance sheet and a three-way
   control in the session attendance tab. Which states could be recorded
@@ -826,10 +856,9 @@ found two bugs, and both were in code that renders documents sent to clients.
   "No session deducted") because two of the four states charge the client.
 - "Clear" means UNMARKED. It previously mapped to absent, which now
   consumes a session — clearing must never charge.
-- refundSessionToBundle has UI in two places, chosen because they are
-  where a mistake is actually noticed: the session attendance row (swipe,
-  shown only when that session was really redeemed) and the contract
-  sheet's "Sessions deducted" section.
+- refundSessionToBundle has UI on the contract sheet's "Sessions deducted"
+  section (both platforms). The session-row Refund swipe was removed in
+  October 2026 at Luther's request.
 
 ## Mac attendance marking (decision REVERSED August 2026)
 (October 2026: the Mac row follows the three-position model too — segments

@@ -1513,7 +1513,7 @@ struct StudentIntelligenceRow: View {
                 // Info
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(student.name)
+                        Text(student.primaryDisplayName)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(.primary)
                         

@@ -686,10 +686,10 @@ struct ReminderStudentPicker: View {
                     )
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(student.name)
+                    Text(student.primaryDisplayName)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.primary)
-                    if let chinese = student.chineseName {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.system(size: 12))
                             .foregroundColor(.gray)

@@ -192,7 +192,7 @@ struct NewAthleteSheet: View {
         if let y = birthYear, let m = birthMonth, let d = Calendar.current.date(from: DateComponents(year: y, month: m, day: 1)) {
             birthdate = d
         }
-        let student = Student(
+        var student = Student(
             name: trimmedName,
             chineseName: trimmedChinese.isEmpty ? nil : trimmedChinese,
             avatarColor: avatarColor,
@@ -205,6 +205,9 @@ struct NewAthleteSheet: View {
             createdAt: now,
             updatedAt: now
         )
+        // A picked grade carries its own September birthdate anchor (as on
+        // iOS), so it promotes itself each school year.
+        if let schoolGrade { student.setSchoolGrade(schoolGrade, asOf: now) }
         let player = Player(studentId: student.id)
         dataManager.addStudent(student, player: player)
 

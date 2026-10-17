@@ -2310,8 +2310,6 @@ struct FlightySessionPageView: View {
         // Four states from three stores. The default is UNMARKED — it used to
         // fall through to .absent, which now consumes a session.
         let attendanceState: AttendanceMark = session.effectiveAttendanceMark(for: student.id)
-        let isRedeemed = dataManager.isSessionRedeemed(sessionId: session.id, studentId: student.id)
-        
         return HStack(spacing: 10) {
             // Main tappable area - opens Quick Peep
             Button(action: { selectedStudentForPeep = student }) {
@@ -2334,12 +2332,12 @@ struct FlightySessionPageView: View {
                     
                     // Name info
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(student.name)
+                        Text(student.primaryDisplayName)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         
-                        if let chinese = student.chineseName {
+                        if let chinese = student.secondaryNameLine {
                             Text(chinese)
                                 .font(.system(size: 11))
                                 .foregroundStyle(.tertiary)
@@ -2387,28 +2385,9 @@ struct FlightySessionPageView: View {
             }
             .tint(Color.accentColor)
         }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            // "Clear" means UNMARKED. It used to map to .absent, which now
-            // consumes a session — clearing must never charge the client.
-            // Offered for a RECORDED mark only: an inferred absence is
-            // already unmarked, so clearing it would do nothing.
-            if session.attendanceMark(for: student.id) != .unmarked {
-                Button(role: .destructive) {
-                    setAttendanceState(for: student.id, state: .unmarked)
-                } label: {
-                    Label(isChinese ? "清除" : "Clear", systemImage: "xmark.circle.fill")
-                }
-            }
-            if isRedeemed {
-                Button {
-                    dataManager.refundSessionToBundle(sessionId: session.id, studentId: student.id)
-                } label: {
-                    Label(isChinese ? "退回课时" : "Refund session",
-                          systemImage: "arrow.uturn.backward")
-                }
-                .tint(.blue)
-            }
-        }
+        // No trailing swipe (October 2026, Luther): Clear duplicated the
+        // switch's middle position and the long-press menu, and Refund lives
+        // on the contract sheet's "Sessions deducted" list.
         #endif
     }
     
@@ -3473,7 +3452,7 @@ struct FlightySessionPageView: View {
 
                     StudentAvatarView(student: student, size: 40)
 
-                    Text(student.name)
+                    Text(student.primaryDisplayName)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
 
@@ -4656,7 +4635,7 @@ struct LiveGameScoringView: View {
                                 Text("\(entry.points)")
                                     .font(.system(size: 20, weight: .bold, design: .rounded))
                                     .foregroundColor(index == 0 ? .orange : (index == 1 ? .gray : .brown))
-                                Text(student.name.components(separatedBy: " ").first ?? student.name)
+                                Text(student.primaryDisplayName.components(separatedBy: " ").first ?? student.primaryDisplayName)
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -4708,7 +4687,7 @@ struct LiveGameScoringView: View {
                                 if index == 0 {
                                     Image(systemName: "crown.fill").font(.system(size: 12)).foregroundColor(.orange)
                                 }
-                                Text(student.name.components(separatedBy: " ").first ?? student.name)
+                                Text(student.primaryDisplayName.components(separatedBy: " ").first ?? student.primaryDisplayName)
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -4964,7 +4943,7 @@ struct LiveGameScoringView: View {
             HStack(spacing: 8) {
                 StudentAvatarView(student: student, size: 32)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(student.name.components(separatedBy: " ").first ?? student.name)
+                    Text(student.primaryDisplayName.components(separatedBy: " ").first ?? student.primaryDisplayName)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
@@ -5053,8 +5032,8 @@ struct LiveGameScoringView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // Show both English and Chinese names
                     HStack(spacing: 6) {
-                        Text(student.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                        if let chineseName = student.chineseName, !chineseName.isEmpty {
+                        Text(student.primaryDisplayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                        if let chineseName = student.secondaryNameLine {
                             Text(chineseName).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
@@ -5116,8 +5095,8 @@ struct LiveGameScoringView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // Show both English and Chinese names
                     HStack(spacing: 6) {
-                        Text(student.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                        if let chineseName = student.chineseName, !chineseName.isEmpty {
+                        Text(student.primaryDisplayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                        if let chineseName = student.secondaryNameLine {
                             Text(chineseName).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
@@ -5643,7 +5622,7 @@ struct GameRecapView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(student.displayName)
                         .font(.title3.bold())
-                    if let chinese = student.chineseName, !chinese.isEmpty, student.displayName != chinese {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -6197,7 +6176,7 @@ struct LiveAttendanceRow: View {
         HStack(spacing: 12) {
             StudentAvatarView(student: student, size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                 if let age = student.age {
@@ -6859,10 +6838,10 @@ struct ManageSessionStudentsSheet: View {
                                 StudentAvatarView(student: student, size: 40)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(student.name)
+                                    Text(student.primaryDisplayName)
                                         .font(.subheadline.weight(.medium))
                                         .foregroundStyle(.primary)
-                                    if let chinese = student.chineseName {
+                                    if let chinese = student.secondaryNameLine {
                                         Text(chinese)
                                             .font(.caption)
                                             .foregroundStyle(.tertiary)

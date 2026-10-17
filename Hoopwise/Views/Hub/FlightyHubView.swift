@@ -694,7 +694,7 @@ struct MonthlyRevenueHistoryView: View {
                         StudentAvatarView(student: s, size: 36)
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(student?.name ?? "—")
+                        Text(student?.primaryDisplayName ?? "—")
                             .font(.body.weight(.medium))
                             .foregroundStyle(.primary)
                         Text("\(contract.bundleSize)-pack · purchased \(contract.effectiveBundlePurchaseDate.formatted(.dateTime.month(.abbreviated).day()))")
@@ -914,7 +914,7 @@ struct MonthlyRevenueHistoryView: View {
             HStack(spacing: 12) {
                 if let s = student { StudentAvatarView(student: s, size: 36) }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(student?.name ?? "—")
+                    Text(student?.primaryDisplayName ?? "—")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
                     Text(privateStatusLine(for: contract))
@@ -966,7 +966,7 @@ struct MonthlyRevenueHistoryView: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(student?.name ?? "—")
+                    Text(student?.primaryDisplayName ?? "—")
                         .font(.body.weight(.medium))
                         .foregroundStyle(.primary)
                     Text(secondaryLine(for: event, contract: contract))
@@ -1152,7 +1152,7 @@ struct PrivateClientDetailSheet: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text(student?.name ?? "—")
+                    Text(student?.primaryDisplayName ?? "—")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                     Text(kindLabel)
@@ -1582,7 +1582,7 @@ struct PrivateClientsListView: View {
                 StudentAvatarView(student: s, size: 40)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(student?.name ?? "—")
+                Text(student?.primaryDisplayName ?? "—")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
                 Text(secondaryLine(for: contract))
@@ -1775,9 +1775,9 @@ struct ReclassifyContractsSheet: View {
                     HStack(spacing: 12) {
                         StudentAvatarView(student: student, size: 32)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(student.name)
+                            Text(student.primaryDisplayName)
                                 .foregroundStyle(.primary)
-                            if let cn = student.chineseName, !cn.isEmpty {
+                            if let cn = student.secondaryNameLine {
                                 Text(cn)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -1830,7 +1830,7 @@ struct ReclassifyContractsSheet: View {
                 StudentAvatarView(student: s, size: 30)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(student?.name ?? "—")
+                Text(student?.primaryDisplayName ?? "—")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
                 Text(currentKindLabel(contract))
@@ -1913,9 +1913,9 @@ struct ReclassifyKeeperPicker: View {
                         HStack(spacing: 12) {
                             StudentAvatarView(student: student, size: 32)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(student.name)
+                                Text(student.primaryDisplayName)
                                     .foregroundStyle(.primary)
-                                if let cn = student.chineseName, !cn.isEmpty {
+                                if let cn = student.secondaryNameLine {
                                     Text(cn)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -2008,11 +2008,11 @@ struct ContractDetailSheet: View {
                     )
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(student?.name ?? "Unknown Student")
+                    Text(student?.primaryDisplayName ?? "Unknown Student")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(.primary)
                     
-                    if let chineseName = student?.chineseName, !chineseName.isEmpty {
+                    if let chineseName = student?.secondaryNameLine {
                         Text(chineseName)
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)

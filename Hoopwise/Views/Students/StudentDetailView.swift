@@ -125,8 +125,8 @@ struct StudentDetailView: View {
                 .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
 
             VStack(spacing: 2) {
-                if isChinese, let chinese = student.chineseName {
-                    Text(chinese)
+                if student.secondaryDisplayName != nil {
+                    Text(student.primaryDisplayName)
                         .font(.title2.bold())
                         .foregroundStyle(.primary)
                     Text(student.name)
@@ -136,7 +136,7 @@ struct StudentDetailView: View {
                     Text(student.name)
                         .font(.title2.bold())
                         .foregroundStyle(.primary)
-                    if let chinese = student.chineseName {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)

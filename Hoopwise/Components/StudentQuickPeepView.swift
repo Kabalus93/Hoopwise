@@ -641,11 +641,11 @@ struct StudentQuickPeepView: View {
             StudentAvatarView(student: student, size: 80)
             
             VStack(spacing: 4) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.primary)
                 
-                if let chinese = student.chineseName {
+                if let chinese = student.secondaryNameLine {
                     Text(chinese)
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)

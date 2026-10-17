@@ -1274,7 +1274,7 @@ struct StudentTagPickerSheet: View {
                             Text(student.displayName)
                                 .font(.system(size: 15))
                                 .foregroundColor(AppTheme.textPrimary)
-                            if let cn = student.chineseName {
+                            if let cn = student.secondaryNameLine {
                                 Text(cn)
                                     .font(.system(size: 12))
                                     .foregroundColor(AppTheme.textTertiary)

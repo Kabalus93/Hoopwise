@@ -209,7 +209,7 @@ struct AthletesDirectoryView: View {
                            isEditableSmart: true),
         ]))
 
-        let levels = Set(students.compactMap { $0.schoolGrade })
+        let levels = Set(students.compactMap { $0.currentSchoolGrade() })
         if !levels.isEmpty {
             let ordered = SchoolGrade.allCases.filter { levels.contains($0) }
             sections.append(DirectoryGroupSection(
@@ -218,7 +218,7 @@ struct AthletesDirectoryView: View {
                     DirectoryGroup(id: "level:\(grade.rawValue)",
                                    title: grade.displayName,
                                    icon: "graduationcap",
-                                   count: students.filter { $0.schoolGrade == grade }.count)
+                                   count: students.filter { $0.currentSchoolGrade() == grade }.count)
                 }))
         }
 
@@ -293,7 +293,7 @@ struct AthletesDirectoryView: View {
         default:
             if groupId.hasPrefix("level:") {
                 let raw = String(groupId.dropFirst("level:".count))
-                return Set(students.filter { $0.schoolGrade?.rawValue == raw }.map(\.id))
+                return Set(students.filter { $0.currentSchoolGrade()?.rawValue == raw }.map(\.id))
             }
             if groupId.hasPrefix("program:"),
                let uuid = UUID(uuidString: String(groupId.dropFirst("program:".count))),
@@ -584,7 +584,7 @@ private struct AthleteDirectoryRow: View {
                 }
             }
             Spacer(minLength: 4)
-            if let grade = student.schoolGrade {
+            if let grade = student.currentSchoolGrade() {
                 Text(grade.shortName)
                     .font(.caption2.weight(.medium))
                     .padding(.horizontal, 5).padding(.vertical, 1)
@@ -596,9 +596,7 @@ private struct AthleteDirectoryRow: View {
     }
 
     private var secondaryName: String? {
-        guard let secondary = student.chineseName, !secondary.isEmpty,
-              secondary != student.displayName else { return nil }
-        return secondary
+        student.secondaryNameLine
     }
 }
 

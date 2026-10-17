@@ -154,7 +154,7 @@ struct AddStudentView: View {
         _profileImageUrl = State(initialValue: student.profileImageUrl)
         
         // Age Input
-        if let grade = student.schoolGrade {
+        if let grade = student.currentSchoolGrade() {
             _ageInputMode = State(initialValue: .schoolGrade)
             _selectedSchoolGrade = State(initialValue: grade)
             _selectedBirthMonth = State(initialValue: Calendar.current.component(.month, from: Date()))
@@ -1393,7 +1393,7 @@ struct AddStudentView: View {
         let schoolGradeValue: SchoolGrade?
         
         if ageInputMode == .schoolGrade, let grade = selectedSchoolGrade {
-            calculatedBirthdate = grade.estimatedBirthdate
+            calculatedBirthdate = grade.estimatedBirthdate()
             birthMonthValue = nil
             birthYearValue = nil
             schoolGradeValue = grade
@@ -1689,7 +1689,7 @@ struct EditStudentView: View {
         // Basic Info
         _name = State(initialValue: student.name)
         _chineseName = State(initialValue: student.chineseName ?? "")
-        _selectedSchoolGrade = State(initialValue: student.schoolGrade)
+        _selectedSchoolGrade = State(initialValue: student.currentSchoolGrade())
         _selectedCategoryId = State(initialValue: student.categoryId)
         _selectedCoachId = State(initialValue: student.coachId)
         _selectedProgramId = State(initialValue: student.programId)
@@ -2554,11 +2554,9 @@ struct EditStudentView: View {
         var updatedStudent = student
         updatedStudent.name = name.trimmingCharacters(in: .whitespaces)
         updatedStudent.chineseName = chineseName.isEmpty ? nil : chineseName.trimmingCharacters(in: .whitespaces)
-        updatedStudent.schoolGrade = selectedSchoolGrade
-        if let grade = selectedSchoolGrade {
-            // Keep birthdate roughly in sync with grade so age-based features still work.
-            updatedStudent.birthdate = grade.estimatedBirthdate
-        }
+        // Grade + its September birthdate anchor, written together so the
+        // grade keeps promoting itself each school year.
+        updatedStudent.setSchoolGrade(selectedSchoolGrade)
         updatedStudent.categoryId = selectedCategoryId
         updatedStudent.coachId = selectedCoachId
         updatedStudent.programId = selectedProgramId

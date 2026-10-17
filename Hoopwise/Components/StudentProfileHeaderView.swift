@@ -71,7 +71,8 @@ struct StudentProfileHeaderView: View {
             
             // Name and number overlay
             VStack(spacing: 4) {
-                if isChinese, let chinese = student.chineseName {
+                if student.secondaryDisplayName != nil {
+                    let chinese = student.primaryDisplayName
                     // Chinese mode: PinYin small on top, Chinese name large below
                     Text(student.name.uppercased())
                         .font(.system(size: 14, weight: .medium))
@@ -95,7 +96,7 @@ struct StudentProfileHeaderView: View {
                         .minimumScaleFactor(0.8)
                     
                     // Show Chinese name in smaller text below
-                    if let chinese = student.chineseName {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white.opacity(0.85))

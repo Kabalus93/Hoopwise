@@ -105,7 +105,7 @@ struct QuickMeasurementView: View {
             StudentAvatarView(student: student, size: 56)
             
             VStack(alignment: .leading, spacing: 3) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(.primary)
                 

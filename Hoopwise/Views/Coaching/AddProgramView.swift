@@ -12,7 +12,7 @@ struct EditEnrolledStudentsView: View {
             List {
                 ForEach(dataManager.students) { student in
                     HStack {
-                        Text(student.name)
+                        Text(student.primaryDisplayName)
                         Spacer()
                         if selectedIds.contains(student.id) {
                             Image(systemName: "checkmark")

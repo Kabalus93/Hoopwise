@@ -222,7 +222,7 @@ struct ContractCard: View {
             // Info
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(student.name)
+                    Text(student.primaryDisplayName)
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
                     
@@ -368,7 +368,7 @@ struct ContractDetailView: View {
             StudentAvatarView(student: student, size: 80)
             
             VStack(spacing: 4) {
-                Text(student.name)
+                Text(student.primaryDisplayName)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                 

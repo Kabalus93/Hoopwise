@@ -555,9 +555,9 @@ struct TeamPlayerSelectionRow: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     // Language-aware name display
-                    if LocalizationManager.shared.currentLanguage == .chinese && student.chineseName != nil {
+                    if student.secondaryDisplayName != nil {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(student.chineseName!)
+                            Text(student.primaryDisplayName)
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(AppTheme.textPrimary)
                             Text(student.name)
@@ -628,9 +628,9 @@ struct FlashyiOSPlayerCard: View {
                 
                 // Name and details - language-aware
                 VStack(alignment: .leading, spacing: 3) {
-                    if LocalizationManager.shared.currentLanguage == .chinese && student.chineseName != nil {
+                    if student.secondaryDisplayName != nil {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(student.chineseName!)
+                            Text(student.primaryDisplayName)
                                 .font(.system(size: 16, weight: isSelected ? .semibold : .medium))
                                 .foregroundColor(isSelected ? teamColor : AppTheme.textPrimary)
                             Text(student.name)

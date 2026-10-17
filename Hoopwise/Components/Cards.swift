@@ -50,9 +50,9 @@ struct StudentCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         // Language-aware name display
-                        if isChinese && student.chineseName != nil {
+                        if student.secondaryDisplayName != nil {
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(student.chineseName!)
+                                Text(student.primaryDisplayName)
                                     .font(.system(size: 17, weight: .semibold, design: .rounded))
                                     .foregroundColor(AppTheme.textPrimary)
                                 Text(student.name)

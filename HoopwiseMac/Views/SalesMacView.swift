@@ -297,7 +297,7 @@ private struct SalesContractRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(student.displayName).font(.subheadline.weight(.medium)).lineLimit(1)
-                    if let chinese = student.chineseName, chinese != student.displayName {
+                    if let chinese = student.secondaryNameLine {
                         Text(chinese)
                             .font(.caption)
                             .foregroundStyle(Color(nsColor: .secondaryLabelColor))
@@ -364,8 +364,7 @@ private struct SalesContractDetail: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 8) {
                             Text(student.displayName).font(.title2.weight(.bold))
-                            if let chinese = student.chineseName,
-                               chinese != student.displayName {
+                            if let chinese = student.secondaryNameLine {
                                 Text(chinese).font(.title3).foregroundStyle(.secondary)
                             }
                         }

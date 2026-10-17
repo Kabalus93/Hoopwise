@@ -614,8 +614,8 @@ struct StudentParentReportView: View {
                     .font(.system(size: 10, weight: .bold))
                     .tracking(2)
                     .foregroundColor(AppTheme.neutral600)
-                Text(loc.isChinese && student.chineseName != nil
-                     ? (student.chineseName ?? student.name)
+                Text(student.secondaryDisplayName != nil
+                     ? student.primaryDisplayName
                      : student.name.uppercased())
                     .font(.system(size: 19, weight: .heavy))
                     .foregroundColor(.black)
@@ -733,7 +733,8 @@ struct StudentParentReportView: View {
             
             // Name overlay - Chinese name bigger when in Chinese mode
             VStack(spacing: 4) {
-                if loc.isChinese, let chinese = student.chineseName {
+                if student.secondaryDisplayName != nil {
+                    let chinese = student.primaryDisplayName
                     // Chinese mode: Chinese name is primary (bigger)
                     Text(chinese)
                         .font(.system(size: 22, weight: .heavy))
@@ -742,7 +743,7 @@ struct StudentParentReportView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
                         .tracking(1)
-                } else if let chinese = student.chineseName {
+                } else if let chinese = student.secondaryNameLine {
                     // English mode: English name is primary (bigger)
                     Text(chinese)
                         .font(.system(size: 14, weight: .medium))
@@ -1267,10 +1268,10 @@ struct StudentParentReportView: View {
                 .shadow(color: accent.opacity(0.4), radius: 8, x: 0, y: 4)
                 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(student.name)
+                    Text(student.primaryDisplayName)
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(textPrimary)
-                    if let cn = student.chineseName {
+                    if let cn = student.secondaryNameLine {
                         Text(cn).font(.system(size: 13)).foregroundColor(textSecondary)
                     }
                     HStack(spacing: 6) {
