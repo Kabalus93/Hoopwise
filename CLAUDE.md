@@ -254,11 +254,12 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   cannot run app code at a set time and there is no push server, so the
   monitor ARMS the Lock Screen / Dynamic Island activity ahead of time —
   `SessionLiveActivityManager.armActivity` for the next allowed class ENDING
-  within 8 hours (Apple's per-activity limit), ContentState.startsLater =
-  true, staleDate = the class start. The widget shows "starts in" while
-  `context.isUpcoming`, and iOS redraws it LIVE at the stale date by itself
-  (observed ~1–2 min late in the simulator; the countdown holds 0:00 in the
-  gap). startActivity reuses an armed activity for the same session, and
+  within 8 hours (Apple's per-activity limit). There is NO countdown to the
+  start (Luther): one layout, keyed to startTime…endTime, shows the full
+  class length frozen until the start and then counts it down by itself —
+  `timerInterval` needs no redraw, so there is no staleDate and no
+  "upcoming" view. ContentState.startsLater is unused, kept only so older
+  payloads decode. startActivity reuses an armed activity for the same session, and
   adopts one surviving from an earlier launch (Activity.activities). An
   activity ended before its class started dismisses IMMEDIATELY — default
   dismissal left "Completed" on the Lock Screen for a class that never ran.

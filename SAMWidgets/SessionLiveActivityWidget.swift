@@ -20,19 +20,15 @@ import ActivityKit
 /// the run (current phase, drill name, attendee count), not for time.
 struct SessionLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
+        // One layout, before and during the class (October 2026, Luther: no
+        // countdown to the start — just the session time). An activity armed
+        // ahead of the class shows the full length frozen; `timerInterval`
+        // starts counting down by itself at startTime, with no redraw needed.
         ActivityConfiguration(for: SessionActivityAttributes.self) { context in
-            if context.isUpcoming {
-                UpcomingSessionLockScreenView(context: context)
-            } else {
-                SessionLiveActivityLockScreenView(context: context)
-            }
+            SessionLiveActivityLockScreenView(context: context)
         } dynamicIsland: { context in
             let accent = Color(hex: context.attributes.accentColorHex)
             let interval = context.attributes.startTime...context.attributes.endTime
-
-            if context.isUpcoming {
-                return upcomingIsland(context, accent: accent)
-            }
 
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -115,117 +111,6 @@ struct SessionLiveActivityWidget: Widget {
                     .foregroundColor(accent)
             }
         }
-    }
-}
-
-extension SessionLiveActivityWidget {
-    /// Armed ahead of the class: a countdown to the start. iOS redraws the
-    /// activity at its stale date (the start), when `isUpcoming` turns false.
-    fileprivate func upcomingIsland(_ context: ActivityViewContext<SessionActivityAttributes>,
-                                accent: Color) -> DynamicIsland {
-        DynamicIsland {
-            DynamicIslandExpandedRegion(.leading) {
-                Image(systemName: "figure.basketball")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-            DynamicIslandExpandedRegion(.trailing) {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(timerInterval: context.startCountdown, countsDown: true)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.trailing)
-                    Text("starts in")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-            DynamicIslandExpandedRegion(.bottom) {
-                HStack {
-                    Text(context.attributes.sessionTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    Spacer()
-                    Text(context.attributes.startTime...context.attributes.endTime)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                .padding(.horizontal, 4)
-            }
-        } compactLeading: {
-            Image(systemName: "clock")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(accent)
-        } compactTrailing: {
-            Text(timerInterval: context.startCountdown, countsDown: true)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .foregroundColor(accent)
-                .frame(maxWidth: 56)
-        } minimal: {
-            Image(systemName: "clock")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(accent)
-        }
-    }
-}
-
-extension ActivityViewContext where Attributes == SessionActivityAttributes {
-    /// Started ahead of the class and the class has not begun. Once the
-    /// stale date (the start) passes, iOS sets `isStale` and redraws live.
-    var isUpcoming: Bool {
-        state.startsLater == true && !isStale
-    }
-
-    /// Counts down TO the start and holds at 0:00 after it. iOS redraws the
-    /// activity as live at the stale date, but not instantly (about a minute
-    /// in the simulator); a `.timer`-style date would count UP in that gap.
-    var startCountdown: ClosedRange<Date> {
-        attributes.startTime.addingTimeInterval(-24 * 3600)...attributes.startTime
-    }
-}
-
-// MARK: - Upcoming (armed) Lock Screen View
-struct UpcomingSessionLockScreenView: View {
-    let context: ActivityViewContext<SessionActivityAttributes>
-
-    var body: some View {
-        let accent = Color(hex: context.attributes.accentColorHex)
-        HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(accent.opacity(0.2)).frame(width: 36, height: 36)
-                Image(systemName: "figure.basketball")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(context.attributes.sessionTitle)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Text(context.attributes.startTime...context.attributes.endTime)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(timerInterval: context.startCountdown, countsDown: true)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.trailing)
-                Text("starts in")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-        }
-        .padding(16)
-        .background(
-            LinearGradient(colors: [accent.opacity(0.3), Color.black.opacity(0.8)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-        )
     }
 }
 

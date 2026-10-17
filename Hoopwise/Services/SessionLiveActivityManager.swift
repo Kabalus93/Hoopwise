@@ -67,14 +67,11 @@ class SessionLiveActivityManager: ObservableObject {
         )
         
         let initialState = calculateContentState(for: session)
-        let upcoming = Date() < session.startTime
 
         do {
-            // An activity started before the class is stale AT the start, so
-            // iOS redraws it as live then — the app need not be running.
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: initialState, staleDate: upcoming ? session.startTime : nil),
+                content: .init(state: initialState, staleDate: nil),
                 pushType: nil
             )
             
@@ -96,11 +93,10 @@ class SessionLiveActivityManager: ObservableObject {
               let session = currentSession else { return }
         
         let newState = calculateContentState(for: session)
-        let upcoming = Date() < session.startTime
 
         Task {
             await activity.update(
-                ActivityContent(state: newState, staleDate: upcoming ? session.startTime : nil)
+                ActivityContent(state: newState, staleDate: nil)
             )
         }
     }
@@ -124,12 +120,13 @@ class SessionLiveActivityManager: ObservableObject {
 
     /// Starts the Live Activity AHEAD of a class (October 2026, Luther: the
     /// session should start even when the app is not opened). iOS cannot run
-    /// app code at an exact time and there is no push server, but an activity
-    /// requested now with stale date = class start is redrawn by the system
-    /// at that moment: "Starts in …" becomes the live countdown on the Lock
-    /// Screen and in the Dynamic Island with the app closed. Apple keeps an
-    /// activity at most 8 hours, so only classes ENDING within 8 hours are
-    /// armed; the monitor re-checks every time the app runs.
+    /// app code at an exact time and there is no push server, but the
+    /// widget's timers are keyed to the class's start…end: until the start
+    /// they show the full session length, and at the start they begin
+    /// counting down on the Lock Screen and in the Dynamic Island with the
+    /// app closed. Apple keeps an activity at most 8 hours, so only classes
+    /// ENDING within 8 hours are armed; the monitor re-checks whenever the
+    /// app runs.
     func armActivity(for session: SessionEvent, programName: String,
                      accentColorHex: String, drillNames: [UUID: String]) {
         adoptRunningActivity()
@@ -207,8 +204,7 @@ class SessionLiveActivityManager: ObservableObject {
             currentPhase: phase,
             currentDrillName: drillName,
             progress: progress,
-            attendeeCount: session.actualAttendeeIds.count,
-            startsLater: now < session.startTime ? true : nil
+            attendeeCount: session.actualAttendeeIds.count
         )
     }
     
