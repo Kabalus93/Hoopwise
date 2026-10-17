@@ -19,12 +19,17 @@ import Compression
 // Dates come back as their serial NUMBER — number formats are not interpreted.
 // ZIP64 archives are rejected as corrupt.
 //
-// WRITER scope: stored (uncompressed) ZIP, inline strings, numbers, optional
-// column widths, one minimal stylesheet. No formulas, no styles per cell.
+// WRITER scope: stored (uncompressed) ZIP, shared strings, numbers, formulas
+// with a cached value, optional column widths / row heights / per-cell style
+// ids, and either a minimal stylesheet or one supplied whole (the class list
+// carries the coach's own, so the export looks like the coach's file).
 
 nonisolated enum XLSXCell: Equatable {
     case text(String)
     case number(Double)
+    /// A formula (no leading "=") and the value it evaluates to now, so
+    /// viewers that do not recalculate (Quick Look, WeChat) still show it.
+    case formula(String, cached: Double)
     case empty
 }
 
@@ -32,6 +37,15 @@ nonisolated struct XLSXSheet: Equatable {
     var name: String
     var rows: [[XLSXCell]]
     var columnWidths: [Double] = []
+    /// Style id (an index into the stylesheet's cellXfs) per cell, parallel
+    /// to `rows`. A styled empty cell is still written — borders and fills
+    /// live on empty cells too.
+    var cellStyles: [[Int]] = []
+    /// Points, per row (parallel to `rows`); missing or nil = default.
+    var rowHeights: [Double?] = []
+    /// Style id for every column (and the columns past the last width).
+    var columnStyle: Int? = nil
+    var showGridLines: Bool = true
 }
 
 nonisolated enum XLSXError: Error, LocalizedError {
@@ -56,6 +70,7 @@ nonisolated extension XLSXCell {
         case .text(let s): return s
         case .empty: return ""
         case .number(let n): return XLSX.formatNumber(n)
+        case .formula(_, let cached): return XLSX.formatNumber(cached)
         }
     }
 }
@@ -126,7 +141,7 @@ nonisolated enum XLSX {
     }
 
     /// A valid .xlsx that Excel, WPS Office and Apple Numbers open.
-    static func write(_ sheets: [XLSXSheet]) throws -> Data {
+    static func write(_ sheets: [XLSXSheet], stylesheet: String? = nil) throws -> Data {
         guard !sheets.isEmpty else {
             throw XLSXError.corrupt("a workbook needs at least one sheet")
         }
@@ -137,11 +152,13 @@ nonisolated enum XLSX {
         parts.append(("_rels/.rels", Data(rootRelsXML.utf8)))
         parts.append(("xl/workbook.xml", Data(workbookXML(names: names).utf8)))
         parts.append(("xl/_rels/workbook.xml.rels", Data(workbookRelsXML(sheetCount: sheets.count).utf8)))
-        parts.append(("xl/styles.xml", Data(stylesXML.utf8)))
+        parts.append(("xl/styles.xml", Data((stylesheet ?? stylesXML).utf8)))
+        var strings = SharedStrings()
         for (i, sheet) in sheets.enumerated() {
-            let xml = try worksheetXML(sheet)
+            let xml = try worksheetXML(sheet, strings: &strings)
             parts.append(("xl/worksheets/sheet\(i + 1).xml", Data(xml.utf8)))
         }
+        parts.append(("xl/sharedStrings.xml", Data(strings.xml.utf8)))
         return XLSXZipWriter.storedArchive(parts)
     }
 
@@ -291,6 +308,7 @@ nonisolated enum XLSX {
             s += "<Override PartName=\"/xl/worksheets/sheet\(i).xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
         }
         s += "<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>"
+        s += "<Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/>"
         s += "</Types>"
         return s
     }
@@ -318,6 +336,7 @@ nonisolated enum XLSX {
             s += "<Relationship Id=\"rId\(i)\" Type=\"\(relNS)/worksheet\" Target=\"worksheets/sheet\(i).xml\"/>"
         }
         s += "<Relationship Id=\"rId\(sheetCount + 1)\" Type=\"\(relNS)/styles\" Target=\"styles.xml\"/>"
+        s += "<Relationship Id=\"rId\(sheetCount + 2)\" Type=\"\(relNS)/sharedStrings\" Target=\"sharedStrings.xml\"/>"
         s += "</Relationships>"
         return s
     }
@@ -332,37 +351,74 @@ nonisolated enum XLSX {
         + "<cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>"
         + "</styleSheet>"
 
-    private static func worksheetXML(_ sheet: XLSXSheet) throws -> String {
+    /// The workbook's string table: each distinct string stored once.
+    struct SharedStrings {
+        private(set) var list: [String] = []
+        private var index: [String: Int] = [:]
+        mutating func id(_ s: String) -> Int {
+            if let i = index[s] { return i }
+            index[s] = list.count
+            list.append(s)
+            return list.count - 1
+        }
+        var xml: String {
+            var s = xmlHeader
+            s += "<sst xmlns=\"\(mainNS)\" count=\"\(list.count)\" uniqueCount=\"\(list.count)\">"
+            for item in list { s += "<si><t xml:space=\"preserve\">\(escape(item))</t></si>" }
+            s += "</sst>"
+            return s
+        }
+    }
+
+    private static func worksheetXML(_ sheet: XLSXSheet, strings: inout SharedStrings) throws -> String {
         var s = xmlHeader
         s += "<worksheet xmlns=\"\(mainNS)\" xmlns:r=\"\(relNS)\">"
+        if !sheet.showGridLines {
+            s += "<sheetViews><sheetView workbookViewId=\"0\" showGridLines=\"0\"/></sheetViews>"
+        }
         let widths = sheet.columnWidths.enumerated().filter { $0.element.isFinite && $0.element > 0 }
+        let styleAttr = sheet.columnStyle.map { " style=\"\($0)\"" } ?? ""
         if !widths.isEmpty {
             s += "<cols>"
             for (i, w) in widths {
-                s += "<col min=\"\(i + 1)\" max=\"\(i + 1)\" width=\"\(formatNumber(min(w, 255)))\" customWidth=\"1\"/>"
+                s += "<col min=\"\(i + 1)\" max=\"\(i + 1)\" width=\"\(formatNumber(min(w, 255)))\"\(styleAttr) customWidth=\"1\"/>"
+            }
+            if sheet.columnStyle != nil {
+                s += "<col min=\"\(sheet.columnWidths.count + 1)\" max=\"16384\" width=\"8.85\"\(styleAttr) customWidth=\"1\"/>"
             }
             s += "</cols>"
         }
         s += "<sheetData>"
         for (r, row) in sheet.rows.enumerated() {
-            let cells = row.enumerated().filter { $0.element != .empty }
+            let styles = r < sheet.cellStyles.count ? sheet.cellStyles[r] : []
+            func style(_ c: Int) -> Int? {
+                c < styles.count && styles[c] != 0 ? styles[c] : nil
+            }
+            let cells = row.enumerated().filter { $0.element != .empty || style($0.offset) != nil }
             if cells.isEmpty { continue }
-            s += "<row r=\"\(r + 1)\">"
+            var rowAttrs = ""
+            if r < sheet.rowHeights.count, let h = sheet.rowHeights[r] {
+                rowAttrs = " ht=\"\(formatNumber(h))\" customHeight=\"1\""
+            }
+            s += "<row r=\"\(r + 1)\"\(rowAttrs)>"
             for (c, cell) in cells {
                 let ref = columnLetters(c) + String(r + 1)
+                let sAttr = style(c).map { " s=\"\($0)\"" } ?? ""
                 switch cell {
                 case .text(let text):
                     guard text.utf16.count <= 32767 else {
                         throw XLSXError.corrupt("cell \(ref) exceeds Excel's 32,767-character limit")
                     }
-                    s += "<c r=\"\(ref)\" t=\"inlineStr\"><is><t xml:space=\"preserve\">\(escape(text))</t></is></c>"
+                    s += "<c r=\"\(ref)\"\(sAttr) t=\"s\"><v>\(strings.id(text))</v></c>"
                 case .number(let n):
                     guard n.isFinite else {
                         throw XLSXError.corrupt("cell \(ref) holds a non-finite number")
                     }
-                    s += "<c r=\"\(ref)\"><v>\(formatNumber(n))</v></c>"
+                    s += "<c r=\"\(ref)\"\(sAttr)><v>\(formatNumber(n))</v></c>"
+                case .formula(let f, let cached):
+                    s += "<c r=\"\(ref)\"\(sAttr)><f>\(escape(f))</f><v>\(formatNumber(cached))</v></c>"
                 case .empty:
-                    break
+                    s += "<c r=\"\(ref)\"\(sAttr)/>"
                 }
             }
             s += "</row>"

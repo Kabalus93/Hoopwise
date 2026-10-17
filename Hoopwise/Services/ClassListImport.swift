@@ -438,17 +438,43 @@ enum ClassList {
 
     // MARK: Export
 
-    /// The sheet back, with live numbers — one worksheet per coach, laid out
-    /// exactly like the coach's own (课程 · 教练 · 学生 · 剩余课时 · 剩余时长 ·
-    /// 备注), plus 长期不来 for students who hold a balance but no class.
-    /// Remaining = the student's group balances that apply to the class.
+    /// The coach's own stylesheet (cellXfs, fonts, fills, borders and the
+    /// indexed palette), copied verbatim from their 上课名单 so the export
+    /// looks like their file: navy header, light-blue class bands, bordered
+    /// student rows, pink low balances, the 长期不来 block and the total row.
+    /// `Style` names the cellXfs ids the export uses.
+    static let exportStylesheet: String = #"""
+<?xml version="1.0" encoding="UTF-8"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="0" formatCode="General"/></numFmts><fonts count="5"><font><sz val="11"/><color indexed="8"/><name val="Calibri"/></font><font><sz val="12"/><color indexed="8"/><name val="Helvetica Neue"/></font><font><sz val="15"/><color indexed="8"/><name val="Calibri"/></font><font><b val="1"/><sz val="11"/><color indexed="9"/><name val="Calibri"/></font><font><b val="1"/><sz val="11"/><color indexed="8"/><name val="Calibri"/></font></fonts><fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor indexed="10"/><bgColor auto="1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor indexed="12"/><bgColor auto="1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor indexed="13"/><bgColor auto="1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor indexed="16"/><bgColor auto="1"/></patternFill></fill></fills><borders count="9"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color indexed="11"/></left><right style="thin"><color indexed="11"/></right><top style="thin"><color indexed="11"/></top><bottom style="thin"><color indexed="11"/></bottom><diagonal/></border><border><left style="thin"><color indexed="14"/></left><right style="thin"><color indexed="15"/></right><top style="thin"><color indexed="11"/></top><bottom style="thin"><color indexed="14"/></bottom><diagonal/></border><border><left style="thin"><color indexed="15"/></left><right style="thin"><color indexed="15"/></right><top style="thin"><color indexed="11"/></top><bottom style="thin"><color indexed="14"/></bottom><diagonal/></border><border><left style="thin"><color indexed="15"/></left><right style="thin"><color indexed="14"/></right><top style="thin"><color indexed="11"/></top><bottom style="thin"><color indexed="14"/></bottom><diagonal/></border><border><left style="thin"><color indexed="14"/></left><right style="thin"><color indexed="11"/></right><top style="thin"><color indexed="14"/></top><bottom style="thin"><color indexed="14"/></bottom><diagonal/></border><border><left style="thin"><color indexed="11"/></left><right style="thin"><color indexed="11"/></right><top style="thin"><color indexed="14"/></top><bottom style="thin"><color indexed="14"/></bottom><diagonal/></border><border><left style="thin"><color indexed="11"/></left><right style="thin"><color indexed="14"/></right><top style="thin"><color indexed="14"/></top><bottom style="thin"><color indexed="14"/></bottom><diagonal/></border><border><left style="thin"><color indexed="11"/></left><right style="thin"><color indexed="11"/></right><top style="thin"><color indexed="14"/></top><bottom style="thin"><color indexed="11"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="0" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf></cellStyleXfs><cellXfs count="31"><xf numFmtId="0" fontId="0" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="0" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="0" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="0" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="49" fontId="3" fillId="2" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="49" fontId="4" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="49" fontId="4" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="0" fontId="4" fillId="3" borderId="1" applyNumberFormat="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="1" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="49" fontId="0" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="1" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="2" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="3" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="3" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="4" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="49" fontId="3" borderId="5" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="0" fontId="3" borderId="6" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="49" fontId="3" borderId="6" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="3" borderId="6" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="3" borderId="6" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="49" fontId="3" borderId="7" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="8" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="49" fontId="0" borderId="8" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="8" applyNumberFormat="0" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="0" fontId="0" borderId="8" applyNumberFormat="1" applyFont="1" applyFill="0" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="center" vertical="bottom"/></xf><xf numFmtId="49" fontId="4" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="0" fontId="4" fillId="5" borderId="1" applyNumberFormat="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment horizontal="left" vertical="bottom"/></xf><xf numFmtId="0" fontId="4" fillId="5" borderId="1" applyNumberFormat="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="0" fontId="4" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf><xf numFmtId="49" fontId="4" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyProtection="0"><alignment vertical="bottom"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles><dxfs count="0"/><tableStyles count="0"/><colors><indexedColors><rgbColor rgb="ff000000"/><rgbColor rgb="ffffffff"/><rgbColor rgb="ffff0000"/><rgbColor rgb="ff00ff00"/><rgbColor rgb="ff0000ff"/><rgbColor rgb="ffffff00"/><rgbColor rgb="ffff00ff"/><rgbColor rgb="ff00ffff"/><rgbColor rgb="ff000000"/><rgbColor rgb="ffffffff"/><rgbColor rgb="ff1f4e78"/><rgbColor rgb="ffbfbfbf"/><rgbColor rgb="ffbdd7ee"/><rgbColor rgb="fffce4d6"/><rgbColor rgb="ff99403d"/><rgbColor rgb="ffaaaaaa"/><rgbColor rgb="fffff2cc"/></indexedColors></colors></styleSheet>
+"""#
+
+    enum Style {
+        static let column = 1, header = 2
+        static let bandText = 3, bandCountLabel = 4, bandCount = 5, bandBlank = 6
+        static let rowEdge = 7, rowText = 8, rowNumber = 9, rowBlank = 10, rowLow = 11
+        static let ruleFirst = 12, ruleSecond = 13, ruleMiddle = 14, ruleLast = 15
+        static let idleTitle = 16, idleBlank = 17, idleCountLabel = 18, idleCount = 19
+        static let idleBlankE = 20, idleNote = 21
+        static let idleFirstEdge = 22, idleFirstText = 23, idleFirstBlank = 24, idleFirstNumber = 25
+        static let totalTitle = 26, totalBlankB = 27, totalBlank = 28, totalCount = 29, totalNote = 30
+    }
+
+    /// A balance at or under this many sessions is filled pink — two months
+    /// of one class a week, the coach's own threshold in their sheet.
+    static let lowBalance = 8
+
+    /// The sheet back, with live numbers, in the coach's layout (October
+    /// 2026, Luther: "it's one tab"): ONE worksheet 上课名单 — header, then
+    /// every class in week order (all coaches) as a band row with its 人数
+    /// counted by formula and one row per student (剩余课时 or 剩余时长,
+    /// 备注), then 长期不来 for students who hold a balance but no class, and
+    /// a 总人次 row per coach. Remaining = the student's group balances that
+    /// apply to the class.
     static func export(programs: [Program],
                        students: [Student],
                        contracts: [Contract],
                        coaches: [StaffCoach],
                        accountCoach: (id: UUID, name: String)?) -> [XLSXSheet] {
-        let header: [XLSXCell] = ["课程", "教练", "学生", "剩余课时(节)", "剩余时长(月)", "备注"].map { .text($0) }
-        let widths: [Double] = [18, 10, 12, 14, 14, 22]
         let studentsById = Dictionary(students.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
 
         func coachName(_ id: UUID?) -> String {
@@ -467,14 +493,30 @@ enum ClassList {
             let months = held.contains { $0.notes?.contains(monthsMarker) == true }
             return (left, months)
         }
-        func balanceCells(_ b: (sessions: Int, months: Bool)?) -> [XLSXCell] {
-            guard let b else { return [.empty, .empty] }
+
+        var rows: [[XLSXCell]] = []
+        var styles: [[Int]] = []
+        var heights: [Double?] = []
+        func add(_ cells: [XLSXCell], _ style: [Int], height: Double = 13.55) {
+            rows.append(cells); styles.append(style); heights.append(height)
+        }
+        /// D and E for one student, and their styles. `first` = the first row
+        /// under 长期不来, which carries that block's own borders.
+        func balanceCells(_ b: (sessions: Int, months: Bool)?, first: Bool, idle: Bool)
+            -> (cells: [XLSXCell], styles: [Int]) {
+            let number = first ? Style.idleFirstNumber : Style.rowNumber
+            let blank = first ? Style.idleFirstBlank : Style.rowBlank
+            guard let b else { return ([.empty, .empty], [blank, blank]) }
             if b.months {
                 let months = Double(b.sessions) / Double(sessionsPerMonth)
-                return [.empty, .number((months * 4).rounded() / 4)]
+                return ([.empty, .number((months * 4).rounded() / 4)], [blank, number])
             }
-            return [.number(Double(b.sessions)), .empty]
+            let low = !idle && !first && b.sessions <= lowBalance
+            return ([.number(Double(b.sessions)), .empty], [low ? Style.rowLow : number, blank])
         }
+
+        add(["课程", "教练", "学生", "剩余课时(节)", "剩余时长(月)", "备注"].map { .text($0) },
+            Array(repeating: Style.header, count: 6), height: 57.45)
 
         let classes = programs
             .filter { $0.programType == .group && $0.status != .archived
@@ -484,54 +526,78 @@ enum ClassList {
                 if da != db { return da < db }
                 return (a.defaultSessionTime ?? .distantPast).timeOfDay < (b.defaultSessionTime ?? .distantPast).timeOfDay
             }
-        let byCoach = Dictionary(grouping: classes) { coachName($0.coachId) }
 
-        var sheets: [XLSXSheet] = []
-        for coach in byCoach.keys.sorted() {
-            var rows: [[XLSXCell]] = [header]
-            var seen: Set<UUID> = []
-            var total = 0
-            for program in byCoach[coach] ?? [] {
-                var block = Block(title: program.name, entries: [], row: 0)
-                block.weekday = program.recurringDays.first
-                if let time = program.defaultSessionTime {
-                    let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-                    block.hour = parts.hour
-                    block.minute = parts.minute
-                }
-                block.ageGroup = program.ageGroup
-                let roster = program.enrolledStudentIds.compactMap { studentsById[$0] }
-                rows.append([.text(block.canonicalTitle), .text(coach), .text("人数:"),
-                             .number(Double(roster.count)), .empty, .empty])
-                total += roster.count
-                for student in roster {
-                    let shared = seen.contains(student.id)
-                    seen.insert(student.id)
-                    rows.append([.empty, .empty, .text(student.chineseName ?? student.name)]
-                                + balanceCells(balance(of: student.id, in: program.id))
-                                + [shared ? .text("课时与其他班共用") : .empty])
-                }
+        var coachOrder: [String] = []
+        var bandCells: [String: [(ref: String, count: Int)]] = [:]
+        var seen: Set<UUID> = []
+        for program in classes {
+            var block = Block(title: program.name, entries: [], row: 0)
+            block.weekday = program.recurringDays.first
+            if let time = program.defaultSessionTime {
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
+                block.hour = parts.hour
+                block.minute = parts.minute
             }
-            rows.append([.text("\(coach) 总人次"), .empty, .empty, .number(Double(total)), .empty,
-                         .text("同一学生上两节课计两次")])
-            sheets.append(XLSXSheet(name: "\(coach)上课名单", rows: rows, columnWidths: widths))
+            block.ageGroup = program.ageGroup
+            let coach = coachName(program.coachId)
+            if !coachOrder.contains(coach) { coachOrder.append(coach) }
+            let roster = program.enrolledStudentIds.compactMap { studentsById[$0] }
+
+            let bandRow = rows.count + 1
+            let count: XLSXCell = roster.isEmpty
+                ? .number(0)
+                : .formula("COUNTA(C\(bandRow + 1):C\(bandRow + roster.count))", cached: Double(roster.count))
+            add([.text(block.canonicalTitle), .text(coach), .text("人数:"), count, .empty, .empty],
+                [Style.bandText, Style.bandText, Style.bandCountLabel, Style.bandCount, Style.bandBlank, Style.bandBlank])
+            bandCells[coach, default: []].append(("D\(bandRow)", roster.count))
+
+            for student in roster {
+                let shared = seen.contains(student.id)
+                seen.insert(student.id)
+                let b = balanceCells(balance(of: student.id, in: program.id), first: false, idle: false)
+                add([.empty, .empty, .text(student.chineseName ?? student.name)] + b.cells
+                        + [shared ? .text("课时与其他班共用") : .empty],
+                    [Style.rowEdge, Style.rowEdge, Style.rowText] + b.styles
+                        + [shared ? Style.rowText : Style.rowBlank])
+            }
         }
 
-        // Students holding a balance and no class.
+        // The rule above 长期不来.
+        add(Array(repeating: .empty, count: 6),
+            [Style.ruleFirst, Style.ruleSecond, Style.ruleMiddle, Style.ruleMiddle, Style.ruleMiddle, Style.ruleLast])
+
+        // Students holding a balance and no class. Not counted in any total.
         let enrolled = Set(classes.flatMap(\.enrolledStudentIds))
         let idle = students.filter { student in
             !enrolled.contains(student.id) && balance(of: student.id, in: nil).map { $0.sessions > 0 } == true
         }
-        if !idle.isEmpty {
-            var rows: [[XLSXCell]] = [header,
-                                      [.text("长期不来"), .empty, .text("人数:"), .number(Double(idle.count)), .empty, .empty]]
-            for student in idle {
-                rows.append([.empty, .empty, .text(student.chineseName ?? student.name)]
-                            + balanceCells(balance(of: student.id, in: nil)) + [.empty])
-            }
-            sheets.append(XLSXSheet(name: "长期不来", rows: rows, columnWidths: widths))
+        let idleNote = coachOrder.count == 1 ? "不计入\(coachOrder[0])总数" : "不计入总人次"
+        add([.text("长期不来"), .empty, .text("人数:"), .number(Double(idle.count)), .empty, .text(idleNote)],
+            [Style.idleTitle, Style.idleBlank, Style.idleCountLabel, Style.idleCount, Style.idleBlankE, Style.idleNote])
+        for (i, student) in idle.enumerated() {
+            let first = i == 0
+            let b = balanceCells(balance(of: student.id, in: nil), first: first, idle: true)
+            add([.empty, .empty, .text(student.chineseName ?? student.name)] + b.cells + [.empty],
+                first
+                    ? [Style.idleFirstEdge, Style.idleFirstEdge, Style.idleFirstText] + b.styles + [Style.idleFirstBlank]
+                    : [Style.rowEdge, Style.rowEdge, Style.rowText] + b.styles + [Style.rowBlank])
         }
-        return sheets
+
+        // One 总人次 per coach: the sum of that coach's class counts.
+        for coach in coachOrder {
+            let cells = bandCells[coach] ?? []
+            let total = cells.reduce(0) { $0 + $1.count }
+            let formula = cells.map(\.ref).joined(separator: "+")
+            add([.text("\(coach) 总人次"), .empty, .empty,
+                 formula.isEmpty ? .number(0) : .formula(formula, cached: Double(total)),
+                 .empty, .text("同一学生上两节课计两次")],
+                [Style.totalTitle, Style.totalBlankB, Style.totalBlank, Style.totalCount, Style.totalBlank, Style.totalNote])
+        }
+
+        return [XLSXSheet(name: "上课名单", rows: rows,
+                          columnWidths: [22, 8, 12, 14, 14, 24],
+                          cellStyles: styles, rowHeights: heights,
+                          columnStyle: Style.column, showGridLines: false)]
     }
 
     /// Monday-first, as the coaches' sheets are ordered.

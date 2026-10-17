@@ -178,16 +178,43 @@ final class ClassListImportTests: XCTestCase {
         dm.applyClassListImport(try makePlan())
         let sheets = ClassList.export(programs: dm.programs, students: dm.students,
                                       contracts: dm.contracts, coaches: [], accountCoach: nil)
-        let data = try XLSX.write(sheets)
+        let data = try XLSX.write(sheets, stylesheet: ClassList.exportStylesheet)
         let reread = try XLSX.read(data)
+        XCTAssertEqual(reread.map(\.name), ["上课名单"], "one tab, like the coach's file")
         let main = try XCTUnwrap(ClassList.parse(reread))
-        XCTAssertEqual(main.blocks.map(\.canonicalTitle), ["周一 18:30 U6", "周三 18:30 U6", "周六 10:00 U12"])
-        let monday = main.blocks[0]
+        let classes = main.blocks.filter { $0.weekday != nil }
+        XCTAssertEqual(classes.map(\.canonicalTitle), ["周一 18:30 U6", "周三 18:30 U6", "周六 10:00 U12"])
+        let monday = classes[0]
         XCTAssertEqual(monday.entries.first { $0.name == "小明" }?.sessionsLeft, 36)
         XCTAssertEqual(monday.entries.first { $0.name == "小红" }?.monthsLeft, 8,
                        "a months balance exports in months")
-        let wednesday = main.blocks[1]
+        let wednesday = classes[1]
         XCTAssertEqual(wednesday.entries.first { $0.name == "共享" }?.note, "课时与其他班共用")
-        XCTAssertTrue(reread.contains { $0.name == "长期不来" })
+        XCTAssertTrue(main.issues.isEmpty, "人数 and 总人次 agree with the rows: \(main.issues)")
+    }
+
+    /// The coach's look: their stylesheet, navy header, blue class bands,
+    /// pink low balances, the 长期不来 block and the 总人次 row, no gridlines.
+    func testExportCarriesTheCoachsLayout() throws {
+        dm.applyClassListImport(try makePlan())
+        let sheet = try XCTUnwrap(ClassList.export(programs: dm.programs, students: dm.students,
+                                                   contracts: dm.contracts, coaches: [],
+                                                   accountCoach: nil).first)
+        typealias S = ClassList.Style
+        XCTAssertEqual(sheet.cellStyles[0], Array(repeating: S.header, count: 6))
+        XCTAssertEqual(sheet.rowHeights[0], 57.45)
+        XCTAssertFalse(sheet.showGridLines)
+        XCTAssertEqual(sheet.columnWidths, [22, 8, 12, 14, 14, 24])
+        let band = sheet.rows.firstIndex { $0.first == .text("周一 18:30 U6") }!
+        XCTAssertEqual(sheet.cellStyles[band][0], S.bandText)
+        if case .formula(let f, _) = sheet.rows[band][3] {
+            XCTAssertTrue(f.hasPrefix("COUNTA(C\(band + 2):C"), f)
+        } else { XCTFail("人数 is a COUNTA formula") }
+        XCTAssertTrue(sheet.rows.contains { $0.first == .text("长期不来") })
+        XCTAssertTrue(sheet.rows.last?.first.map { $0.stringValue.hasSuffix("总人次") } == true)
+
+        let xml = String(decoding: try XLSX.write([sheet], stylesheet: ClassList.exportStylesheet), as: UTF8.self)
+        XCTAssertTrue(xml.contains("showGridLines=\"0\""))
+        XCTAssertTrue(xml.contains("<cellXfs count=\"31\">"), "the coach's stylesheet travels with the file")
     }
 }

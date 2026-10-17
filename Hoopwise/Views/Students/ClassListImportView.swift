@@ -253,7 +253,7 @@ enum ClassListExport {
                                       accountCoach: (dataManager.coach.id, dataManager.coach.name))
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(ClassList.exportFilename())
-        try XLSX.write(sheets).write(to: url, options: .atomic)
+        try XLSX.write(sheets, stylesheet: ClassList.exportStylesheet).write(to: url, options: .atomic)
         return url
     }
 }

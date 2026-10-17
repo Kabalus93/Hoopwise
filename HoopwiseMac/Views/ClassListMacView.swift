@@ -63,7 +63,7 @@ struct ClassListMacSection: View {
                                           contracts: dataManager.contracts,
                                           coaches: dataManager.staffCoaches,
                                           accountCoach: (dataManager.coach.id, dataManager.coach.name))
-            try XLSX.write(sheets).write(to: url, options: .atomic)
+            try XLSX.write(sheets, stylesheet: ClassList.exportStylesheet).write(to: url, options: .atomic)
             message = "Saved \(url.lastPathComponent)."
         } catch {
             message = error.localizedDescription

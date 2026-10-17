@@ -987,8 +987,14 @@ any attendance surface.
   `ClassList.plan` (pure; matches students by name/Chinese name, programs by
   weekday + time + age; NEVER adds to an existing group balance, so a
   re-import cannot double one), `applyClassListImport` / `undoClassListImport`
-  (all writes through the existing writers), `ClassList.export` (one sheet per
-  coach + 长期不来, same columns). iPhone: Athletes → + → Import/Export Class
+  (all writes through the existing writers), `ClassList.export` — ONE tab
+  上课名单 in the coach's own layout (October 2026, Luther): every class in
+  week order as a light-blue band (人数 = COUNTA formula with a cached value),
+  one row per student, low balances (≤ `ClassList.lowBalance` = 8) pink,
+  then 长期不来 and one 总人次 row per coach. It is written with the coach's
+  stylesheet copied VERBATIM (`ClassList.exportStylesheet`, cellXfs ids in
+  `ClassList.Style`) via `XLSX.write(_:stylesheet:)`; XLSX now writes shared
+  strings, formulas, per-cell styles, row heights and no-gridline views. iPhone: Athletes → + → Import/Export Class
   List (Excel). Mac: Settings → Data. Utilities/XLSX.swift is the
   dependency-free codec (zip + XML, CRC-32, deflate via Compression).
 - NAMES: the sheet's hanzi becomes the CHINESE NAME and the name field is
