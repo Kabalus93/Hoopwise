@@ -862,6 +862,37 @@ class StudentIntelligence {
 }
 
 // MARK: - Attendance Record (if not already defined)
+extension AttendanceRecord {
+    /// A student's MARKED classes that already happened, OLDEST FIRST (the
+    /// engines below read "recent" as `suffix`), each
+    /// with its recorded mark — the population AttendanceMath.rate counts:
+    /// past, not skipped/cancelled, and explicitly present / excused / absent.
+    /// Unmarked is neither attended nor missed. The two views that fed the
+    /// insight engines (quick peep, intelligence card) used to take every
+    /// session whose stored attendeeIds held the student — future ones
+    /// included, empty for enrollment-backed sessions — and call anything not
+    /// present "absent".
+    static func marked(for studentId: UUID, in sessions: [SessionEvent],
+                       asOf now: Date = Date()) -> [AttendanceRecord] {
+        sessions.compactMap { session -> AttendanceRecord? in
+            guard session.date <= now, !SessionLifecycle.didNotHappen(session) else { return nil }
+            let status: AttendanceStatus
+            if session.actualAttendeeIds.contains(studentId) {
+                status = .present
+            } else if session.excusedAbsences.contains(studentId) {
+                status = .excused
+            } else if session.unexcusedAbsences.contains(studentId) {
+                status = .absent
+            } else {
+                return nil
+            }
+            return AttendanceRecord(studentId: studentId, sessionId: session.id,
+                                    status: status, recordedAt: session.startTime)
+        }
+        .sorted { $0.recordedAt < $1.recordedAt }
+    }
+}
+
 struct AttendanceRecord: Identifiable, Codable, Hashable {
     let id: UUID
     var studentId: UUID

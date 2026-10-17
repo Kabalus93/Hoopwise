@@ -81,17 +81,18 @@ struct StudentQuickPeepView: View {
         PerformanceRadarMetrics.compute(from: trainingStats, skills: skills, programContext: programContext)
     }
     
+    /// The student's MARKED classes that have already happened, newest first,
+    /// with the mark as recorded — the same population AttendanceMath.rate
+    /// counts. Until October 2026 this took every session whose stored
+    /// attendeeIds held the student (empty for real, enrollment-backed
+    /// sessions), INCLUDING FUTURE ONES, and called anything not present
+    /// "absent": the next three scheduled classes became "Missed 3 of last 3"
+    /// and the rate read 0% beside a contract that had been used.
+    /// Marked, past classes, oldest first (AttendanceRecord.marked). Until
+    /// October 2026 future sessions counted as misses here: the next three
+    /// scheduled classes became "Missed 3 of last 3" and the rate read 0%.
     private var attendanceRecords: [AttendanceRecord] {
-        dataManager.sessionEvents.compactMap { session -> AttendanceRecord? in
-            guard session.attendeeIds.contains(student.id) else { return nil }
-            let didAttend = session.actualAttendeeIds.contains(student.id)
-            return AttendanceRecord(
-                studentId: student.id,
-                sessionId: session.id,
-                status: didAttend ? .present : .absent,
-                recordedAt: session.date
-            )
-        }
+        AttendanceRecord.marked(for: student.id, in: dataManager.sessionEvents)
     }
 
     private var gameAwardsAndImprovementSection: some View {
@@ -149,15 +150,17 @@ struct StudentQuickPeepView: View {
         .cornerRadius(16)
     }
     
+    /// AttendanceMath.rate — the app's one attendance definition (present over
+    /// marked, past classes that happened). 0 when nothing is marked yet; the
+    /// insights require at least three marked classes before saying anything.
     private var attendanceRate: Double {
-        let total = attendanceRecords.count
-        guard total > 0 else { return 0 }
-        let present = attendanceRecords.filter { $0.status == .present }.count
-        return Double(present) / Double(total)
+        let rate = AttendanceMath.rate(for: student.id, in: dataManager.sessionEvents)
+        return rate.of > 0 ? Double(rate.percent) / 100 : 0
     }
-    
+
+    /// The last five marked classes, newest first.
     private var recentAttendance: [AttendanceRecord] {
-        Array(attendanceRecords.sorted { $0.recordedAt > $1.recordedAt }.prefix(5))
+        Array(attendanceRecords.suffix(5).reversed())
     }
     
     private var insights: [StudentInsight] {
@@ -512,11 +515,17 @@ struct StudentQuickPeepView: View {
             if let contract = contract {
                 // Main stats row
                 HStack(spacing: 0) {
+                    // A balance shows sessions USED (deducted — present and
+                    // unexcused absences); anything else shows classes
+                    // attended. It used to print the deducted count labelled
+                    // "Attended".
                     VStack(spacing: 4) {
-                        Text("\(contract.sessionCount)")
+                        Text("\(contract.hasSessionBalance ? contract.bundleSessionIds.count : attendanceRecords.filter { $0.status == .present }.count)")
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .foregroundColor(.green)
-                        Text(isChinese ? "已参加" : "Attended")
+                        Text(contract.hasSessionBalance
+                             ? (isChinese ? "已用" : "Used")
+                             : (isChinese ? "已参加" : "Attended"))
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     }

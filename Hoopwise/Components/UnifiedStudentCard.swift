@@ -157,17 +157,8 @@ struct UnifiedStudentCard: View {
     
     // Intelligence data
     private var attendanceRecords: [AttendanceRecord] {
-        // Build attendance records from session events
-        dataManager.sessionEvents.compactMap { session -> AttendanceRecord? in
-            guard session.attendeeIds.contains(student.id) else { return nil }
-            let didAttend = session.actualAttendeeIds.contains(student.id)
-            return AttendanceRecord(
-                studentId: student.id,
-                sessionId: session.id,
-                status: didAttend ? .present : .absent,
-                recordedAt: session.date
-            )
-        }
+        // Marked, past classes only — see AttendanceRecord.marked.
+        AttendanceRecord.marked(for: student.id, in: dataManager.sessionEvents)
     }
     
     private var churnRiskAssessment: StudentIntelligence.ChurnRiskAssessment {
