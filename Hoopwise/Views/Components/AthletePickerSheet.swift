@@ -273,7 +273,7 @@ struct AthletePickerSheet: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .foregroundStyle(isSelected ? accentColor.accessibleText : AppTheme.textSecondary)
+            .foregroundStyle(isSelected ? Color.white : AppTheme.textSecondary)
             .background(
                 Capsule().fill(
                     isSelected
@@ -313,6 +313,7 @@ struct AthletePickerSheet: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.top, 12)
             .padding(.bottom, 100)
         }
     }

@@ -201,6 +201,19 @@ enum SheetGalleryDebug {
             // What Complete Session opens.
             RollCallPhotoSheet(programColor: .accentColor, reason: .completed) { _ in }
 
+        case "athletePicker":
+            // Add Athlete as a session opens it (banner, sort chips, list).
+            AthletePickerSheet(
+                title: "Add Athlete",
+                students: dm.students,
+                accentColor: .blue,
+                banner: .init(title: "Sessions Count From Here",
+                              subtitle: "The student's contract sessions will count starting from this session",
+                              tint: .blue),
+                confirmLabel: "Add",
+                showSelectionCounter: false
+            ) { _ in }
+
         case "quickPeep":
             // The quick peep as a session opens it, with its Edit button.
             if let program = dm.programs.first,
