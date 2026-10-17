@@ -151,6 +151,7 @@ struct SAMApp: App {
         #if DEBUG
         #if os(iOS)
         ScreenshotStore.prune(dataManager: dataManager)
+        liveActivityDemoIfRequested()
         #endif
         if SheetGalleryDebug.requestedShot != nil {
             SheetGalleryDebug.seedIfEmpty(dataManager: dataManager)
@@ -248,6 +249,26 @@ struct SAMApp: App {
         _ = try? AttendanceStatementDocument.render(
             input, to: dir.appendingPathComponent("statement-debug.pdf"))
     }
+
+    #if os(iOS)
+    /// HOOPWISE_LIVE_ACTIVITY_DEMO=1: arms the Live Activity for a scratch
+    /// class starting in 60 seconds (never saved — a DEBUG scratch record, the
+    /// sanctioned exception to SessionCreation-only construction), so the
+    /// upcoming → live switch at the stale date can be watched without
+    /// waiting for a real class. Background the app at once: a foreground tick
+    /// of the monitor would end an activity whose session is not in the store.
+    @MainActor
+    private func liveActivityDemoIfRequested() {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_LIVE_ACTIVITY_DEMO"] == "1" else { return }
+        SessionStatusMonitor.debugKeepDemoActivity = true
+        let start = Date().addingTimeInterval(60)
+        let scratch = SessionEvent(programId: nil, title: "Demo · U10", date: start,
+                                   startTime: start, endTime: start.addingTimeInterval(300),
+                                   status: .scheduled, attendeeIds: [])
+        SessionLiveActivityManager.shared.armActivity(for: scratch, programName: "Demo",
+                                                      accentColorHex: "#007AFF", drillNames: [:])
+    }
+    #endif
 
     /// Headless Parent Guide export, same channel as the statement.
     /// HOOPWISE_EXPORT_GUIDE="<programName>" (or "*" for the first program)

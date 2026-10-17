@@ -57,23 +57,11 @@ struct MainTabView: View {
             }
             .tabViewStyle(.sidebarAdaptable)
 
-            // Persistent live-session pill across every tab while a session
-            // is running. Tapping it opens THE SESSION PAGE — the separate
-            // live screen was removed (October 2026, Luther: "limiting rather
-            // than useful"); sessions start on their own at their time.
-            if liveEngine.isActive, let live = liveEngine.session {
-                LiveSessionPill(
-                    session: live,
-                    programColor: Color(hex: liveEngine.programColorHex),
-                    remaining: liveEngine.sessionRemainingSeconds,
-                    isPaused: liveEngine.isPaused
-                ) {
-                    openWidgetSession(live.id)
-                }
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
+            // No in-app live pill (October 2026, Luther): it floated over
+            // the app's own screens. The live session lives where iOS puts
+            // it — the Lock Screen and the Dynamic Island, shown whenever
+            // the app is not in front (iOS never shows an app's own activity
+            // while that app is open).
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: liveEngine.isActive)
         .tint(Color.accentColor)
@@ -153,60 +141,6 @@ struct MainTabView: View {
         WidgetSnapshotWriter.traceDeepLink("athlete \(id) found=\(student != nil)")
         guard let student else { return }
         widgetDeepLink = .athlete(student)
-    }
-}
-
-// MARK: - Live Session Pill
-/// Compact persistent indicator that a session is live. Tap to resume the
-/// live screen. Sits at the top edge above all tabs.
-struct LiveSessionPill: View {
-    let session: SessionEvent
-    let programColor: Color
-    let remaining: Int
-    let isPaused: Bool
-    let onTap: () -> Void
-
-    private var remainingLabel: String {
-        let r = max(remaining, 0)
-        return String(format: "%d:%02d", r / 60, r % 60)
-    }
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(isPaused ? Color.secondary : Color.red)
-                    .frame(width: 8, height: 8)
-                    .symbolEffect(.pulse, options: .repeating, isActive: !isPaused)
-
-                Text(isPaused ? "PAUSED" : "LIVE")
-                    .font(.caption2.weight(.bold))
-                    .monospaced()
-                    .foregroundStyle(isPaused ? Color.secondary : Color.red)
-
-                Text(session.title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Spacer(minLength: 8)
-
-                Text(remainingLabel)
-                    .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(programColor)
-
-                Image(systemName: "chevron.up")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.regularMaterial, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(programColor.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 

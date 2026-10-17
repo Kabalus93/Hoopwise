@@ -250,6 +250,23 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   then completed by "Mark Completed" — `.complete` is only legal from
   in progress, and that button used to save without changing the status.
   Covered by AutoStartTests.
+- LIVE ACTIVITY STARTS WITHOUT THE APP (October 2026, same exception): iOS
+  cannot run app code at a set time and there is no push server, so the
+  monitor ARMS the Lock Screen / Dynamic Island activity ahead of time —
+  `SessionLiveActivityManager.armActivity` for the next allowed class ENDING
+  within 8 hours (Apple's per-activity limit), ContentState.startsLater =
+  true, staleDate = the class start. The widget shows "starts in" while
+  `context.isUpcoming`, and iOS redraws it LIVE at the stale date by itself
+  (observed ~1–2 min late in the simulator; the countdown holds 0:00 in the
+  gap). startActivity reuses an armed activity for the same session, and
+  adopts one surviving from an earlier launch (Activity.activities). An
+  activity ended before its class started dismisses IMMEDIATELY — default
+  dismissal left "Completed" on the Lock Screen for a class that never ran.
+  The data's status still flips when the app next runs. The floating in-app
+  pill is gone: iOS never shows an app's own activity while it is in front,
+  and the pill imitated it over the app's screens. DEBUG
+  HOOPWISE_LIVE_ACTIVITY_DEMO=1 arms a scratch class starting in 60s to watch
+  the switch (background the app at once).
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because

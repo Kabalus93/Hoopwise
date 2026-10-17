@@ -35,6 +35,18 @@ class SessionLiveActivityManager: ObservableObject {
             return
         }
         
+        adoptRunningActivity()
+        // Already showing this session (armed ahead of time): keep that
+        // activity and bring it up to date instead of starting a second one.
+        if let activity = currentActivity, activity.attributes.sessionId == session.id {
+            self.currentSession = session
+            self.curriculum = session.curriculum
+            self.drillNames = drillNames
+            updateActivity()
+            startUpdateTimer()
+            return
+        }
+
         // End any existing activity first
         if currentActivity != nil {
             endActivity()
@@ -55,18 +67,21 @@ class SessionLiveActivityManager: ObservableObject {
         )
         
         let initialState = calculateContentState(for: session)
-        
+        let upcoming = Date() < session.startTime
+
         do {
+            // An activity started before the class is stale AT the start, so
+            // iOS redraws it as live then — the app need not be running.
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: initialState, staleDate: nil),
+                content: .init(state: initialState, staleDate: upcoming ? session.startTime : nil),
                 pushType: nil
             )
             
             currentActivity = activity
             isActivityActive = true
             
-            // Start timer to update activity every 30 seconds
+            // While the app runs, refresh phase / drill / headcount every 30s.
             startUpdateTimer()
             
             debugLog("✅ Live Activity started for session: \(session.title)")
@@ -81,16 +96,51 @@ class SessionLiveActivityManager: ObservableObject {
               let session = currentSession else { return }
         
         let newState = calculateContentState(for: session)
-        
+        let upcoming = Date() < session.startTime
+
         Task {
             await activity.update(
-                ActivityContent(state: newState, staleDate: nil)
+                ActivityContent(state: newState, staleDate: upcoming ? session.startTime : nil)
             )
         }
     }
     
+    /// The activity this app started in an earlier launch (iOS keeps it
+    /// alive across launches; the reference does not survive).
+    private func adoptRunningActivity() {
+        guard currentActivity == nil,
+              let running = Activity<SessionActivityAttributes>.activities.first(where: {
+                  $0.activityState == .active || $0.activityState == .stale
+              }) else { return }
+        currentActivity = running
+        isActivityActive = true
+    }
+
+    /// The session the running activity shows, if any.
+    var activeSessionId: UUID? {
+        adoptRunningActivity()
+        return currentActivity?.attributes.sessionId
+    }
+
+    /// Starts the Live Activity AHEAD of a class (October 2026, Luther: the
+    /// session should start even when the app is not opened). iOS cannot run
+    /// app code at an exact time and there is no push server, but an activity
+    /// requested now with stale date = class start is redrawn by the system
+    /// at that moment: "Starts in …" becomes the live countdown on the Lock
+    /// Screen and in the Dynamic Island with the app closed. Apple keeps an
+    /// activity at most 8 hours, so only classes ENDING within 8 hours are
+    /// armed; the monitor re-checks every time the app runs.
+    func armActivity(for session: SessionEvent, programName: String,
+                     accentColorHex: String, drillNames: [UUID: String]) {
+        adoptRunningActivity()
+        if currentActivity?.attributes.sessionId == session.id { return }
+        startActivity(for: session, programName: programName,
+                      accentColorHex: accentColorHex, drillNames: drillNames)
+    }
+
     // MARK: - End Live Activity
     func endActivity(showAttendanceReminder: Bool = true) {
+        adoptRunningActivity()
         guard let activity = currentActivity else { return }
         
         stopUpdateTimer()
@@ -104,10 +154,14 @@ class SessionLiveActivityManager: ObservableObject {
             attendeeCount: currentSession?.actualAttendeeIds.count ?? 0
         )
         
+        // An activity armed for a class that has NOT started (replaced,
+        // cancelled, rescheduled) must vanish, not linger on the Lock Screen
+        // for hours reading "Completed" for a class that never ran.
+        let neverStarted = Date() < activity.attributes.startTime
         Task {
             await activity.end(
                 ActivityContent(state: finalState, staleDate: nil),
-                dismissalPolicy: .default
+                dismissalPolicy: neverStarted ? .immediate : .default
             )
             
             await MainActor.run {
@@ -153,7 +207,8 @@ class SessionLiveActivityManager: ObservableObject {
             currentPhase: phase,
             currentDrillName: drillName,
             progress: progress,
-            attendeeCount: session.actualAttendeeIds.count
+            attendeeCount: session.actualAttendeeIds.count,
+            startsLater: now < session.startTime ? true : nil
         )
     }
     

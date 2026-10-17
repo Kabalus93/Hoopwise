@@ -45,6 +45,12 @@ struct SessionActivityAttributes: ActivityAttributes {
         var currentDrillName: String?
         var progress: Double  // 0.0 to 1.0
         var attendeeCount: Int
+        /// True while the activity was started AHEAD of the class (October
+        /// 2026): the widget shows "Starts in …" until its stale date — the
+        /// class start — when iOS redraws it as live with no app code
+        /// running. Optional so an in-flight activity from an older build
+        /// still decodes.
+        var startsLater: Bool? = nil
     }
     
     // Fixed attributes (don't change during activity)

@@ -84,6 +84,8 @@ class SessionStatusMonitor: ObservableObject {
             $0.status == .inProgress && $0.startTime <= now && now < $0.endTime
         }) {
             startInAppEngine(for: live, dataManager: dataManager)
+        } else {
+            armNextLiveActivity(sessions: sessions, dataManager: dataManager, now: now)
         }
 
         // Reconcile scheduled local notifications with the current set of
@@ -95,6 +97,49 @@ class SessionStatusMonitor: ObservableObject {
 
     // MARK: - Live Activity Integration
     #if os(iOS)
+    /// Arms the Lock Screen / Dynamic Island activity for the next class that
+    /// ENDS within 8 hours (Apple's limit for one activity), so it turns live
+    /// at its start time even if the app is not opened then. Ends an activity
+    /// whose class is over, completed, skipped or cancelled.
+    #if DEBUG
+    /// Set by the HOOPWISE_LIVE_ACTIVITY_DEMO hook: its scratch class is not
+    /// in the store, so the cleanup below would end it before it starts.
+    static var debugKeepDemoActivity = false
+    #endif
+
+    private func armNextLiveActivity(sessions: [SessionEvent], dataManager: DataManager, now: Date) {
+        #if DEBUG
+        if Self.debugKeepDemoActivity { return }
+        #endif
+        let manager = SessionLiveActivityManager.shared
+        if let shownId = manager.activeSessionId {
+            let shown = sessions.first { $0.id == shownId }
+            let over = shown.map {
+                $0.endTime < now || $0.status == .completed || SessionLifecycle.didNotHappen($0)
+            } ?? true
+            if over { manager.endActivity(showAttendanceReminder: false) } else { return }
+        }
+
+        let horizon = now.addingTimeInterval(8 * 3600)
+        guard let next = sessions
+            .filter({ $0.status == .scheduled && $0.startTime > now && $0.endTime <= horizon })
+            .min(by: { $0.startTime < $1.startTime }),
+              SessionSeries.allowsLiveActivity(
+                next,
+                programs: dataManager.programs,
+                contracts: dataManager.contracts,
+                privateSessionsEnabled: SessionSeries.privateLiveActivityEnabled)
+        else { return }
+
+        let program = next.programId.flatMap { id in dataManager.programs.first { $0.id == id } }
+        let drillNames = Dictionary(dataManager.drills.map { ($0.id, $0.name) },
+                                    uniquingKeysWith: { first, _ in first })
+        manager.armActivity(for: next,
+                            programName: program?.resolvedDisplayName(in: dataManager.programs) ?? next.title,
+                            accentColorHex: program?.colorHex ?? "#FF6B35",
+                            drillNames: drillNames)
+    }
+
     /// Bring up the in-app `LiveSessionEngine` so the persistent pill at
     /// the top of `MainTabView` and the live screen reflect a session that
     /// auto-started while the app was backgrounded. Engine ignores the call
