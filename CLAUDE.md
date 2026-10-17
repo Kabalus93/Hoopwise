@@ -270,24 +270,31 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   NameIndex collation are unchanged. Pinned by StudentNameLinesTests.
 - The session roster's right-to-left swipe (Clear, Refund) was removed the
   same month at Luther's request — see "Attendance UI".
-- LIVE ACTIVITY STARTS WITHOUT THE APP (October 2026, same exception): iOS
-  cannot run app code at a set time and there is no push server, so the
-  monitor ARMS the Lock Screen / Dynamic Island activity ahead of time —
-  `SessionLiveActivityManager.armActivity` for the next allowed class ENDING
-  within 8 hours (Apple's per-activity limit). There is NO countdown to the
-  start (Luther): one layout, keyed to startTime…endTime, shows the full
-  class length frozen until the start and then counts it down by itself —
-  `timerInterval` needs no redraw, so there is no staleDate and no
-  "upcoming" view. ContentState.startsLater is unused, kept only so older
-  payloads decode. startActivity reuses an armed activity for the same session, and
-  adopts one surviving from an earlier launch (Activity.activities). An
-  activity ended before its class started dismisses IMMEDIATELY — default
-  dismissal left "Completed" on the Lock Screen for a class that never ran.
-  The data's status still flips when the app next runs. The floating in-app
-  pill is gone: iOS never shows an app's own activity while it is in front,
-  and the pill imitated it over the app's screens. DEBUG
-  HOOPWISE_LIVE_ACTIVITY_DEMO=1 arms a scratch class starting in 60s to watch
-  the switch (background the app at once).
+- LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
+  on screen for a class that is LIVE (counts down the time left) or that
+  starts within 10 minutes (counts down to the start). Nothing else.
+  `SessionLiveActivityManager.reconcile(targets:)` is THE writer: the
+  monitor's 30s tick passes `SessionStatusMonitor.liveActivityTargets`
+  (scheduled/in-progress, not skipped, not over, allowed by
+  SessionSeries.allowsLiveActivity, within 12h, max 4) and every other
+  activity is ended with .immediate dismissal — including one an older
+  build armed hours early (that was the frozen "1:30:00"). Later classes are
+  SCHEDULED with iOS 26's `Activity.request(…, start:)` at T−10, so they
+  appear with the app closed (verified in the simulator: active at exactly
+  T−10). The upcoming → live flip is the stale-date redraw at the start
+  (ActivityClock in the widget decides by render time; verified on time).
+  iOS gives no way to END an activity at a set time without a push server:
+  at the class end it holds 0:00 until a BGAppRefresh
+  (`com.hoopwise.liveactivity.cleanup`, earliest = the class end, runs
+  `endFinished`, which needs no data) or the next app run removes it. iOS
+  decides when that refresh runs; it is usually minutes, not guaranteed.
+  Simulated launch via lldb `_simulateLaunchForTaskWithIdentifier` removed
+  it. Completing the class in the app removes it at once. Scheduled starts
+  carry an alert ("Class in 10 minutes"). DEBUG
+  HOOPWISE_LIVE_ACTIVITY_DEMO=<seconds> runs a scratch 5-min class through
+  the same reconcile (1 = 60s; 660 shows the scheduled T−10 appearance).
+  Covered by LiveActivityTargetsTests. The floating in-app pill is gone: iOS
+  never shows an app's own activity while it is in front.
 - WHAT THE FREEZE PROTECTS (clarified August 2026, not a new exception):
   the iOS UI SURFACE — what renders and reads on screen. Rewiring the
   plumbing BEHIND that interface to a shared service is permitted, because

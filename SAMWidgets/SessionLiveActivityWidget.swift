@@ -20,15 +20,16 @@ import ActivityKit
 /// the run (current phase, drill name, attendee count), not for time.
 struct SessionLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
-        // One layout, before and during the class (October 2026, Luther: no
-        // countdown to the start — just the session time). An activity armed
-        // ahead of the class shows the full length frozen; `timerInterval`
-        // starts counting down by itself at startTime, with no redraw needed.
+        // Two moments only (October 2026, Luther): the 10 minutes before a
+        // class count down to its start, and the class itself counts down
+        // what is left. The manager sets the stale date to the start, so iOS
+        // redraws there and `ActivityClock` flips from one to the other.
         ActivityConfiguration(for: SessionActivityAttributes.self) { context in
             SessionLiveActivityLockScreenView(context: context)
         } dynamicIsland: { context in
             let accent = Color(hex: context.attributes.accentColorHex)
-            let interval = context.attributes.startTime...context.attributes.endTime
+            let clock = ActivityClock(context.attributes)
+            let interval = clock.interval
 
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -58,7 +59,7 @@ struct SessionLiveActivityWidget: Widget {
                             .monospacedDigit()
                             .foregroundColor(.white)
                             .multilineTextAlignment(.trailing)
-                        Text("remaining")
+                        Text(clock.caption)
                             .font(.system(size: 10))
                             .foregroundColor(.white.opacity(0.7))
                     }
@@ -120,7 +121,8 @@ struct SessionLiveActivityLockScreenView: View {
 
     var body: some View {
         let accent = Color(hex: context.attributes.accentColorHex)
-        let interval = context.attributes.startTime...context.attributes.endTime
+        let clock = ActivityClock(context.attributes)
+        let interval = clock.interval
 
         return VStack(spacing: 12) {
             HStack {
@@ -155,7 +157,7 @@ struct SessionLiveActivityLockScreenView: View {
                         .monospacedDigit()
                         .foregroundColor(.white)
                         .multilineTextAlignment(.trailing)
-                    Text("remaining")
+                    Text(clock.caption)
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -225,6 +227,26 @@ struct SessionLiveActivityLockScreenView: View {
                 endPoint: .bottomTrailing
             )
         )
+    }
+}
+
+// MARK: - Clock
+/// What the timers count, decided at render time: before the start, the
+/// (up to) 10 minutes to it; from the start, the time left in the class.
+struct ActivityClock {
+    let interval: ClosedRange<Date>
+    let caption: String
+
+    init(_ attributes: SessionActivityAttributes, now: Date = Date()) {
+        let start = attributes.startTime
+        let isChinese = Locale.preferredLanguages.first?.hasPrefix("zh") == true
+        if now < start {
+            interval = min(now, start.addingTimeInterval(-600))...start
+            caption = isChinese ? "后开始" : "starts in"
+        } else {
+            interval = start...max(start, attributes.endTime)
+            caption = isChinese ? "剩余" : "remaining"
+        }
     }
 }
 

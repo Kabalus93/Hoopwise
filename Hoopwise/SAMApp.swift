@@ -98,6 +98,13 @@ struct SAMApp: App {
                 )
             }
         }
+        #if os(iOS)
+        // Requested by SessionLiveActivityManager for a class's end time: a
+        // finished class's Live Activity is removed without opening the app.
+        .backgroundTask(.appRefresh(SessionLiveActivityManager.cleanupTaskId)) {
+            await MainActor.run { SessionLiveActivityManager.shared.endFinished() }
+        }
+        #endif
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:
@@ -251,22 +258,23 @@ struct SAMApp: App {
     }
 
     #if os(iOS)
-    /// HOOPWISE_LIVE_ACTIVITY_DEMO=1: arms the Live Activity for a scratch
-    /// class starting in 60 seconds (never saved — a DEBUG scratch record, the
-    /// sanctioned exception to SessionCreation-only construction), so the
-    /// upcoming → live switch at the stale date can be watched without
-    /// waiting for a real class. Background the app at once: a foreground tick
-    /// of the monitor would end an activity whose session is not in the store.
+    /// HOOPWISE_LIVE_ACTIVITY_DEMO=<seconds>: a scratch 5-minute class
+    /// starting that many seconds from now (never saved — a DEBUG scratch
+    /// record, the sanctioned exception to SessionCreation-only construction),
+    /// put through the same reconcile as real classes. "1" means 60 s (inside
+    /// the 10-minute lead: "starts in" at once); 660 shows the scheduled
+    /// start appearing a minute later. Background the app at once.
     @MainActor
     private func liveActivityDemoIfRequested() {
-        guard ProcessInfo.processInfo.environment["HOOPWISE_LIVE_ACTIVITY_DEMO"] == "1" else { return }
+        guard let raw = ProcessInfo.processInfo.environment["HOOPWISE_LIVE_ACTIVITY_DEMO"],
+              let value = Double(raw) else { return }
         SessionStatusMonitor.debugKeepDemoActivity = true
-        let start = Date().addingTimeInterval(60)
+        let start = Date().addingTimeInterval(value == 1 ? 60 : value)
         let scratch = SessionEvent(programId: nil, title: "Demo · U10", date: start,
                                    startTime: start, endTime: start.addingTimeInterval(300),
                                    status: .scheduled, attendeeIds: [])
-        SessionLiveActivityManager.shared.armActivity(for: scratch, programName: "Demo",
-                                                      accentColorHex: "#007AFF", drillNames: [:])
+        SessionLiveActivityManager.shared.reconcile(
+            targets: [.init(session: scratch, programName: "Demo", accentColorHex: "#007AFF")])
     }
     #endif
 

@@ -80,12 +80,11 @@ class SessionStatusMonitor: ObservableObject {
            sessions.first(where: { $0.id == running.id })?.status != .inProgress {
             LiveSessionEngine.shared.end()
         }
+        reconcileLiveActivities(sessions: sessions, dataManager: dataManager, now: now)
         if let live = sessions.first(where: {
             $0.status == .inProgress && $0.startTime <= now && now < $0.endTime
         }) {
             startInAppEngine(for: live, dataManager: dataManager)
-        } else {
-            armNextLiveActivity(sessions: sessions, dataManager: dataManager, now: now)
         }
 
         // Reconcile scheduled local notifications with the current set of
@@ -97,47 +96,51 @@ class SessionStatusMonitor: ObservableObject {
 
     // MARK: - Live Activity Integration
     #if os(iOS)
-    /// Arms the Lock Screen / Dynamic Island activity for the next class that
-    /// ENDS within 8 hours (Apple's limit for one activity), so it turns live
-    /// at its start time even if the app is not opened then. Ends an activity
-    /// whose class is over, completed, skipped or cancelled.
+    /// Which classes get a Lock Screen / Dynamic Island activity (October
+    /// 2026, Luther): one that is LIVE, or one starting within 10 minutes.
+    /// Classes starting later today are scheduled — iOS puts them up at their
+    /// T−10 even with the app closed. Everything else is taken down.
     #if DEBUG
     /// Set by the HOOPWISE_LIVE_ACTIVITY_DEMO hook: its scratch class is not
-    /// in the store, so the cleanup below would end it before it starts.
+    /// in the store, so reconciliation would take it down.
     static var debugKeepDemoActivity = false
     #endif
 
-    private func armNextLiveActivity(sessions: [SessionEvent], dataManager: DataManager, now: Date) {
+    /// How far ahead classes are scheduled, and at most how many — iOS limits
+    /// how many activities one app may hold.
+    private static let scheduleHorizon: TimeInterval = 12 * 3600
+    private static let maxScheduled = 4
+
+    static func liveActivityTargets(sessions: [SessionEvent], now: Date,
+                                    allows: (SessionEvent) -> Bool) -> [SessionEvent] {
+        let horizon = now.addingTimeInterval(scheduleHorizon)
+        return sessions
+            .filter { ($0.status == .scheduled || $0.status == .inProgress)
+                && !SessionLifecycle.didNotHappen($0)
+                && $0.endTime > now
+                && $0.startTime.addingTimeInterval(-SessionLiveActivityManager.leadTime) <= horizon
+                && allows($0) }
+            .sorted { $0.startTime < $1.startTime }
+            .prefix(maxScheduled)
+            .map { $0 }
+    }
+
+    private func reconcileLiveActivities(sessions: [SessionEvent], dataManager: DataManager, now: Date) {
         #if DEBUG
         if Self.debugKeepDemoActivity { return }
         #endif
-        let manager = SessionLiveActivityManager.shared
-        if let shownId = manager.activeSessionId {
-            let shown = sessions.first { $0.id == shownId }
-            let over = shown.map {
-                $0.endTime < now || $0.status == .completed || SessionLifecycle.didNotHappen($0)
-            } ?? true
-            if over { manager.endActivity(showAttendanceReminder: false) } else { return }
+        let targets = Self.liveActivityTargets(sessions: sessions, now: now) {
+            SessionSeries.allowsLiveActivity($0,
+                                             programs: dataManager.programs,
+                                             contracts: dataManager.contracts,
+                                             privateSessionsEnabled: SessionSeries.privateLiveActivityEnabled)
+        }.map { session -> SessionLiveActivityManager.Target in
+            let program = session.programId.flatMap { id in dataManager.programs.first { $0.id == id } }
+            return .init(session: session,
+                         programName: program?.resolvedDisplayName(in: dataManager.programs) ?? session.title,
+                         accentColorHex: program?.colorHex ?? "#FF6B35")
         }
-
-        let horizon = now.addingTimeInterval(8 * 3600)
-        guard let next = sessions
-            .filter({ $0.status == .scheduled && $0.startTime > now && $0.endTime <= horizon })
-            .min(by: { $0.startTime < $1.startTime }),
-              SessionSeries.allowsLiveActivity(
-                next,
-                programs: dataManager.programs,
-                contracts: dataManager.contracts,
-                privateSessionsEnabled: SessionSeries.privateLiveActivityEnabled)
-        else { return }
-
-        let program = next.programId.flatMap { id in dataManager.programs.first { $0.id == id } }
-        let drillNames = Dictionary(dataManager.drills.map { ($0.id, $0.name) },
-                                    uniquingKeysWith: { first, _ in first })
-        manager.armActivity(for: next,
-                            programName: program?.resolvedDisplayName(in: dataManager.programs) ?? next.title,
-                            accentColorHex: program?.colorHex ?? "#FF6B35",
-                            drillNames: drillNames)
+        SessionLiveActivityManager.shared.reconcile(targets: targets, now: now)
     }
 
     /// Bring up the in-app `LiveSessionEngine` so the persistent pill at

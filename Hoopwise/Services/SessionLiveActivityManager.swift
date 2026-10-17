@@ -4,6 +4,7 @@ import Combine
 
 #if os(iOS)
 import ActivityKit
+import BackgroundTasks
 
 // SessionActivityAttributes and SessionPhase are defined in Models/SessionActivityAttributes.swift
 // That file must be added to BOTH the main app and widget extension targets
@@ -23,7 +24,143 @@ class SessionLiveActivityManager: ObservableObject {
     
     private init() {}
     
-    // MARK: - Start Live Activity
+    // MARK: - When an activity is on screen (October 2026, Luther)
+    //
+    // An activity exists for exactly two kinds of class:
+    //   1. a class that is LIVE — it counts down the time left;
+    //   2. a class starting within `leadTime` (10 min) — it counts down to
+    //      the start, then switches to (1) by itself.
+    // Anything else must not be on screen. iOS 26 schedules the start
+    // (`request(…, start:)`), so (2) appears with the app closed; the switch
+    // to (1) is the stale-date redraw at the start time. iOS gives an app no
+    // way to END an activity at a set time, so a class that ends while the
+    // app is closed is cleared on the next app run or background refresh
+    // (`endFinished`, scheduled for the end time).
+    static let leadTime: TimeInterval = 10 * 60
+
+    /// One class that should have an activity now or at its lead time.
+    struct Target {
+        let session: SessionEvent
+        let programName: String
+        let accentColorHex: String
+    }
+
+    /// Every activity this app has, including scheduled (pending) ones.
+    private var allActivities: [Activity<SessionActivityAttributes>] {
+        Activity<SessionActivityAttributes>.activities.filter {
+            $0.activityState == .pending || $0.activityState == .active || $0.activityState == .stale
+        }
+    }
+
+    /// THE reconciliation. Makes the app's activities exactly `targets`:
+    /// ends every other one at once, replaces one that went up too early
+    /// (an older build armed classes hours ahead, frozen at full length), and
+    /// requests or schedules the missing ones.
+    func reconcile(targets: [Target], now: Date = Date()) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let wanted = Dictionary(targets.map { ($0.session.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        for activity in allActivities {
+            let id = activity.attributes.sessionId
+            let tooEarly = activity.activityState != .pending
+                && now < activity.attributes.startTime.addingTimeInterval(-Self.leadTime)
+            if wanted[id] == nil || tooEarly || activity.attributes.endTime <= now {
+                dismiss(activity)
+            }
+        }
+
+        let kept = Set(allActivities.map(\.attributes.sessionId))
+        for target in targets where !kept.contains(target.session.id) {
+            request(target, now: now)
+        }
+        scheduleCleanup(at: targets.map(\.session.endTime).min())
+    }
+
+    /// Ends every activity whose class is over. Needs no data — the end
+    /// time travels in the attributes — so it can run in a background
+    /// refresh before anything is loaded.
+    func endFinished(now: Date = Date()) {
+        for activity in allActivities where activity.attributes.endTime <= now {
+            dismiss(activity)
+        }
+    }
+
+    private func dismiss(_ activity: Activity<SessionActivityAttributes>) {
+        if currentActivity?.id == activity.id {
+            stopUpdateTimer()
+            currentActivity = nil
+            isActivityActive = false
+        }
+        Task { await activity.end(nil, dismissalPolicy: .immediate) }
+    }
+
+    private func attributes(for target: Target) -> SessionActivityAttributes {
+        SessionActivityAttributes(
+            sessionId: target.session.id,
+            sessionTitle: target.session.title,
+            programName: target.programName,
+            startTime: target.session.startTime,
+            endTime: target.session.endTime,
+            location: target.session.location,
+            accentColorHex: target.accentColorHex
+        )
+    }
+
+    /// Redraw at the start (upcoming → live), and once more at the end.
+    private func content(for session: SessionEvent, now: Date) -> ActivityContent<SessionActivityAttributes.ContentState> {
+        ActivityContent(state: calculateContentState(for: session),
+                        staleDate: now < session.startTime ? session.startTime : session.endTime)
+    }
+
+    @discardableResult
+    private func request(_ target: Target, now: Date) -> Activity<SessionActivityAttributes>? {
+        let session = target.session
+        let showFrom = session.startTime.addingTimeInterval(-Self.leadTime)
+        do {
+            let activity: Activity<SessionActivityAttributes>
+            if now >= showFrom {
+                activity = try Activity.request(attributes: attributes(for: target),
+                                                content: content(for: session, now: now),
+                                                pushType: nil)
+            } else {
+                let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+                let alert = AlertConfiguration(
+                    title: LocalizedStringResource(stringLiteral: isChinese ? "10 分钟后上课" : "Class in 10 minutes"),
+                    body: LocalizedStringResource(stringLiteral: target.programName),
+                    sound: .default)
+                activity = try Activity.request(attributes: attributes(for: target),
+                                                content: content(for: session, now: showFrom),
+                                                pushType: nil,
+                                                style: .standard,
+                                                alertConfiguration: alert,
+                                                start: showFrom)
+            }
+            debugLog("✅ Live Activity \(now >= showFrom ? "started" : "scheduled for \(showFrom)") — \(session.title)")
+            return activity
+        } catch {
+            debugLog("❌ Live Activity request failed: \(error)")
+            return nil
+        }
+    }
+
+    // MARK: - Background cleanup at the class's end
+    static let cleanupTaskId = "com.hoopwise.liveactivity.cleanup"
+
+    /// Asks iOS for a background refresh at the earliest class end so a
+    /// finished class's activity is removed without opening the app. iOS
+    /// decides when it actually runs (usually within minutes, never early).
+    private func scheduleCleanup(at date: Date?) {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.cleanupTaskId)
+        guard let date else { return }
+        let request = BGAppRefreshTaskRequest(identifier: Self.cleanupTaskId)
+        request.earliestBeginDate = date
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    // MARK: - The live class (in-app engine)
+    /// Called by the in-app engine for the class running now: makes sure its
+    /// activity exists and keeps phase / drill / headcount current while the
+    /// app runs.
     func startActivity(
         for session: SessionEvent,
         programName: String,
@@ -34,144 +171,40 @@ class SessionLiveActivityManager: ObservableObject {
             debugLog("⚠️ Live Activities are not enabled")
             return
         }
-        
-        adoptRunningActivity()
-        // Already showing this session (armed ahead of time): keep that
-        // activity and bring it up to date instead of starting a second one.
-        if let activity = currentActivity, activity.attributes.sessionId == session.id {
-            self.currentSession = session
-            self.curriculum = session.curriculum
-            self.drillNames = drillNames
-            updateActivity()
-            startUpdateTimer()
-            return
-        }
-
-        // End any existing activity first
-        if currentActivity != nil {
-            endActivity()
-        }
-        
         self.currentSession = session
         self.curriculum = session.curriculum
         self.drillNames = drillNames
-        
-        let attributes = SessionActivityAttributes(
-            sessionId: session.id,
-            sessionTitle: session.title,
-            programName: programName,
-            startTime: session.startTime,
-            endTime: session.endTime,
-            location: session.location,
-            accentColorHex: accentColorHex
-        )
-        
-        let initialState = calculateContentState(for: session)
 
-        do {
-            let activity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: initialState, staleDate: nil),
-                pushType: nil
-            )
-            
-            currentActivity = activity
-            isActivityActive = true
-            
-            // While the app runs, refresh phase / drill / headcount every 30s.
-            startUpdateTimer()
-            
-            debugLog("✅ Live Activity started for session: \(session.title)")
-        } catch {
-            debugLog("❌ Failed to start Live Activity: \(error)")
-        }
+        let existing = allActivities.first { $0.attributes.sessionId == session.id }
+        let activity = existing ?? request(Target(session: session, programName: programName,
+                                                   accentColorHex: accentColorHex), now: Date())
+        guard let activity else { return }
+        currentActivity = activity
+        isActivityActive = true
+        updateActivity()
+        stopUpdateTimer()
+        startUpdateTimer()
     }
     
     // MARK: - Update Live Activity
     func updateActivity() {
         guard let activity = currentActivity,
               let session = currentSession else { return }
-        
-        let newState = calculateContentState(for: session)
-
-        Task {
-            await activity.update(
-                ActivityContent(state: newState, staleDate: nil)
-            )
-        }
-    }
-    
-    /// The activity this app started in an earlier launch (iOS keeps it
-    /// alive across launches; the reference does not survive).
-    private func adoptRunningActivity() {
-        guard currentActivity == nil,
-              let running = Activity<SessionActivityAttributes>.activities.first(where: {
-                  $0.activityState == .active || $0.activityState == .stale
-              }) else { return }
-        currentActivity = running
-        isActivityActive = true
+        let newContent = content(for: session, now: Date())
+        Task { await activity.update(newContent) }
     }
 
-    /// The session the running activity shows, if any.
+    /// The session the live activity shows, if any.
     var activeSessionId: UUID? {
-        adoptRunningActivity()
-        return currentActivity?.attributes.sessionId
-    }
-
-    /// Starts the Live Activity AHEAD of a class (October 2026, Luther: the
-    /// session should start even when the app is not opened). iOS cannot run
-    /// app code at an exact time and there is no push server, but the
-    /// widget's timers are keyed to the class's start…end: until the start
-    /// they show the full session length, and at the start they begin
-    /// counting down on the Lock Screen and in the Dynamic Island with the
-    /// app closed. Apple keeps an activity at most 8 hours, so only classes
-    /// ENDING within 8 hours are armed; the monitor re-checks whenever the
-    /// app runs.
-    func armActivity(for session: SessionEvent, programName: String,
-                     accentColorHex: String, drillNames: [UUID: String]) {
-        adoptRunningActivity()
-        if currentActivity?.attributes.sessionId == session.id { return }
-        startActivity(for: session, programName: programName,
-                      accentColorHex: accentColorHex, drillNames: drillNames)
+        currentActivity?.attributes.sessionId
     }
 
     // MARK: - End Live Activity
+    /// Ends the live class's activity — it leaves the screen at once.
     func endActivity(showAttendanceReminder: Bool = true) {
-        adoptRunningActivity()
         guard let activity = currentActivity else { return }
-        
-        stopUpdateTimer()
-        
-        let finalState = SessionActivityAttributes.ContentState(
-            elapsedMinutes: currentSession?.durationMinutes ?? 0,
-            totalMinutes: currentSession?.durationMinutes ?? 0,
-            currentPhase: .completed,
-            currentDrillName: nil,
-            progress: 1.0,
-            attendeeCount: currentSession?.actualAttendeeIds.count ?? 0
-        )
-        
-        // An activity armed for a class that has NOT started (replaced,
-        // cancelled, rescheduled) must vanish, not linger on the Lock Screen
-        // for hours reading "Completed" for a class that never ran.
-        let neverStarted = Date() < activity.attributes.startTime
-        Task {
-            await activity.end(
-                ActivityContent(state: finalState, staleDate: nil),
-                dismissalPolicy: neverStarted ? .immediate : .default
-            )
-            
-            await MainActor.run {
-                currentActivity = nil
-                isActivityActive = false
-                
-                // Schedule attendance reminder notification
-                if showAttendanceReminder {
-                    scheduleAttendanceReminder()
-                }
-            }
-        }
-        
+        dismiss(activity)
+        if showAttendanceReminder { scheduleAttendanceReminder() }
         debugLog("✅ Live Activity ended")
     }
     
@@ -306,7 +339,7 @@ class SessionLiveActivityManager: ObservableObject {
         
         Task {
             await currentActivity?.update(
-                ActivityContent(state: state, staleDate: nil)
+                ActivityContent(state: state, staleDate: currentActivity?.content.staleDate)
             )
         }
     }
