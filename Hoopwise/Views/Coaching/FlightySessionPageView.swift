@@ -5145,6 +5145,9 @@ struct LiveGameScoringView: View {
             }
         }()
         return HStack(spacing: 2) { Text("\(value)").font(.system(size: 13, weight: .bold)).foregroundStyle(.primary); Text(localizedLabel).font(.system(size: 10)).foregroundStyle(.secondary) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("stat.\(label)")
+            .accessibilityValue("\(value)")
     }
     private func statButton(_ label: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -5168,19 +5171,9 @@ struct LiveGameScoringView: View {
             default: return label
             }
         }()
-        return Button(action: add) {
-            Text(localizedLabel)
-                .font(.caption.bold())
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.roundedRectangle(radius: 8))
-        .controlSize(.regular)
-        .tint(color)
-        .sensoryFeedback(.impact(weight: .light), trigger: false)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5).onEnded { _ in remove() }
-        )
+        // One touch, one action: StatPressButton (tap adds, hold removes).
+        // The Button + simultaneous long press here re-added on release.
+        return StatPressButton(label: localizedLabel, color: color, add: add, remove: remove)
     }
     private func toggleTimer() {
         isTimerRunning.toggle()

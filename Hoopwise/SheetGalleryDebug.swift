@@ -201,6 +201,10 @@ enum SheetGalleryDebug {
             // What Complete Session opens.
             RollCallPhotoSheet(programColor: .accentColor, reason: .completed) { _ in }
 
+        case "liveGame":
+            // A live 5-on-5 game over the demo roster (scratch, never saved).
+            LiveGameGalleryHost(students: Array(dm.students.prefix(10)))
+
         case "athletePicker":
             // Add Athlete as a session opens it (banner, sort chips, list).
             AthletePickerSheet(
@@ -294,6 +298,26 @@ enum SheetGalleryDebug {
             .font(.system(size: 15, design: .monospaced))
             .foregroundStyle(.red)
             .padding()
+    }
+}
+
+/// Holds a scratch game for the "liveGame" shot: two teams of up to five,
+/// already in progress. Nothing is written to the store.
+private struct LiveGameGalleryHost: View {
+    let students: [Student]
+    @State private var game: SessionGame
+
+    init(students: [Student]) {
+        self.students = students
+        let ids = students.map(\.id)
+        let home = GameTeam(name: "Blue", colorHex: "#007AFF", playerIds: Array(ids.prefix(5)))
+        let away = GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: Array(ids.dropFirst(5).prefix(5)))
+        _game = State(initialValue: SessionGame(sessionId: UUID(), teams: [home, away],
+                                                status: .inProgress, startedAt: Date()))
+    }
+
+    var body: some View {
+        LiveGameScoringView(game: $game, students: students, allGamesInSession: [game], onSave: {})
     }
 }
 #endif
