@@ -201,9 +201,33 @@ enum SheetGalleryDebug {
             // What Complete Session opens.
             RollCallPhotoSheet(programColor: .accentColor, reason: .completed) { _ in }
 
+        case "rollCallOverlay":
+            // The roll-call photo's watermark over a stand-in photo
+            // (a gym-toned gradient, 1024×768 like PhotoCaptureManager's).
+            let photo = UIGraphicsImageRenderer(size: CGSize(width: 1024, height: 768)).image { ctx in
+                let colors = [UIColor(red: 0.55, green: 0.42, blue: 0.30, alpha: 1).cgColor,
+                              UIColor(red: 0.25, green: 0.22, blue: 0.20, alpha: 1).cgColor] as CFArray
+                let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: nil)!
+                ctx.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: 768), options: [])
+            }
+            ScrollView {
+                AttendanceWatermarkOverlay(photo: photo, coachName: "王聪", weekdayText: "星期六",
+                                           dateText: "2026年10月17日 13:30", location: "酷迅篮球馆",
+                                           presentCount: 7,
+                                           nameList: "王诗玲、小辣椒、张梓晨、虞鑫晨、沈思梵、汪文轩、任逸冕")
+                    .scaleEffect(0.38, anchor: .topLeading)
+                    .frame(width: 1024 * 0.38, height: 768 * 0.38, alignment: .topLeading)
+                    .padding()
+            }
+
         case "liveGame":
             // A live 5-on-5 game over the demo roster (scratch, never saved).
-            LiveGameGalleryHost(students: Array(dm.students.prefix(10)))
+            // The demo roster has five; the second team is scratch players
+            // (never saved) so both teams and Chinese names can be seen.
+            let scratch = [("Wáng Shī Líng", "王诗玲"), ("Zhāng Zǐ Chén", "张梓晨"), ("Shěn Sī Fàn", "沈思梵"),
+                           ("Wāng Wén Xuān", "汪文轩"), ("Rèn Yì Miǎn", "任逸冕")]
+                .map { Student(name: $0.0, chineseName: $0.1) }
+            LiveGameGalleryHost(students: Array(dm.students.prefix(5)) + scratch)
 
         case "athletePicker":
             // Add Athlete as a session opens it (banner, sort chips, list).

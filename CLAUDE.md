@@ -270,6 +270,23 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   NameIndex collation are unchanged. Pinned by StudentNameLinesTests.
 - The session roster's right-to-left swipe (Clear, Refund) was removed the
   same month at Luther's request — see "Attendance UI".
+- TWELFTH sanctioned exception (October 2026, Luther's request, field use
+  during games): the iPhone live-game screen (LiveGameScoringView's iPhone
+  branch → `liveScoreboard` + `liveEntry` + Views/Coaching/LiveTeamPanel.swift).
+  ONE team at a time; the scores are the team switcher (rows slide). Every
+  player on screen, no scrolling: photo, pinyin + Chinese name (Chinese first
+  in Chinese), stats, points. The ROW is the points target — tap = basket at
+  the strip's value (+2 default, +1/+3 one tap, back to +2 after a basket);
+  press and DRAG onto a teammate's row = basket + assist (`AssistDrop`), a
+  line follows the finger, release elsewhere = basket only. REB / STL / BLK
+  are fixed colour-coded StatPressButtons (tap add, hold removes one).
+  Points are corrected with Undo (`GameStatAction` log, view-local) — a hold
+  on the row would collide with starting a drag. iPad side-by-side and
+  Battle Royal are unchanged. Every stat button goes through
+  `StatPressButton` + `StatPressGate`: the old Button + simultaneous long
+  press removed on hold and RE-ADDED on release. Tests: StatPressGateTests,
+  LiveGameEntryTests, LiveGameStatUITests, LiveGameAssistUITests
+  (HOOPWISE_SHOT=liveGame).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

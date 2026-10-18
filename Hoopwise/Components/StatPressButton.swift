@@ -37,6 +37,10 @@ struct StatPressButton: View {
     let color: Color
     let add: () -> Void
     let remove: () -> Void
+    /// Grow to the height the parent offers (the live panel's tall rows)
+    /// instead of the 34pt strip button.
+    var fillsHeight = false
+    var font: Font = .caption.bold()
 
     @State private var gate = StatPressGate()
     @State private var addTick = 0
@@ -44,8 +48,8 @@ struct StatPressButton: View {
 
     var body: some View {
         Text(label)
-            .font(.caption.bold())
-            .frame(maxWidth: .infinity, minHeight: 34)
+            .font(font)
+            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: fillsHeight ? .infinity : nil)
             .foregroundStyle(color)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
             .contentShape(RoundedRectangle(cornerRadius: 8))

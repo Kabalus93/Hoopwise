@@ -16,21 +16,21 @@ final class LiveGameStatUITests: XCTestCase {
         app.launch()
     }
 
-    private func points() -> String {
-        let label = app.descendants(matching: .any).matching(identifier: "stat.PTS").firstMatch
-        XCTAssertTrue(label.waitForExistence(timeout: 20), "no player row")
-        return label.value as? String ?? ""
+    private var firstRow: XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "live.row").firstMatch
     }
 
-    func testHoldRemovesExactlyOnePointAndReleaseDoesNotReAdd() {
-        XCTAssertEqual(points(), "0")
-        let plusTwo = app.descendants(matching: .any).matching(NSPredicate(format: "label == '+2'")).firstMatch
-        XCTAssertTrue(plusTwo.waitForExistence(timeout: 5))
-        plusTwo.tap()
-        plusTwo.tap()
-        XCTAssertEqual(points(), "4", "two taps = two baskets")
-        plusTwo.press(forDuration: 1.0)
+    /// Hold-to-remove lives on REB / STL / BLK (points are undone with Undo).
+    func testHoldRemovesExactlyOneAndReleaseDoesNotReAdd() {
+        XCTAssertTrue(firstRow.waitForExistence(timeout: 20), "no player row")
+        let reb = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'REB'")).firstMatch
+        XCTAssertTrue(reb.waitForExistence(timeout: 5))
+        reb.tap()
+        reb.tap()
+        XCTAssertTrue(firstRow.label.contains("2 REB"), firstRow.label)
+        reb.press(forDuration: 1.0)
         sleep(1)                                   // let any stray release tap land
-        XCTAssertEqual(points(), "2", "one hold removes one basket, and nothing comes back")
+        XCTAssertTrue(firstRow.label.contains("1 REB"),
+                      "one hold removes one, and nothing comes back: \(firstRow.label)")
     }
 }

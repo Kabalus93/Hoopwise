@@ -4447,6 +4447,11 @@ struct LiveGameScoringView: View {
     @State private var selectedTeamIndex: Int = 0
     @State private var headerCollapsed = false
     @State private var showingRecap = false
+    /// Value of the next basket scored by tapping a row; back to 2 after each.
+    @State private var basketValue = 2
+    /// Every stat logged on this screen, newest last — what Undo reverses.
+    @State private var actionLog: [GameStatAction] = []
+    @State private var undoTick = 0
     /// Set the moment the countdown reaches 0 so we don't fire the alarm
     /// every tick afterward. Reset by `resetTimer()` and on round transitions.
     @State private var hasFiredAlarm = false
@@ -4504,10 +4509,10 @@ struct LiveGameScoringView: View {
                     compactGameHeader
                     sideBySideTeamsView
                 } else {
-                    // iPhone: Tab-based team switching
-                    compactGameHeader
-                    teamTabs
-                    playersList
+                    // iPhone: one team at a time, all its players on screen
+                    // (October 2026 field redesign — see LiveTeamPanel).
+                    liveScoreboard
+                    liveEntry
                 }
             }
             .background(Color(.systemGroupedBackground))
@@ -4830,6 +4835,194 @@ struct LiveGameScoringView: View {
         }.padding(24).background(Color(.secondarySystemGroupedBackground))
     }
     
+    // MARK: - Live entry (iPhone)
+
+    /// Clock + the two scores. The scores ARE the team switcher: tap the
+    /// other team and its players slide in.
+    private var liveScoreboard: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Text(formattedClock)
+                    .font(.system(size: 30, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(clockTint)
+                    .contentTransition(.numericText())
+                Spacer()
+                if game.status != .completed {
+                    Button(action: resetTimer) {
+                        Image(systemName: "arrow.counterclockwise").font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered).buttonBorderShape(.circle).tint(.secondary)
+                    Button(action: toggleTimer) {
+                        Image(systemName: isTimerRunning ? "pause.fill" : "play.fill")
+                            .font(.system(size: 18, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .frame(width: 46, height: 46)
+                            .background(Circle().fill(isTimerRunning ? Color.orange : Color.green))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isTimerRunning ? "Pause timer" : "Start timer")
+                }
+            }
+            HStack(spacing: 8) {
+                ForEach(Array(activeTeamsForScoring.enumerated()), id: \.element.id) { index, team in
+                    teamScoreSwitch(team: team, index: index)
+                }
+            }
+            if !game.waitingTeams.isEmpty {
+                HStack(spacing: 6) {
+                    Text(isChinese ? "候场" : "Next").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(game.waitingTeams) { team in
+                        HStack(spacing: 4) {
+                            Circle().fill(Color(hex: team.colorHex)).frame(width: 12, height: 12)
+                            Text(GameTeam.localizedColorName(team.name)).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial)
+        .sensoryFeedback(.selection, trigger: selectedTeamIndex)
+    }
+
+    private func teamScoreSwitch(team: GameTeam, index: Int) -> some View {
+        let selected = selectedTeamIndex == index
+        let color = team.colorHex == "#F5F5F5" ? Color.gray : Color(hex: team.colorHex)
+        return Button {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { selectedTeamIndex = index }
+        } label: {
+            HStack(spacing: 8) {
+                Circle().fill(Color(hex: team.colorHex)).frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.2), lineWidth: 0.5))
+                Text(GameTeam.localizedColorName(team.name))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(selected ? .primary : .secondary)
+                Spacer(minLength: 4)
+                Text("\(game.score(for: team.id))")
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(color)
+                    .contentTransition(.numericText(value: Double(game.score(for: team.id))))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 12).fill(color.opacity(selected ? 0.18 : 0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? color : .clear, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("live.team.\(index)")
+    }
+
+    /// Basket-value strip, the selected team's players, and the last action.
+    @ViewBuilder
+    private var liveEntry: some View {
+        let teams = activeTeamsForScoring
+        if selectedTeamIndex < teams.count {
+            let team = teams[selectedTeamIndex]
+            VStack(spacing: 10) {
+                if game.status != .completed {
+                    basketValueStrip
+                }
+                LiveTeamPanel(game: $game, team: team, students: students,
+                              pointValue: basketValue, onAction: log)
+                    .id(team.id)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: selectedTeamIndex == 0 ? .leading : .trailing),
+                        removal: .move(edge: selectedTeamIndex == 0 ? .trailing : .leading)))
+                    .allowsHitTesting(game.status != .completed)
+                lastActionBar
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .clipped()
+        }
+    }
+
+    private var basketValueStrip: some View {
+        HStack(spacing: 6) {
+            ForEach([2, 1, 3], id: \.self) { value in
+                let label = value == 1 ? (isChinese ? "+1 罚球" : "+1 FT")
+                    : value == 2 ? (isChinese ? "投篮 +2" : "+2 basket") : "+3"
+                Button {
+                    basketValue = value
+                } label: {
+                    Text(label)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .foregroundStyle(basketValue == value ? Color.white : Color.primary)
+                        .background(RoundedRectangle(cornerRadius: 10)
+                            .fill(basketValue == value ? Color.accentColor : Color(.tertiarySystemFill)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("live.value.\(value)")
+            }
+        }
+        .sensoryFeedback(.selection, trigger: basketValue)
+    }
+
+    private var lastActionBar: some View {
+        HStack(spacing: 10) {
+            Text(lastActionText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("live.last")
+            Button(action: undoLast) {
+                Label(isChinese ? "撤销" : "Undo", systemImage: "arrow.uturn.backward")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 40)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .disabled(actionLog.isEmpty)
+            .accessibilityIdentifier("live.undo")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.secondarySystemGroupedBackground)))
+        .sensoryFeedback(.warning, trigger: undoTick)
+    }
+
+    private func name(_ id: UUID) -> String {
+        students.first { $0.id == id }?.primaryDisplayName ?? "—"
+    }
+
+    private var lastActionText: String {
+        guard let last = actionLog.last else {
+            return isChinese ? "点击球员得分 · 按住拖到传球人记助攻" : "Tap a player to score · drag to the passer for an assist"
+        }
+        let who = name(last.playerId)
+        switch last.kind {
+        case .points(let n):
+            let assist = last.assistId.map { isChinese ? " · 助攻 \(name($0))" : " · assist \(name($0))" } ?? ""
+            return "+\(n) \(who)\(assist)"
+        case .rebound: return (isChinese ? "篮板 " : "Rebound ") + who
+        case .steal: return (isChinese ? "抢断 " : "Steal ") + who
+        case .block: return (isChinese ? "盖帽 " : "Block ") + who
+        }
+    }
+
+    private func log(_ action: GameStatAction) {
+        action.apply(to: &game)
+        actionLog.append(action)
+        if case .points = action.kind { basketValue = 2 }
+        onSave()
+    }
+
+    private func undoLast() {
+        guard let last = actionLog.popLast() else { return }
+        last.undo(on: &game)
+        undoTick += 1
+        onSave()
+    }
+
     // Teams currently on court for scoring
     private var activeTeamsForScoring: [GameTeam] {
         game.activeTeams.isEmpty ? game.teams : game.activeTeams
