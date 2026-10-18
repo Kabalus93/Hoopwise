@@ -162,14 +162,16 @@ struct LiveTeamPanel: View {
                 score(student, assist: nil)
             }
 
+            // Rebound is the most frequent, so it is the big one.
             VStack(spacing: 4) {
+                statButton(.rebound, student)
+                    .frame(height: (height - 4) * 0.58)
                 HStack(spacing: 4) {
-                    statButton(.rebound, student)
                     statButton(.steal, student)
+                    statButton(.block, student)
                 }
-                statButton(.block, student)
             }
-            .frame(width: 112, height: height)
+            .frame(width: 118, height: height)
         }
     }
 
@@ -178,21 +180,22 @@ struct LiveTeamPanel: View {
         let parts: [(String, Int)] = [
             (zh ? "板" : "REB", stats?.rebounds ?? 0), (zh ? "助" : "AST", stats?.assists ?? 0),
             (zh ? "断" : "STL", stats?.steals ?? 0), (zh ? "帽" : "BLK", stats?.blocks ?? 0)]
-        return Text(parts.map { "\($0.1) \($0.0)" }.joined(separator: "  "))
+        return Text(parts.map { "\($0.1) \($0.0)" }.joined(separator: " · "))
             .font(.system(size: 11, weight: .medium))
             .monospacedDigit()
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .minimumScaleFactor(0.75)
     }
 
     private func statButton(_ kind: GameStatAction.Kind, _ student: Student) -> some View {
         let zh = LocalizationManager.shared.currentLanguage == .chinese
-        let (label, color): (String, Color) = {
+        let (label, color, icon): (String, Color, String) = {
             switch kind {
-            case .rebound: return (zh ? "篮板" : "REB", .purple)
-            case .steal: return (zh ? "抢断" : "STL", .orange)
-            case .block: return (zh ? "盖帽" : "BLK", .teal)
-            case .points: return ("", .clear)
+            case .rebound: return (zh ? "篮板" : "REB", .purple, "arrow.down.to.line")
+            case .steal: return (zh ? "抢断" : "STL", .orange, "hand.raised.fill")
+            case .block: return (zh ? "盖帽" : "BLK", .teal, "hand.raised.slash.fill")
+            case .points: return ("", .clear, "")
             }
         }()
         let action = GameStatAction(playerId: student.id, teamId: team.id, kind: kind)
@@ -200,7 +203,8 @@ struct LiveTeamPanel: View {
                                add: { onAction(action) },
                                remove: { action.undo(on: &game) },
                                fillsHeight: true,
-                               font: .system(size: 15, weight: .bold))
+                               font: .system(size: kind == .rebound ? 15 : 12, weight: .bold),
+                               icon: icon)
     }
 
     // MARK: Score / assist gesture

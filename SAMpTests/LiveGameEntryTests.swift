@@ -38,3 +38,21 @@ final class LiveGameEntryTests: XCTestCase {
                      "a press that barely moved is a tap")
     }
 }
+
+/// The standard basket value set on the setup page travels with the game.
+final class GameBasketValueTests: XCTestCase {
+
+    func testOlderGamesReadTwoAndTheValueRoundTrips() throws {
+        var game = SessionGame(sessionId: UUID(), basketValue: 3)
+        let data = try JSONEncoder().encode(game)
+        XCTAssertEqual(try JSONDecoder().decode(SessionGame.self, from: data).basketValue, 3)
+
+        var json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        json.removeValue(forKey: "basketValue")                 // a game saved before the field
+        let old = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertEqual(try JSONDecoder().decode(SessionGame.self, from: old).basketValue, 2)
+
+        game = SessionGame(sessionId: UUID(), basketValue: 7)
+        XCTAssertEqual(game.basketValue, 3, "only 1, 2 or 3")
+    }
+}

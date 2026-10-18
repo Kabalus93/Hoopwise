@@ -4159,6 +4159,7 @@ struct SessionGamesTabView: View {
             gameType: type,
             teams: teams,
             durationMinutes: 10,
+            basketValue: UserDefaults.standard.object(forKey: SessionGame.basketValueDefaultsKey) as? Int ?? 2,
             status: .ready
         )
 
@@ -4450,7 +4451,8 @@ struct LiveGameScoringView: View {
     @State private var selectedTeamIndex: Int = 0
     @State private var headerCollapsed = false
     @State private var showingRecap = false
-    /// Value of the next basket scored by tapping a row; back to 2 after each.
+    /// Value of the next basket scored by tapping a row; back to the game's
+    /// standard value (setup page) after each basket.
     @State private var basketValue = 2
     /// Every stat logged on this screen, newest last — what Undo reverses.
     @State private var actionLog: [GameStatAction] = []
@@ -4945,26 +4947,36 @@ struct LiveGameScoringView: View {
         }
     }
 
+    /// +1 / +2 / +3. The game's standard value (set on the setup page) is
+    /// selected by default and marked; any other is for the next basket only.
     private var basketValueStrip: some View {
         HStack(spacing: 6) {
-            ForEach([2, 1, 3], id: \.self) { value in
-                let label = value == 1 ? (isChinese ? "+1 罚球" : "+1 FT")
-                    : value == 2 ? (isChinese ? "投篮 +2" : "+2 basket") : "+3"
+            ForEach(1...3, id: \.self) { value in
+                let selected = basketValue == value
+                let standard = game.basketValue == value
                 Button {
                     basketValue = value
                 } label: {
-                    Text(label)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 34)
-                        .foregroundStyle(basketValue == value ? Color.white : Color.primary)
-                        .background(RoundedRectangle(cornerRadius: 10)
-                            .fill(basketValue == value ? Color.accentColor : Color(.tertiarySystemFill)))
+                    VStack(spacing: 0) {
+                        Text("+\(value)")
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                        if standard {
+                            Text(isChinese ? "标准" : "standard")
+                                .font(.system(size: 9, weight: .semibold))
+                                .opacity(0.8)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 38)
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .background(RoundedRectangle(cornerRadius: 10)
+                        .fill(selected ? Color.accentColor : Color(.tertiarySystemFill)))
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("live.value.\(value)")
             }
         }
         .sensoryFeedback(.selection, trigger: basketValue)
+        .onAppear { basketValue = game.basketValue }
     }
 
     private var lastActionBar: some View {
@@ -5015,7 +5027,7 @@ struct LiveGameScoringView: View {
     private func log(_ action: GameStatAction) {
         action.apply(to: &game)
         actionLog.append(action)
-        if case .points = action.kind { basketValue = 2 }
+        if case .points = action.kind { basketValue = game.basketValue }
         onSave()
     }
 
@@ -5458,6 +5470,7 @@ struct LiveGameScoringView: View {
                     teamScores: game.teamScores,
                     playerStats: game.playerStats,
                     durationMinutes: game.durationMinutes,
+                    basketValue: game.basketValue,
                     roundNumber: game.roundNumber,
                     status: .completed,
                     startedAt: game.startedAt,

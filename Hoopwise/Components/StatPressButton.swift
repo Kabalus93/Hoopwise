@@ -41,14 +41,24 @@ struct StatPressButton: View {
     /// instead of the 34pt strip button.
     var fillsHeight = false
     var font: Font = .caption.bold()
+    /// SF Symbol shown above the label, so the action reads at a glance.
+    var icon: String? = nil
 
     @State private var gate = StatPressGate()
     @State private var addTick = 0
     @State private var removeTick = 0
 
     var body: some View {
-        Text(label)
-            .font(font)
+        VStack(spacing: 2) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: fillsHeight ? 20 : 14, weight: .semibold))
+            }
+            Text(label)
+                .font(font)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
             .frame(maxWidth: .infinity, minHeight: 34, maxHeight: fillsHeight ? .infinity : nil)
             .foregroundStyle(color)
             .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))

@@ -365,6 +365,13 @@ struct SessionGame: Codable, Hashable, Identifiable {
     var teamScores: [UUID: Int]
     var playerStats: [SessionPlayerStats]
     var durationMinutes: Int
+    /// What a basket is worth by default in this game (1, 2 or 3), chosen on
+    /// the setup page — the coach changes it with the drill's focus. Stored
+    /// inside the session's games JSON, so not a SwiftData column; games
+    /// saved before it existed read 2.
+    var basketValue: Int = 2
+    /// UserDefaults key for the last standard value the coach chose.
+    static let basketValueDefaultsKey = "game.standardBasketValue"
     var roundNumber: Int              // Current round within this game series
     var status: SessionGameStatus
     var startedAt: Date?
@@ -378,6 +385,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
          gameType: SessionGameType = .twoTeam, teams: [GameTeam] = [], 
          activeTeamIds: [UUID]? = nil, teamScores: [UUID: Int] = [:],
          playerStats: [SessionPlayerStats] = [], durationMinutes: Int = 10,
+         basketValue: Int = 2,
          roundNumber: Int = 1, status: SessionGameStatus = .setup, 
          startedAt: Date? = nil, endedAt: Date? = nil,
          winningTeamId: UUID? = nil, notes: String? = nil,
@@ -392,6 +400,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
         self.teamScores = teamScores
         self.playerStats = playerStats
         self.durationMinutes = durationMinutes
+        self.basketValue = min(3, max(1, basketValue))
         self.roundNumber = roundNumber
         self.status = status
         self.startedAt = startedAt
@@ -415,6 +424,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
         teamScores = try container.decode([UUID: Int].self, forKey: .teamScores)
         playerStats = try container.decode([SessionPlayerStats].self, forKey: .playerStats)
         durationMinutes = try container.decode(Int.self, forKey: .durationMinutes)
+        basketValue = min(3, max(1, try container.decodeIfPresent(Int.self, forKey: .basketValue) ?? 2))
         roundNumber = try container.decodeIfPresent(Int.self, forKey: .roundNumber) ?? 1
         status = try container.decode(SessionGameStatus.self, forKey: .status)
         startedAt = try container.decodeIfPresent(Date.self, forKey: .startedAt)
@@ -427,7 +437,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
     
     private enum CodingKeys: String, CodingKey {
         case id, sessionId, gameNumber, gameType, teams, activeTeamIds, teamScores
-        case playerStats, durationMinutes, roundNumber, status, startedAt, endedAt
+        case playerStats, durationMinutes, basketValue, roundNumber, status, startedAt, endedAt
         case winningTeamId, notes, createdAt, updatedAt
     }
     

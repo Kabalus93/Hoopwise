@@ -36,6 +36,8 @@ final class LiveGameAssistUITests: XCTestCase {
         XCTAssertTrue(last.label.hasPrefix("Tap a player"), "Undo leaves nothing logged: \(last.label)")
     }
 
+    /// A basket at another value is for that basket only; the next tap scores
+    /// the game's standard value again (2 in the gallery game).
     func testTapScoresWithoutAssistAndValueResetsToTwo() {
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 20))
         app.buttons["live.value.3"].tap()

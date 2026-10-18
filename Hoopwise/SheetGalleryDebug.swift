@@ -220,6 +220,17 @@ enum SheetGalleryDebug {
                     .padding()
             }
 
+        case "createGame":
+            // The game setup page over the first program session (Create is
+            // never tapped by the shot, so nothing is written).
+            if let session = dm.sessionEvents.first(where: { $0.programId != nil }) {
+                CreateGameSheet(session: .constant(session),
+                                enrolledStudents: Array(dm.students.prefix(10)),
+                                programColor: .blue, onSave: {})
+            } else {
+                missing("createGame: no program session")
+            }
+
         case "liveGame":
             // A live 5-on-5 game over the demo roster (scratch, never saved).
             // The demo roster has five; the second team is scratch players

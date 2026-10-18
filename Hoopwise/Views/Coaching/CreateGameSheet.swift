@@ -16,6 +16,9 @@ struct CreateGameSheet: View {
     // Configuration
     @State private var gameType: SessionGameType = .twoTeam
     @State private var durationMinutes: Int = 5
+    /// What a basket is worth in this game. Remembered between games — the
+    /// coach sets it for what the session is working on.
+    @AppStorage(SessionGame.basketValueDefaultsKey) private var basketValue: Int = 2
     @State private var showOnlyPresent: Bool = true
     /// Tracks whether the coach has manually edited the duration. Once true
     /// we stop auto-snapping the duration when team count changes —
@@ -88,6 +91,7 @@ struct CreateGameSheet: View {
             Form {
                 gameTypeSection
                 durationSection
+                basketValueSection
                 playersFilterSection
                 if isBattleRoyal {
                     battleRoyalSection
@@ -181,6 +185,39 @@ struct CreateGameSheet: View {
             .onChange(of: durationMinutes) { _, _ in durationManuallyEdited = true }
         } footer: {
             Text(presetFooter)
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var basketValueSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                ForEach(1...3, id: \.self) { value in
+                    let isSelected = basketValue == value
+                    Button {
+                        basketValue = value
+                    } label: {
+                        Text(isChinese ? "\(value) 分" : "\(value) pt\(value == 1 ? "" : "s")")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.primary))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(RoundedRectangle(cornerRadius: 10)
+                                .fill(isSelected ? Color.accentColor : Color(.tertiarySystemFill)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("setup.basket.\(value)")
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            .sensoryFeedback(.selection, trigger: basketValue)
+        } header: {
+            Text(isChinese ? "每球标准分值" : "Standard basket value")
+        } footer: {
+            Text(isChinese
+                 ? "比赛中点击球员即记这个分值；其他分值在比赛页上方随时可选。"
+                 : "Tapping a player in the game scores this. The other values stay one tap away above the players.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -613,6 +650,7 @@ struct CreateGameSheet: View {
     private func loadPreviousConfiguration(from game: SessionGame) {
         gameType = game.gameType
         durationMinutes = game.durationMinutes
+        basketValue = game.basketValue
         let pool = Set(availableStudents.map(\.id))
         teams = game.teams.map { team in
             GameTeam(
@@ -716,6 +754,7 @@ struct CreateGameSheet: View {
                 gameType: gameType,
                 teams: [],
                 durationMinutes: durationMinutes,
+                basketValue: basketValue,
                 status: .ready
             )
             for pid in battleRoyalIds {
@@ -730,6 +769,7 @@ struct CreateGameSheet: View {
                 gameType: gameType,
                 teams: teams,
                 durationMinutes: durationMinutes,
+                basketValue: basketValue,
                 status: .ready
             )
         }

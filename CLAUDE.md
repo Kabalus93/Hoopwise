@@ -276,10 +276,15 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   ONE team at a time; the scores are the team switcher (rows slide). Every
   player on screen, no scrolling: photo, pinyin + Chinese name (Chinese first
   in Chinese), stats, points. The ROW is the points target — tap = basket at
-  the strip's value (+2 default, +1/+3 one tap, back to +2 after a basket);
+  the strip's value (+1 / +2 / +3; the game's STANDARD value, chosen on the
+  setup page and stored as `SessionGame.basketValue` inside the games JSON —
+  not a schema column, old games read 2 — is preselected and marked, and the
+  strip returns to it after each basket; the last choice is remembered in
+  UserDefaults `game.standardBasketValue`);
   press and DRAG onto a teammate's row = basket + assist (`AssistDrop`), a
   line follows the finger, release elsewhere = basket only. REB / STL / BLK
-  are fixed colour-coded StatPressButtons (tap add, hold removes one).
+  are fixed colour-coded StatPressButtons with icons (tap add, hold removes
+  one); REB is the big one because it is the most frequent.
   Points are corrected with Undo (`GameStatAction` log, view-local) — a hold
   on the row would collide with starting a drag. iPad side-by-side and
   Battle Royal are unchanged. Every stat button goes through
