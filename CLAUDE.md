@@ -287,6 +287,14 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   press removed on hold and RE-ADDED on release. Tests: StatPressGateTests,
   LiveGameEntryTests, LiveGameStatUITests, LiveGameAssistUITests
   (HOOPWISE_SHOT=liveGame).
+- THIRTEENTH sanctioned exception (October 2026, Luther's request): the
+  roll-call photo band (AttendanceWatermarkOverlay, exported to Photos for
+  WeChat). Same fields, one left edge: the count leads as present/expected
+  ("7/10 到场", expected = AttendanceMath.expectedIds — the session's own
+  roster, else program enrollment), then WHEN (weekday · date · time), then
+  WHO/WHERE ("<coach>教练 · venue"), then the present names under a hairline.
+  Text stays Chinese whatever the app language. HOOPWISE_SHOT=rollCallOverlay
+  renders it over a stand-in photo.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

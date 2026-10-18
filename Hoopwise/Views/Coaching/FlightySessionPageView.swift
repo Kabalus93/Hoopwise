@@ -2179,6 +2179,7 @@ struct FlightySessionPageView: View {
             dateText: dateText,
             location: session.location,
             presentCount: presentStudents.count,
+            expectedCount: AttendanceMath.expectedIds(of: session, programs: dataManager.programs).count,
             nameList: nameList
         ) ?? basePhoto
 
@@ -2218,6 +2219,7 @@ struct FlightySessionPageView: View {
         dateText: String,
         location: String?,
         presentCount: Int,
+        expectedCount: Int,
         nameList: String
     ) -> UIImage? {
         let pointSize = photo.size
@@ -2230,6 +2232,7 @@ struct FlightySessionPageView: View {
             dateText: dateText,
             location: location,
             presentCount: presentCount,
+            expectedCount: expectedCount,
             nameList: nameList
         )
 
@@ -7173,28 +7176,27 @@ struct SessionPhotoExportToastView: View {
 
 // MARK: - Attendance Watermark Overlay
 #if os(iOS)
-/// Renders the attendance photo with a clean dark-gradient watermark band at
-/// the bottom showing coach name, date/time, location, a "X 人到场" badge and
-/// the Chinese names of attending students. The band is attached via
-/// `.overlay(alignment: .bottom)` so it can never overflow past the photo's
-/// bottom edge — anchoring with `ZStack(alignment: .bottomLeading)` was
-/// letting the last line of names get clipped on certain photo aspect ratios.
+/// The roll-call photo's band (October 2026 layout, Luther): one left edge,
+/// three levels. The COUNT leads — present against expected ("7/10 到场",
+/// expected = AttendanceMath.expectedIds) — then one line of WHEN (weekday ·
+/// date · time) and one of WHO/WHERE (coach · venue), and the names of the
+/// players present below a hairline. Attached with `.overlay(alignment:
+/// .bottom)` so it can never overflow the photo's bottom edge — anchoring
+/// with a ZStack clipped the last line of names on some aspect ratios.
 struct AttendanceWatermarkOverlay: View {
     let photo: UIImage
     let coachName: String
-    /// Day of week (localized — e.g. "星期日"). Rendered as its own heavy
-    /// emphasized line between the coach name and the date so a quick
-    /// glance at a WeChat thumbnail can place which day the session was on.
+    /// Day of week (e.g. "星期日").
     let weekdayText: String
     let dateText: String
     let location: String?
     let presentCount: Int
+    /// The session's roster. 0 = unknown, and the count stands alone.
+    var expectedCount: Int = 0
     let nameList: String
 
-    /// Font/padding sizes are tuned for a 1024-wide photo (PhotoCaptureManager's
-    /// max). Scale proportionally so the watermark stays legible on smaller
-    /// source images and on WeChat thumbnails (which downscale aggressively).
-    /// Clamped above 0.6 so very small photos still show readable text.
+    /// Sizes are tuned for a 1024-wide photo (PhotoCaptureManager's max) and
+    /// scale with it, clamped so WeChat thumbnails stay legible.
     private var s: CGFloat {
         max(0.6, photo.size.width / 1024.0)
     }
@@ -7208,69 +7210,90 @@ struct AttendanceWatermarkOverlay: View {
             }
     }
 
+    private var whenLine: String {
+        [weekdayText, dateText].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var whoWhereLine: String {
+        var parts: [String] = []
+        if !coachName.isEmpty { parts.append("\(coachName)教练") }
+        if let location, !location.isEmpty { parts.append(location) }
+        return parts.joined(separator: " · ")
+    }
+
     private var watermarkBand: some View {
-        VStack(alignment: .leading, spacing: 10 * s) {
-            HStack(alignment: .firstTextBaseline, spacing: 18 * s) {
-                VStack(alignment: .leading, spacing: 6 * s) {
-                    if !coachName.isEmpty {
-                        Text(coachName)
-                            .font(.system(size: 54 * s, weight: .bold))
+        VStack(alignment: .leading, spacing: 18 * s) {
+            HStack(alignment: .center, spacing: 28 * s) {
+                countBlock
+                Rectangle()
+                    .fill(.white.opacity(0.35))
+                    .frame(width: 2 * s)
+                    .frame(maxHeight: 120 * s)
+                VStack(alignment: .leading, spacing: 8 * s) {
+                    if !whenLine.isEmpty {
+                        Text(whenLine)
+                            .font(.system(size: 40 * s, weight: .bold))
                             .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
                     }
-                    if !weekdayText.isEmpty {
-                        Text(weekdayText)
-                            .font(.system(size: 38 * s, weight: .heavy))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
+                    if !whoWhereLine.isEmpty {
+                        Text(whoWhereLine)
+                            .font(.system(size: 28 * s, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.85))
                     }
-                    HStack(spacing: 10 * s) {
-                        Text(dateText)
-                        if let location, !location.isEmpty {
-                            Text("·")
-                            Text(location).lineLimit(1)
-                        }
-                    }
-                    .font(.system(size: 28 * s, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
                 }
-                Spacer(minLength: 12 * s)
-                HStack(alignment: .firstTextBaseline, spacing: 6 * s) {
-                    Text("\(presentCount)")
-                        .font(.system(size: 38 * s, weight: .heavy))
-                    Text("人到场")
-                        .font(.system(size: 22 * s, weight: .heavy))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 20 * s)
-                .padding(.vertical, 10 * s)
-                .background(Capsule().fill(Color.green))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                Spacer(minLength: 0)
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             if !nameList.isEmpty {
+                Rectangle()
+                    .fill(.white.opacity(0.25))
+                    .frame(height: 1.5 * s)
                 Text(nameList)
                     .font(.system(size: 28 * s, weight: .medium))
                     .foregroundStyle(.white.opacity(0.95))
                     .lineLimit(3)
-                    .lineSpacing(4 * s)
+                    .lineSpacing(6 * s)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 32 * s)
-        .padding(.vertical, 28 * s)
+        .padding(.horizontal, 36 * s)
+        .padding(.top, 60 * s)
+        .padding(.bottom, 30 * s)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [.black.opacity(0), .black.opacity(0.7), .black.opacity(0.95)],
+                stops: [.init(color: .black.opacity(0), location: 0),
+                        .init(color: .black.opacity(0.78), location: 0.3),
+                        .init(color: .black.opacity(0.92), location: 1)],
                 startPoint: .top,
                 endPoint: .bottom
             )
         )
+    }
+
+    /// "7/10" large, "到场" under it.
+    private var countBlock: some View {
+        VStack(alignment: .leading, spacing: 2 * s) {
+            HStack(alignment: .firstTextBaseline, spacing: 2 * s) {
+                Text("\(presentCount)")
+                    .font(.system(size: 92 * s, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                if expectedCount > 0 {
+                    Text("/\(expectedCount)")
+                        .font(.system(size: 44 * s, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+            }
+            Text("到场")
+                .font(.system(size: 26 * s, weight: .bold))
+                .foregroundStyle(Color(red: 0.62, green: 0.88, blue: 0.80))
+        }
+        .monospacedDigit()
+        .fixedSize()
     }
 }
 #endif

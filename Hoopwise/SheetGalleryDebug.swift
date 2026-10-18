@@ -213,7 +213,7 @@ enum SheetGalleryDebug {
             ScrollView {
                 AttendanceWatermarkOverlay(photo: photo, coachName: "王聪", weekdayText: "星期六",
                                            dateText: "2026年10月17日 13:30", location: "酷迅篮球馆",
-                                           presentCount: 7,
+                                           presentCount: 7, expectedCount: 10,
                                            nameList: "王诗玲、小辣椒、张梓晨、虞鑫晨、沈思梵、汪文轩、任逸冕")
                     .scaleEffect(0.38, anchor: .topLeading)
                     .frame(width: 1024 * 0.38, height: 768 * 0.38, alignment: .topLeading)
