@@ -570,8 +570,8 @@ class SwiftDataManager: ObservableObject {
         migrateAttendancePhotoPaths()
         backfillStudentPhotosFromLocalCache()
         
-        // Sync sample drills (adds any new drills from DrillItem.samples)
-        syncSampleDrills()
+        // The activity library replaces the old sample drills.
+        syncActivityLibrary()
         
         // Clean up any duplicate drills (one-time cleanup + prevention)
         deduplicateDrills()
@@ -1009,10 +1009,9 @@ class SwiftDataManager: ObservableObject {
             modelContext.insert(sdSession)
         }
         
-        // Drills
-        for drill in DrillItem.samples {
-            let sdDrill = SDDrill.from(drill)
-            modelContext.insert(sdDrill)
+        // Drills: the activity library (rule options are not drills).
+        for activity in ActivityLibrary.shared.plannable {
+            modelContext.insert(SDDrill.from(ActivityLibrary.drill(for: activity)))
         }
         
         // Default Coach
@@ -2331,81 +2330,93 @@ class SwiftDataManager: ObservableObject {
     
     // MARK: - Drill CRUD
     
-    /// Syncs sample drills to the database, adding any that don't already exist by name
-    func syncSampleDrills() {
+    /// THE drill-library sync (October 2026, Luther). Idempotent, every launch:
+    /// 1. removes the 121 drills bundled before the activity library — only
+    ///    records no coach created whose name is one of those samples, so a
+    ///    coach's own drill and anything the library seeded are never touched
+    ///    (an older build on another device can re-seed them; this cleans up);
+    /// 2. adds every library activity and game that is missing, by its
+    ///    deterministic id (rule options are never drills);
+    /// 3. refreshes a library drill's text when the library changed, unless a
+    ///    coach has edited that drill.
+    func syncActivityLibrary() {
         do {
-            let descriptor = FetchDescriptor<SDDrill>()
-            let existingDrills = try modelContext.fetch(descriptor)
-            let existingNames = Set(existingDrills.map { $0.name.lowercased() })
-            
-            var addedCount = 0
-            for sampleDrill in DrillItem.samples {
-                if !existingNames.contains(sampleDrill.name.lowercased()) {
-                    let sdDrill = SDDrill.from(sampleDrill)
-                    modelContext.insert(sdDrill)
-                    addedCount += 1
+            let all = try modelContext.fetch(FetchDescriptor<SDDrill>())
+            let legacy = DrillItem.legacySampleNames
+            var removed = 0, added = 0, updated = 0
+
+            for drill in all where drill.createdByCoachId == nil
+                && ActivityLibrary.activity(forDrillId: drill.id) == nil
+                && legacy.contains(drill.name.lowercased()) {
+                modelContext.delete(drill)
+                removed += 1
+            }
+
+            let existing = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            for activity in ActivityLibrary.shared.plannable {
+                let fresh = ActivityLibrary.drill(for: activity)
+                if let sd = existing[activity.id] {
+                    guard sd.lastModifiedAt == nil,
+                          sd.name != fresh.name || sd.drillDescription != fresh.description
+                            || sd.categoryRaw != fresh.category.rawValue || sd.tags != fresh.tags else { continue }
+                    sd.name = fresh.name
+                    sd.drillDescription = fresh.description
+                    sd.categoryRaw = fresh.category.rawValue
+                    sd.difficultyRaw = fresh.difficulty.rawValue
+                    sd.tags = fresh.tags
+                    updated += 1
+                } else {
+                    modelContext.insert(SDDrill.from(fresh))
+                    added += 1
                 }
             }
-            
-            if addedCount > 0 {
+
+            if removed + added + updated > 0 {
                 try modelContext.save()
-                debugLog("✅ Added \(addedCount) new sample drills to library")
-                // Refresh drills cache
-                let sdDrills = try modelContext.fetch(FetchDescriptor<SDDrill>())
-                cachedDrills = sdDrills.map { $0.toStruct() }
+                cachedDrills = try modelContext.fetch(FetchDescriptor<SDDrill>()).map { $0.toStruct() }
+                debugLog("📚 Activity library: -\(removed) legacy, +\(added) new, \(updated) refreshed")
             }
         } catch {
-            debugLog("❌ Failed to sync sample drills: \(error)")
+            debugLog("❌ Failed to sync the activity library: \(error)")
         }
     }
-    
-    /// Removes duplicate drills, keeping only the oldest one (or favorited one) for each unique name
+
+    /// Removes duplicate drills. Library drills are duplicates when they share
+    /// an ID (two devices seeding at once); the same NAME at two ages is
+    /// legitimate. Other drills keep the old rule: one per name. Prefer the
+    /// favourite, then the one with media, then the oldest.
     func deduplicateDrills() {
         do {
             let descriptor = FetchDescriptor<SDDrill>()
             let allDrills = try modelContext.fetch(descriptor)
-            
-            // Group drills by lowercase name
-            var drillsByName: [String: [SDDrill]] = [:]
+
+            var groups: [String: [SDDrill]] = [:]
             for drill in allDrills {
-                let key = drill.name.lowercased().trimmingCharacters(in: .whitespaces)
-                drillsByName[key, default: []].append(drill)
+                let key = ActivityLibrary.activity(forDrillId: drill.id) != nil
+                    ? "id:" + drill.id.uuidString
+                    : "name:" + drill.name.lowercased().trimmingCharacters(in: .whitespaces)
+                groups[key, default: []].append(drill)
             }
-            
+
             var deletedCount = 0
-            var deletedIds: [UUID] = []
-            
-            for (name, drills) in drillsByName {
-                guard drills.count > 1 else { continue }
-                
-                // Sort: prefer favorited, then oldest createdAt
-                let sorted = drills.sorted { drill1, drill2 in
-                    if drill1.isFavorite != drill2.isFavorite {
-                        return drill1.isFavorite  // Favorited first
-                    }
-                    return drill1.createdAt < drill2.createdAt  // Oldest first
+            for (key, drills) in groups where drills.count > 1 {
+                let sorted = drills.sorted { a, b in
+                    if a.isFavorite != b.isFavorite { return a.isFavorite }
+                    let am = (a.media ?? []).count, bm = (b.media ?? []).count
+                    if am != bm { return am > bm }
+                    return a.createdAt < b.createdAt
                 }
-                
-                // Keep the first one, delete the rest
-                let toKeep = sorted[0]
-                let toDelete = sorted.dropFirst()
-                
-                for drill in toDelete {
-                    deletedIds.append(drill.id)
+                for drill in sorted.dropFirst() {
                     modelContext.delete(drill)
                     deletedCount += 1
                 }
-                
-                debugLog("🧹 Deduplicated '\(name)': kept 1, removed \(toDelete.count)")
+                debugLog("🧹 Deduplicated '\(key)': kept 1, removed \(drills.count - 1)")
             }
-            
+
             if deletedCount > 0 {
                 try modelContext.save()
                 refreshCachesSync()
-                _ = deletedIds
                 debugLog("✅ Removed \(deletedCount) duplicate drills")
-            } else {
-                debugLog("ℹ️ No duplicate drills found")
             }
         } catch {
             debugLog("❌ Failed to deduplicate drills: \(error)")

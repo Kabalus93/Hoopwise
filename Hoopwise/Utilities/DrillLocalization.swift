@@ -238,7 +238,12 @@ struct DrillLocalization {
 // MARK: - DrillItem Extension for Localization
 extension DrillItem {
     var localizedName: String {
-        DrillLocalization.localizedDrillName(name)
+        // Library activities carry their own Chinese name where the library
+        // gives one; everything else goes through the translation table.
+        if let activity = libraryActivity, activity.nameZh != nil, name == activity.name {
+            return activity.displayName
+        }
+        return DrillLocalization.localizedDrillName(name)
     }
     
     var localizedCategory: String {

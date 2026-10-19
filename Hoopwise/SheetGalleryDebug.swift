@@ -231,6 +231,10 @@ enum SheetGalleryDebug {
                 missing("createGame: no program session")
             }
 
+        case "drillsLibrary":
+            // The activity-library drills page, as the Hub pushes it.
+            NavigationStack { DrillsLibraryView() }
+
         case "liveGame":
             // A live 5-on-5 game over the demo roster (scratch, never saved).
             // The demo roster has five; the second team is scratch players

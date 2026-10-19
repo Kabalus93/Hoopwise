@@ -162,6 +162,11 @@ struct DrillItem: Identifiable, Codable, Hashable {
     /// safe across launches.
     static var samples: [DrillItem] { baseSamples + eliteSamples }
 
+    /// The 121 drills bundled before the activity library (October 2026).
+    /// No longer seeded; their names are how the library sync finds and
+    /// removes the copies already in stores and in CloudKit.
+    static let legacySampleNames: Set<String> = Set(samples.map { $0.name.lowercased() })
+
     private static let baseSamples: [DrillItem] = [
         DrillItem(name: "Form Shooting", category: .shooting, difficulty: .beginner,
                  durationMinutes: 10, description: "Close-range shooting focusing on proper form",

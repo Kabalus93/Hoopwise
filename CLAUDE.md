@@ -65,9 +65,9 @@ the predicate returned. A lie and a dead view look identical from the outside.
   a jersey number to a CONTRACT — Player.jerseyNumber IS real; the two read
   sites are guarded so nothing renders "Jersey #0"), and `weeklyAttendance` is
   always empty.
-- The 121 drills visible in both apps are seeded locally every launch by
-  syncSampleDrills() from bundled DrillItem.samples. Their presence is
-  NOT evidence that CloudKit sync works.
+- The drill library is seeded locally every launch by syncActivityLibrary()
+  from the bundled activity library. Its presence is NOT evidence that
+  CloudKit sync works.
 
 ## THE SESSION LAYER — canonical, post-restructure (August 2026)
 Phase 2 ended here. Every question about a session has exactly one answer,
@@ -396,6 +396,33 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   invented "M1"). Its birthday milestone skips grade-anchored birthdates —
   1 September is an estimate, not a birthday. Covered by
   SchoolGradePromotionTests.
+
+## Activity library — the drill library (October 2026)
+- Luther's "Activity Library: U6 to U16" (Claude Docs, sourced FIBA / Jr. NBA /
+  USA Basketball …) REPLACED the 121 bundled sample drills. It is embedded as
+  JSON in Models/ActivityLibraryData.swift (generated — regenerate, don't
+  hand-edit) and modelled in Models/ActivityLibrary.swift (both targets):
+  476 items = 7 ages (U6, U7, U8, U10, U12, U14, U16) × 4 blocks (routine,
+  small games, compete, game) × 15 types (the doc's 55 sub-headings folded).
+- Activities and games (422) are seeded as SDDrill records with
+  DETERMINISTIC ids (SHA-256 of "age|block|name") so every device seeds the
+  same record and plans resolve everywhere. Tags carry `library`,
+  `library:<key>`, the planner age tag (U7 → `u8`; DrillProfile has no U7),
+  `block:`, `type:`, `kind:`. No schema change.
+- RULE OPTIONS (54) are NOT drills: read from the library only, shown under
+  the Game block, never in session planning.
+- `syncActivityLibrary()` (every launch, idempotent): deletes the old samples
+  — only records with no coach owner whose name is in
+  `DrillItem.legacySampleNames` (an older build elsewhere can re-seed them);
+  inserts missing library drills; refreshes a library drill's text unless a
+  coach edited it (`lastModifiedAt`). `deduplicateDrills` keys library drills
+  by ID — the same name at two ages is legitimate.
+- iOS drills page (sanctioned, Luther): age chips + "Mine" (coach-created),
+  the age's guidance, block segments, type chips, "Include earlier ages"
+  (default off; each age adds to the ones before). Detail shows age/block/
+  type, the source (linked) and "How it runs". HOOPWISE_SHOT=drillsLibrary.
+  Tests: ActivityLibraryTests, ActivityLibraryUITests.
+- Mac gets the same drills through the shared seeding; its page is unchanged.
 
 ## Mac directory pattern (August 2026)
 - DirectoryView (HoopwiseMac/Views/Directory/) is the Contacts skeleton:

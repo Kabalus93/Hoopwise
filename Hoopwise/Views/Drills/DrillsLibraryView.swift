@@ -1,25 +1,35 @@
 import SwiftUI
 
+/// The drills screen, built on the activity library (October 2026, Luther):
+/// pick an AGE, a session BLOCK and an activity TYPE. "Mine" lists the
+/// drills coaches create themselves. Rule options live under the Game block
+/// and are read from the library directly — they are not drills and never
+/// reach session planning.
 struct DrillsLibraryView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var searchText = ""
-    @State private var selectedCategory: DrillCategory?
-    @State private var showFavoritesOnly = false
     @State private var showingAddDrill = false
+    /// "U8" … or "mine".
+    @AppStorage("library.age") private var ageChoice = ActivityAge.u8.rawValue
+    @AppStorage("library.includeEarlier") private var includeEarlier = false
+    @State private var block: ActivityBlock = .routine
+    @State private var type: ActivityType?
+    @State private var showGuidance = false
+    @State private var openRule: LibraryActivity?
+    @State private var mineCategory: DrillCategory?
 
-    private var isChinese: Bool {
-        LocalizationManager.shared.currentLanguage == .chinese
-    }
-
-    private var currentCoachId: UUID {
-        dataManager.loggedInCoachId ?? dataManager.coach.id
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+    private var currentCoachId: UUID { dataManager.loggedInCoachId ?? dataManager.coach.id }
+    private var age: ActivityAge? { ActivityAge(rawValue: ageChoice) }
+    private var ages: [ActivityAge] {
+        guard let age else { return [] }
+        return includeEarlier ? age.upToHere : [age]
     }
 
     private var visibleDrills: [DrillItem] {
         dataManager.drills.filter { drill in
             let visibilityTag = drill.tags.first(where: { $0.hasPrefix("visibility:") })
             let ownerTag = drill.tags.first(where: { $0.hasPrefix("owner:") })
-
             if visibilityTag == "visibility:private" {
                 guard let ownerTag else { return false }
                 return ownerTag == "owner:\(currentCoachId.uuidString)"
@@ -28,165 +38,421 @@ struct DrillsLibraryView: View {
         }
     }
 
-    private var filteredDrills: [DrillItem] {
-        var drills = visibleDrills
-
-        if !searchText.isEmpty {
-            drills = drills.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                $0.localizedName.localizedCaseInsensitiveContains(searchText) ||
-                $0.description.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-
-        if let category = selectedCategory {
-            drills = drills.filter { $0.category == category }
-        }
-
-        if showFavoritesOnly {
-            drills = drills.filter { $0.isFavorite }
-        }
-
-        return drills.sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
+    private func matchesSearch(_ text: String...) -> Bool {
+        searchText.isEmpty || text.contains { $0.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private func drillCount(for category: DrillCategory) -> Int {
-        visibleDrills.filter { $0.category == category }.count
+    /// Library drills for the chosen ages and block (all types), library order.
+    private var blockPairs: [(activity: LibraryActivity, drill: DrillItem)] {
+        let byId = Dictionary(visibleDrills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return ActivityLibrary.shared.plannable.compactMap { activity in
+            guard ages.contains(activity.age), activity.block == block,
+                  let drill = byId[activity.id],
+                  matchesSearch(drill.name, drill.localizedName, drill.description) else { return nil }
+            return (activity, drill)
+        }
+    }
+
+    private var shownPairs: [(activity: LibraryActivity, drill: DrillItem)] {
+        guard let type else { return blockPairs }
+        return blockPairs.filter { $0.activity.type == type }
+    }
+
+    /// Rule options for the chosen ages (Game block only).
+    private var rules: [LibraryActivity] {
+        guard block == .game, type == nil || type == .rules else { return [] }
+        return ActivityLibrary.shared.items.filter {
+            $0.isRule && ages.contains($0.age) && matchesSearch($0.name, $0.howItRuns)
+        }
+    }
+
+    private var typeCounts: [(ActivityType, Int)] {
+        var counts: [ActivityType: Int] = [:]
+        for pair in blockPairs { counts[pair.activity.type, default: 0] += 1 }
+        if block == .game {
+            let ruleCount = ActivityLibrary.shared.items.filter { $0.isRule && ages.contains($0.age) }.count
+            if ruleCount > 0 { counts[.rules] = ruleCount }
+        }
+        return ActivityType.allCases.compactMap { t in counts[t].map { (t, $0) } }
+    }
+
+    private func blockCount(_ b: ActivityBlock) -> Int {
+        let ids = Set(visibleDrills.map(\.id))
+        return ActivityLibrary.shared.plannable.filter {
+            ages.contains($0.age) && $0.block == b && ids.contains($0.id)
+        }.count
+    }
+
+    /// Drills a coach created (not from the library).
+    private var mine: [DrillItem] {
+        visibleDrills.filter { !$0.isLibraryDrill }
+            .filter { mineCategory == nil || $0.category == mineCategory }
+            .filter { matchesSearch($0.name, $0.localizedName, $0.description) }
+            .sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !filteredDrills.isEmpty {
-                    Section {
-                        categoriesRow
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                    }
-                }
-
-                if filteredDrills.isEmpty {
-                    emptyContent
-                } else {
-                    Section {
-                        ForEach(filteredDrills) { drill in
-                            NavigationLink(destination: DrillDetailView(drill: drill)) {
-                                DrillRow(drill: drill)
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    dataManager.toggleDrillFavorite(drill)
-                                } label: {
-                                    Label(
-                                        drill.isFavorite ? DrillLocalization.L("Unfavorite") : DrillLocalization.L("Favorite"),
-                                        systemImage: drill.isFavorite ? "heart.slash" : "heart"
-                                    )
-                                }
-                                .tint(.pink)
-                            }
-                        }
-                    } header: {
-                        Text(DrillLocalization.L("All Drills"))
-                    }
-                }
+        List {
+            Section {
+                ageChips
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle(DrillLocalization.L("Drills"))
-            .searchable(text: $searchText, prompt: DrillLocalization.L("Search"))
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Toggle(isOn: $showFavoritesOnly) {
-                            Label(DrillLocalization.L("Favorites Only"), systemImage: "heart")
-                        }
-
-                        if selectedCategory != nil || showFavoritesOnly {
-                            Divider()
-                            Button(role: .destructive) {
-                                selectedCategory = nil
-                                showFavoritesOnly = false
-                            } label: {
-                                Label(DrillLocalization.L("Clear Filters"), systemImage: "xmark.circle")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle\(showFavoritesOnly || selectedCategory != nil ? ".fill" : "")")
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingAddDrill = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
+            if let age {
+                libraryContent(age)
+            } else {
+                mineContent
             }
-            .sheet(isPresented: $showingAddDrill) {
-                AddEditDrillSheet(drill: nil)
-                    .environmentObject(dataManager)
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle(isChinese ? "训练库" : "Activity library")
+        .searchable(text: $searchText, prompt: DrillLocalization.L("Search"))
+        .onChange(of: block) { _, _ in type = nil }
+        .onChange(of: ageChoice) { _, _ in type = nil }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showingAddDrill = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel(DrillLocalization.L("Add Drill"))
             }
+        }
+        .sheet(isPresented: $showingAddDrill) {
+            AddEditDrillSheet(drill: nil).environmentObject(dataManager)
+        }
+        .sheet(item: $openRule) { rule in
+            LibraryRuleSheet(rule: rule)
+                .presentationDetents([.medium, .large])
         }
     }
 
-    // MARK: - Categories Row
-    private var categoriesRow: some View {
+    // MARK: Age chips
+
+    private var ageChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                CategoryChip(
-                    title: DrillLocalization.L("All"),
-                    count: visibleDrills.count,
-                    color: .accentColor,
-                    isSelected: selectedCategory == nil
-                ) {
-                    selectedCategory = nil
+            HStack(spacing: 6) {
+                ForEach(ActivityAge.allCases) { a in
+                    chip(a.title, selected: ageChoice == a.rawValue) { ageChoice = a.rawValue }
                 }
+                chip(isChinese ? "我的" : "Mine", selected: age == nil, icon: "person.crop.circle") {
+                    ageChoice = "mine"
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .sensoryFeedback(.selection, trigger: ageChoice)
+    }
 
-                ForEach(DrillCategory.allCases, id: \.self) { category in
-                    CategoryChip(
-                        title: DrillLocalization.localizedCategory(category),
-                        count: drillCount(for: category),
-                        color: Color.drillCategoryColor(category),
-                        isSelected: selectedCategory == category
-                    ) {
-                        selectedCategory = category
-                    }
+    private func chip(_ title: String, selected: Bool, icon: String? = nil,
+                      action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon { Image(systemName: icon).font(.caption.weight(.semibold)) }
+                Text(title).font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .foregroundStyle(selected ? Color.white : Color.primary)
+            .background(Capsule().fill(selected ? Color.accentColor : Color(.secondarySystemGroupedBackground)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    // MARK: Library
+
+    @ViewBuilder
+    private func libraryContent(_ age: ActivityAge) -> some View {
+        Section {
+            guidanceCard(age)
+            Toggle(isOn: $includeEarlier) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isChinese ? "包含更低年龄段" : "Include earlier ages")
+                    Text(age == .u6
+                         ? (isChinese ? "U6 是第一个年龄段" : "U6 is the first age")
+                         : (isChinese ? "每个年龄段在前一个的基础上增加" : "Each age adds to the ones before it"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+            }
+            .disabled(age == .u6)
+            .accessibilityIdentifier("library.includeEarlier")
+        }
+
+        Section {
+            Picker(isChinese ? "环节" : "Block", selection: $block) {
+                ForEach(ActivityBlock.allCases) { b in
+                    Text(b.title).tag(b)
+                }
+            }
+            .pickerStyle(.segmented)
+            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+            .listRowBackground(Color.clear)
+
+            if typeCounts.count > 1 {
+                typeChips
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+        }
+
+        if shownPairs.isEmpty && rules.isEmpty {
+            Section {
+                Text(searchText.isEmpty
+                     ? (isChinese ? "这个环节暂无内容" : "Nothing in this block for this age")
+                     : (isChinese ? "没有匹配的结果" : "No matches"))
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        if !shownPairs.isEmpty && type != .rules {
+            Section {
+                ForEach(shownPairs, id: \.activity.key) { pair in
+                    NavigationLink(destination: DrillDetailView(drill: pair.drill)) {
+                        LibraryRow(activity: pair.activity, drill: pair.drill,
+                                   showAge: includeEarlier)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(pair.drill) }
+                }
+            } header: {
+                Text("\(type?.title ?? block.title) · \(shownPairs.count)")
+            }
+        }
+
+        if !rules.isEmpty {
+            Section {
+                ForEach(rules) { rule in
+                    Button { openRule = rule } label: {
+                        LibraryRuleRow(rule: rule, showAge: includeEarlier)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text(ActivityType.rules.title)
+            } footer: {
+                Text(isChinese ? "规则选项不是训练，不会出现在课程计划中。"
+                               : "Rule options are not drills and don't appear in session planning.")
             }
         }
     }
 
-    // MARK: - Empty State
-    @ViewBuilder
-    private var emptyContent: some View {
-        let hasFilters = selectedCategory != nil || showFavoritesOnly || !searchText.isEmpty
-        Section {
-            VStack(spacing: 12) {
-                Image(systemName: hasFilters ? "magnifyingglass" : "figure.basketball")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(.tertiary)
-                Text(hasFilters ? DrillLocalization.L("No Results") : DrillLocalization.L("No Drills"))
-                    .font(.headline)
-                Text(hasFilters
-                     ? DrillLocalization.L("Try adjusting your filters")
-                     : DrillLocalization.L("Add your first drill to get started"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                if !hasFilters {
-                    Button(DrillLocalization.L("Add Drill")) {
-                        showingAddDrill = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .padding(.top, 4)
+    private var typeChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                CategoryChip(title: DrillLocalization.L("All"),
+                             count: typeCounts.reduce(0) { $0 + $1.1 },
+                             color: .accentColor, isSelected: type == nil) { type = nil }
+                ForEach(typeCounts, id: \.0) { t, count in
+                    CategoryChip(title: t.title, count: count, color: .accentColor,
+                                 isSelected: type == t) { type = t }
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
+            .padding(.horizontal, 20)
+        }
+    }
+
+    @ViewBuilder
+    private func guidanceCard(_ age: ActivityAge) -> some View {
+        if let tab = ActivityLibrary.shared.tab(age), !tab.guidance.isEmpty {
+            DisclosureGroup(isExpanded: $showGuidance) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(tab.guidance.enumerated()), id: \.offset) { _, line in
+                        Text(LocalizedStringKey(line))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                Label(isChinese ? "\(age.title) 指引" : "\(age.title) guidance", systemImage: "info.circle")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityIdentifier("library.guidance")
+        }
+    }
+
+    private func favoriteButton(_ drill: DrillItem) -> some View {
+        Button {
+            dataManager.toggleDrillFavorite(drill)
+        } label: {
+            Label(drill.isFavorite ? DrillLocalization.L("Unfavorite") : DrillLocalization.L("Favorite"),
+                  systemImage: drill.isFavorite ? "heart.slash" : "heart")
+        }
+        .tint(.pink)
+    }
+
+    // MARK: Mine
+
+    @ViewBuilder
+    private var mineContent: some View {
+        if mine.isEmpty && mineCategory == nil {
+            Section {
+                VStack(spacing: 12) {
+                    Image(systemName: "figure.basketball")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundStyle(.tertiary)
+                    Text(isChinese ? "还没有自己的训练" : "No drills of your own yet")
+                        .font(.headline)
+                    Text(isChinese ? "你创建的训练会出现在这里。" : "Drills you create appear here.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button(DrillLocalization.L("Add Drill")) { showingAddDrill = true }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+                .listRowBackground(Color.clear)
+            }
+        } else {
+            Section {
+                ForEach(mine) { drill in
+                    NavigationLink(destination: DrillDetailView(drill: drill)) { DrillRow(drill: drill) }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(drill) }
+                }
+            } header: {
+                Text(isChinese ? "我的训练" : "My drills")
+            }
+        }
+    }
+}
+
+// MARK: - Library rows
+
+private struct LibraryRow: View {
+    let activity: LibraryActivity
+    let drill: DrillItem
+    let showAge: Bool
+
+    private var leadingMedia: DrillMedia? { drill.media.min(by: { $0.sortOrder < $1.sortOrder }) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let media = leadingMedia {
+                DrillMediaThumb(media: media, size: 40, cornerRadius: 8)
+            } else {
+                Image(systemName: activity.type.icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 40, height: 40)
+                    .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(drill.localizedName)
+                    .font(.body)
+                    .lineLimit(2)
+                Text([showAge ? activity.age.rawValue : nil, activity.type.title, activity.sourceText]
+                        .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            if drill.isFavorite {
+                Image(systemName: "heart.fill").font(.caption).foregroundStyle(.pink)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityIdentifier("library.row")
+    }
+}
+
+private struct LibraryRuleRow: View {
+    let rule: LibraryActivity
+    let showAge: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: ActivityType.rules.icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, height: 32)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(rule.displayName).font(.body)
+                Text(rule.howItRuns)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if showAge {
+                    Text(rule.age.rawValue).font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .padding(.vertical, 2)
+        .accessibilityIdentifier("library.rule")
+    }
+}
+
+/// A rule option: what it does and where it comes from. Read-only.
+private struct LibraryRuleSheet: View {
+    let rule: LibraryActivity
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    LibraryBadges(activity: rule)
+                    Text(rule.howItRuns).font(.body)
+                    LibrarySourceView(activity: rule)
+                }
+                .padding(20)
+            }
+            .navigationTitle(rule.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(DrillLocalization.L("Done")) { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+/// Age · block · type, as small chips.
+struct LibraryBadges: View {
+    let activity: LibraryActivity
+    var body: some View {
+        HStack(spacing: 6) {
+            badge(activity.age.title, accent: true)
+            badge(activity.block.title)
+            badge(activity.type.title)
+        }
+    }
+    private func badge(_ text: String, accent: Bool = false) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .foregroundStyle(accent ? Color.accentColor : Color.primary)
+            .background(Capsule().fill(accent ? Color.accentColor.opacity(0.12) : Color(.tertiarySystemFill)))
+    }
+}
+
+/// "Source" with the citation and, when there is one, the link.
+struct LibrarySourceView: View {
+    let activity: LibraryActivity
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(isChinese ? "来源" : "Source")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            if let urlString = activity.sourceUrl, let url = URL(string: urlString) {
+                Link(destination: url) {
+                    HStack(spacing: 4) {
+                        Text(activity.sourceText).multilineTextAlignment(.leading)
+                        Image(systemName: "arrow.up.right.square")
+                    }
+                    .font(.subheadline)
+                }
+            } else {
+                Text(activity.sourceText).font(.subheadline)
+            }
         }
     }
 }
@@ -334,6 +600,8 @@ struct DrillDetailView: View {
             .filter { !$0.hasPrefix("visibility:") }
             .filter { !$0.hasPrefix("owner:") }
             .filter { $0 != "quick-note" } // Hide internal tag
+            .filter { $0 != ActivityLibrary.tag && !$0.hasPrefix("library:") && !$0.hasPrefix("block:")
+                && !$0.hasPrefix("type:") && !$0.hasPrefix("kind:") }  // library bookkeeping
             .map { raw in
                 raw.replacingOccurrences(of: "-", with: " ")
                    .replacingOccurrences(of: "_", with: " ")
@@ -395,6 +663,18 @@ struct DrillDetailView: View {
                     VStack(spacing: 16) {
                         // Inline info chips (replaces cards)
                         quickInfoChips
+
+                        // Activity library: age · block · type, and the source.
+                        if let activity = currentDrill.libraryActivity {
+                            VStack(alignment: .leading, spacing: 12) {
+                                LibraryBadges(activity: activity)
+                                if let zh = activity.nameZh, zh != currentDrill.localizedName {
+                                    Text(zh).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                LibrarySourceView(activity: activity)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         
                         // Description (with placeholder for empty)
                         descriptionSection
@@ -797,7 +1077,9 @@ struct DrillDetailView: View {
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                DetailSectionHeader(title: DrillLocalization.L("Description"), icon: "text.alignleft")
+                DetailSectionHeader(title: currentDrill.isLibraryDrill
+                                    ? (isChinese ? "怎么进行" : "How it runs")
+                                    : DrillLocalization.L("Description"), icon: "text.alignleft")
                 Spacer()
                 if editingDescription {
                     Button(action: saveDescription) {
