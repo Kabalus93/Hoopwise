@@ -61,7 +61,15 @@ struct DrillPlanGenerator {
     static func generatePlan(in ctx: Context,
                              random: () -> Double = { Double.random(in: 0..<1) })
         -> (curriculum: SessionCurriculum, rationale: PlanRationale) {
-        let cur = ctx.session.curriculum
+        var cur = ctx.session.curriculum
+        // A session made by the cycle planner can arrive with no block minutes
+        // at all: share its length out evenly over the three blocks.
+        if cur.warmupMinutes + cur.skillsMinutes + cur.gameMinutes == 0 {
+            let total = max(30, Int(ctx.session.endTime.timeIntervalSince(ctx.session.startTime) / 60))
+            cur.warmupMinutes = total / 3
+            cur.skillsMinutes = total / 3
+            cur.gameMinutes = total - 2 * (total / 3)
+        }
         let warmupBudget = max(5, cur.warmupMinutes)
         let skillsBudget = max(5, cur.skillsMinutes)
         let gameBudget = max(0, cur.gameMinutes)
@@ -207,6 +215,12 @@ struct DrillPlanGenerator {
 
         var seen = Set<ActivityType>()
         return (types.filter { seen.insert($0).inserted }, notes)
+    }
+
+    /// The emphasis the DATA asks for — weakest evaluated area, and passing
+    /// when game stats show few assists. No phase input.
+    static func dataFocus(students: [Student], players: [Player], games: [SessionGame]) -> [ActivityType] {
+        focusTypes(phase: nil, students: students, players: players, games: games).types
     }
 
     /// "assists:<ratio>" when the roster's games show under one assist per

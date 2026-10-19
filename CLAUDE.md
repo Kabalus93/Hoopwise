@@ -453,6 +453,30 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   set) gates skill-target comparisons, so a level-only blob never shows
   default 5s as targets. Tests: PlanGeneratorTests, PlanGeneratorUITests.
 
+## Cycle planner (October 2026, Luther)
+- "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,
+  Services/CyclePlanner, both targets): the coach gives START, DELIVER-BY
+  date (required — open-ended programs plan cycle by cycle; defaults to the
+  program end, else 12 weeks), LEVEL (the program's Training level) and
+  EMPHASIS (preselected from evaluations + game stats via
+  DrillPlanGenerator.dataFocus). `plan` is pure and previewed live; `apply`
+  writes: phases from the coach's templates else FEB, the NEXT age group's
+  chain at level 4–5 and the previous at 1, stretched to fit start…target
+  exactly (weeks shared out, each ≥ 1); emphasis added to every phase's
+  focus; up to 8 library activities suggested per phase; sessions via
+  materializeSessions (existing ones adopted, never doubled); a plan for
+  every planless session IN DATE ORDER so review/new builds up; the level
+  saved to the program. Phase titles stay template strings so PhaseNaming
+  still localises them.
+- NEXT-CYCLE REMINDER: AttentionEngine rule 6 (`.nextCycle`, sanctioned by
+  Luther as a sixth rule) — an active program whose LAST phase ends within
+  14 days or ended < 7 days ago; one item per cycle; opens the program. Plus a
+  local notification at 09:00 two weeks before the target
+  (`next-cycle-<programId>`, replaced on every new plan). "Plan the next
+  cycle" button under the phase list starts the day after the last phase.
+- A planner-made session with no block minutes gets its length split evenly
+  over warm-up/skills/game before planning. Tests: CyclePlannerTests.
+
 ## Mac directory pattern (August 2026)
 - DirectoryView (HoopwiseMac/Views/Directory/) is the Contacts skeleton:
   groups column → indexed list → detail card, three columns inside the
@@ -843,6 +867,8 @@ found two bugs, and both were in code that renders documents sent to clients.
      counts); edge-triggered, 14-day cooldown, shown 48h.
   4. Note follow-up — only ON its due date (24h), never ahead.
   5. Reminders — only once due, shown 48h.
+  6. Next cycle — added October 2026 at Luther's request (see "Cycle
+     planner").
   RETIRED from attention: plan needed (visible on the session itself) and
   new student with no first session. Their Kind cases stay so adapters
   compile. Do not re-add a rule without asking: each one must cost

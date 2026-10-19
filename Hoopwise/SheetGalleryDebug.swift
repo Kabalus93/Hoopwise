@@ -231,6 +231,14 @@ enum SheetGalleryDebug {
                 missing("createGame: no program session")
             }
 
+        case "cyclePlanner":
+            // The cycle planner over the first program (Create is not tapped).
+            if let program = dm.programs.first {
+                CyclePlannerSheet(program: program, defaultStart: Date())
+            } else {
+                missing("cyclePlanner: no program")
+            }
+
         case "drillsLibrary":
             // The activity-library drills page, as the Hub pushes it.
             NavigationStack { DrillsLibraryView() }

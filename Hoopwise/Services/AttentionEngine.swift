@@ -86,6 +86,7 @@ enum AttentionEngine {
     enum Kind: String {
         case planNeeded, rollCallRecovery, renewalWindow
         case newStudent, reengage, followUp, reminderDue
+        case nextCycle
     }
 
     /// 0 = fyi, 1 = attention, 2 = urgent — the inbox's existing ladder.
@@ -100,6 +101,7 @@ enum AttentionEngine {
         var studentId: UUID?
         var sessionId: UUID?
         var reminderId: UUID?
+        var programId: UUID?
         var id: String { key }
     }
 
@@ -403,6 +405,30 @@ enum AttentionEngine {
                 urgency: 2,
                 deadline: reminder.dueDate.addingTimeInterval(48 * 3600),
                 reminderId: reminder.id))
+        }
+
+        // 6. Plan the next cycle (October 2026, Luther) — a program whose LAST
+        // phase ends within two weeks (or ended up to a week ago) with nothing
+        // planned after it. Without a next cycle the sessions stop and the
+        // plans run dry; every cycle has a target date, open-ended programs
+        // included. One item per cycle (the key carries the end date).
+        let horizon = now.addingTimeInterval(CyclePlanner.reminderLead)
+        for program in dataManager.programs where program.status == .active {
+            guard let start = CyclePlanner.nextCycleStart(programId: program.id, phases: dataManager.microCycles)
+            else { continue }
+            let lastEnd = start.addingTimeInterval(-86_400)
+            guard lastEnd <= horizon, lastEnd.addingTimeInterval(7 * 86_400) > now else { continue }
+            let days = max(0, Calendar.current.dateComponents([.day], from: now, to: lastEnd).day ?? 0)
+            items.append(Item(
+                key: "nextCycle:\(program.id):\(dayStamp(lastEnd))",
+                kind: .nextCycle, category: .plan,
+                title: isChinese ? "规划下一周期 · \(program.name)" : "Plan the next cycle · \(program.name)",
+                subtitle: lastEnd < now
+                    ? (isChinese ? "当前周期已结束" : "The cycle has ended")
+                    : (isChinese ? "当前周期 \(days) 天后结束" : "Cycle ends in \(days) days"),
+                urgency: lastEnd < now ? 2 : 1,
+                deadline: lastEnd.addingTimeInterval(7 * 86_400),
+                programId: program.id))
         }
 
         saveState(state)

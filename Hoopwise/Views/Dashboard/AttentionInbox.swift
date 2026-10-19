@@ -173,6 +173,7 @@ extension AttentionInbox {
         case .reengage:         return "person.crop.circle.badge.clock"
         case .followUp:         return "text.bubble"
         case .reminderDue:      return "bell.badge.fill"
+        case .nextCycle:        return "calendar.badge.plus"
         }
     }
 
@@ -180,6 +181,7 @@ extension AttentionInbox {
         if let sessionId = item.sessionId { return .session(sessionId) }
         if let studentId = item.studentId { return .student(studentId) }
         if let reminderId = item.reminderId { return .reminder(reminderId) }
+        if let programId = item.programId { return .program(programId) }
         return .reminder(UUID())   // unreachable: every kind carries a ref
     }
 }

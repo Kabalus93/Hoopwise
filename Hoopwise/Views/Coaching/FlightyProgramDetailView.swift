@@ -23,6 +23,8 @@ struct FlightyProgramDetailView: View {
     @State private var cardExportError: String?
     @State private var showingDedupeConfirmation = false
     @State private var dedupeResultMessage: String?
+    @State var showingCyclePlanner = false
+    @State var cycleResultMessage: String?
 
     var microCycles: [MicroCycle] {
         dataManager.microCycles
@@ -146,6 +148,20 @@ struct FlightyProgramDetailView: View {
             }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .sheet(isPresented: $showingCyclePlanner) {
+            CyclePlannerSheet(
+                program: program,
+                defaultStart: CyclePlanner.nextCycleStart(programId: program.id, phases: dataManager.microCycles)
+                    ?? program.startDate ?? Date()
+            ) { result in
+                let zh = LocalizationManager.shared.currentLanguage == .chinese
+                cycleResultMessage = zh
+                    ? "已创建 \(result.phases) 个阶段 · 新增 \(result.sessionsCreated) 节课 · 生成 \(result.sessionsPlanned) 份计划"
+                    : "\(result.phases) phases · \(result.sessionsCreated) new sessions · \(result.sessionsPlanned) plans"
+                if let fresh = dataManager.programs.first(where: { $0.id == program.id }) { program = fresh }
+            }
+            .environmentObject(dataManager)
+        }
         .navigationBarTitleDisplayModeCompat(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailingCompat) {
@@ -835,6 +851,12 @@ extension FlightyProgramDetailView {
                 phasesEmptyState
             } else {
                 VStack(spacing: 8) {
+                    if let message = cycleResultMessage {
+                        Label(message, systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     ForEach(microCycles) { cycle in
                         NavigationLink(destination: FlightyMicroCycleDetailView(microCycle: cycle, program: program)) {
                             phaseRow(cycle)
@@ -846,6 +868,20 @@ extension FlightyProgramDetailView {
                             }
                         }
                     }
+                    // Every cycle has a target date; the next one starts the
+                    // day after the last phase (and is what the attention
+                    // reminder points at).
+                    Button {
+                        showingCyclePlanner = true
+                    } label: {
+                        Label(isChinese ? "规划下一周期" : "Plan the next cycle", systemImage: "calendar.badge.plus")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(programColor)
+                    .padding(.top, 4)
+                    .accessibilityIdentifier("cycle.planNext")
                 }
             }
         }
@@ -868,8 +904,8 @@ extension FlightyProgramDetailView {
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.primary)
                     Text(isChinese
-                         ? "基于 \(program.ageGroup.rawValue) 一键生成 FEB 周期。"
-                         : "Generate the FEB chain for \(program.ageGroup.rawValue), or add one by hand.")
+                         ? "按目标日期、水平和训练库为 \(program.ageGroup.rawValue) 规划阶段、课程与计划，或手动添加。"
+                         : "Phases, sessions and plans for \(program.ageGroup.rawValue) from a target date, level and the library — or add one by hand.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -880,10 +916,10 @@ extension FlightyProgramDetailView {
             HStack(spacing: 10) {
                 if templateCount > 0 {
                     Button {
-                        generatePhasesFromTemplate()
+                        showingCyclePlanner = true
                     } label: {
                         Label(
-                            isChinese ? "生成 \(templateCount) 个阶段" : "Generate \(templateCount) phases",
+                            isChinese ? "规划周期" : "Plan a cycle",
                             systemImage: "wand.and.stars"
                         )
                         .frame(maxWidth: .infinity)

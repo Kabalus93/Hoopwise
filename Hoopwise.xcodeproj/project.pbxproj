@@ -163,6 +163,7 @@
 				Services/AttentionEngine.swift,
 				Services/ClassListImport.swift,
 				Services/CloudSyncMonitor.swift,
+				Services/CyclePlanner.swift,
 				Services/DrillPlanGenerator.swift,
 				Services/FrameThumbnailRenderer.swift,
 				Services/HoopwiseBundle.swift,
