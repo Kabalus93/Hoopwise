@@ -141,8 +141,13 @@ struct LibraryActivity: Codable, Identifiable, Hashable {
     /// activity | game | rule
     let kind: String
     let name: String
+    /// Chinese title (October 2026 translation, natural coaching Chinese).
     let nameZh: String?
+    /// FIBA's own Chinese-edition name, kept when the translation improved
+    /// on it, so a coach can still find the page in FIBA's Chinese manual.
+    let fibaNameZh: String?
     let howItRuns: String
+    let howItRunsZh: String?
     /// The source cell as written (markdown links kept).
     let source: String
     let sourceUrl: String?
@@ -150,10 +155,16 @@ struct LibraryActivity: Codable, Identifiable, Hashable {
     var id: UUID { ActivityLibrary.drillId(forKey: key) }
     var isRule: Bool { kind == "rule" }
 
-    /// Chinese name first in Chinese, when the library gives one.
+    /// Chinese name in Chinese, when the library has one.
     var displayName: String {
         if LocalizationManager.shared.currentLanguage == .chinese, let nameZh, !nameZh.isEmpty { return nameZh }
         return name
+    }
+
+    /// "How it runs" in the app's language.
+    var localizedHowItRuns: String {
+        if LocalizationManager.shared.currentLanguage == .chinese, let howItRunsZh, !howItRunsZh.isEmpty { return howItRunsZh }
+        return howItRuns
     }
 
     /// The source without markdown link syntax ("Jr. NBA Rookie Plan 5, 7").
@@ -167,6 +178,15 @@ struct LibraryTab: Codable, Hashable {
     let age: ActivityAge
     let title: String
     let guidance: [String]
+    let titleZh: String?
+    let guidanceZh: [String]?
+
+    var localizedGuidance: [String] {
+        if LocalizationManager.shared.currentLanguage == .chinese, let guidanceZh, guidanceZh.count == guidance.count {
+            return guidanceZh
+        }
+        return guidance
+    }
 }
 
 struct ActivityLibrary: Codable {

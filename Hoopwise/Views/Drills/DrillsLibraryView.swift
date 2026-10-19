@@ -48,7 +48,8 @@ struct DrillsLibraryView: View {
         return ActivityLibrary.shared.plannable.compactMap { activity in
             guard ages.contains(activity.age), activity.block == block,
                   let drill = byId[activity.id],
-                  matchesSearch(drill.name, drill.localizedName, drill.description) else { return nil }
+                  matchesSearch(drill.name, drill.localizedName, drill.description,
+                                activity.nameZh ?? "", activity.howItRunsZh ?? "") else { return nil }
             return (activity, drill)
         }
     }
@@ -62,7 +63,8 @@ struct DrillsLibraryView: View {
     private var rules: [LibraryActivity] {
         guard block == .game, type == nil || type == .rules else { return [] }
         return ActivityLibrary.shared.items.filter {
-            $0.isRule && ages.contains($0.age) && matchesSearch($0.name, $0.howItRuns)
+            $0.isRule && ages.contains($0.age)
+                && matchesSearch($0.name, $0.howItRuns, $0.nameZh ?? "", $0.howItRunsZh ?? "")
         }
     }
 
@@ -98,6 +100,14 @@ struct DrillsLibraryView: View {
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                // The switch lives in the ⓘ sheet; while it is on, say so here
+                // so the list is never filtered by something out of sight.
+                if includeEarlier, let age, age != .u6 {
+                    earlierAgesNote(age)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
             }
             if let age {
                 libraryContent(age)
@@ -107,10 +117,19 @@ struct DrillsLibraryView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle(isChinese ? "训练库" : "Activity library")
-        .searchable(text: $searchText, prompt: DrillLocalization.L("Search"))
+        .searchable(text: $searchText, prompt: isChinese ? "搜索训练" : "Search")
         .onChange(of: block) { _, _ in type = nil }
         .onChange(of: ageChoice) { _, _ in type = nil }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                // Guidance is read now and then, not every visit: it lives
+                // behind ⓘ rather than taking the top of the list.
+                if age != nil {
+                    Button { showGuidance = true } label: { Image(systemName: "info.circle") }
+                        .accessibilityLabel(isChinese ? "年龄段指引" : "Age guidance")
+                        .accessibilityIdentifier("library.info")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showingAddDrill = true } label: { Image(systemName: "plus") }
                     .accessibilityLabel(DrillLocalization.L("Add Drill"))
@@ -118,6 +137,12 @@ struct DrillsLibraryView: View {
         }
         .sheet(isPresented: $showingAddDrill) {
             AddEditDrillSheet(drill: nil).environmentObject(dataManager)
+        }
+        .sheet(isPresented: $showGuidance) {
+            if let age {
+                LibraryGuidanceSheet(age: age, includeEarlier: $includeEarlier)
+                    .presentationDetents([.medium, .large])
+            }
         }
         .sheet(item: $openRule) { rule in
             LibraryRuleSheet(rule: rule)
@@ -162,22 +187,6 @@ struct DrillsLibraryView: View {
 
     @ViewBuilder
     private func libraryContent(_ age: ActivityAge) -> some View {
-        Section {
-            guidanceCard(age)
-            Toggle(isOn: $includeEarlier) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isChinese ? "包含更低年龄段" : "Include earlier ages")
-                    Text(age == .u6
-                         ? (isChinese ? "U6 是第一个年龄段" : "U6 is the first age")
-                         : (isChinese ? "每个年龄段在前一个的基础上增加" : "Each age adds to the ones before it"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .disabled(age == .u6)
-            .accessibilityIdentifier("library.includeEarlier")
-        }
-
         Section {
             Picker(isChinese ? "环节" : "Block", selection: $block) {
                 ForEach(ActivityBlock.allCases) { b in
@@ -251,25 +260,18 @@ struct DrillsLibraryView: View {
         }
     }
 
-    @ViewBuilder
-    private func guidanceCard(_ age: ActivityAge) -> some View {
-        if let tab = ActivityLibrary.shared.tab(age), !tab.guidance.isEmpty {
-            DisclosureGroup(isExpanded: $showGuidance) {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(tab.guidance.enumerated()), id: \.offset) { _, line in
-                        Text(LocalizedStringKey(line))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(.top, 6)
-            } label: {
-                Label(isChinese ? "\(age.title) 指引" : "\(age.title) guidance", systemImage: "info.circle")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .accessibilityIdentifier("library.guidance")
+    private func earlierAgesNote(_ age: ActivityAge) -> some View {
+        let earlier = age.upToHere.dropLast().map(\.rawValue)
+        return HStack(spacing: 6) {
+            Image(systemName: "square.stack.3d.up").font(.caption2)
+            Text(isChinese ? "含 \(earlier.joined(separator: "、"))" : "Including \(earlier.joined(separator: ", "))")
+                .font(.caption)
+            Spacer()
+            Button(isChinese ? "关闭" : "Turn off") { includeEarlier = false }
+                .font(.caption.weight(.semibold))
         }
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("library.earlierNote")
     }
 
     private func favoriteButton(_ drill: DrillItem) -> some View {
@@ -370,7 +372,7 @@ private struct LibraryRuleRow: View {
                 .frame(width: 40, height: 32)
             VStack(alignment: .leading, spacing: 3) {
                 Text(rule.displayName).font(.body)
-                Text(rule.howItRuns)
+                Text(rule.localizedHowItRuns)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -396,7 +398,7 @@ private struct LibraryRuleSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     LibraryBadges(activity: rule)
-                    Text(rule.howItRuns).font(.body)
+                    Text(rule.localizedHowItRuns).font(.body)
                     LibrarySourceView(activity: rule)
                 }
                 .padding(20)
@@ -452,6 +454,56 @@ struct LibrarySourceView: View {
                 }
             } else {
                 Text(activity.sourceText).font(.subheadline)
+            }
+            // The FIBA Chinese edition's own name, when the title above
+            // improves on it — so the page can still be found in that book.
+            if isChinese, let fiba = activity.fibaNameZh, fiba != activity.nameZh {
+                Text("FIBA 中文版：\(fiba)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// The age's guidance, plus the switch that adds younger ages to the list.
+private struct LibraryGuidanceSheet: View {
+    let age: ActivityAge
+    @Binding var includeEarlier: Bool
+    @Environment(\.dismiss) private var dismiss
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if age != .u6 {
+                    Section {
+                        Toggle(isOn: $includeEarlier) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(isChinese ? "包含更低年龄段" : "Include earlier ages")
+                                Text(isChinese ? "每个年龄段在前一个的基础上增加" : "Each age adds to the ones before it")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("library.includeEarlier")
+                    }
+                }
+                if let tab = ActivityLibrary.shared.tab(age) {
+                    Section {
+                        ForEach(Array(tab.localizedGuidance.enumerated()), id: \.offset) { _, line in
+                            Text(LocalizedStringKey(line))
+                                .font(.subheadline)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } header: {
+                        Text(isChinese ? "指引" : "Guidance")
+                    }
+                }
+            }
+            .navigationTitle(isChinese ? "\(age.title) 指引" : "\(age.title) guidance")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(DrillLocalization.L("Done")) { dismiss() }
+                }
             }
         }
     }
@@ -1078,7 +1130,7 @@ struct DrillDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 DetailSectionHeader(title: currentDrill.isLibraryDrill
-                                    ? (isChinese ? "怎么进行" : "How it runs")
+                                    ? (isChinese ? "具体做法" : "How it runs")
                                     : DrillLocalization.L("Description"), icon: "text.alignleft")
                 Spacer()
                 if editingDescription {
@@ -1370,7 +1422,7 @@ struct DrillDetailView: View {
     
     // MARK: - Inline Editing Helpers
     private func startEditingDescription() {
-        editedDescription = currentDrill.description
+        editedDescription = currentDrill.localizedDescription
         editingDescription = true
         focusedField = .description
     }

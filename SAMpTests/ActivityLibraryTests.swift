@@ -66,3 +66,15 @@ final class ActivityLibraryTests: XCTestCase {
         XCTAssertEqual(drill.libraryActivity?.key, u7.key)
     }
 }
+
+/// Every activity and every age's guidance reads in Chinese (October 2026).
+final class ActivityLibraryChineseTests: XCTestCase {
+    func testEverythingIsTranslated() {
+        let lib = ActivityLibrary.shared
+        let missing = lib.items.filter { ($0.nameZh ?? "").isEmpty || ($0.howItRunsZh ?? "").isEmpty }
+        XCTAssertTrue(missing.isEmpty, "untranslated: \(missing.prefix(5).map(\.key))")
+        for tab in lib.tabs {
+            XCTAssertEqual(tab.guidanceZh?.count, tab.guidance.count, "\(tab.age) guidance")
+        }
+    }
+}

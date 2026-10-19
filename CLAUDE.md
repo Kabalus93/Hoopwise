@@ -418,11 +418,25 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   coach edited it (`lastModifiedAt`). `deduplicateDrills` keys library drills
   by ID — the same name at two ages is legitimate.
 - iOS drills page (sanctioned, Luther): age chips + "Mine" (coach-created),
-  the age's guidance, block segments, type chips, "Include earlier ages"
-  (default off; each age adds to the ones before). Detail shows age/block/
+  block segments, type chips; guidance and "Include earlier ages" (default
+  off; each age adds to the ones before) behind ⓘ. Detail shows age/block/
   type, the source (linked) and "How it runs". HOOPWISE_SHOT=drillsLibrary.
   Tests: ActivityLibraryTests, ActivityLibraryUITests.
 - Mac gets the same drills through the shared seeding; its page is unchanged.
+- CHINESE (October 2026, Luther: "useless to Chinese-only coaches if not
+  localised"): every item carries `nameZh` + `howItRunsZh` and every age
+  `titleZh` + `guidanceZh`, translated to natural coaching Chinese against a
+  shared glossary (7 parallel translators + one consistency review across
+  ages: terms, cross-references, block/tab labels, misleading titles).
+  `fibaNameZh` keeps FIBA's Chinese-edition name where the new title replaced
+  it (shown under the source as "FIBA 中文版：…"). Library drills read their
+  name/description from the library (`localizedName`/`localizedDescription`)
+  and NEVER from the legacy DrillContentLocalization name table; a coach's
+  edit wins. Sources stay as cited. Regenerate data with the merge step, never
+  hand-edit ActivityLibraryData.swift. Pinned by ActivityLibraryChineseTests.
+- Guidance and "Include earlier ages" live behind the ⓘ toolbar button
+  (read 2 in 10 visits — not worth the top of the list); while the switch
+  is on, a one-line note under the age chips says so.
 - THE PLAN ENGINE (Services/DrillPlanGenerator.swift, October 2026 rewrite)
   plans from the library: slots follow its blocks (warm-up ← routine + a
   closing small game, skills ← compete, game ← game), rule options never.

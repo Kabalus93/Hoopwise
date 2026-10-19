@@ -240,7 +240,10 @@ extension DrillItem {
     var localizedName: String {
         // Library activities carry their own Chinese name where the library
         // gives one; everything else goes through the translation table.
-        if let activity = libraryActivity, activity.nameZh != nil, name == activity.name {
+        // A library drill's name comes from the library's own translation,
+        // never the legacy name table (a name match there would be another
+        // drill's text). A coach who renamed it keeps their name.
+        if let activity = libraryActivity, name == activity.name {
             return activity.displayName
         }
         return DrillLocalization.localizedDrillName(name)
@@ -371,21 +374,26 @@ extension DrillItem {
     
     /// Localized description - falls back to original if no translation
     var localizedDescription: String {
-        DrillContentLocalization.localizedDescription(for: name) ?? description
+        // Library drill, text untouched by a coach: the library's translation.
+        if let activity = libraryActivity, description == activity.howItRuns {
+            return activity.localizedHowItRuns
+        }
+        if isLibraryDrill { return description }
+        return DrillContentLocalization.localizedDescription(for: name) ?? description
     }
     
     /// Localized instructions - falls back to original if no translation
     var localizedInstructions: [String] {
-        DrillContentLocalization.localizedInstructions(for: name) ?? instructions
+        isLibraryDrill ? instructions : (DrillContentLocalization.localizedInstructions(for: name) ?? instructions)
     }
     
     /// Localized key points - falls back to original if no translation
     var localizedKeyPoints: [String] {
-        DrillContentLocalization.localizedKeyPoints(for: name) ?? keyPoints
+        isLibraryDrill ? keyPoints : (DrillContentLocalization.localizedKeyPoints(for: name) ?? keyPoints)
     }
     
     /// Localized variations - falls back to original if no translation
     var localizedVariations: [String] {
-        DrillContentLocalization.localizedVariations(for: name) ?? variations
+        isLibraryDrill ? variations : (DrillContentLocalization.localizedVariations(for: name) ?? variations)
     }
 }

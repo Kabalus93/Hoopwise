@@ -17,16 +17,23 @@ final class ActivityLibraryUITests: XCTestCase {
 
     private var rows: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "library.row") }
 
-    /// U8 alone has 22 routine activities; with U6 and U7 included, 51.
-    /// The switch is remembered, so start from whichever state it is in.
+    /// U8 alone has 22 routine activities; with U6 and U7 included, 51. The
+    /// switch lives in the ⓘ guidance sheet and is remembered, so start from
+    /// whichever state it is in.
     func testAgeBlockAndEarlierAges() {
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
         let alone = app.staticTexts["Routine · 22"], together = app.staticTexts["Routine · 51"]
         XCTAssertTrue(alone.exists || together.exists, "U8 routine: 22 alone, 51 with earlier ages")
         let wasAlone = alone.exists
-        app.switches["library.includeEarlier"].switches.firstMatch.tap()
+        app.buttons["library.info"].tap()
+        let toggle = app.switches["library.includeEarlier"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "the switch is in the guidance sheet")
+        toggle.switches.firstMatch.tap()
+        app.buttons["Done"].tap()
         XCTAssertTrue((wasAlone ? together : alone).waitForExistence(timeout: 5),
                       "the switch adds or removes U6 and U7")
+        let note = app.descendants(matching: .any).matching(identifier: "library.earlierNote").firstMatch
+        XCTAssertEqual(note.exists, wasAlone, "a visible note says when earlier ages are included")
     }
 
     func testRuleOptionsLiveUnderGame() {
