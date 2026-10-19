@@ -216,7 +216,7 @@ struct SkillsSectionCardView: View {
     }
     
     private var skillTargets: ProgramSkillTargets? {
-        enrolledProgram?.skillTargets
+        enrolledProgram?.skillTargets.flatMap { $0.hasTargets ? $0 : nil }
     }
     
     var body: some View {

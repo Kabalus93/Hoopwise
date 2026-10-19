@@ -423,6 +423,21 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   type, the source (linked) and "How it runs". HOOPWISE_SHOT=drillsLibrary.
   Tests: ActivityLibraryTests, ActivityLibraryUITests.
 - Mac gets the same drills through the shared seeding; its page is unchanged.
+- THE PLAN ENGINE (Services/DrillPlanGenerator.swift, October 2026 rewrite)
+  plans from the library: slots follow its blocks (warm-up ← routine + a
+  closing small game, skills ← compete, game ← game), rule options never.
+  It reads AGE (program age group → library age), LEVEL 1–5 (the program
+  page's Training level slider, stored as `ProgramSkillTargets.level` in the
+  existing skillTargets JSON — no schema change; unset → player evaluations
+  suggest one only when ≥ half the roster is rated; else 3), which sets the
+  AGE WINDOW (3 = this age + the one below; 4–5 borrow older; 1–2 younger),
+  FOCUS (phase focus, weakest evaluated area, and with ≥ 3 games a low
+  assists-per-basket signal → passing), and HISTORY (every earlier plan of
+  the program: nothing from the last session repeats; review vs new is 30/70
+  in a phase's first two sessions, 60/40 after). `PlanRationale.summary` is
+  shown under the plan. `ProgramSkillTargets.hasTargets` (lastUpdatedDate
+  set) gates skill-target comparisons, so a level-only blob never shows
+  default 5s as targets. Tests: PlanGeneratorTests, PlanGeneratorUITests.
 
 ## Mac directory pattern (August 2026)
 - DirectoryView (HoopwiseMac/Views/Directory/) is the Contacts skeleton:

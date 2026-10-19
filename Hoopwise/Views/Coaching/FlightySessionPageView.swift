@@ -29,6 +29,8 @@ struct FlightySessionPageView: View {
     @State private var skipReason: SkipReason = .holiday
     /// The student whose profile photo the leading swipe is retaking.
     @State private var studentForPhoto: Student?
+    /// What the plan generator read and decided on its last run here.
+    @State private var planRationale: DrillPlanGenerator.PlanRationale?
     @State private var selectedStudentForPeep: Student?
     @State private var showingDrillPicker = false
     @State private var showingStudentPicker = false
@@ -867,7 +869,15 @@ struct FlightySessionPageView: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: session.curriculum.totalDrillCount)
         } else {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
+                // What the engine read and decided — shown after it ran.
+                if let rationale = planRationale {
+                    Label(rationale.summary, systemImage: "sparkles")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("plan.rationale")
+                }
                 Spacer()
                 Button {
                     generatePlanFromLibrary()
@@ -886,17 +896,12 @@ struct FlightySessionPageView: View {
     }
 
     private func generatePlanFromLibrary() {
-        // Pull the recent N sessions on this same program so the generator
-        // can avoid drills the cohort just did.
-        let recent: [SessionEvent] = {
+        // Every earlier session of this program: the engine reads its plans
+        // to decide what to review and what to introduce.
+        let history: [SessionEvent] = {
             guard let pid = session.programId else { return [] }
-            return dataManager.sessionEvents
-                .filter { $0.programId == pid && $0.id != session.id && $0.date < session.date }
-                .sorted { $0.date > $1.date }
-                .prefix(3)
-                .map { $0 }
+            return dataManager.sessionEvents.filter { $0.programId == pid && $0.id != session.id }
         }()
-
         let players = enrolledStudents.compactMap { dataManager.player(for: $0.id) }
 
         let ctx = DrillPlanGenerator.Context(
@@ -906,16 +911,17 @@ struct FlightySessionPageView: View {
             enrolledStudents: enrolledStudents,
             players: players,
             allDrills: dataManager.drills,
-            recentSessions: recent
+            programHistory: history
         )
 
-        let newCurriculum = DrillPlanGenerator.generate(in: ctx)
+        let result = DrillPlanGenerator.generatePlan(in: ctx)
         // Preserve the coach's hand-typed notes if any.
-        var merged = newCurriculum
+        var merged = result.curriculum
         if let existingNotes = session.curriculum.notes, !existingNotes.isEmpty {
             merged.notes = existingNotes
         }
         session.curriculum = merged
+        planRationale = result.rationale
         saveSession()
         HapticFeedback.notification(.success)
     }
@@ -1680,7 +1686,7 @@ struct FlightySessionPageView: View {
                     }
                     
                     // Skill targets recommendation
-                    if let targets = program.skillTargets {
+                    if let targets = program.skillTargets, targets.hasTargets {
                         Text(isChinese ? "建议选择难度与学员水平匹配的训练" : "Recommended: Match drill difficulty to student levels")
                             .font(.system(size: 11))
                             .foregroundColor(.orange)

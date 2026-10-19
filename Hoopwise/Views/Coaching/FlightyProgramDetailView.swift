@@ -124,6 +124,9 @@ struct FlightyProgramDetailView: View {
                 
                 // Content sections
                 VStack(spacing: 20) {
+                    // Training level — read by the session plan generator.
+                    ProgramLevelCard(program: $program, enrolledStudents: enrolledStudents)
+
                     // Training phases - PRIMARY CONTENT
                     phasesSection
                     

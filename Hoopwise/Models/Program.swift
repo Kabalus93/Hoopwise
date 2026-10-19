@@ -198,6 +198,11 @@ struct ProgramSkillTargets: Codable, Hashable {
     var athleticism: Int    // Target athleticism
     var intangibles: Int    // Target intangibles (teamwork, coachability, hustle)
     var lastUpdatedDate: Date?
+    /// The program's training LEVEL, 1…5 (October 2026, Luther): the slider on
+    /// the program page. 3 = this age group; 4–5 work above it; 1–2 below.
+    /// Nil = not set, and the plan generator falls back to player
+    /// evaluations. Lives in this JSON blob, so it syncs with no schema change.
+    var level: Int? = nil
     
     // Legacy computed properties for backward compatibility
     var shooting: Int { scoring }
@@ -244,12 +249,13 @@ struct ProgramSkillTargets: Codable, Hashable {
         defense = try container.decodeIfPresent(Int.self, forKey: .defense) ?? 5
         athleticism = try container.decodeIfPresent(Int.self, forKey: .athleticism) ?? 5
         lastUpdatedDate = try container.decodeIfPresent(Date.self, forKey: .lastUpdatedDate)
+        level = try container.decodeIfPresent(Int.self, forKey: .level)
     }
     
     private enum CodingKeys: String, CodingKey {
         case scoring, playmaking, rebounding, defense, athleticism, intangibles
         case shooting, ballHandling, basketballIQ, teamwork, coachability
-        case lastUpdatedDate
+        case lastUpdatedDate, level
     }
     
     func encode(to encoder: Encoder) throws {
@@ -261,8 +267,14 @@ struct ProgramSkillTargets: Codable, Hashable {
         try container.encode(athleticism, forKey: .athleticism)
         try container.encode(intangibles, forKey: .intangibles)
         try container.encodeIfPresent(lastUpdatedDate, forKey: .lastUpdatedDate)
+        try container.encodeIfPresent(level, forKey: .level)
     }
     
+    /// True once a coach has saved skill targets. A blob that only carries the
+    /// program LEVEL has no targets, and its default 5s must not be shown as
+    /// if a coach had chosen them.
+    var hasTargets: Bool { lastUpdatedDate != nil }
+
     var overallTarget: Double {
         Double(scoring + playmaking + rebounding + defense + athleticism + intangibles) / 6.0
     }
