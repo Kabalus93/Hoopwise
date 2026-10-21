@@ -322,9 +322,7 @@ struct StudentIntelligenceListView: View {
                 }
             }
             .sheet(isPresented: $showingAddStudent) {
-                NavigationStack {
-                    AddStudentView()
-                }
+                EditStudentView()
             }
             .sheet(item: $transferMode) { mode in
                 StudentTransferView(initialMode: mode)
@@ -420,6 +418,7 @@ struct StudentIntelligenceListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityIdentifier("athletes.add")
                 }
             }
         }
@@ -2521,7 +2520,7 @@ struct StudentIntelligenceProfileView: View {
             AddTouchpointSheet(student: student)
         }
         .sheet(isPresented: $showingEditStudent) {
-            AddStudentView(student: student, player: player)
+            EditStudentView(student: student, player: player)
         }
         .sheet(isPresented: $showingAddContract) {
             ContractEditSheet(

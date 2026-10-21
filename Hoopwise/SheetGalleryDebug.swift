@@ -145,6 +145,10 @@ enum SheetGalleryDebug {
                 missing("editStudent: no enrolled student")
             }
 
+        case "addStudent":
+            // Adding an athlete: the edit page over a fresh, unsaved record.
+            EditStudentView()
+
         case "groupContract":
             // An imported-shape group balance (shared, 12 left), NOT saved:
             // the sheet only renders it.

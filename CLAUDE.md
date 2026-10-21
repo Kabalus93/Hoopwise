@@ -300,6 +300,15 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   WHO/WHERE ("<coach>教练 · venue"), then the present names under a hairline.
   Text stays Chinese whatever the app language. HOOPWISE_SHOT=rollCallOverlay
   renders it over a stand-in photo.
+- FOURTEENTH sanctioned exception (October 2026, Luther's request): ADDING an
+  athlete opens the SAME page as editing one — `EditStudentView()` (create
+  mode, a fresh unsaved record; `isNew`) — photo, name, Chinese name, the one
+  School Grade menu, Parent/Guardian, Sharing. The old AddStudentView (date of
+  birth / grade toggle, category/coach/program, physical stats, contract
+  setup) is DELETED; enrolment happens on the program, contracts on the
+  profile. A Chinese name alone is enough — the name becomes its pinyin. The
+  profile's pencil also opens EditStudentView now. HOOPWISE_SHOT=addStudent;
+  pinned by AddStudentUITests (Athletes → + → Add Student → Save).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.
