@@ -3,10 +3,10 @@ import Charts
 
 // MARK: - Game stats so far (October 2026, Luther)
 //
-// The Games tab's stats: a summary card at the top of the tab and, on tap,
-// the program's whole record — collective averages with their direction,
-// the trend per session, this session against the average, leaders, and who
-// has been playing. Numbers come from GameStatsReport; this file only draws.
+// The Games tab's stats, unfolded at the bottom of the tab: the program's
+// whole record — collective averages with their direction, the trend per
+// session, this session against the average, leaders, and who has been
+// playing. Numbers come from GameStatsReport; this file only draws.
 
 extension GameStatsReport.Metric {
     func title(_ zh: Bool) -> String {
@@ -82,95 +82,34 @@ struct StatDirectionChip: View {
     }
 }
 
-// MARK: - Summary card (top of the Games tab)
+// MARK: - Inline stats (bottom of the Games tab)
 
-struct GameStatsSummaryCard: View {
+struct GameStatsContent: View {
     let report: GameStatsReport.Report
-    let action: () -> Void
-    private var zh: Bool { LocalizationManager.shared.currentLanguage == .chinese }
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(zh ? "比赛数据" : "GAME STATS SO FAR")
-                        .font(.caption.weight(.bold))
-                        .monospaced()
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(zh ? "\(report.games) 场 · \(report.sessions) 次课" : "\(report.games) games · \(report.sessions) sessions")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                HStack(spacing: 0) {
-                    ForEach([GameStatsReport.Metric.points, .rebounds, .assistRate]) { m in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(report.average[m].map(m.format) ?? "–")
-                                .font(.title2.weight(.bold))
-                                .monospacedDigit()
-                            HStack(spacing: 4) {
-                                Text(m == .assistRate ? (zh ? "助攻率" : "AST / basket") : (zh ? "\(m.title(true))/场" : "\(m.short) / game"))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                StatDirectionChip(change: report.direction[m])
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-            .padding(14)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
-        .accessibilityIdentifier("games.statsCard")
-    }
-}
-
-// MARK: - The sheet
-
-struct GameStatsSheet: View {
-    let report: GameStatsReport.Report
-    let className: String
     let students: [Student]
-    @Environment(\.dismiss) private var dismiss
     @State private var metric: GameStatsReport.Metric = .points
     private var zh: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private var locale: Locale { Locale(identifier: zh ? "zh_CN" : "en_GB") }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
-                    tiles
-                    if report.trend.count >= 2 { trendSection }
-                    if let today = report.thisSession { todaySection(today) }
-                    leadersSection
-                    playingSection
-                }
-                .padding(16)
-            }
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle(zh ? "比赛数据" : "Game stats")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(zh ? "完成" : "Done") { dismiss() }.fontWeight(.semibold)
-                }
-            }
+        VStack(alignment: .leading, spacing: 22) {
+            header
+            tiles
+            if report.trend.count >= 2 { trendSection }
+            if let today = report.thisSession { todaySection(today) }
+            leadersSection
+            playingSection
         }
-        .accessibilityIdentifier("games.statsSheet")
+        .accessibilityIdentifier("games.stats")
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(className).font(.title2.weight(.bold))
-            Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            Text(zh ? "比赛数据" : "GAME STATS SO FAR")
+                .font(.caption.weight(.bold))
+                .monospaced()
+                .foregroundStyle(.secondary)
+            Text(subtitle).font(.footnote).foregroundStyle(.tertiary)
         }
     }
 

@@ -1,6 +1,6 @@
 import XCTest
 
-/// The Games tab stats sheet (HOOPWISE_SHOT=gameStats), scrolled through
+/// The Games tab inline stats (HOOPWISE_SHOT=gameStats), scrolled through
 /// with a screenshot per screen.
 final class GameStatsUITests: XCTestCase {
 

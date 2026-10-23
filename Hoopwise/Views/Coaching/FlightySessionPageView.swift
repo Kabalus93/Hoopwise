@@ -3876,7 +3876,6 @@ struct SessionGamesTabView: View {
     @State private var showingCreateGame = false
     @State private var selectedGame: SessionGame?
     @State private var selectedRecapGame: SessionGame?
-    @State private var showingGameStats = false
 
     /// Every played game of this session's program so far (just this
     /// session's when it has no program) — GameStatsReport.
@@ -3887,10 +3886,6 @@ struct SessionGamesTabView: View {
         return GameStatsReport.make(sessions: sessions, roster: enrolledStudents.map(\.id), current: session)
     }
 
-    private var statsClassName: String {
-        session.programId.flatMap { pid in dataManager.programs.first { $0.id == pid } }
-            .map { $0.resolvedDisplayName(in: dataManager.programs) } ?? session.title
-    }
     
     private var isIPad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
@@ -3905,18 +3900,6 @@ struct SessionGamesTabView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
 
-                let report = gameStats
-                if report.games > 0 {
-                    GameStatsSummaryCard(report: report) { showingGameStats = true }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                }
-
-                if !sessionHighlights.isEmpty {
-                    highlightsStrip
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
-                }
 
                 if session.games.isEmpty {
                     emptyGamesState
@@ -3933,6 +3916,15 @@ struct SessionGamesTabView: View {
                     }
                     .glassEffect(.regular, in: .rect(cornerRadius: 14))
                     .padding(.horizontal, 16)
+                }
+
+                // The program's record so far, unfolded under today's games
+                // (October 2026, Luther).
+                let report = gameStats
+                if report.games > 0 {
+                    GameStatsContent(report: report, students: dataManager.students)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 28)
                 }
                 Spacer(minLength: 100)
             }
@@ -3987,9 +3979,7 @@ struct SessionGamesTabView: View {
         .fullScreenCover(item: $selectedRecapGame) { game in
             GameRecapView(game: game, students: enrolledStudents, allGamesInSession: session.games)
         }
-        .sheet(isPresented: $showingGameStats) {
-            GameStatsSheet(report: gameStats, className: statsClassName, students: dataManager.students)
-        }
+
     }
     
     private var gamesHeader: some View {
@@ -4216,125 +4206,6 @@ struct SessionGamesTabView: View {
         dataManager.deleteSessionGame(inSessionId: session.id, gameId: game.id)
     }
 
-    // MARK: - Stat Highlights
-
-    /// Tiny chips above the games list summarising the most interesting
-    /// shape of the day so far. Kids and coaches scan them in 2 seconds.
-    /// Only shows what's actually meaningful — empty session = empty strip.
-    private struct GameHighlight: Identifiable {
-        let id = UUID()
-        let icon: String
-        let tint: Color
-        let label: String
-        let value: String
-        let detail: String?
-    }
-
-    private var sessionHighlights: [GameHighlight] {
-        let isCN = LocalizationManager.shared.currentLanguage == .chinese
-        let completedGames = session.games.filter { $0.status == .completed }
-        guard !completedGames.isEmpty else { return [] }
-
-        var out: [GameHighlight] = []
-
-        // Top scorer across all completed games today.
-        let allStats = completedGames.flatMap(\.playerStats)
-        let scoreByPlayer: [UUID: Int] = Dictionary(allStats.map { ($0.playerId, $0.points) },
-                                                     uniquingKeysWith: +)
-        if let (pid, pts) = scoreByPlayer.max(by: { $0.value < $1.value }), pts > 0,
-           let s = enrolledStudents.first(where: { $0.id == pid }) {
-            out.append(.init(
-                icon: "scope",
-                tint: .orange,
-                label: isCN ? "本场得分王" : "Top scorer",
-                value: "\(pts)",
-                detail: firstName(of: s)
-            ))
-        }
-
-        // Most assists today — secondary "playmaker of the day" call-out.
-        let assistsByPlayer: [UUID: Int] = Dictionary(allStats.map { ($0.playerId, $0.assists) },
-                                                       uniquingKeysWith: +)
-        if let (pid, ast) = assistsByPlayer.max(by: { $0.value < $1.value }), ast > 0,
-           let s = enrolledStudents.first(where: { $0.id == pid }) {
-            out.append(.init(
-                icon: "hand.raised.fill",
-                tint: .blue,
-                label: isCN ? "助攻王" : "Most assists",
-                value: "\(ast)",
-                detail: firstName(of: s)
-            ))
-        }
-
-        // Closest game — smallest non-zero margin among today's completed games.
-        // For team games only; battle royal margins don't read the same way.
-        let teamGames = completedGames.filter { !$0.gameType.isIndividual }
-        let margins = teamGames.compactMap { game -> (margin: Int, gameNumber: Int)? in
-            let scores = game.teamScores.values.sorted(by: >)
-            guard scores.count >= 2 else { return nil }
-            return (scores[0] - scores[1], game.gameNumber)
-        }
-        if let closest = margins.min(by: { $0.margin < $1.margin }) {
-            out.append(.init(
-                icon: "scalemass",
-                tint: .purple,
-                label: isCN ? "最焦灼" : "Closest game",
-                value: closest.margin == 0
-                    ? (isCN ? "平局" : "tie")
-                    : "\(closest.margin) \(isCN ? "分" : "pt\(closest.margin == 1 ? "" : "s")")",
-                detail: isCN ? "第\(closest.gameNumber)场" : "Game \(closest.gameNumber)"
-            ))
-        }
-
-        return out
-    }
-
-    private var highlightsStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(sessionHighlights) { highlight in
-                    highlightChip(highlight)
-                }
-            }
-        }
-    }
-
-    private func highlightChip(_ h: GameHighlight) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: h.icon)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(h.tint)
-                Text(h.label)
-                    .font(.caption2.weight(.bold))
-                    .monospaced()
-                    .foregroundStyle(.secondary)
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(h.value)
-                    .font(.title3.bold().monospacedDigit())
-                    .foregroundStyle(.primary)
-                if let detail = h.detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(minWidth: 130, alignment: .leading)
-        .background(h.tint.opacity(0.10), in: .rect(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(h.tint.opacity(0.18), lineWidth: 1)
-        )
-    }
-
-    private func firstName(of student: Student) -> String {
-        student.name.components(separatedBy: " ").first ?? student.name
-    }
     
     private func gameRow(_ game: SessionGame) -> some View {
         HStack(spacing: 12) {

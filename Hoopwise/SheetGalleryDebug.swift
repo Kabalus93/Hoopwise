@@ -146,53 +146,17 @@ enum SheetGalleryDebug {
             }
 
         case "gameStats":
-            // The Games tab's stats sheet over a made-up season of the first
+            // The Games tab's inline stats over a made-up season of the first
             // program's roster — built in memory, never saved.
             if let program = dm.programs.first {
                 let roster = dm.students.filter { program.enrolledStudentIds.contains($0.id) }
-                GameStatsSheet(report: demoGameStats(roster: roster.map(\.id)),
-                               className: program.resolvedDisplayName(in: dm.programs),
-                               students: dm.students)
+                ScrollView {
+                    GameStatsContent(report: demoGameStats(roster: roster.map(\.id)), students: dm.students)
+                        .padding(16)
+                }
+                .background(Color(.systemGroupedBackground))
             } else {
                 missing("gameStats: no program")
-            }
-
-        case "gameStatsCard":
-            // The card at the top of the Games tab, over the same demo season.
-            if let program = dm.programs.first {
-                let roster = dm.students.filter { program.enrolledStudentIds.contains($0.id) }
-                VStack {
-                    GameStatsSummaryCard(report: demoGameStats(roster: roster.map(\.id))) {}
-                        .padding(16)
-                    Spacer()
-                }
-                .background(Color(.systemGroupedBackground))
-            } else {
-                missing("gameStatsCard: no program")
-            }
-
-        case "studentProfile":
-            // The athlete profile of the first program's first student.
-            if let program = dm.programs.first,
-               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
-                NavigationStack { StudentDetailView(student: student) }
-            } else {
-                missing("studentProfile: no enrolled student")
-            }
-
-        case "trainingStats":
-            // The profile's Training Stats over a made-up season.
-            if let program = dm.programs.first,
-               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
-                ScrollView {
-                    CollapsibleTrainingStatsSection(
-                        studentId: student.id,
-                        sessions: demoSessions(roster: program.enrolledStudentIds))
-                        .padding(16)
-                }
-                .background(Color(.systemGroupedBackground))
-            } else {
-                missing("trainingStats: no enrolled student")
             }
 
         case "makeUpOffer":

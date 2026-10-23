@@ -376,19 +376,21 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   does not link UserNotificationsUI and the extension dies at launch
   ("Unable to find NSExtensionContextClass").
 - SIXTEENTH sanctioned exception (October 2026, Luther's request): the
-  session Games tab opens with a "GAME STATS SO FAR" card (points / rebounds
-  per game, assists per basket, each with its direction); tapping it opens
-  GameStatsSheet (Views/Coaching/GameStatsSheet.swift): the program's team
-  averages for all six stats, a per-session trend chart with the average as
-  a rule, this session vs the average, the top three per counting stat
-  (total · per game), and games played per rostered player (zeros last, in
-  red). All numbers come from Services/GameStatsReport.swift (both targets,
-  pure): a game counts once past setup with a stat line; sessions that did
-  not happen are left out; baskets = points ÷ that game's basket value; the
-  arrows compare the last 3 sessions with the ones before (none until 4
-  sessions have games). Scope is the session's PROGRAM (this session alone
-  when it has none). HOOPWISE_SHOT=gameStats / gameStatsCard over a made-up
-  season. Tests: GameStatsReportTests, GameStatsUITests.
+  session Games tab ends with the program's "GAME STATS SO FAR", UNFOLDED
+  under the games list (GameStatsContent, Views/Coaching/GameStatsContent.swift
+  — it was a card that opened a sheet; Luther moved it down and opened it):
+  team averages for all six stats with direction, a per-session trend chart
+  with the average as a rule, this session vs the average, the top three per
+  counting stat (total · per game), and games played per rostered player
+  (zeros last, in red). The Top scorer / Most assists / Closest game chips
+  above the list were REMOVED at the same time. All numbers come from
+  Services/GameStatsReport.swift (both targets, pure): a game counts once
+  past setup with a stat line; sessions that did not happen are left out;
+  baskets = points ÷ that game's basket value; the arrows compare the last 3
+  sessions with the ones before (none until 4 sessions have games). Scope is
+  the session's PROGRAM (this session alone when it has none).
+  HOOPWISE_SHOT=gameStats over a made-up season. Tests: GameStatsReportTests,
+  GameStatsUITests.
 - SEVENTEENTH sanctioned exception (October 2026, Luther's request): the
   athlete profile (StudentDetailView — the screen the Athletes list, widgets,
   dashboard and program roster open; StudentIntelligenceProfileView is never
