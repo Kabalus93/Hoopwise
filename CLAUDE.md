@@ -125,6 +125,21 @@ numbering ("Session N of M") skips classes that did not happen, and the
 Profile "Session in N minutes" reminder is removed. HOOPWISE_SHOT=makeUpOffer
 shows the question. Tests: SessionPlanShiftTests.
 
+SESSIONS FOLLOW THEIR PROGRAM (October 2026, Luther): `updateProgram` and the
+enrollment writers pass each edit on to the program's UPCOMING SCHEDULED
+sessions that still follow it (Services/ProgramSessionSync.swift, both
+targets, pure): time of day (same day, length kept), length, venue (an empty
+venue follows), roster (a stored roster equal to the OLD enrollment; empty
+rosters already read the program). A session the coach changed on its own
+keeps its value; history never changes. Until then every one of these was
+copied at creation and never again — a new student was not expected at
+already-scheduled classes. Weekday edits (iOS editor dialog): a SWAP offers
+"Move <day> sessions to <day>" (`moveSessions` — nearest new day, plan and
+roster kept); removing days still deletes those future classes, but their
+plans first REFLOW in date order onto the classes that remain
+(`reflowPlans`, gaps kept). Notifications and Live Activities re-sync from
+the moved times on the monitor's 30 s tick. Tests: ProgramSessionSyncTests.
+
 EXPIRY SEMANTICS: `Contract.expiresOn` derives from `validityMonths` +
 `effectiveBundlePurchaseDate`; zero months is a term nobody agreed and never
 expires. `isExpired` is display only — an expired contract STAYS `.active`, so

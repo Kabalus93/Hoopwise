@@ -187,6 +187,7 @@
 				Services/PhaseNaming.swift,
 				Services/PlayCardDocument.swift,
 				Services/ProgramGuideDocument.swift,
+				Services/ProgramSessionSync.swift,
 				Services/SessionAdoption.swift,
 				Services/SessionCreation.swift,
 				Services/SessionDedupe.swift,

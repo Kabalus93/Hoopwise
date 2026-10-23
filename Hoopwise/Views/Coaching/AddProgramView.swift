@@ -139,6 +139,14 @@ struct EditProgramView: View {
                 titleVisibility: .visible,
                 presenting: pendingScheduleDelta
             ) { delta in
+                // A swap (Saturday → Sunday) moves the classes, plans and all.
+                if !delta.added.isEmpty, delta.added.count == delta.removed.count {
+                    Button(moveButtonLabel(for: delta)) {
+                        dataManager.moveSessions(forProgramId: draft.id, from: delta.removed, to: delta.added)
+                        pendingScheduleDelta = nil
+                        dismiss()
+                    }
+                }
                 if !delta.added.isEmpty {
                     Button(generateButtonLabel(for: delta.added)) {
                         applySchedule(addedDays: delta.added, removedDays: [])
@@ -239,8 +247,8 @@ struct EditProgramView: View {
             Text(isChinese ? "时间安排" : "Schedule")
         } footer: {
             Text(isChinese
-                 ? "已排程的课程不会自动移动。改动只影响新创建的课程。"
-                 : "Existing scheduled sessions don't move. Changes apply to newly created sessions.")
+                 ? "时间、时长和场地的改动会同步到所有即将进行的课程；单独改过的课程保持不变。"
+                 : "Time, length and venue changes apply to every upcoming session, except ones you changed on their own.")
         }
     }
 
@@ -443,10 +451,16 @@ struct EditProgramView: View {
         if !delta.removed.isEmpty {
             let names = delta.removed.map { dayName($0) }.joined(separator: ", ")
             parts.append(isChinese
-                         ? "移除了 \(names)。要取消未来该日的训练吗？过往训练会保留。"
-                         : "Removed \(names). Cancel future sessions on those days? Past sessions stay as history.")
+                         ? "移除了 \(names)。要取消未来该日的训练吗？训练计划会顺延到保留的课程，过往训练会保留。"
+                         : "Removed \(names). Cancel future sessions on those days? Their plans move to the classes that remain; past sessions stay as history.")
         }
         return parts.joined(separator: "\n\n")
+    }
+
+    private func moveButtonLabel(for delta: ScheduleDelta) -> String {
+        let from = delta.removed.map { dayName($0) }.joined(separator: ", ")
+        let to = delta.added.map { dayName($0) }.joined(separator: ", ")
+        return isChinese ? "把 \(from) 的训练移到 \(to)" : "Move \(from) sessions to \(to)"
     }
 
     private func generateButtonLabel(for days: [Weekday]) -> String {

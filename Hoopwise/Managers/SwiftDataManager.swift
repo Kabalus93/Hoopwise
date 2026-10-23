@@ -1217,6 +1217,7 @@ class SwiftDataManager: ObservableObject {
     }
     
     func updateProgram(_ program: Program) {
+        let before = cachedPrograms.first { $0.id == program.id }
         do {
             let descriptor = FetchDescriptor<SDProgram>(predicate: #Predicate { $0.id == program.id })
             if let sdProgram = try modelContext.fetch(descriptor).first {
@@ -1264,7 +1265,9 @@ class SwiftDataManager: ObservableObject {
                 
                 // Refresh caches for UI
                 refreshCachesSync()
-                
+
+                // Its upcoming sessions follow the edit (ProgramSessionSync).
+                if let before { sessionsFollowProgram(before: before, after: program) }
             }
         } catch {
             debugLog("❌ Failed to update program: \(error)")
@@ -1616,10 +1619,43 @@ class SwiftDataManager: ObservableObject {
             return removedWeekdayValues.contains(weekday)
         }
 
+        // The plans stay in order on the classes that remain, instead of
+        // going away with the deleted ones (ProgramSessionSync.reflowPlans).
+        let reflow = ProgramSessionSync.reflowPlans(
+            removing: Set(toCancel.map(\.id)), programId: programId, sessions: cachedSessionEvents, now: now)
+        for session in reflow.updated { updateSessionEvent(session) }
         for event in toCancel {
             deleteSessionEvent(event)
         }
         return toCancel.count
+    }
+
+    /// A weekday swap: upcoming sessions on `removed` days move to the nearest
+    /// paired `added` day, plans and rosters intact. nil when the
+    /// change is not a swap (different counts).
+    @discardableResult
+    func moveSessions(forProgramId programId: UUID, from removed: [Weekday], to added: [Weekday]) -> Int? {
+        guard let moved = ProgramSessionSync.move(programId: programId, from: removed, to: added,
+                                                  sessions: cachedSessionEvents) else { return nil }
+        for session in moved { updateSessionEvent(session) }
+        return moved.count
+    }
+
+    /// Applies a program edit to the upcoming sessions that follow it.
+    private func sessionsFollowProgram(before: Program, after: Program) {
+        for session in ProgramSessionSync.follow(before: before, after: after, sessions: cachedSessionEvents) {
+            updateSessionEvent(session)
+        }
+    }
+
+    /// After an enrollment write: each program whose roster changed passes the
+    /// change on to its upcoming sessions.
+    private func rostersFollowEnrollment(programsBefore: [Program]) {
+        for after in cachedPrograms {
+            guard let before = programsBefore.first(where: { $0.id == after.id }),
+                  Set(before.enrolledStudentIds) != Set(after.enrolledStudentIds) else { continue }
+            sessionsFollowProgram(before: before, after: after)
+        }
     }
 
     // MARK: - MicroCycle CRUD
@@ -3015,7 +3051,9 @@ class SwiftDataManager: ObservableObject {
                 sdProgram.enrolledStudentIds = enrolled
                 sdProgram.updatedAt = Date()
             }
+            let programsBefore = cachedPrograms
             saveAndRefresh()
+            rostersFollowEnrollment(programsBefore: programsBefore)
         } catch {
             debugLog("❌ setStudentEnrollment failed: \(error)")
         }
@@ -3045,7 +3083,9 @@ class SwiftDataManager: ObservableObject {
                 sdProgram.enrolledStudentIds.append(studentId)
                 sdProgram.updatedAt = Date()
             }
+            let programsBefore = cachedPrograms
             saveAndRefresh()
+            rostersFollowEnrollment(programsBefore: programsBefore)
         } catch {
             debugLog("❌ addStudentEnrollment failed: \(error)")
         }
