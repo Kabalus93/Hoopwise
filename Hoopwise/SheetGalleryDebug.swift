@@ -145,6 +145,32 @@ enum SheetGalleryDebug {
                 missing("editStudent: no enrolled student")
             }
 
+        case "gameStats":
+            // The Games tab's stats sheet over a made-up season of the first
+            // program's roster — built in memory, never saved.
+            if let program = dm.programs.first {
+                let roster = dm.students.filter { program.enrolledStudentIds.contains($0.id) }
+                GameStatsSheet(report: demoGameStats(roster: roster.map(\.id)),
+                               className: program.resolvedDisplayName(in: dm.programs),
+                               students: dm.students)
+            } else {
+                missing("gameStats: no program")
+            }
+
+        case "gameStatsCard":
+            // The card at the top of the Games tab, over the same demo season.
+            if let program = dm.programs.first {
+                let roster = dm.students.filter { program.enrolledStudentIds.contains($0.id) }
+                VStack {
+                    GameStatsSummaryCard(report: demoGameStats(roster: roster.map(\.id))) {}
+                        .padding(16)
+                    Spacer()
+                }
+                .background(Color(.systemGroupedBackground))
+            } else {
+                missing("gameStatsCard: no program")
+            }
+
         case "makeUpOffer":
             // The question a cancelled class with a plan asks (SessionPlanShift).
             Color(.systemGroupedBackground)
@@ -381,6 +407,37 @@ private struct LiveGameGalleryHost: View {
 
     var body: some View {
         LiveGameScoringView(game: $game, students: students, allGamesInSession: [game], onSave: {})
+    }
+
+}
+
+extension SheetGalleryDebug {
+    /// Eight sessions of two games each, scoring rising over time.
+    static func demoGameStats(roster: [UUID]) -> GameStatsReport.Report {
+        var sessions: [SessionEvent] = []
+        let players = Array(roster.prefix(8))
+        guard !players.isEmpty else {
+            return GameStatsReport.make(sessions: [], roster: roster, current: nil)
+        }
+        for week in 0..<8 {
+            let start = fixedDate.addingTimeInterval(Double(week - 8) * 7 * 86_400)
+            var s = SessionEvent(programId: nil, title: "Demo", date: start, startTime: start,
+                                 endTime: start.addingTimeInterval(3600), status: .completed, attendeeIds: roster)
+            for g in 0..<2 {
+                let gid = UUID()
+                let lines = players.enumerated().compactMap { i, p -> SessionPlayerStats? in
+                    guard (i + week + g) % 5 != 0 else { return nil }
+                    return SessionPlayerStats(playerId: p, gameId: gid, teamId: gid,
+                                              points: 2 * ((i * 3 + week + g) % 4) + (week > 4 ? 2 : 0),
+                                              rebounds: (i + week) % 3, assists: (i + g + week / 2) % 3,
+                                              steals: (i + week) % 2, blocks: i % 4 == 0 ? 1 : 0)
+                }
+                s.games.append(SessionGame(sessionId: s.id, gameNumber: g + 1, playerStats: lines,
+                                           status: .completed))
+            }
+            sessions.append(s)
+        }
+        return GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
     }
 }
 #endif

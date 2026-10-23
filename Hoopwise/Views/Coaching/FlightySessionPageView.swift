@@ -3876,6 +3876,21 @@ struct SessionGamesTabView: View {
     @State private var showingCreateGame = false
     @State private var selectedGame: SessionGame?
     @State private var selectedRecapGame: SessionGame?
+    @State private var showingGameStats = false
+
+    /// Every played game of this session's program so far (just this
+    /// session's when it has no program) — GameStatsReport.
+    private var gameStats: GameStatsReport.Report {
+        let sessions = session.programId.map { pid in
+            dataManager.sessionEvents.filter { $0.programId == pid && $0.id != session.id } + [session]
+        } ?? [session]
+        return GameStatsReport.make(sessions: sessions, roster: enrolledStudents.map(\.id), current: session)
+    }
+
+    private var statsClassName: String {
+        session.programId.flatMap { pid in dataManager.programs.first { $0.id == pid } }
+            .map { $0.resolvedDisplayName(in: dataManager.programs) } ?? session.title
+    }
     
     private var isIPad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
@@ -3889,6 +3904,13 @@ struct SessionGamesTabView: View {
                 gamesHeader
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+
+                let report = gameStats
+                if report.games > 0 {
+                    GameStatsSummaryCard(report: report) { showingGameStats = true }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 12)
+                }
 
                 if !sessionHighlights.isEmpty {
                     highlightsStrip
@@ -3964,6 +3986,9 @@ struct SessionGamesTabView: View {
         }
         .fullScreenCover(item: $selectedRecapGame) { game in
             GameRecapView(game: game, students: enrolledStudents, allGamesInSession: session.games)
+        }
+        .sheet(isPresented: $showingGameStats) {
+            GameStatsSheet(report: gameStats, className: statsClassName, students: dataManager.students)
         }
     }
     

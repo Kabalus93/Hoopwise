@@ -375,6 +375,20 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   ENABLE_DEBUG_DYLIB = NO — with Xcode's debug dylib the stub executable
   does not link UserNotificationsUI and the extension dies at launch
   ("Unable to find NSExtensionContextClass").
+- SIXTEENTH sanctioned exception (October 2026, Luther's request): the
+  session Games tab opens with a "GAME STATS SO FAR" card (points / rebounds
+  per game, assists per basket, each with its direction); tapping it opens
+  GameStatsSheet (Views/Coaching/GameStatsSheet.swift): the program's team
+  averages for all six stats, a per-session trend chart with the average as
+  a rule, this session vs the average, the top three per counting stat
+  (total · per game), and games played per rostered player (zeros last, in
+  red). All numbers come from Services/GameStatsReport.swift (both targets,
+  pure): a game counts once past setup with a stat line; sessions that did
+  not happen are left out; baskets = points ÷ that game's basket value; the
+  arrows compare the last 3 sessions with the ones before (none until 4
+  sessions have games). Scope is the session's PROGRAM (this session alone
+  when it has none). HOOPWISE_SHOT=gameStats / gameStatsCard over a made-up
+  season. Tests: GameStatsReportTests, GameStatsUITests.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

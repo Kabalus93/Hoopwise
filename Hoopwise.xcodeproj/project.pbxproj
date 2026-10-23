@@ -178,6 +178,7 @@
 				Services/CyclePlanner.swift,
 				Services/DrillPlanGenerator.swift,
 				Services/FrameThumbnailRenderer.swift,
+				Services/GameStatsReport.swift,
 				Services/HoopwiseBundle.swift,
 				Services/HoopwiseBundleImporter.swift,
 				Services/LiveSessionEngine.swift,
