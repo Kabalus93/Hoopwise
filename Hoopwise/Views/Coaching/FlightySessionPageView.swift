@@ -3879,11 +3879,14 @@ struct SessionGamesTabView: View {
 
     /// Every played game of this session's program so far (just this
     /// session's when it has no program) — GameStatsReport.
-    private var gameStats: GameStatsReport.Report {
-        let sessions = session.programId.map { pid in
+    private var statsSessions: [SessionEvent] {
+        session.programId.map { pid in
             dataManager.sessionEvents.filter { $0.programId == pid && $0.id != session.id } + [session]
         } ?? [session]
-        return GameStatsReport.make(sessions: sessions, roster: enrolledStudents.map(\.id), current: session)
+    }
+
+    private var gameStats: GameStatsReport.Report {
+        GameStatsReport.make(sessions: statsSessions, roster: enrolledStudents.map(\.id), current: session)
     }
 
     
@@ -3918,13 +3921,16 @@ struct SessionGamesTabView: View {
                     .padding(.horizontal, 16)
                 }
 
-                // The program's record so far, unfolded under today's games
-                // (October 2026, Luther).
+                // At most three things worth acting on from the program's
+                // games so far (October 2026, Luther: limited, smart).
                 let report = gameStats
-                if report.games > 0 {
-                    GameStatsContent(report: report, students: dataManager.students)
+                let insights = GameStatsReport.insights(report: report, sessions: statsSessions,
+                                                        roster: enrolledStudents.map(\.id))
+                if !insights.isEmpty {
+                    GameInsightsView(insights: insights, games: report.games, sessions: report.sessions,
+                                     students: dataManager.students)
                         .padding(.horizontal, 16)
-                        .padding(.top, 28)
+                        .padding(.top, 24)
                 }
                 Spacer(minLength: 100)
             }

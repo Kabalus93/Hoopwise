@@ -376,20 +376,22 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   does not link UserNotificationsUI and the extension dies at launch
   ("Unable to find NSExtensionContextClass").
 - SIXTEENTH sanctioned exception (October 2026, Luther's request): the
-  session Games tab ends with the program's "GAME STATS SO FAR", UNFOLDED
-  under the games list (GameStatsContent, Views/Coaching/GameStatsContent.swift
-  — it was a card that opened a sheet; Luther moved it down and opened it):
-  team averages for all six stats with direction, a per-session trend chart
-  with the average as a rule, this session vs the average, the top three per
-  counting stat (total · per game), and games played per rostered player
-  (zeros last, in red). The Top scorer / Most assists / Closest game chips
-  above the list were REMOVED at the same time. All numbers come from
-  Services/GameStatsReport.swift (both targets, pure): a game counts once
-  past setup with a stat line; sessions that did not happen are left out;
-  baskets = points ÷ that game's basket value; the arrows compare the last 3
-  sessions with the ones before (none until 4 sessions have games). Scope is
-  the session's PROGRAM (this session alone when it has none).
-  HOOPWISE_SHOT=gameStats over a made-up season. Tests: GameStatsReportTests,
+  session Games tab ends with GAME INSIGHTS — AT MOST THREE worded insights
+  from the program's games (GameInsightsView; rules in
+  GameStatsReport.insights, pure, both targets). It went card → sheet →
+  unfolded record → curated: Luther found the full record "too much
+  information", so do not add numbers back. Rules, each with a threshold so
+  noise stays silent and a quiet program shows nothing: rostered players who
+  have not played (≥ 2 sessions with games; first), else playing time 3×
+  uneven (≥ 6 games); under 0.2 assists per basket (the plan engine's
+  passing signal — "upcoming plans add passing"); this session's points per
+  game a best (≥ 3 sessions); one player's points per game up ≥ 2 and ≥ 50 %
+  over the last 3 sessions; the biggest team stat move ≥ 20 % (last 3
+  sessions vs before; never the assist rate twice). The Top scorer / Most
+  assists / Closest game chips were removed. Counting rules: a game counts
+  once past setup with a stat line; sessions that did not happen are left
+  out; baskets = points ÷ that game's basket value. Scope is the session's
+  PROGRAM. HOOPWISE_SHOT=gameStats. Tests: GameStatsReportTests,
   GameStatsUITests.
 - SEVENTEENTH sanctioned exception (October 2026, Luther's request): the
   athlete profile (StudentDetailView — the screen the Athletes list, widgets,

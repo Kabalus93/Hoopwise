@@ -146,17 +146,45 @@ enum SheetGalleryDebug {
             }
 
         case "gameStats":
-            // The Games tab's inline stats over a made-up season of the first
-            // program's roster — built in memory, never saved.
+            // The Games tab's insights over a made-up season of the first
+            // program's roster (its last player never plays) —
+            // built in memory, never saved.
             if let program = dm.programs.first {
-                let roster = dm.students.filter { program.enrolledStudentIds.contains($0.id) }
+                let roster = program.enrolledStudentIds
+                let sessions = demoSessions(roster: roster.count > 1 ? Array(roster.dropLast()) : roster)
+                let report = GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
                 ScrollView {
-                    GameStatsContent(report: demoGameStats(roster: roster.map(\.id)), students: dm.students)
+                    GameInsightsView(insights: GameStatsReport.insights(report: report, sessions: sessions, roster: roster),
+                                     games: report.games, sessions: report.sessions, students: dm.students)
                         .padding(16)
                 }
                 .background(Color(.systemGroupedBackground))
             } else {
                 missing("gameStats: no program")
+            }
+
+        case "studentProfile":
+            // The athlete profile of the first program's first student.
+            if let program = dm.programs.first,
+               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
+                NavigationStack { StudentDetailView(student: student) }
+            } else {
+                missing("studentProfile: no enrolled student")
+            }
+
+        case "trainingStats":
+            // The profile's Training Stats over a made-up season.
+            if let program = dm.programs.first,
+               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
+                ScrollView {
+                    CollapsibleTrainingStatsSection(
+                        studentId: student.id,
+                        sessions: demoSessions(roster: program.enrolledStudentIds))
+                        .padding(16)
+                }
+                .background(Color(.systemGroupedBackground))
+            } else {
+                missing("trainingStats: no enrolled student")
             }
 
         case "makeUpOffer":
@@ -401,11 +429,6 @@ private struct LiveGameGalleryHost: View {
 
 extension SheetGalleryDebug {
     /// Eight sessions of two games each, scoring rising over time.
-    static func demoGameStats(roster: [UUID]) -> GameStatsReport.Report {
-        let sessions = demoSessions(roster: roster)
-        return GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
-    }
-
     static func demoSessions(roster: [UUID]) -> [SessionEvent] {
         var sessions: [SessionEvent] = []
         let players = Array(roster.prefix(8))

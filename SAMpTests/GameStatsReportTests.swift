@@ -121,4 +121,39 @@ final class GameStatsReportTests: XCTestCase {
         XCTAssertEqual(r.games, 0)
         XCTAssertTrue(r.average.isEmpty)
     }
+
+    // MARK: Insights
+
+    private func insights(_ sessions: [SessionEvent], roster: [UUID]) -> [GameStatsReport.Insight] {
+        let r = GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
+        return GameStatsReport.insights(report: r, sessions: sessions, roster: roster)
+    }
+
+    func testNotPlayingLeadsAndAtMostThree() {
+        let ss = (1...6).map { d in session(day: d, [game([(a, 2 * d, 0), (b, 2, 0)])]) }
+        let out = insights(ss, roster: [a, b, bench])
+        XCTAssertLessThanOrEqual(out.count, 3)
+        XCTAssertEqual(out.first, .notPlaying(players: [bench]))
+    }
+
+    func testFewAssistsSaidOnce() {
+        let ss = (1...4).map { d in session(day: d, [game([(a, 10, d == 4 ? 0 : 1)])]) }
+        let out = insights(ss, roster: [a])
+        XCTAssertTrue(out.contains { if case .fewAssists = $0 { return true }; return false })
+        XCTAssertFalse(out.contains { if case .teamTrend(.assistRate, _, _, _) = $0 { return true }; return false })
+    }
+
+    func testQuietProgramSaysNothing() {
+        // Steady scoring, assisted baskets, everyone playing: nothing to act on.
+        let ss = (1...5).map { d in session(day: d, [game([(a, 4, 1), (b, 4, 1)])]) }
+        XCTAssertTrue(insights(ss, roster: [a, b]).isEmpty)
+    }
+
+    func testRiserAndBestSession() {
+        let early = (1...3).map { d in session(day: d, [game([(a, 2, 1), (b, 4, 1)])]) }
+        let late = (4...6).map { d in session(day: d, [game([(a, 2 + 4 * (d - 3), 1), (b, 4, 1)])]) }
+        let out = insights(early + late, roster: [a, b])
+        XCTAssertTrue(out.contains { if case .riser(let p, _, _) = $0 { return p == a }; return false }, "\(out)")
+        XCTAssertTrue(out.contains { if case .bestSession = $0 { return true }; return false }, "\(out)")
+    }
 }

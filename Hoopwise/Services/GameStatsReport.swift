@@ -246,5 +246,106 @@ enum GameStatsReport {
                             direction: direction, recent: Array(games.reversed().prefix(5)),
                             record: (results.filter { $0 }.count, results.filter { !$0 }.count))
     }
+
+    // MARK: - Insights (the Games tab, curated — October 2026, Luther)
+    //
+    // The tab used to unfold every number. Now it says at most THREE things,
+    // and only things a coach would act on: someone who is not getting games,
+    // a real change in how the team plays, a pass-first gap the plans will
+    // address, today being a best, one player taking off. Each rule has a
+    // threshold so noise stays silent; a quiet program shows nothing.
+
+    enum Insight: Equatable {
+        /// Rostered players with no game yet (≥ 2 sessions with games).
+        case notPlaying(players: [UUID])
+        /// Most vs fewest games when the gap is 3× or more (≥ 6 games).
+        case unevenGames(most: UUID, mostGames: Int, least: UUID, leastGames: Int)
+        /// A team stat moved ≥ 20 % over the last 3 sessions.
+        case teamTrend(metric: Metric, change: Double, from: Double, to: Double)
+        /// Under one assisted basket in five (the plan engine's passing signal).
+        case fewAssists(rate: Double)
+        /// This session's points per game beat every earlier session (≥ 3).
+        case bestSession(pointsPerGame: Double, previousBest: Double)
+        /// One player's points per game up ≥ 2 and ≥ 50 % recently.
+        case riser(player: UUID, from: Double, to: Double)
+
+        var priority: Int {
+            switch self {
+            case .notPlaying: return 100
+            case .fewAssists: return 80
+            case .bestSession: return 70
+            case .unevenGames: return 60
+            case .riser: return 50
+            case .teamTrend(_, let change, _, _): return 40 + min(30, Int(abs(change) * 30))
+            }
+        }
+    }
+
+    static let maxInsights = 3
+
+    static func insights(report: Report, sessions: [SessionEvent], roster: [UUID]) -> [Insight] {
+        guard report.games > 0 else { return [] }
+        var out: [Insight] = []
+
+        let rosterSet = Set(roster)
+        let rostered = report.playing.filter { rosterSet.contains($0.playerId) }
+        let zero = rostered.filter { $0.games == 0 }.map(\.playerId)
+        if report.sessions >= 2, !zero.isEmpty {
+            out.append(.notPlaying(players: zero))
+        } else if report.games >= 6,
+                  let most = rostered.first, let least = rostered.last,
+                  least.games > 0, most.games >= least.games * 3 {
+            out.append(.unevenGames(most: most.playerId, mostGames: most.games,
+                                    least: least.playerId, leastGames: least.games))
+        }
+
+        if let rate = report.average[.assistRate], rate < 0.2, report.games >= 3 {
+            out.append(.fewAssists(rate: rate))
+        }
+
+        if let today = report.thisSession?[.points], report.trend.count >= 3,
+           let current = report.trend.last, current.values[.points] == today {
+            let earlier = report.trend.dropLast().compactMap { $0.values[.points] }
+            if let best = earlier.max(), today > best { out.append(.bestSession(pointsPerGame: today, previousBest: best)) }
+        }
+
+        // The single biggest team move, recent vs before (not the assist
+        // rate again when the passing gap is already said).
+        let saidFewAssists = out.contains { if case .fewAssists = $0 { return true } else { return false } }
+        if report.trend.count >= recentWindow + 1 {
+            let recentPts = report.trend.suffix(recentWindow)
+            let earlierPts = report.trend.dropLast(recentWindow)
+            let candidates: [Metric] = [.points, .rebounds, .assists, .steals, .assistRate]
+            if let pick = candidates
+                .compactMap({ m -> (Metric, Double)? in report.direction[m].map { (m, $0) } })
+                .filter({ abs($0.1) >= 0.2 && !($0.0 == .assistRate && saidFewAssists) })
+                .max(by: { abs($0.1) < abs($1.1) }) {
+                let to = mean(recentPts, pick.0), from = mean(earlierPts, pick.0)
+                out.append(.teamTrend(metric: pick.0, change: pick.1, from: from, to: to))
+            }
+        }
+
+        // One player taking off — biggest rise in points per game.
+        var bestRise: (UUID, Double, Double)?
+        for id in roster {
+            let games = playerGames(id, in: sessions)
+            let order = games.map(\.sessionId).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
+            guard order.count >= recentWindow + 1 else { continue }
+            let recentIds = Set(order.suffix(recentWindow))
+            let r = games.filter { recentIds.contains($0.sessionId) }
+            let e = games.filter { !recentIds.contains($0.sessionId) }
+            let to = Double(r.reduce(0) { $0 + $1.line.points }) / Double(max(1, r.count))
+            let from = Double(e.reduce(0) { $0 + $1.line.points }) / Double(max(1, e.count))
+            guard to - from >= 2, from == 0 || (to - from) / from >= 0.5 else { continue }
+            if bestRise == nil || to - from > bestRise!.2 - bestRise!.1 { bestRise = (id, from, to) }
+        }
+        if let rise = bestRise { out.append(.riser(player: rise.0, from: rise.1, to: rise.2)) }
+
+        return Array(out.sorted { $0.priority > $1.priority }.prefix(maxInsights))
+    }
+
+    private static func mean<S: Sequence>(_ points: S, _ m: Metric) -> Double where S.Element == SessionPoint {
+        weighted(points, m)
+    }
 }
 
