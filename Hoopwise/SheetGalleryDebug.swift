@@ -145,6 +145,18 @@ enum SheetGalleryDebug {
                 missing("editStudent: no enrolled student")
             }
 
+        case "makeUpOffer":
+            // The question a cancelled class with a plan asks (SessionPlanShift).
+            Color(.systemGroupedBackground)
+                .makeUpOfferAlert()
+                .onAppear {
+                    dm.makeUpOffer = MakeUpOffer(
+                        cancelledSessionId: UUID(), programId: programId, phaseId: phaseId,
+                        start: fixedDate.addingTimeInterval(21 * 86_400), durationMinutes: 60,
+                        curriculum: SessionCurriculum(), note: "Make-up for demo",
+                        className: "U8 Elite")
+                }
+
         case "addStudent":
             // Adding an athlete: the edit page over a fresh, unsaved record.
             EditStudentView()

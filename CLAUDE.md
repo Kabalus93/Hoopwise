@@ -106,6 +106,25 @@ what it consumed, it leaves every attendance statistic, and it never appears
 as live or next-up. It is NOT a visibility rule: the record stays in the
 calendar with its "Skipped: <reason>" note.
 
+PLANS MOVE ON (October 2026, Luther): a class that stops happening (cancel or
+skip, any caller — the hook is in `updateSessionEvent`) hands its PLAN to the
+next scheduled class of its phase (else program); each later plan moves down
+one; completed/live/skipped classes are never rewritten
+(Services/SessionPlanShift.swift, both targets — pure; the manager writes in
+`shiftPlansAfterStatusChange`). The cancelled class keeps its plan as the
+record plus the note marker "Plan moved to the next class". The plan left
+over is offered as a MAKE-UP class (`makeUpOffer`, alert via
+`.makeUpOfferAlert()` on MainTabView, the session page, the attention sheet
+and the Mac RootView — only the most recently appeared host presents) on the
+program's next usual day after the phase, at the class's time; accepting
+creates it through SessionCreation with "Make-up for <date time>" in its notes
+and stretches the phase end to it. REOPENING (reset to scheduled) pulls every
+plan back; an untouched make-up (scheduled, no marks) is deleted, otherwise
+kept, and without one the last class gets a freshly generated plan. Phase
+numbering ("Session N of M") skips classes that did not happen, and the
+Profile "Session in N minutes" reminder is removed. HOOPWISE_SHOT=makeUpOffer
+shows the question. Tests: SessionPlanShiftTests.
+
 EXPIRY SEMANTICS: `Contract.expiresOn` derives from `validityMonths` +
 `effectiveBundlePurchaseDate`; zero months is a term nobody agreed and never
 expires. `isExpired` is display only — an expired contract STAYS `.active`, so

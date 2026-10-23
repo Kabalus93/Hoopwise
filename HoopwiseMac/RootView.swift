@@ -129,6 +129,7 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macExpandSidebar)) { _ in
             withAnimation(.easeInOut(duration: 0.2)) { columnVisibility = .all }
         }
+        .makeUpOfferAlert()
         .onAppear {
             columnVisibility = (selection == .frameEditor || sidebarCollapsed) ? .detailOnly : .all
             presentationKeys.install()

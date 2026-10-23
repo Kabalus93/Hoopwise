@@ -45,8 +45,10 @@ enum SessionNaming {
                 guard let program else { return legacyFallback(session) }
                 return program.resolvedDisplayName(in: programs)
             }
+            // A class that did not happen is not a step of the plan: the next
+            // one takes its number (its plan moved there — SessionPlanShift).
             let siblings = allSessions
-                .filter { $0.microCycleId == phase.id }
+                .filter { $0.microCycleId == phase.id && !SessionLifecycle.didNotHappen($0) }
                 .sorted { $0.date < $1.date }
             let position = (siblings.firstIndex { $0.id == session.id }).map { $0 + 1 }
             let isChinese = LocalizationManager.shared.currentLanguage == .chinese

@@ -285,6 +285,7 @@ struct FlightySessionPageView: View {
         } message: {
             Text(LocalizationManager.shared.currentLanguage == .chinese ? "此课程将被标记为已取消。" : "This session will be marked as cancelled.")
         }
+        .makeUpOfferAlert()
         .sheet(isPresented: $showingSkipSheet) {
             SkipSessionSheet(reason: $skipReason) {
                 skipSession(reason: skipReason)

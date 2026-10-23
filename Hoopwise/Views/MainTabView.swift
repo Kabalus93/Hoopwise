@@ -87,6 +87,7 @@ struct MainTabView: View {
             PendingWidgetRoute.pending = nil
             if let id = note.object as? UUID { openWidgetAthlete(id) }
         }
+        .makeUpOfferAlert()
         .sheet(item: $widgetDeepLink) { link in
             switch link {
             case .session(let session):

@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 import Combine
+import UserNotifications
 
 /// Type alias for backward compatibility - views using DataManager will now use SwiftDataManager
 typealias DataManager = SwiftDataManager
@@ -39,6 +40,10 @@ class SwiftDataManager: ObservableObject {
     @Published var isSyncing = false
     @Published var lastSyncDate: Date?
     @Published var errorMessage: String?
+    /// Set when a cancelled/skipped class pushed its phase's plans on and one
+    /// plan is left without a class — the UI asks whether to add a make-up
+    /// class (SessionPlanShift). nil = nothing to ask.
+    @Published var makeUpOffer: MakeUpOffer?
     
     // MARK: - Batch Operation Mode
     /// When true, saveAndRefresh won't trigger fullSync (for batch operations like AI generation)
@@ -1869,6 +1874,7 @@ class SwiftDataManager: ObservableObject {
     }
 
     func updateSessionEvent(_ event: SessionEvent) {
+        let before = cachedSessionEvents.first { $0.id == event.id }
         do {
             let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == event.id })
             if let sdSession = try modelContext.fetch(descriptor).first {
@@ -1898,6 +1904,8 @@ class SwiftDataManager: ObservableObject {
                 
                 // Update contracts for all students who attended this session
                 updateContractsForAttendance(sessionEvent: event)
+
+                if let before { shiftPlansAfterStatusChange(from: before, to: event) }
             }
         } catch {
             debugLog("❌ Failed to update session: \(error)")
@@ -4883,5 +4891,114 @@ extension SwiftDataManager {
             debugLog("❌ restoreDrill failed: \(error)")
             return false
         }
+    }
+}
+
+
+// MARK: - Plans move on when a class does not happen (SessionPlanShift)
+
+struct MakeUpOffer: Identifiable, Equatable {
+    let id = UUID()
+    let cancelledSessionId: UUID
+    let programId: UUID
+    let phaseId: UUID?
+    let start: Date
+    let durationMinutes: Int
+    let curriculum: SessionCurriculum
+    let note: String
+    let className: String
+}
+
+extension SwiftDataManager {
+
+    /// Runs after every session write. A class that STOPS happening pushes
+    /// its phase's plans on; a class that is reopened pulls them back.
+    func shiftPlansAfterStatusChange(from before: SessionEvent, to after: SessionEvent) {
+        let wasOff = SessionLifecycle.didNotHappen(before)
+        let isOff = SessionLifecycle.didNotHappen(after)
+        if !wasOff && isOff {
+            removeSessionReminder(for: after.id)
+            movePlansForward(cancelled: after)
+        } else if wasOff && !isOff {
+            movePlansBack(reopened: after)
+        }
+    }
+
+    private func movePlansForward(cancelled: SessionEvent) {
+        guard let shift = SessionPlanShift.forward(cancelling: cancelled, in: cachedSessionEvents) else { return }
+        for follower in shift.updated { updateSessionEvent(follower) }
+        var marked = cancelled
+        marked.notes = SessionPlanShift.addingMovedMarker(marked.notes)
+        updateSessionEvent(marked)
+        guard let programId = cancelled.programId else { return }
+        let program = cachedPrograms.first { $0.id == programId }
+        let phase = cancelled.microCycleId.flatMap { id in cachedMicroCycles.first { $0.id == id } }
+        let lastDate = ([cancelled.startTime] + shift.updated.map(\.startTime) + [phase?.endDate].compactMap { $0 }).max()
+            ?? cancelled.startTime
+        let start = SessionPlanShift.makeUpStart(for: cancelled, program: program, after: lastDate)
+        let minutes = max(15, Int(cancelled.endTime.timeIntervalSince(cancelled.startTime) / 60))
+        makeUpOffer = MakeUpOffer(
+            cancelledSessionId: cancelled.id, programId: programId, phaseId: phase?.id,
+            start: start, durationMinutes: minutes, curriculum: shift.overflow,
+            note: SessionPlanShift.makeUpNote(for: cancelled),
+            className: program?.resolvedDisplayName(in: cachedPrograms) ?? cancelled.title)
+    }
+
+    private func movePlansBack(reopened: SessionEvent) {
+        guard let shift = SessionPlanShift.backward(reopening: reopened, in: cachedSessionEvents) else { return }
+        for follower in shift.updated { updateSessionEvent(follower) }
+        if let makeUp = shift.makeUp {
+            // Its plan went back; the class itself goes only if nothing was
+            // recorded on it — a make-up that happened is history.
+            let untouched = makeUp.actualAttendeeIds.isEmpty && makeUp.excusedAbsences.isEmpty
+                && makeUp.unexcusedAbsences.isEmpty && makeUp.status == .scheduled
+            if untouched { deleteSessionEvent(makeUp) }
+        }
+        if let id = shift.needsPlan, var session = cachedSessionEvents.first(where: { $0.id == id }),
+           let programId = session.programId,
+           let program = cachedPrograms.first(where: { $0.id == programId }) {
+            let phase = session.microCycleId.flatMap { pid in cachedMicroCycles.first { $0.id == pid } }
+            let enrolled = cachedStudents.filter { program.enrolledStudentIds.contains($0.id) }
+            let ctx = DrillPlanGenerator.Context(
+                session: session, program: program, phase: phase,
+                enrolledStudents: enrolled, players: cachedPlayers,
+                allDrills: drills, programHistory: cachedSessionEvents.filter { $0.programId == programId })
+            session.curriculum = DrillPlanGenerator.generatePlan(in: ctx).curriculum
+            updateSessionEvent(session)
+        }
+        var reopenedNow = reopened
+        reopenedNow.notes = SessionPlanShift.removingMovedMarker(reopenedNow.notes)
+        updateSessionEvent(reopenedNow)
+        if makeUpOffer?.cancelledSessionId == reopened.id { makeUpOffer = nil }
+    }
+
+    /// Adds the make-up class the offer describes and stretches its phase to it.
+    @discardableResult
+    func acceptMakeUp(_ offer: MakeUpOffer) -> SessionCreationResult {
+        var intent = SessionCreation.Intent(group: .program(offer.programId),
+                                            start: offer.start,
+                                            durationMinutes: offer.durationMinutes)
+        intent.phase = offer.phaseId
+        intent.notes = offer.note
+        intent.curriculum = offer.curriculum
+        let result = createSession(intent)
+        if let phaseId = offer.phaseId,
+           var phase = cachedMicroCycles.first(where: { $0.id == phaseId }),
+           let end = phase.endDate, end < offer.start {
+            phase.endDate = offer.start
+            updateMicroCycle(phase)
+        }
+        makeUpOffer = nil
+        return result
+    }
+
+    func declineMakeUp() { makeUpOffer = nil }
+
+    /// The Profile "Session in N minutes" reminder for a class that will not run.
+    private func removeSessionReminder(for id: UUID) {
+        #if os(iOS)
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: ["session-\(id)"])
+        #endif
     }
 }

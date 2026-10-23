@@ -50,6 +50,7 @@ struct AttentionFocusedSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .makeUpOfferAlert()
     }
 
     // MARK: - Empty state
