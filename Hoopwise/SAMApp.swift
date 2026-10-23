@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 extension Notification.Name {
     /// Fired by SAMApp's `.onOpenURL` when the user taps a `.hoopwise`
@@ -159,6 +160,7 @@ struct SAMApp: App {
         #if os(iOS)
         ScreenshotStore.prune(dataManager: dataManager)
         liveActivityDemoIfRequested()
+        notificationCardDemoIfRequested()
         #endif
         if SheetGalleryDebug.requestedShot != nil {
             SheetGalleryDebug.seedIfEmpty(dataManager: dataManager)
@@ -275,6 +277,31 @@ struct SAMApp: App {
                                    status: .scheduled, attendeeIds: [])
         SessionLiveActivityManager.shared.reconcile(
             targets: [.init(session: scratch, programName: "Demo", accentColorHex: "#007AFF")])
+    }
+
+    /// HOOPWISE_NOTIFY_DEMO=<kind>: one notification of that card kind
+    /// (upcoming, started, completed, reminder, nextCycle) five seconds from
+    /// now, stamped like the real one, so the expanded card can be checked.
+    /// Background the app at once.
+    private func notificationCardDemoIfRequested() {
+        guard let raw = ProcessInfo.processInfo.environment["HOOPWISE_NOTIFY_DEMO"],
+              let kind = NotificationCard.Kind(rawValue: raw) else { return }
+        let lines: [NotificationCard.Kind: (String, String)] = [
+            .upcoming: ("Session in 30 minutes", "U12 Development · 19:00"),
+            .started: ("Time to coach", "Private session · 17:00"),
+            .completed: ("Session complete", "U8 Elite · Review attendance"),
+            .reminder: ("Bring the training bibs", "Pack both colours before leaving"),
+            .nextCycle: ("Plan the next cycle", "U8 Elite · Two weeks to go"),
+        ]
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted, let line = lines[kind] else { return }
+            let content = UNMutableNotificationContent()
+            NotificationCard.stamp(content, kind: kind, headline: line.0, detail: line.1)
+            center.add(UNNotificationRequest(
+                identifier: "notify-demo-\(raw)", content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+        }
     }
     #endif
 

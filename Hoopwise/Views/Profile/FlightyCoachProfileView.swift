@@ -710,9 +710,12 @@ struct FlightyCoachProfileView: View {
         
         for session in upcomingSessions.prefix(10) {
             let content = UNMutableNotificationContent()
-            content.title = "Upcoming Session"
-            content.body = "\(session.title) starts in \(localSettings.reminderMinutesBefore) minutes"
+            let minutes = localSettings.reminderMinutesBefore
+            let isChinese = LocalizationManager.shared.currentLanguage == .chinese
             content.sound = .default
+            NotificationCard.stamp(content, kind: .upcoming,
+                                   headline: isChinese ? "\(minutes) 分钟后上课" : "Session in \(minutes) minutes",
+                                   detail: "\(session.title) · \(NotificationCard.time(session.startTime))")
             
             let triggerDate = session.startTime.addingTimeInterval(-Double(localSettings.reminderMinutesBefore * 60))
             guard triggerDate > Date() else { continue }
@@ -725,8 +728,16 @@ struct FlightyCoachProfileView: View {
         }
     }
     
+    /// Cancels only THESE reminders ("session-<id>"). It used to remove every
+    /// pending request — the coach's own reminders and the next-cycle reminder
+    /// with them — whenever Session Reminders was switched off.
     private func cancelSessionReminders() {
-        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { requests in
+            let ids = requests.map(\.identifier)
+                .filter { $0.hasPrefix("session-") && !$0.hasPrefix("session-start-") }
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
     }
 }
 

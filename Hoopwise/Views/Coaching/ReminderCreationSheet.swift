@@ -263,10 +263,12 @@ struct ReminderCreationSheet: View {
             guard granted else { return }
 
             let content = UNMutableNotificationContent()
-            content.title = "Hoopwise"
-            content.body = reminder.title
-            if let note = reminder.note { content.subtitle = note }
             content.sound = .default
+            // The reminder IS the headline; its note (or when it was due) under it.
+            let note = reminder.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            NotificationCard.stamp(content, kind: .reminder,
+                                   headline: reminder.title,
+                                   detail: note.isEmpty ? NotificationCard.time(reminder.dueDate) : note)
 
             let triggerDate = Calendar.current.dateComponents(
                 [.year, .month, .day, .hour, .minute],

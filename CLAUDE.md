@@ -309,6 +309,38 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   profile. A Chinese name alone is enough — the name becomes its pinyin. The
   profile's pencil also opens EditStudentView now. HOOPWISE_SHOT=addStudent;
   pinned by AddStudentUITests (Athletes → + → Add Student → Save).
+- FIFTEENTH sanctioned exception (October 2026, Luther's design): the
+  NOTIFICATION LOOK. (a) The Live Activity lock-screen card
+  (SAMWidgets/SessionLiveActivityWidget.swift) is a deep gradient per moment
+  (`ActivityCardStyle`: starting soon navy → blue → cyan bloom; live court
+  green → navy → blue), "HOOPWISE · STARTING SOON / SESSION LIVE" in tracked
+  caps, ONE huge countdown, "until <program> starts" / "remaining in
+  <program>" bold, the class times bottom-right. The Dynamic Island takes the
+  moment's accent. (b) Every standard notification is stamped through
+  `NotificationCard.stamp` (Models/NotificationCard.swift — iOS, Mac and the
+  extension): a KIND (upcoming / started / completed / reminder / nextCycle →
+  category `HW_CARD_<KIND>`), a headline (= banner title) and a detail
+  (= body). The collapsed banner is iOS's own and cannot be styled; PRESSING it
+  shows the HoopwiseNotifications content extension (new target, bundle
+  OKTO.SAMp.HoopwiseNotifications, embedded in the app): the kind's gradient,
+  HOOPWISE caps, headline big, detail under it. The extension reads ONLY the
+  stamped userInfo (falls back to title/body for older requests). New kinds
+  need a case in Kind AND the category in HoopwiseNotifications/Info.plist.
+  The "Class in 10 minutes" alert is ActivityKit's AlertConfiguration, not a
+  UNNotification — only its words changed ("<program> · HH:mm").
+  Pending "Session started" requests from before the design are replaced on
+  the next 30s sync (their category is stale). Fixed with it: switching
+  Session Reminders OFF used to removeAllPendingNotificationRequests — every
+  reminder and the next-cycle reminder went with it; it now removes only its
+  own "session-<id>" requests. DEBUG HOOPWISE_NOTIFY_DEMO=<kind> fires one
+  stamped notification in 5 s; NotificationCardUITests (env-gated, recipe in
+  its header) long-presses the banner found by its headline and attaches the
+  expanded card, or pulls down Notification Center for the Live Activity.
+  Verified on the simulator: four kinds expanded (upcoming, completed,
+  reminder, nextCycle) and the starting-soon card; the extension needed
+  ENABLE_DEBUG_DYLIB = NO — with Xcode's debug dylib the stub executable
+  does not link UserNotificationsUI and the extension dies at launch
+  ("Unable to find NSExtensionContextClass").
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

@@ -253,10 +253,11 @@ enum CyclePlanner {
               let fire = cal.date(bySettingHour: 9, minute: 0, second: 0, of: day), fire > Date() else { return }
         let zh = LocalizationManager.shared.currentLanguage == .chinese
         let content = UNMutableNotificationContent()
-        content.title = zh ? "规划下一周期" : "Plan the next cycle"
-        content.body = zh ? "\(program.name) 当前周期两周后结束。" : "\(program.name)'s cycle ends in two weeks."
         content.sound = .default
         content.userInfo = ["programId": program.id.uuidString]
+        NotificationCard.stamp(content, kind: .nextCycle,
+                               headline: zh ? "规划下一周期" : "Plan the next cycle",
+                               detail: "\(program.name) · \(zh ? "还有两周" : "Two weeks to go")")
         let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
         center.add(UNNotificationRequest(identifier: reminderId(program.id), content: content,
                                          trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)))

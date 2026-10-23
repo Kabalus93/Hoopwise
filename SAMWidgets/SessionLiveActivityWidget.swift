@@ -27,8 +27,8 @@ struct SessionLiveActivityWidget: Widget {
         ActivityConfiguration(for: SessionActivityAttributes.self) { context in
             SessionLiveActivityLockScreenView(context: context)
         } dynamicIsland: { context in
-            let accent = Color(hex: context.attributes.accentColorHex)
             let clock = ActivityClock(context.attributes)
+            let accent = ActivityCardStyle(isUpcoming: clock.isUpcoming).accent
             let interval = clock.interval
 
             return DynamicIsland {
@@ -116,117 +116,85 @@ struct SessionLiveActivityWidget: Widget {
 }
 
 // MARK: - Lock Screen View
+/// The lock-screen card (October 2026, Luther's design): a deep gradient per
+/// moment, the brand line in tracked caps, ONE huge countdown, what it counts
+/// to in bold, and the class's times bottom-right. Starting soon is navy →
+/// blue → cyan; live is court-green → navy → blue.
 struct SessionLiveActivityLockScreenView: View {
     let context: ActivityViewContext<SessionActivityAttributes>
 
     var body: some View {
-        let accent = Color(hex: context.attributes.accentColorHex)
         let clock = ActivityClock(context.attributes)
-        let interval = clock.interval
+        let style = ActivityCardStyle(isUpcoming: clock.isUpcoming)
 
-        return VStack(spacing: 12) {
-            HStack {
-                HStack(spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(0.2))
-                            .frame(width: 36, height: 36)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(clock.headline)
+                .font(.system(size: 13, weight: .semibold))
+                .kerning(1.2)
+                .foregroundStyle(.white.opacity(0.92))
 
-                        Image(systemName: "figure.basketball")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(accent)
-                    }
+            Text(timerInterval: clock.interval, countsDown: true)
+                .font(.system(size: 60, weight: .heavy))
+                .monospacedDigit()
+                .kerning(-1.5)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.top, 2)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(context.attributes.sessionTitle)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                        Text(context.attributes.programName)
-                            .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    // Live-ticking countdown timer. iOS updates this every
-                    // second on the lock screen with no state pushes.
-                    Text(timerInterval: interval, countsDown: true)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.trailing)
-                    Text(clock.caption)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.7))
-                }
-            }
-
-            VStack(spacing: 6) {
-                // Smoothly animated bar — fills proportionally to time
-                // elapsed between startTime and endTime, no pushes needed.
-                ProgressView(timerInterval: interval, countsDown: false) {
-                    EmptyView()
-                } currentValueLabel: {
-                    EmptyView()
-                }
-                .progressViewStyle(.linear)
-                .tint(accent)
-                .background(Color.white.opacity(0.15))
-                .clipShape(Capsule())
-
-                HStack {
-                    PhaseMarker(phase: .warmup, isActive: context.state.currentPhase == .warmup, accentColor: context.attributes.accentColorHex)
-                    Spacer()
-                    PhaseMarker(phase: .skills, isActive: context.state.currentPhase == .skills, accentColor: context.attributes.accentColorHex)
-                    Spacer()
-                    PhaseMarker(phase: .game, isActive: context.state.currentPhase == .game, accentColor: context.attributes.accentColorHex)
-                }
-            }
-
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: context.state.currentPhase.icon)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(hex: context.attributes.accentColorHex))
-
-                    Text(context.state.currentPhase.displayName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    if let drill = context.state.currentDrillName {
-                        Text("•")
-                            .foregroundColor(.white.opacity(0.5))
-                        Text(drill)
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.8))
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 10))
-                    Text("\(context.state.attendeeCount)")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(.white.opacity(0.7))
+            HStack(alignment: .lastTextBaseline) {
+                Text(clock.subtitle(for: className))
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 12)
+                Text(clock.detail)
+                    .font(.system(size: 15, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.88))
+                    .lineLimit(1)
             }
         }
-        .padding(16)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(hex: context.attributes.accentColorHex).opacity(0.3),
-                    Color.black.opacity(0.8)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .padding(.horizontal, 22)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(style.background)
+        .activityBackgroundTint(style.base)
+        .activitySystemActionForegroundColor(.white)
+    }
+
+    private var className: String {
+        let program = context.attributes.programName.trimmingCharacters(in: .whitespaces)
+        return program.isEmpty ? context.attributes.sessionTitle : program
+    }
+}
+
+/// The two moments' colours, shared by the card and the Dynamic Island.
+struct ActivityCardStyle {
+    let isUpcoming: Bool
+
+    /// Deepest tone — what the system shows behind the card's edges.
+    var base: Color { isUpcoming ? Color(hex: "0A1A5C") : Color(hex: "072B3A") }
+    /// The bright end, used as the Dynamic Island accent.
+    var accent: Color { isUpcoming ? Color(hex: "35C8FF") : Color(hex: "2FD39A") }
+
+    var background: some View {
+        ZStack {
+            if isUpcoming {
+                LinearGradient(colors: [Color(hex: "081650"), Color(hex: "1236C8"), Color(hex: "1E7BFF")],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [Color(hex: "22D3FF").opacity(0.85), .clear],
+                               center: .bottomTrailing, startRadius: 0, endRadius: 220)
+            } else {
+                LinearGradient(colors: [Color(hex: "0B4F4A"), Color(hex: "0A2F7A"), Color(hex: "1446E0")],
+                               startPoint: .bottomLeading, endPoint: .topTrailing)
+                RadialGradient(colors: [Color(hex: "0E8A6A").opacity(0.7), .clear],
+                               center: .bottomLeading, startRadius: 0, endRadius: 200)
+                RadialGradient(colors: [Color(hex: "081A5A").opacity(0.6), .clear],
+                               center: .bottomTrailing, startRadius: 0, endRadius: 180)
+            }
+        }
     }
 }
 
@@ -236,34 +204,41 @@ struct SessionLiveActivityLockScreenView: View {
 struct ActivityClock {
     let interval: ClosedRange<Date>
     let caption: String
+    let isUpcoming: Bool
+    let isChinese: Bool
+    let start: Date
+    let end: Date
 
     init(_ attributes: SessionActivityAttributes, now: Date = Date()) {
-        let start = attributes.startTime
-        let isChinese = Locale.preferredLanguages.first?.hasPrefix("zh") == true
-        if now < start {
+        start = attributes.startTime
+        end = max(attributes.startTime, attributes.endTime)
+        isChinese = Locale.preferredLanguages.first?.hasPrefix("zh") == true
+        isUpcoming = now < start
+        if isUpcoming {
             interval = min(now, start.addingTimeInterval(-600))...start
             caption = isChinese ? "后开始" : "starts in"
         } else {
-            interval = start...max(start, attributes.endTime)
+            interval = start...end
             caption = isChinese ? "剩余" : "remaining"
         }
     }
-}
 
-// MARK: - Phase Marker
-struct PhaseMarker: View {
-    let phase: SessionPhase
-    let isActive: Bool
-    let accentColor: String
+    var headline: String {
+        if isChinese { return isUpcoming ? "HOOPWISE · 即将上课" : "HOOPWISE · 正在上课" }
+        return isUpcoming ? "HOOPWISE · STARTING SOON" : "HOOPWISE · SESSION LIVE"
+    }
 
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: phase.icon)
-                .font(.system(size: 10, weight: isActive ? .bold : .regular))
-            Text(phase.displayName)
-                .font(.system(size: 10, weight: isActive ? .semibold : .regular))
-        }
-        .foregroundColor(isActive ? Color(hex: accentColor) : .white.opacity(0.5))
+    func subtitle(for name: String) -> String {
+        if isChinese { return isUpcoming ? "距 \(name) 开始" : "\(name) 剩余时间" }
+        return isUpcoming ? "until \(name) starts" : "remaining in \(name)"
+    }
+
+    /// "18:30–19:30" before the class, "Ends at 19:30" during it.
+    var detail: String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        if isUpcoming { return "\(f.string(from: start))–\(f.string(from: end))" }
+        return isChinese ? "\(f.string(from: end)) 结束" : "Ends at \(f.string(from: end))"
     }
 }
 

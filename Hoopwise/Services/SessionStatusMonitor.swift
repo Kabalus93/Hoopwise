@@ -237,7 +237,10 @@ class SessionStatusMonitor: ObservableObject {
                 guard let req = pendingMap[id],
                       let stored = req.content.userInfo["startEpoch"] as? TimeInterval else { return nil }
                 let drift = abs(session.startTime.timeIntervalSince1970 - stored)
-                return drift > 5 ? id : nil
+                // A request from before the card design (no card category)
+                // is replaced too, so pending starts pick up the new look.
+                let stale = req.content.categoryIdentifier != NotificationCard.Kind.started.categoryIdentifier
+                return drift > 5 || stale ? id : nil
             }
             let allCancellations = Array(toCancel) + driftedIds
             if !allCancellations.isEmpty {
@@ -264,16 +267,14 @@ class SessionStatusMonitor: ObservableObject {
     private func scheduleStartNotification(for session: SessionEvent) {
         let content = UNMutableNotificationContent()
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        content.title = isChinese ? "课程开始" : "Session started"
-        content.body = isChinese
-            ? "\(session.title) · \(timeOnlyString(session.startTime))"
-            : "\(session.title) · \(timeOnlyString(session.startTime))"
         content.sound = .default
-        content.categoryIdentifier = "SESSION_STARTED"
         content.userInfo = [
             "sessionId": session.id.uuidString,
             "startEpoch": session.startTime.timeIntervalSince1970
         ]
+        NotificationCard.stamp(content, kind: .started,
+                               headline: isChinese ? "该上课了" : "Time to coach",
+                               detail: "\(session.title) · \(timeOnlyString(session.startTime))")
 
         let comps = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute],

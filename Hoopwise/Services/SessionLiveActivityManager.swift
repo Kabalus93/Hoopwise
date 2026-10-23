@@ -126,7 +126,8 @@ class SessionLiveActivityManager: ObservableObject {
                 let isChinese = LocalizationManager.shared.currentLanguage == .chinese
                 let alert = AlertConfiguration(
                     title: LocalizedStringResource(stringLiteral: isChinese ? "10 分钟后上课" : "Class in 10 minutes"),
-                    body: LocalizedStringResource(stringLiteral: target.programName),
+                    body: LocalizedStringResource(stringLiteral:
+                        "\(target.programName) · \(NotificationCard.time(session.startTime))"),
                     sound: .default)
                 activity = try Activity.request(attributes: attributes(for: target),
                                                 content: content(for: session, now: showFrom),
@@ -203,8 +204,10 @@ class SessionLiveActivityManager: ObservableObject {
     /// Ends the live class's activity — it leaves the screen at once.
     func endActivity(showAttendanceReminder: Bool = true) {
         guard let activity = currentActivity else { return }
+        let className = activity.attributes.programName.isEmpty
+            ? activity.attributes.sessionTitle : activity.attributes.programName
         dismiss(activity)
-        if showAttendanceReminder { scheduleAttendanceReminder() }
+        if showAttendanceReminder { scheduleAttendanceReminder(className: className) }
         debugLog("✅ Live Activity ended")
     }
     
@@ -306,14 +309,13 @@ class SessionLiveActivityManager: ObservableObject {
     }
     
     // MARK: - Attendance Reminder
-    private func scheduleAttendanceReminder() {
+    private func scheduleAttendanceReminder(className: String) {
         let content = UNMutableNotificationContent()
-        content.title = LocalizationManager.shared.currentLanguage == .chinese ? "课程已结束" : "Session Completed"
-        content.body = LocalizationManager.shared.currentLanguage == .chinese 
-            ? "别忘了记录今天的出勤情况！" 
-            : "Don't forget to take attendance for today's session!"
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         content.sound = .default
-        content.categoryIdentifier = "ATTENDANCE_REMINDER"
+        NotificationCard.stamp(content, kind: .completed,
+                               headline: isChinese ? "课程结束" : "Session complete",
+                               detail: "\(className) · \(isChinese ? "查看出勤" : "Review attendance")")
         
         // Show notification after 5 seconds
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)

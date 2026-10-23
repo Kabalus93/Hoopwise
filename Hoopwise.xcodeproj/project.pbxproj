@@ -10,6 +10,7 @@
 		2D8D33B32FA0B80800F1AD64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */; };
 		2D8D33B42FA0B80800F1AD64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */; };
 		2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AB0C0E012FB9000000A10C01 /* HoopwiseNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,13 @@
 			remoteGlobalIDString = 2D8D33B12FA0B80800F1AD64;
 			remoteInfo = SAMWidgetsExtension;
 		};
+		AB0C0E022FB9000000A10C01 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 054981662EE9F81300C56E5A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB0C0E0A2FB9000000A10C01;
+			remoteInfo = HoopwiseNotifications;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -44,6 +52,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */,
+				AB0C0E012FB9000000A10C01 /* HoopwiseNotifications.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -59,6 +68,7 @@
 		2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SAMWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoopwiseMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration.xcconfig; sourceTree = "<group>"; };
+		AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HoopwiseNotifications.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -117,6 +127,7 @@
 				Models/FrameSequence.swift,
 				Models/League.swift,
 				Models/MicroCycle.swift,
+				Models/NotificationCard.swift,
 				Models/Organization.swift,
 				Models/Playbook.swift,
 				Models/PlayDiagram.swift,
@@ -216,6 +227,20 @@
 			);
 			target = 2D8D35552FA6374E00F1AD64 /* HoopwiseMac */;
 		};
+		AB0C0E042FB9000000A10C01 /* Exceptions for "HoopwiseNotifications" folder in "HoopwiseNotifications" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */;
+		};
+		AB0C0E052FB9000000A10C01 /* Exceptions for "Hoopwise" folder in "HoopwiseNotifications" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/NotificationCard.swift,
+			);
+			target = AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -225,6 +250,7 @@
 				054981912EE9F81400C56E5A /* Exceptions for "Hoopwise" folder in "Hoopwise" target */,
 				2D8D33CB2FA0BB9500F1AD64 /* Exceptions for "Hoopwise" folder in "SAMWidgetsExtension" target */,
 				2D8D35752FA6390F00F1AD64 /* Exceptions for "Hoopwise" folder in "HoopwiseMac" target */,
+				AB0C0E052FB9000000A10C01 /* Exceptions for "Hoopwise" folder in "HoopwiseNotifications" target */,
 			);
 			path = Hoopwise;
 			sourceTree = "<group>";
@@ -250,6 +276,14 @@
 		2D8D35572FA6374E00F1AD64 /* HoopwiseMac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HoopwiseMac;
+			sourceTree = "<group>";
+		};
+		AB0C0E062FB9000000A10C01 /* HoopwiseNotifications */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AB0C0E042FB9000000A10C01 /* Exceptions for "HoopwiseNotifications" folder in "HoopwiseNotifications" target */,
+			);
+			path = HoopwiseNotifications;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -292,6 +326,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AB0C0E072FB9000000A10C01 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -303,6 +344,7 @@
 				0549818C2EE9F81400C56E5A /* SAMpUITests */,
 				2D8D33B52FA0B80800F1AD64 /* SAMWidgets */,
 				2D8D35572FA6374E00F1AD64 /* HoopwiseMac */,
+				AB0C0E062FB9000000A10C01 /* HoopwiseNotifications */,
 				2D8D33552FA0B74100F1AD64 /* Frameworks */,
 				0549816F2EE9F81300C56E5A /* Products */,
 				2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */,
@@ -317,6 +359,7 @@
 				054981892EE9F81400C56E5A /* HoopwiseUITests.xctest */,
 				2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */,
 				2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */,
+				AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -346,6 +389,7 @@
 			);
 			dependencies = (
 				2D8D33C22FA0B80800F1AD64 /* PBXTargetDependency */,
+				AB0C0E0B2FB9000000A10C01 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				054981702EE9F81300C56E5A /* Hoopwise */,
@@ -447,6 +491,28 @@
 			productReference = 2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB0C0E0E2FB9000000A10C01 /* Build configuration list for PBXNativeTarget "HoopwiseNotifications" */;
+			buildPhases = (
+				AB0C0E082FB9000000A10C01 /* Sources */,
+				AB0C0E072FB9000000A10C01 /* Frameworks */,
+				AB0C0E092FB9000000A10C01 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AB0C0E062FB9000000A10C01 /* HoopwiseNotifications */,
+			);
+			name = HoopwiseNotifications;
+			packageProductDependencies = (
+			);
+			productName = HoopwiseNotifications;
+			productReference = AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -474,6 +540,9 @@
 					2D8D35552FA6374E00F1AD64 = {
 						CreatedOnToolsVersion = 26.3;
 					};
+					AB0C0E0A2FB9000000A10C01 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 				};
 			};
 			buildConfigurationList = 054981692EE9F81300C56E5A /* Build configuration list for PBXProject "Hoopwise" */;
@@ -495,6 +564,7 @@
 				054981882EE9F81400C56E5A /* HoopwiseUITests */,
 				2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */,
 				2D8D35552FA6374E00F1AD64 /* HoopwiseMac */,
+				AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */,
 			);
 		};
 /* End PBXProject section */
@@ -529,6 +599,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2D8D35542FA6374E00F1AD64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0C0E092FB9000000A10C01 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -573,6 +650,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AB0C0E082FB9000000A10C01 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -590,6 +674,11 @@
 			isa = PBXTargetDependency;
 			target = 2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */;
 			targetProxy = 2D8D33C12FA0B80800F1AD64 /* PBXContainerItemProxy */;
+		};
+		AB0C0E0B2FB9000000A10C01 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */;
+			targetProxy = AB0C0E022FB9000000A10C01 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1087,6 +1176,75 @@
 			};
 			name = Release;
 		};
+		AB0C0E0C2FB9000000A10C01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HoopwiseNotifications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HoopwiseNotifications;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					UserNotificationsUI,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.HoopwiseNotifications;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AB0C0E0D2FB9000000A10C01 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 3SGGYH29MQ;
+				ENABLE_DEBUG_DYLIB = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HoopwiseNotifications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HoopwiseNotifications;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					UserNotificationsUI,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.HoopwiseNotifications;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1140,6 +1298,15 @@
 			buildConfigurations = (
 				2D8D355F2FA6375000F1AD64 /* Debug */,
 				2D8D35602FA6375000F1AD64 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AB0C0E0E2FB9000000A10C01 /* Build configuration list for PBXNativeTarget "HoopwiseNotifications" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB0C0E0C2FB9000000A10C01 /* Debug */,
+				AB0C0E0D2FB9000000A10C01 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
