@@ -171,6 +171,30 @@ enum SheetGalleryDebug {
                 missing("gameStatsCard: no program")
             }
 
+        case "studentProfile":
+            // The athlete profile of the first program's first student.
+            if let program = dm.programs.first,
+               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
+                NavigationStack { StudentDetailView(student: student) }
+            } else {
+                missing("studentProfile: no enrolled student")
+            }
+
+        case "trainingStats":
+            // The profile's Training Stats over a made-up season.
+            if let program = dm.programs.first,
+               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
+                ScrollView {
+                    CollapsibleTrainingStatsSection(
+                        studentId: student.id,
+                        sessions: demoSessions(roster: program.enrolledStudentIds))
+                        .padding(16)
+                }
+                .background(Color(.systemGroupedBackground))
+            } else {
+                missing("trainingStats: no enrolled student")
+            }
+
         case "makeUpOffer":
             // The question a cancelled class with a plan asks (SessionPlanShift).
             Color(.systemGroupedBackground)
@@ -414,11 +438,14 @@ private struct LiveGameGalleryHost: View {
 extension SheetGalleryDebug {
     /// Eight sessions of two games each, scoring rising over time.
     static func demoGameStats(roster: [UUID]) -> GameStatsReport.Report {
+        let sessions = demoSessions(roster: roster)
+        return GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
+    }
+
+    static func demoSessions(roster: [UUID]) -> [SessionEvent] {
         var sessions: [SessionEvent] = []
         let players = Array(roster.prefix(8))
-        guard !players.isEmpty else {
-            return GameStatsReport.make(sessions: [], roster: roster, current: nil)
-        }
+        guard !players.isEmpty else { return [] }
         for week in 0..<8 {
             let start = fixedDate.addingTimeInterval(Double(week - 8) * 7 * 86_400)
             var s = SessionEvent(programId: nil, title: "Demo", date: start, startTime: start,
@@ -437,7 +464,7 @@ extension SheetGalleryDebug {
             }
             sessions.append(s)
         }
-        return GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
+        return sessions
     }
 }
 #endif

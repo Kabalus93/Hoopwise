@@ -154,4 +154,97 @@ enum GameStatsReport {
         }
         return n > 0 ? sum / n : 0
     }
+
+    // MARK: - One player (the athlete profile's Training Stats)
+
+    /// A game the player has a stat line in.
+    struct PlayerGame: Identifiable, Equatable {
+        var id: UUID { game.id }
+        let date: Date
+        let sessionId: UUID
+        let game: SessionGame
+        let line: SessionPlayerStats
+        /// true won, false lost, nil a draw or an every-player-for-themselves game.
+        var won: Bool? {
+            guard !game.gameType.isIndividual else { return nil }
+            let mine = game.teamScores[line.teamId] ?? 0
+            let best = game.teamScores.filter { $0.key != line.teamId }.values.max() ?? 0
+            return mine == best ? nil : mine > best
+        }
+
+        static func == (a: PlayerGame, b: PlayerGame) -> Bool { a.game.id == b.game.id && a.line == b.line }
+    }
+
+    struct PlayerReport: Equatable {
+        let games: Int
+        let sessions: Int
+        let totals: [Metric: Int]
+        let average: [Metric: Double]
+        /// Last 3 sessions vs the ones before, per game.
+        let direction: [Metric: Double]
+        /// Newest first.
+        let recent: [PlayerGame]
+        let record: (won: Int, lost: Int)
+
+        static func == (a: PlayerReport, b: PlayerReport) -> Bool {
+            a.games == b.games && a.totals == b.totals && a.direction == b.direction && a.recent == b.recent
+        }
+    }
+
+    /// THE list of a player's games, oldest first: played games (same rule
+    /// as the team report) in sessions that happened. Every per-player stat
+    /// reads this, so the profile, the card and the grade cannot disagree.
+    static func playerGames(_ playerId: UUID, in sessions: [SessionEvent],
+                            in range: ClosedRange<Date>? = nil) -> [PlayerGame] {
+        sessions
+            .filter { !SessionLifecycle.didNotHappen($0) && (range?.contains($0.startTime) ?? true) }
+            .sorted { $0.startTime < $1.startTime }
+            .flatMap { s in
+                s.games.filter(played).sorted { $0.gameNumber < $1.gameNumber }.compactMap { g in
+                    g.stats(for: playerId).map { PlayerGame(date: s.startTime, sessionId: s.id, game: g, line: $0) }
+                }
+            }
+    }
+
+    static let countingMetrics: [Metric] = [.points, .rebounds, .assists, .steals, .blocks]
+
+    static func player(_ playerId: UUID, sessions: [SessionEvent]) -> PlayerReport {
+        let games = playerGames(playerId, in: sessions)
+        func value(_ m: Metric, _ l: SessionPlayerStats) -> Int {
+            switch m {
+            case .points: return l.points
+            case .rebounds: return l.rebounds
+            case .assists: return l.assists
+            case .steals: return l.steals
+            case .blocks: return l.blocks
+            case .assistRate: return 0
+            }
+        }
+        var totals: [Metric: Int] = [:]
+        for m in countingMetrics { totals[m] = games.reduce(0) { $0 + value(m, $1.line) } }
+        let n = Double(max(1, games.count))
+        var average: [Metric: Double] = [:]
+        if !games.isEmpty { for m in countingMetrics { average[m] = Double(totals[m] ?? 0) / n } }
+
+        // Direction by SESSION, like the team: a day of three games weighs as
+        // three games, and the last three sessions face everything before.
+        let bySession = Dictionary(grouping: games, by: \.sessionId)
+        let order = games.map(\.sessionId).reduce(into: [UUID]()) { if !$0.contains($1) { $0.append($1) } }
+        var direction: [Metric: Double] = [:]
+        if order.count >= recentWindow + 1 {
+            let recentIds = Set(order.suffix(recentWindow))
+            let recent = games.filter { recentIds.contains($0.sessionId) }
+            let earlier = games.filter { !recentIds.contains($0.sessionId) }
+            for m in countingMetrics {
+                let r = Double(recent.reduce(0) { $0 + value(m, $1.line) }) / Double(max(1, recent.count))
+                let e = Double(earlier.reduce(0) { $0 + value(m, $1.line) }) / Double(max(1, earlier.count))
+                if e > 0 { direction[m] = (r - e) / e } else if r > 0 { direction[m] = 1 }
+            }
+        }
+        let results = games.compactMap(\.won)
+        return PlayerReport(games: games.count, sessions: bySession.count, totals: totals, average: average,
+                            direction: direction, recent: Array(games.reversed().prefix(5)),
+                            record: (results.filter { $0 }.count, results.filter { !$0 }.count))
+    }
 }
+

@@ -74,4 +74,51 @@ final class GameStatsReportTests: XCTestCase {
         XCTAssertEqual(r.playing.last?.playerId, bench)
         XCTAssertEqual(r.thisSession?[.points], 4)
     }
+
+    // MARK: One player (profile Training Stats)
+
+    func testPlayerCountsPlayedGamesNotOnlyEndedOnes() {
+        let live = session(day: 1, [game([(a, 4, 1)], status: .inProgress)])
+        let ended = session(day: 2, [game([(a, 6, 0)])])
+        let setup = session(day: 3, [game([(a, 9, 9)], status: .setup)])
+        let skipped = session(day: 4, [game([(a, 9, 9)])], status: .skipped)
+        let r = GameStatsReport.player(a, sessions: [live, ended, setup, skipped])
+        XCTAssertEqual(r.games, 2)
+        XCTAssertEqual(r.sessions, 2)
+        XCTAssertEqual(r.totals[.points], 10)
+        XCTAssertEqual(r.average[.points], 5)
+        XCTAssertEqual(r.average[.assists], 0.5)
+        // TrainingSessionStats (grade, cards) reads the same games.
+        let legacy = TrainingSessionStats.calculate(for: a, from: [live, ended, setup, skipped])
+        XCTAssertEqual(legacy.gamesPlayed, 2)
+        XCTAssertEqual(legacy.totalPoints, 10)
+    }
+
+    func testPlayerRecentNewestFirstWithResult() {
+        var g1 = game([(a, 4, 0)]); g1.gameNumber = 1
+        var g2 = game([(a, 8, 0)]); g2.gameNumber = 2
+        let other = UUID()
+        g2.teamScores = [team: 8, other: 4]
+        g1.teamScores = [team: 4, other: 10]
+        let r = GameStatsReport.player(a, sessions: [session(day: 1, [g2, g1])])
+        XCTAssertEqual(r.recent.map(\.game.gameNumber), [2, 1])
+        XCTAssertEqual(r.recent.first?.won, true)
+        XCTAssertEqual(r.recent.last?.won, false)
+        XCTAssertEqual(r.record.won, 1)
+        XCTAssertEqual(r.record.lost, 1)
+    }
+
+    func testPlayerDirectionBySession() {
+        let early = (1...2).map { session(day: $0, [game([(a, 2, 0)])]) }
+        let late = (3...5).map { session(day: $0, [game([(a, 6, 0)])]) }
+        let r = GameStatsReport.player(a, sessions: early + late)
+        XCTAssertEqual(r.direction[.points]!, 2.0, accuracy: 0.0001)   // 2 → 6 per game
+        XCTAssertTrue(GameStatsReport.player(a, sessions: late).direction.isEmpty)
+    }
+
+    func testPlayerWithNoGames() {
+        let r = GameStatsReport.player(bench, sessions: [session(day: 1, [game([(a, 4, 0)])])])
+        XCTAssertEqual(r.games, 0)
+        XCTAssertTrue(r.average.isEmpty)
+    }
 }

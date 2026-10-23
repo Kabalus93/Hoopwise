@@ -4,12 +4,10 @@ struct StudentDetailView: View {
     @EnvironmentObject var dataManager: DataManager
     let student: Student
     @State private var showingEditSheet = false
-    @State private var showingMeasurementSheet = false
     @State private var contractEdit: ContractEdit?
 
     // Section expansion states
     @State private var showParent = false
-    @State private var showMeasurements = false
 
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
 
@@ -42,10 +40,6 @@ struct StudentDetailView: View {
         dataManager.programs.filter { $0.enrolledStudentIds.contains(student.id) }
     }
     
-    var hasLeagueData: Bool {
-        dataManager.teams.contains { $0.playerIds.contains(student.id) }
-    }
-    
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -61,13 +55,9 @@ struct StudentDetailView: View {
                     // Contract & Risk Analysis section (comprehensive)
                     contractAndRiskSection
                     
-                    // Measurements
-                    measurementsSection
-                    
-                    // League Stats
-                    CollapsibleLeagueSection(studentId: student.id)
-                    
-                    // Training Stats
+                    // Training Stats — the profile's one stats section.
+                    // Measurements and league stats were removed (October
+                    // 2026, Luther).
                     CollapsibleTrainingStatsSection(studentId: student.id)
                     
                     // Notes
@@ -104,9 +94,6 @@ struct StudentDetailView: View {
         }
         .sheet(isPresented: $showingEditSheet) {
             EditStudentView(student: student, player: player)
-        }
-        .sheet(isPresented: $showingMeasurementSheet) {
-            QuickMeasurementView(student: student, sessionId: nil)
         }
         .sheet(item: $contractEdit) { edit in
             AddEditContractSheet(studentId: student.id, existing: edit.contract)
@@ -248,11 +235,11 @@ struct StudentDetailView: View {
 
             Divider().frame(height: 32)
 
-            if let height = player?.heightCm {
-                quickStatItem(value: "\(Int(height))", label: "cm")
-            } else {
-                quickStatItem(value: "—", label: isChinese ? "身高" : "Height")
-            }
+            // Games played in training sessions — the Training Stats count.
+            quickStatItem(
+                value: "\(GameStatsReport.playerGames(student.id, in: dataManager.sessionEvents).count)",
+                label: isChinese ? "比赛" : "Games"
+            )
         }
         .padding(.vertical, 12)
         .glassEffect(.regular, in: .rect(cornerRadius: 12))
@@ -460,69 +447,6 @@ struct StudentDetailView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 
-    // MARK: - Measurements Section
-    private var measurementsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label {
-                    Text(isChinese ? "测量数据" : "Measurements")
-                        .font(.footnote.weight(.semibold))
-                } icon: {
-                    Image(systemName: "ruler.fill").font(.caption)
-                }
-                .foregroundStyle(.primary)
-                Spacer()
-                Button {
-                    showingMeasurementSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-                .controlSize(.small)
-                .tint(Color.accentColor)
-            }
-
-            if measurementSummary.measurements.isEmpty {
-                Button(action: { showingMeasurementSheet = true }) {
-                    HStack {
-                        Text(isChinese ? "点击记录身高、体重等" : "Tap to record height, weight...")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(12)
-                    .background(.quaternary, in: .rect(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-            } else {
-                // Compact measurement grid
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    ForEach(measurementSummary.measurements.prefix(6)) { measurement in
-                        VStack(spacing: 2) {
-                            Text(measurement.formattedValue)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.primary)
-                            Text(measurement.type.rawValue)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(.quaternary)
-                        .cornerRadius(8)
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .background(.regularMaterial)
-        .cornerRadius(14)
-    }
-    
     // MARK: - Notes Section
     private func notesSection(_ notes: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {

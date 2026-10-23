@@ -790,18 +790,17 @@ struct TrainingSessionStats {
         var totalSteals = 0
         var totalBlocks = 0
 
-        for session in sessions {
-            if let range = dateRange, !range.contains(session.date) { continue }
-            for game in session.games where game.status == .completed {
-                if let stats = game.stats(for: studentId) {
-                    gamesPlayed += 1
-                    totalPoints += stats.points
-                    totalRebounds += stats.rebounds
-                    totalAssists += stats.assists
-                    totalSteals += stats.steals
-                    totalBlocks += stats.blocks
-                }
-            }
+        // The same games the Games tab and the profile count (October 2026):
+        // played games — not only ones someone pressed "end" on — in sessions
+        // that happened.
+        for item in GameStatsReport.playerGames(studentId, in: sessions, in: dateRange) {
+            let stats = item.line
+            gamesPlayed += 1
+            totalPoints += stats.points
+            totalRebounds += stats.rebounds
+            totalAssists += stats.assists
+            totalSteals += stats.steals
+            totalBlocks += stats.blocks
         }
 
         return TrainingSessionStats(

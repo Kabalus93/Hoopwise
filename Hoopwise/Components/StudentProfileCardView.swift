@@ -439,12 +439,8 @@ struct StudentProfileCardView: View {
     private func computeMultiStatTrends() -> MultiStatTrends {
         var gameStats: [(pts: Int, reb: Int, ast: Int)] = []
         
-        for session in dataManager.sessionEvents.sorted(by: { $0.date > $1.date }) {
-            for game in session.games where game.status == .completed {
-                if let stats = game.stats(for: student.id) {
-                    gameStats.append((stats.points, stats.rebounds, stats.assists))
-                }
-            }
+        for item in GameStatsReport.playerGames(student.id, in: dataManager.sessionEvents).reversed() {
+            gameStats.append((item.line.points, item.line.rebounds, item.line.assists))
         }
         
         let games = Array(gameStats.prefix(8))

@@ -389,6 +389,20 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   sessions have games). Scope is the session's PROGRAM (this session alone
   when it has none). HOOPWISE_SHOT=gameStats / gameStatsCard over a made-up
   season. Tests: GameStatsReportTests, GameStatsUITests.
+- SEVENTEENTH sanctioned exception (October 2026, Luther's request): the
+  athlete profile (StudentDetailView — the screen the Athletes list, widgets,
+  dashboard and program roster open; StudentIntelligenceProfileView is never
+  constructed) has NO measurements and NO league stats; the quick-stats Height
+  became Games. Training Stats (Components/StudentLeagueStatsView.swift —
+  the league views in it were deleted) is the one stats section and reads
+  `GameStatsReport.player` / `playerGames`: played games (not only ones
+  someone ended — it used to count `.completed` only, so an unfinished game
+  vanished) in sessions that happened (skipped ones used to count), all five
+  stats per game with totals, direction by the last 3 SESSIONS vs before (was
+  two single games' points), recent games newest first with game number and
+  W/L, bilingual. TrainingSessionStats.calculate (grade, radar, monthly card)
+  and the profile card's trends read the same list, so no two surfaces
+  disagree. HOOPWISE_SHOT=studentProfile / trainingStats.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.
