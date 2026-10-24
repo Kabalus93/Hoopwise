@@ -260,7 +260,16 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   circle's square, no edit step; replaces UIImagePickerController on the
   add/edit-student paths) and the edit-student school grade as ONE menu row
   instead of three chip grids. ProfilePhotoCropTests pins the crop; the
-  preview→sensor mapping needs a real device.
+  preview→sensor mapping needs a real device. SHARPNESS (October 2026):
+  the camera opens the VIRTUAL multi-lens device (triple → dual-wide → dual
+  → wide; `bestDevice`) framed at the wide lens's 1× (`wideZoomFactor` = the
+  first switch-over factor when an ultra-wide is present), so iOS switches
+  lenses itself — ultra-wide macro when the child is too close, which the
+  plain wide camera it used could not focus. Continuous focus/exposure on
+  the circle's centre, tap to refocus, the shutter waits ≤ 0.6 s for focus,
+  capture at .balanced (was .speed — no multi-frame deblur indoors).
+  ProfileCameraLensTests pins the lens order and framing; the actual
+  sharpness needs a real iPhone (the simulator has no camera).
 - EIGHTH sanctioned exception (October 2026, Luther's request): the student
   quick peep (Components/StudentQuickPeepView.swift) has an "Edit Student"
   toolbar button that opens the same EditStudentView as the profile, so a

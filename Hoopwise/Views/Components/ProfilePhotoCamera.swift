@@ -16,6 +16,17 @@ import UIKit
 // - shows the avatar's circle as a mask, and
 // - crops the captured photo to exactly that circle's square, so the framing
 //   on screen is the framing saved. No edit step.
+//
+// SHARPNESS (October 2026, Luther: "sometimes the image stays blurry"). It
+// used the plain wide camera only — which cannot focus closer than ~15–20 cm
+// on recent iPhones and never hands over to another lens — and captured at
+// .speed quality, which drops the multi-frame processing that removes motion
+// blur under gym lights. Now it opens the phone's VIRTUAL multi-lens camera
+// (triple → dual-wide → dual → wide, whichever exists), framed at the wide
+// lens's 1×, so iOS switches lenses by itself (ultra-wide macro when the
+// child is too close, telephoto when it helps); focus and exposure follow
+// the circle's centre continuously, tap anywhere to refocus there, the
+// shutter waits (≤ 0.6 s) for focus to settle, and capture is .balanced.
 
 struct ProfilePhotoCamera: View {
     /// Receives the square photo (or nothing, on cancel).
@@ -23,6 +34,7 @@ struct ProfilePhotoCamera: View {
 
     @StateObject private var camera = ProfileCameraModel()
     @State private var circleRect: CGRect = .zero
+    @State private var focusTap: CGPoint?
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
@@ -37,6 +49,21 @@ struct ProfilePhotoCamera: View {
                 Color.black
 
                 CameraPreview(session: camera.session, previewLayer: camera.previewLayer)
+                    // Tap to focus (and expose) there; the ring shows where.
+                    .onTapGesture(coordinateSpace: .local) { location in
+                        camera.focus(at: location)
+                        focusTap = location
+                        withAnimation(.easeOut(duration: 0.8).delay(0.4)) { focusTap = nil }
+                    }
+
+                if let focusTap {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.yellow, lineWidth: 1.5)
+                        .frame(width: 70, height: 70)
+                        .position(focusTap)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
 
                 // The mask: everything outside the avatar circle is dimmed.
                 Rectangle()
@@ -75,6 +102,10 @@ struct ProfilePhotoCamera: View {
             }
             .onAppear { circleRect = circle }
             .onChange(of: proxy.size) { _, _ in circleRect = circle }
+            // Once the camera runs, focus and expose on the face circle.
+            .onChange(of: camera.isRunning) { _, running in
+                if running { camera.focus(at: CGPoint(x: circle.midX, y: circle.midY)) }
+            }
         }
         .ignoresSafeArea()
         .statusBarHidden()
@@ -162,6 +193,8 @@ final class ProfileCameraModel: NSObject, ObservableObject {
     private let output = AVCapturePhotoOutput()
     private let queue = DispatchQueue(label: "hoopwise.profile-camera")
     private var position: AVCaptureDevice.Position = .back
+    /// The device in use — read and configured on `queue` only.
+    nonisolated(unsafe) private var device: AVCaptureDevice?
     private var pending: ((UIImage?) -> Void)?
     private var pendingCircle: CGRect = .zero
 
@@ -189,7 +222,7 @@ final class ProfileCameraModel: NSObject, ObservableObject {
             message = isChinese ? "需要相机权限（设置 › Hoopwise）" : "Camera access is off (Settings › Hoopwise)"
             return
         }
-        canFlip = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) != nil
+        canFlip = Self.bestDevice(position: .front) != nil
         let configured = await configure(position: .back)
         if !configured {
             message = isChinese ? "没有可用的相机" : "No camera available"
@@ -216,7 +249,7 @@ final class ProfileCameraModel: NSObject, ObservableObject {
         let output = output
         return await withCheckedContinuation { continuation in
             queue.async {
-                guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
+                guard let device = Self.bestDevice(position: position),
                       let input = try? AVCaptureDeviceInput(device: device) else {
                     continuation.resume(returning: false)
                     return
@@ -232,10 +265,13 @@ final class ProfileCameraModel: NSObject, ObservableObject {
                 session.addInput(input)
                 if !session.outputs.contains(output), session.canAddOutput(output) {
                     session.addOutput(output)
-                    // Speed over quality: this is a 1024px avatar, not a print.
-                    output.maxPhotoQualityPrioritization = .speed
+                    // Balanced, not speed: speed skips the multi-frame
+                    // processing that removes motion blur indoors.
+                    output.maxPhotoQualityPrioritization = .balanced
                 }
                 session.commitConfiguration()
+                Self.prepare(device)
+                self.device = device
                 if !session.isRunning { session.startRunning() }
                 continuation.resume(returning: true)
             }
@@ -248,9 +284,76 @@ final class ProfileCameraModel: NSObject, ObservableObject {
         isCapturing = true
         pending = completion
         pendingCircle = circle
-        let settings = AVCapturePhotoSettings()
-        settings.photoQualityPrioritization = .speed
-        output.capturePhoto(with: settings, delegate: self)
+        let output = output
+        // Give focus a moment to settle (≤ 0.6 s) before the shot.
+        queue.async { [weak self] in
+            let deadline = Date().addingTimeInterval(0.6)
+            while let device = self?.device, device.isAdjustingFocus, Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.03)
+            }
+            let settings = AVCapturePhotoSettings()
+            settings.photoQualityPrioritization = .balanced
+            DispatchQueue.main.async {
+                guard let self else { return }
+                output.capturePhoto(with: settings, delegate: self)
+            }
+        }
+    }
+
+    /// Continuous focus and exposure at a point of the preview.
+    func focus(at layerPoint: CGPoint) {
+        let point = previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
+        queue.async { [weak self] in
+            guard let device = self?.device, (try? device.lockForConfiguration()) != nil else { return }
+            if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = point }
+            if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+            if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = point }
+            if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+            device.unlockForConfiguration()
+        }
+    }
+
+    // MARK: Lens choice
+
+    /// Most capable first: the virtual multi-lens cameras switch lenses by
+    /// themselves; the plain wide camera is the fallback every iPhone has.
+    nonisolated static func deviceTypes(for position: AVCaptureDevice.Position) -> [AVCaptureDevice.DeviceType] {
+        position == .front
+            ? [.builtInTrueDepthCamera, .builtInWideAngleCamera]
+            : [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera]
+    }
+
+    nonisolated static func bestDevice(position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+        // A discovery session lists devices in the order the types were given.
+        AVCaptureDevice.DiscoverySession(deviceTypes: deviceTypes(for: position),
+                                         mediaType: .video, position: position).devices.first
+    }
+
+    /// The zoom factor that frames like the WIDE lens at 1×: on a virtual
+    /// camera that includes the ultra-wide, factor 1 IS the ultra-wide and
+    /// the first switch-over factor is the wide.
+    nonisolated static func wideZoomFactor(constituents: [AVCaptureDevice.DeviceType],
+                                           switchOvers: [CGFloat]) -> CGFloat {
+        guard constituents.contains(.builtInUltraWideCamera), let first = switchOvers.first else { return 1 }
+        return first
+    }
+
+    /// Frames at the wide lens, lets iOS switch lenses on its own, and starts
+    /// continuous focus/exposure with face-driven focus left on.
+    nonisolated static func prepare(_ device: AVCaptureDevice) {
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        let zoom = wideZoomFactor(constituents: device.constituentDevices.map(\.deviceType),
+                                  switchOvers: device.virtualDeviceSwitchOverVideoZoomFactors.map { CGFloat(truncating: $0) })
+        device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(zoom, device.maxAvailableVideoZoomFactor))
+        if device.isVirtualDevice,
+           device.activePrimaryConstituentDeviceSwitchingBehavior != .unsupported {
+            device.setPrimaryConstituentDeviceSwitchingBehavior(.auto, restrictedSwitchingBehaviorConditions: [])
+        }
+        if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+        if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+        if device.isSmoothAutoFocusSupported { device.isSmoothAutoFocusEnabled = false }
+        device.isSubjectAreaChangeMonitoringEnabled = true
     }
 
     /// The circle's square, as a normalized rect in the sensor's coordinates —
