@@ -416,6 +416,23 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   W/L, bilingual. TrainingSessionStats.calculate (grade, radar, monthly card)
   and the profile card's trends read the same list, so no two surfaces
   disagree. HOOPWISE_SHOT=studentProfile / trainingStats.
+- EIGHTEENTH sanctioned exception (October 2026, Luther's request): Profile →
+  Notifications → "Add Sessions to Calendar" writes sessions into a
+  "Hoopwise" calendar in Apple Calendar (Services/CalendarSync.swift, both
+  targets; iOS only calls it). One-way, device setting (UserDefaults
+  `calendarSync.enabled`), FULL calendar access (write-only cannot find and
+  update its own events; NSCalendarsFullAccessUsageDescription). Window 7 days
+  back to 60 ahead; sessions that did not happen are removed. IDENTITY IS THE
+  EVENT URL hoopwise://session/<id> — no id table, so a reinstall or a second
+  device seeing the same iCloud calendar updates the events instead of
+  copying them, and copies/foreign events in that calendar are deleted
+  (`plan`, pure, CalendarSyncTests). Runs debounced after every cache refresh
+  (both refresh paths). The calendar goes in iCloud when the phone has it,
+  else on the phone; switching off REMOVES the calendar. DEBUG
+  HOOPWISE_CALENDAR_LOCAL=1 syncs into a phone-only "Hoopwise (test)" calendar
+  (the simulators are on Luther's iCloud — never test without it), =remove
+  deletes it; verified on the simulator: 18 sessions written, visible in
+  Calendar, then removed.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

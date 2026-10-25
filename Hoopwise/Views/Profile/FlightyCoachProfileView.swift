@@ -15,6 +15,8 @@ struct FlightyCoachProfileView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var showingEditProfile = false
     @State private var localSettings: AppSettings = AppSettings.default
+    @State private var calendarSyncOn = UserDefaults.standard.bool(forKey: CalendarSync.enabledKey)
+    @State private var calendarSyncMessage: String?
     @StateObject private var syncMonitor = CloudSyncMonitor.shared
     @State private var iCloudAccountLabel: String?
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
@@ -437,11 +439,46 @@ struct FlightyCoachProfileView: View {
                     }
                 }
             }
+
+            // Sessions in Apple Calendar (CalendarSync): a "Hoopwise"
+            // calendar of their own, kept in step after every change.
+            Toggle(isOn: Binding(
+                get: { calendarSyncOn },
+                set: { newValue in setCalendarSync(newValue) })) {
+                    Label(isChinese ? "同步到日历" : "Add Sessions to Calendar", systemImage: "calendar.badge.plus")
+                }
+                .accessibilityIdentifier("profile.calendarSync")
         } header: {
             Text(isChinese ? "通知" : "Notifications")
+        } footer: {
+            Text(calendarSyncMessage ?? (isChinese
+                 ? "在「日历」App 中新建 Hoopwise 日历，显示前 7 天到之后 60 天的课程；课程改动或取消时自动更新。"
+                 : "Adds a Hoopwise calendar to the Calendar app with your sessions from the last 7 days to the next 60. It updates when a session moves or is cancelled."))
         }
         .onChange(of: localSettings) { _, newSettings in
             dataManager.updateAppSettings(newSettings)
+        }
+    }
+
+    private func setCalendarSync(_ on: Bool) {
+        calendarSyncMessage = nil
+        if on {
+            Task { @MainActor in
+                if await CalendarSync.requestAccess() {
+                    UserDefaults.standard.set(true, forKey: CalendarSync.enabledKey)
+                    calendarSyncOn = true
+                    CalendarSync.syncNow(dataManager: dataManager)
+                } else {
+                    calendarSyncOn = false
+                    calendarSyncMessage = isChinese
+                        ? "没有日历权限。请在「设置 › Hoopwise › 日历」中选择「完全访问」。"
+                        : "Calendar access is off. Allow Full Access in Settings › Hoopwise › Calendars."
+                }
+            }
+        } else {
+            UserDefaults.standard.set(false, forKey: CalendarSync.enabledKey)
+            calendarSyncOn = false
+            CalendarSync.removeCalendar()
         }
     }
 

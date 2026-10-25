@@ -161,6 +161,7 @@ struct SAMApp: App {
         ScreenshotStore.prune(dataManager: dataManager)
         liveActivityDemoIfRequested()
         notificationCardDemoIfRequested()
+        CalendarSync.runLocalTestIfRequested(dataManager: dataManager)
         #endif
         if SheetGalleryDebug.requestedShot != nil {
             SheetGalleryDebug.seedIfEmpty(dataManager: dataManager)

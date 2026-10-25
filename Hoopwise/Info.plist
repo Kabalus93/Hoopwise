@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Hoopwise</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Hoopwise adds your sessions to a Hoopwise calendar and keeps them up to date when a session moves or is cancelled.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Hoopwise needs camera access to take profile photos of students.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

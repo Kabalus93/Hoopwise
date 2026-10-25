@@ -663,6 +663,9 @@ class SwiftDataManager: ObservableObject {
                 WidgetSnapshotWriter.scheduleWrite(dataManager: self)
                 AttentionEngine.scheduleAutomation(dataManager: self)
                 SessionReconciler.scheduleReconcile(dataManager: self)
+                #if os(iOS)
+                CalendarSync.scheduleSync(dataManager: self)
+                #endif
             }
         }
         do {
@@ -4437,6 +4440,9 @@ class SwiftDataManager: ObservableObject {
             if !isEphemeralTestInstance {
                 WidgetSnapshotWriter.scheduleWrite(dataManager: self)
                 AttentionEngine.scheduleAutomation(dataManager: self)
+                #if os(iOS)
+                CalendarSync.scheduleSync(dataManager: self)
+                #endif
             }
         }
         do {
