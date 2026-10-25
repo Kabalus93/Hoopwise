@@ -279,6 +279,7 @@ struct SessionSnapshotV1: Codable {
         sd.attendeeIds = event.attendeeIds
         sd.actualAttendeeIds = event.actualAttendeeIds
         sd.excusedAbsences = event.excusedAbsences
+        sd.unexcusedAbsences = event.unexcusedAbsences
         sd.attendancePhotoPath = event.attendancePhotoPath
         sd.notes = event.notes
         sd.coachNotes = event.coachNotes

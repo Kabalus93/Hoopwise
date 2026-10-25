@@ -1655,6 +1655,29 @@ STILL OPEN, needs a decision rather than a verdict:
 - PhaseSession is DELETED (no persistence, no writers; its only reference was
   an unused `phaseSessions` array on the manager). Verdict recorded: gone.
 
+## Stale session saves — games and attendance lost in class (25 October 2026)
+- Luther lost a class's games and attendance mid-session (瓜沥 U10, 16:32,
+  just after taking a photo). FlightySessionPageView keeps an `@State` copy and
+  `saveSession()` wrote the WHOLE copy back on many actions (plan, notes,
+  skip/cancel/complete…); a copy older than the store erased everything
+  recorded since, and a whole-record write kept no revision. The exact trigger
+  that day was not proven.
+- FIX: `updateSessionEvent(_:keepLiveFields: true)` — the page's saves never
+  write games, actualAttendeeIds, excusedAbsences, unexcusedAbsences or
+  attendancePhotoPath; those keep the store's values (they are written field
+  by field as they happen). `refreshSessionFromStore` copies those live fields
+  ALWAYS (it gated them on updatedAt, so the page could keep showing an empty
+  list), and now also copies unexcusedAbsences, which it never did.
+- Any other whole-record write that would REMOVE games, stat lines or marks
+  (`erasesLiveData`) records a revision first, actorLabel "Before overwrite".
+- RECOVERY: session ⋯ → Restore Earlier Version (SessionVersionsSheet) lists
+  the session's revisions (last 10, one before every field-level write) with
+  games / stat lines / points / present / excused / absent / photo and
+  restores one (`restoreSession`, which keeps the current version first).
+  SessionSnapshotV1.apply did not restore unexcusedAbsences — fixed.
+- Never add a whole-record session save from a view's copy without
+  keepLiveFields. Tests: SessionStaleSaveTests.
+
 ## Tests: never let CloudKit into the test process
 - ModelConfiguration's `cloudKitDatabase` defaults to **.automatic**, which
   attaches CloudKit mirroring whenever the target has the iCloud entitlement

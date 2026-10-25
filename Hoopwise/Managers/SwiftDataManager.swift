@@ -1912,7 +1912,14 @@ class SwiftDataManager: ObservableObject {
         
     }
 
-    func updateSessionEvent(_ event: SessionEvent) {
+    /// `keepLiveFields`: the caller edits the session's DETAILS (plan,
+    /// notes, status, times…) and must never write its games, attendance
+    /// marks or roll-call photo — those keep what the store holds. The
+    /// session page saves this way: its `@State` copy can be older than the
+    /// store, and a whole-record save from it erased games and attendance
+    /// taken during a class (Luther, 25 October 2026).
+    func updateSessionEvent(_ event: SessionEvent, keepLiveFields: Bool = false) {
+        var event = event
         let before = cachedSessionEvents.first { $0.id == event.id }
         do {
             let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == event.id })
@@ -1930,6 +1937,18 @@ class SwiftDataManager: ObservableObject {
                 // hand-list 19 of the 23 columns and silently dropped
                 // unexcusedAbsences, developmentFocus, headerImageURL and
                 // createdByCoachId on every save.
+                if keepLiveFields {
+                    event.games = sdSession.games
+                    event.actualAttendeeIds = sdSession.actualAttendeeIds
+                    event.excusedAbsences = sdSession.excusedAbsences
+                    event.unexcusedAbsences = sdSession.unexcusedAbsences
+                    event.attendancePhotoPath = sdSession.attendancePhotoPath
+                } else if Self.erasesLiveData(stored: sdSession, incoming: event) {
+                    // A whole-record write that would REMOVE games, stats or
+                    // marks leaves a restorable copy first (Restore earlier
+                    // version on the session page).
+                    recordSessionRevision(sdSession, reason: .manualEdit, actorLabel: "Before overwrite")
+                }
                 var incoming = event
                 incoming.updatedAt = Date()
                 // Never burn a derived name into the stored column.
@@ -5048,3 +5067,31 @@ extension SwiftDataManager {
         #endif
     }
 }
+
+extension SwiftDataManager {
+    /// True when writing `incoming` over `stored` would lose games, stat
+    /// lines or attendance marks.
+    static func erasesLiveData(stored: SDSessionEvent, incoming: SessionEvent) -> Bool {
+        let storedStats = stored.games.reduce(0) { $0 + $1.playerStats.count }
+        let incomingStats = incoming.games.reduce(0) { $0 + $1.playerStats.count }
+        return incoming.games.count < stored.games.count
+            || incomingStats < storedStats
+            || !Set(stored.actualAttendeeIds).isSubset(of: incoming.actualAttendeeIds)
+            || !Set(stored.excusedAbsences).isSubset(of: incoming.excusedAbsences)
+            || !Set(stored.unexcusedAbsences).isSubset(of: incoming.unexcusedAbsences)
+    }
+
+    /// A session's restorable versions, newest first.
+    func sessionRevisions(for sessionId: UUID) -> [(id: UUID, createdAt: Date, actor: String?, event: SessionEvent)] {
+        let typeRaw = RevisionEntityType.session.rawValue
+        let descriptor = FetchDescriptor<SDEntityRevision>(
+            predicate: #Predicate { $0.entityId == sessionId && $0.entityTypeRaw == typeRaw },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)])
+        let revisions = (try? modelContext.fetch(descriptor)) ?? []
+        return revisions.compactMap { rev in
+            guard let snap = try? JSONDecoder().decode(SessionSnapshotV1.self, from: rev.snapshotData) else { return nil }
+            return (rev.id, rev.createdAt, rev.actorLabel, snap.event)
+        }
+    }
+}
+

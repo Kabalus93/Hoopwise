@@ -25,6 +25,7 @@ struct FlightySessionPageView: View {
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var showingCancelConfirmation = false
+    @State private var showingSessionVersions = false
     @State private var showingSkipSheet = false
     @State private var skipReason: SkipReason = .holiday
     /// The student whose profile photo the leading swipe is retaking.
@@ -229,6 +230,13 @@ struct FlightySessionPageView: View {
                             }
                         }
 
+                        // Recovery: every attendance mark, game change and
+                        // overwrite keeps a copy (SessionVersionsSheet).
+                        Button(action: { showingSessionVersions = true }) {
+                            Label(LocalizationManager.shared.currentLanguage == .chinese ? "恢复早前版本" : "Restore Earlier Version",
+                                  systemImage: "clock.arrow.circlepath")
+                        }
+
                         // Cancel session - available for any status except already cancelled
                         if session.status != .cancelled {
                             Divider()
@@ -286,6 +294,9 @@ struct FlightySessionPageView: View {
             Text(LocalizationManager.shared.currentLanguage == .chinese ? "此课程将被标记为已取消。" : "This session will be marked as cancelled.")
         }
         .makeUpOfferAlert()
+        .sheet(isPresented: $showingSessionVersions) {
+            SessionVersionsSheet(sessionId: session.id, students: dataManager.students)
+        }
         .sheet(isPresented: $showingSkipSheet) {
             SkipSessionSheet(reason: $skipReason) {
                 skipSession(reason: skipReason)
@@ -373,7 +384,17 @@ struct FlightySessionPageView: View {
         guard let fresh = dataManager.sessionEvents.first(where: { $0.id == session.id }) else {
             return
         }
-        // Bail early when nothing has changed downstream.
+        // Live fields ALWAYS follow the store: every write to them is
+        // immediate and field-level, so the store is never behind this copy.
+        // (Gating them on updatedAt let this copy keep showing an empty game
+        // list after the store had the games.)
+        if session.games != fresh.games { session.games = fresh.games }
+        if session.actualAttendeeIds != fresh.actualAttendeeIds { session.actualAttendeeIds = fresh.actualAttendeeIds }
+        if session.excusedAbsences != fresh.excusedAbsences { session.excusedAbsences = fresh.excusedAbsences }
+        if session.unexcusedAbsences != fresh.unexcusedAbsences { session.unexcusedAbsences = fresh.unexcusedAbsences }
+        if session.attendancePhotoPath != fresh.attendancePhotoPath { session.attendancePhotoPath = fresh.attendancePhotoPath }
+
+        // Bail early when nothing else has changed downstream.
         guard fresh.updatedAt > session.updatedAt else { return }
 
         session.title = fresh.title
@@ -3598,7 +3619,10 @@ struct FlightySessionPageView: View {
             }
         }
         session.updatedAt = Date()
-        dataManager.updateSessionEvent(session)
+        // Details only: games, marks and the photo are written field by
+        // field as they happen and keep the store's values here, so this
+        // copy can never erase them however stale it is.
+        dataManager.updateSessionEvent(session, keepLiveFields: true)
     }
     
     private func deleteSession() {
