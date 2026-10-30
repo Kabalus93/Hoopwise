@@ -155,7 +155,7 @@ struct ParentProgramSummaryView: View {
             Button {
                 shareLongImage()
             } label: {
-                Label(isChinese ? "长图（微信）" : "Long Image", systemImage: "photo")
+                Label(isChinese ? "长图" : "Long Image", systemImage: "photo")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)

@@ -83,8 +83,22 @@ final class AppStoreScreenshots: XCTestCase {
         sleep(4)
         tab("Sessions", "课程")
         tapContaining(zh ? "日历" : "Calendar")
-        shot("03-calendar")
-        if tapContaining("Elite U8") { sleep(2); shot("02-attendance") }
+        shot("07-calendar")
+        guard tapContaining("Elite U8") else { return }
+        sleep(2)
+        tapContaining(zh ? "点名" : "Attend")
+        // Roll call under way: two players present (isolated demo store).
+        let controls = app.descendants(matching: .any).matching(identifier: "attendanceControl")
+        for i in 0..<min(2, controls.count) {
+            let c = controls.element(boundBy: i)
+            if c.isHittable { c.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap(); sleep(1) }
+        }
+        shot("02-attendance")
+        if tapContaining(zh ? "计划" : "Plan") {
+            // A generated plan, not an empty one.
+            if tapContaining(zh ? "生成计划" : "Generate Plan") { sleep(3) }
+            shot("03-plan")
+        }
     }
 
     func test3ProgramAndParentGuide() throws {
@@ -103,13 +117,19 @@ final class AppStoreScreenshots: XCTestCase {
     func test4Athletes() throws {
         sleep(4)
         tab("Athletes", "学员")
-        shot("07-athletes")
+        shot("08-athletes")
         if tapContaining("Maya Chen") { shot("06-athlete") }
     }
 
-    func test5Hub() throws {
+    /// The activity library (Hub → Coach), the plan engine's source.
+    func test5Library() throws {
         sleep(4)
         tab("Hub", "中心")
-        shot("08-hub")
+        let coach = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", zh ? "个训练" : "drills")).firstMatch
+        guard coach.waitForExistence(timeout: 5) else { return }
+        coach.tap()
+        sleep(2)
+        shot("09-library")
     }
 }
