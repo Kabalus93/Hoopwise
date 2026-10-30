@@ -48,7 +48,7 @@ CONTRACTS AND BUNDLES
 DOCUMENTS
 • Export a one-page attendance statement for a family
 • Export the training agreement, blank for signing or filled from a contract
-• Share as PDF through any app, including WeChat
+• Share as PDF or as a long image through the share sheet
 
 AT A GLANCE
 • Home screen widgets: next session, today, needs attention, and weekly cadence
@@ -56,7 +56,7 @@ AT A GLANCE
 • An attention list limited to the few things that need action in the next two days
 
 ATHLETES
-• Profiles with photos, birth date or school grade, measurements and guardian contacts
+• Profiles with photos, school grade and guardian contacts
 • Attendance rate per athlete, counted only from sessions you actually marked
 
 LANGUAGES
