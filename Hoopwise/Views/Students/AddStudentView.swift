@@ -706,17 +706,6 @@ struct EditStudentView: View {
             }
             #endif
             
-            // Regenerate Card Background button
-            Button(action: regenerateHeaderImage) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 12))
-                    Text(LocalizationManager.shared.currentLanguage == .chinese ? "更换卡片背景" : "Regenerate Card Background")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundColor(.blue.opacity(0.8))
-            }
-            
             // Error message
             if let error = uploadError {
                 HStack(spacing: 6) {
@@ -1115,9 +1104,6 @@ struct EditStudentView: View {
         dismiss()
     }
 
-    private func regenerateHeaderImage() {
-        headerImageURL = StudentProfileHeaderView.randomBasketballURL()
-    }
     
     #if os(iOS)
     private func uploadImage() {

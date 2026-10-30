@@ -597,47 +597,16 @@ struct FlightySessionPageView: View {
         }
         .frame(height: 200 + safeAreaTop) // Extend height to include safe area
         .clipped()
-        .onAppear {
-            // Assign a header image to sessions without one (or replace
-            // broken legacy Unsplash Source URLs). Field-level write so we
-            // don't drag a stale `@State session` over the canonical
-            // record — a previous version of this onAppear could wipe
-            // sibling fields when the @State was initialized from a stale
-            // cached snapshot.
-            if session.headerImageURL == nil || session.headerImageURL?.contains("source.unsplash.com") == true {
-                let newURL = SessionEvent.randomUnsplashURL()
-                session.headerImageURL = newURL
-                dataManager.setSessionHeaderImageURL(sessionId: session.id, url: newURL)
-            }
-        }
     }
     
-    // MARK: - Hero Image Background (Cached)
-    @ViewBuilder
+    // MARK: - Hero Background
+    /// The program's colour with court lines (CardCourtBackground). Session
+    /// headers used to be random Unsplash photos — third-party content App
+    /// Review rejected (4.1(a), October 2026); stored URLs are ignored.
     private var heroMapBackground: some View {
-        if let imageURL = session.headerImageURL {
-            CachedImageView(
-                id: ImageCacheManager.sessionImageId(session.id),
-                urlString: imageURL,
-                placeholder: programGradientFallback
-            )
-        } else {
-            programGradientFallback
-        }
+        CardCourtBackground(color: programColor)
     }
     
-    private var programGradientFallback: some View {
-        ZStack {
-            LinearGradient(
-                colors: [programColor.opacity(0.7), programColor.opacity(0.4)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            Image(systemName: "basketball.fill")
-                .font(.system(size: 60))
-                .foregroundColor(.white.opacity(0.15))
-        }
-    }
     
     // MARK: - Schedule Bar (Scrollable)
     private var scheduleBar: some View {

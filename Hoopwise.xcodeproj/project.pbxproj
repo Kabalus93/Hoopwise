@@ -203,8 +203,6 @@
 				Services/SessionStatusMonitor.swift,
 				Services/StudentIntelligence.swift,
 				Services/TrainingAgreementDocument.swift,
-				Services/UnsplashConfig.swift,
-				Services/UnsplashImageService.swift,
 				Services/WidgetSnapshotWriter.swift,
 				Utilities/CourtGeometry.swift,
 				Utilities/CourtProjection.swift,

@@ -1678,6 +1678,25 @@ STILL OPEN, needs a decision rather than a verdict:
 - Never add a whole-record session save from a view's copy without
   keepLiveFields. Tests: SessionStaleSaveTests.
 
+## No third-party imagery (App Review 4.1(a), 29 October 2026)
+- Version 1.0 (5) was REJECTED under 4.1(a) Copycats: "the app's metadata
+  contains third-party content … from a third-party platform". The listing
+  text was clean; the screenshots showed Unsplash stock photos — every
+  session header was a random Unsplash photo minted on first view, and
+  athlete cards/parent reports/card PDFs used a second Unsplash set.
+- REMOVED: SessionEvent.randomUnsplashURL, StudentProfileHeaderView's
+  curatedImages/basketballURL/randomBasketballURL, the Edit Student
+  "Regenerate Card Background" button, UnsplashImageService/UnsplashConfig
+  (unused, and fatalError'd in Release without a key), and the card
+  exporters' background fetches. Headers are now `CardCourtBackground`
+  (StudentProfileHeaderView.swift): the program's or athlete's colour with a
+  half court drawn in code. Stored headerImageURL values are ignored (legacy
+  column, kept — removing it would be a schema change).
+- RULE: no hot-linked or bundled third-party images, logos or brand names in
+  the app or the listing. Student portraits in screenshots are AI-generated
+  (Luther, 30 October 2026). Real business names from the coach's store
+  (e.g. 酷迅) must not appear in App Store screenshots.
+
 ## Tests: never let CloudKit into the test process
 - ModelConfiguration's `cloudKitDatabase` defaults to **.automatic**, which
   attaches CloudKit mirroring whenever the target has the iCloud entitlement

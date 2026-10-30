@@ -376,18 +376,9 @@ struct MonthlyStudentCardExportService {
         return nil
     }
 
-    private func loadBackgroundImage(for student: Student) async -> CacheImage? {
-        let urlString: String
-        if let saved = UserDefaults.standard.string(forKey: .cardBgKey(student.id)),
-           !saved.isEmpty,
-           StudentProfileHeaderView.curatedImages.contains(saved) {
-            urlString = saved
-        } else {
-            urlString = StudentProfileHeaderView.basketballURL(for: student.id)
-        }
-        let upgradedURL = upgradedBackgroundURLString(from: urlString)
-        return await loadExportImage(from: upgradedURL, studentId: student.id, maxPixelSize: 2800)
-    }
+    /// No background photo: the card draws its own court background
+    /// (CardCourtBackground). Stock photography was removed for App Review.
+    private func loadBackgroundImage(for student: Student) async -> CacheImage? { nil }
 
     private func loadExportImage(from urlString: String, studentId: UUID = UUID(), maxPixelSize: CGFloat) async -> CacheImage? {
         if urlString.hasPrefix("file://") || urlString.hasPrefix("/var/") || urlString.hasPrefix("/Users/") {
@@ -412,30 +403,6 @@ struct MonthlyStudentCardExportService {
         }
     }
 
-    private func upgradedBackgroundURLString(from urlString: String) -> String {
-        guard var components = URLComponents(string: urlString), let host = components.host else {
-            return urlString
-        }
-
-        if host.contains("unsplash.com") {
-            var queryItems = components.queryItems ?? []
-            func upsert(_ name: String, _ value: String) {
-                if let index = queryItems.firstIndex(where: { $0.name == name }) {
-                    queryItems[index] = URLQueryItem(name: name, value: value)
-                } else {
-                    queryItems.append(URLQueryItem(name: name, value: value))
-                }
-            }
-            upsert("w", "2400")
-            upsert("h", "1200")
-            upsert("fit", "crop")
-            upsert("q", "90")
-            components.queryItems = queryItems
-            return components.string ?? urlString
-        }
-
-        return urlString
-    }
 
     private func decodeExportImage(from data: Data, maxPixelSize: CGFloat) -> CacheImage? {
         #if canImport(ImageIO)

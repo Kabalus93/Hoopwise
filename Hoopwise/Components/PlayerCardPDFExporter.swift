@@ -268,36 +268,9 @@ struct PlayerCardPDFExporter {
     /// the first call. Errors are swallowed; the corresponding card just
     /// renders the gradient fallback.
     static func prefetchHeaderImages(for cards: [CardData]) async -> [CardData] {
-        await withTaskGroup(of: (UUID, UIImage?).self) { group in
-            for card in cards {
-                group.addTask {
-                    let urlString = StudentProfileHeaderView.basketballURL(for: card.student.id)
-                    // CacheImage is typealiased to UIImage on iOS / NSImage
-                    // on macOS, so the result already matches the platform.
-                    let cached = await ImageCacheManager.shared.loadImage(
-                        for: "card-bg-\(card.student.id.uuidString)",
-                        from: urlString
-                    )
-                    return (card.student.id, cached)
-                }
-            }
-            var byId: [UUID: UIImage] = [:]
-            for await (id, img) in group {
-                if let img = img { byId[id] = img }
-            }
-            return cards.map { card in
-                CardData(
-                    student: card.student,
-                    player: card.player,
-                    contract: card.contract,
-                    trainingStats: card.trainingStats,
-                    monthlyStats: card.monthlyStats,
-                    programContext: card.programContext,
-                    profileImage: card.profileImage,
-                    headerBackgroundImage: byId[card.student.id]
-                )
-            }
-        }
+        // Nothing to fetch: card headers draw their own court background
+        // (CardCourtBackground). Stock photos were removed for App Review.
+        cards
     }
 }
 

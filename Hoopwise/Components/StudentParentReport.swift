@@ -560,10 +560,6 @@ struct StudentParentReportView: View {
     
     // MARK: - Baseball Card (Matching Intelligence Profile Layout)
     
-    // Deterministic background image URL based on student ID
-    private var backgroundImageURL: String {
-        StudentProfileHeaderView.basketballURL(for: student.id)
-    }
     
     private let cardBackground = AppTheme.cream
     private let cardBorder = AppTheme.saddleBrown
@@ -809,36 +805,11 @@ struct StudentParentReportView: View {
                 .blur(radius: 4)
             #endif
         } else {
-            AsyncImage(url: URL(string: backgroundImageURL)) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .blur(radius: 4)
-                case .failure, .empty:
-                    fallbackHeaderBackground
-                @unknown default:
-                    fallbackHeaderBackground
-                }
-            }
+            // Own artwork only — stock photos were removed (App Review 4.1(a)).
+            CardCourtBackground(color: Color.avatarColor(student.avatarColor))
         }
     }
 
-    /// Color-only fallback when no background image is available.
-    /// A diagonal gradient from the student's accent to a darker shade —
-    /// reads as a deliberate design treatment rather than a missing asset.
-    private var fallbackHeaderBackground: some View {
-        LinearGradient(
-            colors: [
-                accent.opacity(0.85),
-                accent.opacity(0.55),
-                Color.black.opacity(0.45)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
 
     private var middleSection: some View {
         ZStack {
@@ -1842,13 +1813,8 @@ struct ParentReportSheet: View {
         isGenerating = true
 
         Task { @MainActor in
-            // Pre-fetch the basketball header so the snapshot doesn't race
-            // the network — same path the bulk PDF exporter uses.
-            let urlString = StudentProfileHeaderView.basketballURL(for: student.id)
-            let headerImage = await ImageCacheManager.shared.loadImage(
-                for: "card-bg-\(student.id.uuidString)",
-                from: urlString
-            )
+            // No header photo to fetch: the card draws its own background.
+            let headerImage: UIImage? = nil
 
             let resolvedProfile: UIImage? = {
                 if let pi = profileImage { return pi }

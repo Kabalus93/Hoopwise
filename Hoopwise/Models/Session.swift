@@ -610,7 +610,8 @@ struct SessionEvent: Identifiable, Codable, Hashable {
     // In-session games (scrimmages with team assignments and stats)
     var games: [SessionGame]
     
-    // Header image URL (from Unsplash)
+    // Header image URL — legacy (old builds stored stock-photo URLs);
+    // nothing renders it since October 2026.
     var headerImageURL: String?
     
     var createdAt: Date
@@ -660,33 +661,6 @@ struct SessionEvent: Identifiable, Codable, Hashable {
         self.headerImageURL = headerImageURL
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-    }
-    
-    /// Generate a random image URL for session headers from Nature, Space, or Art categories
-    static func randomUnsplashURL() -> String {
-        // Curated image IDs from Unsplash for Nature, Space, and Art
-        // These are reliable direct image URLs that won't break
-        let curatedImages = [
-            // Nature
-            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=800&h=400&fit=crop",
-            // Space
-            "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1464802686167-b939a6910659?w=800&h=400&fit=crop",
-            // Art
-            "https://images.unsplash.com/photo-1549490349-8643362247b5?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1547826039-bfc35e0f1ea8?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1482160549825-59d1b23cb208?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800&h=400&fit=crop",
-            "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800&h=400&fit=crop"
-        ]
-        return curatedImages.randomElement() ?? curatedImages[0]
     }
     
     /// Check if session belongs to a phase (architect flow)

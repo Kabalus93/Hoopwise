@@ -18,10 +18,6 @@ struct StudentProfileHeaderView: View {
 #endif
 
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-    // Deterministic image URL based on student ID - never changes
-    private var backgroundImageURL: String {
-        Self.basketballURL(for: student.id)
-    }
     
     // Card colors
     private let cardBackground = AppTheme.cream // Cream/tan color like the card
@@ -55,9 +51,9 @@ struct StudentProfileHeaderView: View {
     // MARK: - Top Section
     private var topSection: some View {
         ZStack {
-            // Background image. Pre-loaded override beats AsyncImage so PDF
-            // exports get the real image instead of the gray placeholder
-            // that AsyncImage falls back to during synchronous snapshot.
+            // Background: the athlete's own colour with court lines drawn
+            // here — no third-party stock photography (App Review 4.1(a),
+            // October 2026). A pre-loaded override still wins.
             backgroundLayer
                 .frame(height: 160)
                 .clipped()
@@ -131,10 +127,8 @@ struct StudentProfileHeaderView: View {
     }
     
     // MARK: - Middle Section
-    /// Resolves the header background. Pre-loaded override > AsyncImage >
-    /// flat-gray fallback. The override path is what the PDF exporter
-    /// uses so it can capture the real photo instead of waiting on a
-    /// network fetch that finishes after the snapshot.
+    /// Resolves the header background: a pre-loaded override, else
+    /// `CardCourtBackground` in the athlete's colour.
     @ViewBuilder
     private var backgroundLayer: some View {
         if let pre = headerImageOverride {
@@ -150,19 +144,7 @@ struct StudentProfileHeaderView: View {
                 .blur(radius: 4)
             #endif
         } else {
-            AsyncImage(url: URL(string: backgroundImageURL)) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .blur(radius: 4)
-                case .failure, .empty:
-                    Color.gray.opacity(0.3)
-                @unknown default:
-                    Color.gray.opacity(0.3)
-                }
-            }
+            CardCourtBackground(color: Color.avatarColor(student.avatarColor))
         }
     }
 
@@ -374,27 +356,6 @@ struct StudentProfileHeaderView: View {
         return String(format: "%.1f", stats.efrt)
     }
     
-    static let curatedImages = [
-        "https://images.unsplash.com/photo-1505666287802-931dc83a38b1?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1504450758481-7338bbe75c8e?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1519861531473-9200262188bf?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1574623452334-1e0ac2b3ccb4?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1608245449230-4ac19066d2d0?w=800&h=400&fit=crop",
-        "https://images.unsplash.com/photo-1511067007398-7e4b90cfa4bc?w=800&h=400&fit=crop"
-    ]
-    
-    /// Deterministic basketball image URL based on student ID - same student always gets same image
-    static func basketballURL(for studentId: UUID) -> String {
-        let index = abs(studentId.hashValue) % curatedImages.count
-        return curatedImages[index]
-    }
-    
-    /// Random basketball image URL for new students or manual regeneration
-    static func randomBasketballURL() -> String {
-        curatedImages.randomElement() ?? curatedImages[0]
-    }
 }
 
 
@@ -408,3 +369,30 @@ struct StudentProfileHeaderView: View {
     .padding()
     .background(Color.gray.opacity(0.2))
 }
+
+/// The card header's background: a deep gradient in `color` with a half
+/// court drawn over it in thin white lines. Original artwork, drawn in code.
+struct CardCourtBackground: View {
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [color, color.opacity(0.75), .black.opacity(0.55)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Canvas { ctx, size in
+                let w = size.width, h = size.height
+                var court = Path()
+                // Free-throw lane and circle, three-point arc, from the bottom edge.
+                let laneW = w * 0.22, laneH = h * 0.62
+                court.addRect(CGRect(x: w / 2 - laneW / 2, y: h - laneH, width: laneW, height: laneH))
+                court.addEllipse(in: CGRect(x: w / 2 - laneW / 2, y: h - laneH - laneW / 2, width: laneW, height: laneW))
+                court.addArc(center: CGPoint(x: w / 2, y: h), radius: w * 0.42,
+                             startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
+                court.addArc(center: CGPoint(x: w / 2, y: h - h * 0.12), radius: w * 0.03,
+                             startAngle: .zero, endAngle: .degrees(360), clockwise: false)
+                ctx.stroke(court, with: .color(.white.opacity(0.16)), lineWidth: 2)
+            }
+        }
+    }
+}
+
