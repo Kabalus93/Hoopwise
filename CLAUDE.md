@@ -194,6 +194,25 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
   simulator's (demo data only).
 
+## The Mac app IS the iPad app — Mac Catalyst (6 November 2026, Luther)
+"Make this a Mac app: everything as it is for the iPad — views, aesthetic,
+functionality." The app target has SUPPORTS_MACCATALYST = YES (SUPPORTED_
+PLATFORMS adds macosx); no separate Mac code, so it cannot fall behind
+again. Kept at the iPad look (Catalyst's default "Scaled to match iPad"
+idiom). What differs on the Mac:
+- NO LIVE ACTIVITIES (macOS has none): SessionActivityAttributes and the
+  real SessionLiveActivityManager compile only for
+  `os(iOS) && !targetEnvironment(macCatalyst)`; Catalyst gets a no-op
+  manager with the same calls. New ActivityKit code needs the same guard.
+- The widget and notification-content extensions are iOS-only
+  (platformFilter = ios on their embed + dependency).
+- LSSupportsOpeningDocumentsInPlace is YES (Catalyst refuses NO with
+  document types); the .hoopwise import already takes security-scoped
+  access, so iPhone behaviour is unchanged.
+- Build: `xcodebuild -scheme Hoopwise -destination 'platform=macOS,variant=Mac Catalyst'`.
+  Signing/iCloud for the Mac build needs the Catalyst App ID/profile — an
+  account change, done only with Luther's OK.
+
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
 remotely close to usable." The HoopwiseMac target, its folder and scheme are

@@ -9,8 +9,8 @@
 /* Begin PBXBuildFile section */
 		2D8D33B32FA0B80800F1AD64 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */; };
 		2D8D33B42FA0B80800F1AD64 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */; };
-		2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		AB0C0E012FB9000000A10C01 /* HoopwiseNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		2D8D33C32FA0B80800F1AD64 /* SAMWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AB0C0E012FB9000000A10C01 /* HoopwiseNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -483,11 +483,13 @@
 		};
 		2D8D33C22FA0B80800F1AD64 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = 2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */;
 			targetProxy = 2D8D33C12FA0B80800F1AD64 /* PBXContainerItemProxy */;
 		};
 		AB0C0E0B2FB9000000A10C01 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilter = ios;
 			target = AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */;
 			targetProxy = AB0C0E022FB9000000A10C01 /* PBXContainerItemProxy */;
 		};
@@ -547,8 +549,8 @@
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -612,8 +614,8 @@
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

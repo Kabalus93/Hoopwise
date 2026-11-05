@@ -1,5 +1,5 @@
 import Foundation
-#if os(iOS)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 #endif
 
@@ -36,7 +36,7 @@ enum SessionPhase: String, Codable, Hashable {
 
 // MARK: - Session Live Activity Attributes (iOS only)
 // This struct is only available on iOS where ActivityKit is supported
-#if os(iOS)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 struct SessionActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var elapsedMinutes: Int

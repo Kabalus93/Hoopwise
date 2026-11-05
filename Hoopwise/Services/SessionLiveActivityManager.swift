@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 
-#if os(iOS)
+#if os(iOS) && !targetEnvironment(macCatalyst)
 import ActivityKit
 import BackgroundTasks
 
@@ -345,5 +345,34 @@ class SessionLiveActivityManager: ObservableObject {
             )
         }
     }
+}
+#elseif targetEnvironment(macCatalyst)
+// MARK: - Mac (November 2026)
+// The Mac app is the iPad app (Mac Catalyst). macOS has no Live Activities,
+// so the same calls land here and do nothing.
+@MainActor
+class SessionLiveActivityManager: ObservableObject {
+    static let shared = SessionLiveActivityManager()
+    static let leadTime: TimeInterval = 10 * 60
+    static let cleanupTaskId = "com.hoopwise.liveactivity.cleanup"
+
+    struct Target {
+        let session: SessionEvent
+        let programName: String
+        let accentColorHex: String
+    }
+
+    @Published private(set) var isActivityActive = false
+    var activeSessionId: UUID? { nil }
+
+    private init() {}
+
+    func reconcile(targets: [Target], now: Date = Date()) {}
+    func endFinished(now: Date = Date()) {}
+    func startActivity(for session: SessionEvent, programName: String,
+                       accentColorHex: String = "#FF6B35", drillNames: [UUID: String] = [:]) {}
+    func updateActivity() {}
+    func endActivity(showAttendanceReminder: Bool = true) {}
+    func updateAttendeeCount(_ count: Int) {}
 }
 #endif
