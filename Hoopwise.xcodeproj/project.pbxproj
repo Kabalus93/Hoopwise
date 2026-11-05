@@ -66,7 +66,6 @@
 		2D8D33562FA0B74100F1AD64 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		2D8D33582FA0B74100F1AD64 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SAMWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoopwiseMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D8D3AA32FA6582F00F1AD64 /* Configuration.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Configuration.xcconfig; sourceTree = "<group>"; };
 		AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HoopwiseNotifications.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -94,151 +93,6 @@
 			);
 			target = 2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */;
 		};
-		2D8D35752FA6390F00F1AD64 /* Exceptions for "Hoopwise" folder in "HoopwiseMac" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Components/AgeBadge.swift,
-				Components/AvatarView.swift,
-				Components/Cards.swift,
-				Components/CourtView.swift,
-				Components/FlightyMacDesignSystem.swift,
-				Components/GlassDesignSystem.swift,
-				Components/MacDesignSystem.swift,
-				Components/MakeUpOfferAlert.swift,
-				Components/ProgressViews.swift,
-				Components/SAMLogoView.swift,
-				Components/TeamMascotLogos.swift,
-				Components/Theme.swift,
-				Managers/ImageCacheManager.swift,
-				Managers/PhaseTemplateStore.swift,
-				Managers/SwiftDataManager.swift,
-				Models/ActivityLibrary.swift,
-				Models/ActivityLibraryData.swift,
-				Models/BallDerivation.swift,
-				Models/BasketballCategory.swift,
-				Models/Coach.swift,
-				Models/CoachMentionStore.swift,
-				Models/CourtSpace.swift,
-				Models/DrillItem.swift,
-				Models/DrillMedia.swift,
-				Models/DrillProfile.swift,
-				Models/EliteDrillLibrary.swift,
-				Models/FEBPhasePresets.swift,
-				Models/FramePlayback.swift,
-				Models/FrameSequence.swift,
-				Models/League.swift,
-				Models/MicroCycle.swift,
-				Models/NotificationCard.swift,
-				Models/Organization.swift,
-				Models/Playbook.swift,
-				Models/PlayDiagram.swift,
-				Models/Player.swift,
-				Models/PlayerMeasurement.swift,
-				Models/PlayFrame.swift,
-				Models/ProfileAuditLog.swift,
-				Models/Program.swift,
-				Models/Reminder.swift,
-				Models/School.swift,
-				Models/Session.swift,
-				Models/SessionActivityAttributes.swift,
-				Models/SessionFormat.swift,
-				Models/SessionLifecycle.swift,
-				Models/Student.swift,
-				Models/SwiftData/SDCoach.swift,
-				Models/SwiftData/SDConceptLink.swift,
-				Models/SwiftData/SDConceptNode.swift,
-				Models/SwiftData/SDContract.swift,
-				Models/SwiftData/SDDirectoryGroup.swift,
-				Models/SwiftData/SDDrill.swift,
-				Models/SwiftData/SDDrillMedia.swift,
-				Models/SwiftData/SDEntityRevision.swift,
-				Models/SwiftData/SDGame.swift,
-				Models/SwiftData/SDImportLog.swift,
-				Models/SwiftData/SDLocation.swift,
-				Models/SwiftData/SDMeasurement.swift,
-				Models/SwiftData/SDMicroCycle.swift,
-				Models/SwiftData/SDPlay.swift,
-				Models/SwiftData/SDPlayDiagram.swift,
-				Models/SwiftData/SDPlayer.swift,
-				Models/SwiftData/SDProgram.swift,
-				Models/SwiftData/SDReminder.swift,
-				Models/SwiftData/SDSchool.swift,
-				Models/SwiftData/SDSessionEvent.swift,
-				Models/SwiftData/SDStaffCoach.swift,
-				Models/SwiftData/SDStudent.swift,
-				Models/SwiftData/SDTeam.swift,
-				Models/SyncLogStore.swift,
-				Models/SyncTypes.swift,
-				Models/WidgetSnapshot.swift,
-				Services/AttendanceInference.swift,
-				Services/AttendanceStatementDocument.swift,
-				Services/AttentionEngine.swift,
-				Services/ClassListImport.swift,
-				Services/CloudSyncMonitor.swift,
-				Services/CyclePlanner.swift,
-				Services/DrillPlanGenerator.swift,
-				Services/FrameThumbnailRenderer.swift,
-				Services/CalendarSync.swift,
-				Services/GameStatsReport.swift,
-				Services/HoopwiseBundle.swift,
-				Services/HoopwiseBundleImporter.swift,
-				Services/LiveSessionEngine.swift,
-				Services/MonthlyStudentCardExportService.swift,
-				Services/PDFDocumentRenderer.swift,
-				Services/PhaseAssignment.swift,
-				Services/PhaseNaming.swift,
-				Services/PlayCardDocument.swift,
-				Services/ProgramGuideDocument.swift,
-				Services/ProgramSessionSync.swift,
-				Services/SessionAdoption.swift,
-				Services/SessionCreation.swift,
-				Services/SessionDedupe.swift,
-				Services/SessionIntegrity.swift,
-				Services/SessionLiveActivityManager.swift,
-				Services/SessionNaming.swift,
-				Services/SessionPlanShift.swift,
-				Services/SessionPrivacy.swift,
-				Services/SessionReconciler.swift,
-				Services/SessionSeries.swift,
-				Services/SessionStatusMonitor.swift,
-				Services/StudentIntelligence.swift,
-				Services/TrainingAgreementDocument.swift,
-				Services/WidgetSnapshotWriter.swift,
-				Utilities/CourtGeometry.swift,
-				Utilities/CourtProjection.swift,
-				Utilities/DebugLog.swift,
-				Utilities/DrillContentLocalization_Batch1.swift,
-				Utilities/DrillContentLocalization_Batch2.swift,
-				Utilities/DrillContentLocalization_Batch3.swift,
-				Utilities/DrillContentLocalization_Batch4.swift,
-				Utilities/DrillContentLocalization_Batch5.swift,
-				Utilities/DrillImporter.swift,
-				Utilities/DrillLocalization.swift,
-				Utilities/DrillMediaStorage.swift,
-				Utilities/DrillMediaURL.swift,
-				Utilities/FrameCardRenderer.swift,
-				Utilities/FrameNotation.swift,
-				Utilities/HapticFeedback.swift,
-				Utilities/MovementGeometry.swift,
-				Utilities/NameIndex.swift,
-				Utilities/PerformanceUtilities.swift,
-				Utilities/PhotoCaptureManager.swift,
-				Utilities/PinyinConverter.swift,
-				Utilities/PlatformModifiers.swift,
-				Utilities/RenderStyle.swift,
-				Utilities/XLSX.swift,
-				Models/JournalPlays/JournalPlayActions.swift,
-				Models/JournalPlays/JournalPlayDiagram.swift,
-				Models/JournalPlays/JournalPlayEditing.swift,
-				Models/JournalPlays/JournalPlayLibrary.swift,
-				Models/JournalPlays/JournalPlayLocalization.swift,
-				Models/JournalPlays/JournalPlayMath.swift,
-				Models/JournalPlays/JournalPlayModels.swift,
-				Models/JournalPlays/JournalPlaySnapshots.swift,
-				Models/JournalPlays/JournalPlayStrings.swift,
-			);
-			target = 2D8D35552FA6374E00F1AD64 /* HoopwiseMac */;
-		};
 		AB0C0E042FB9000000A10C01 /* Exceptions for "HoopwiseNotifications" folder in "HoopwiseNotifications" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -261,7 +115,6 @@
 			exceptions = (
 				054981912EE9F81400C56E5A /* Exceptions for "Hoopwise" folder in "Hoopwise" target */,
 				2D8D33CB2FA0BB9500F1AD64 /* Exceptions for "Hoopwise" folder in "SAMWidgetsExtension" target */,
-				2D8D35752FA6390F00F1AD64 /* Exceptions for "Hoopwise" folder in "HoopwiseMac" target */,
 				AB0C0E052FB9000000A10C01 /* Exceptions for "Hoopwise" folder in "HoopwiseNotifications" target */,
 			);
 			path = Hoopwise;
@@ -283,11 +136,6 @@
 				2D8D33C72FA0B80800F1AD64 /* Exceptions for "SAMWidgets" folder in "SAMWidgetsExtension" target */,
 			);
 			path = SAMWidgets;
-			sourceTree = "<group>";
-		};
-		2D8D35572FA6374E00F1AD64 /* HoopwiseMac */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = HoopwiseMac;
 			sourceTree = "<group>";
 		};
 		AB0C0E062FB9000000A10C01 /* HoopwiseNotifications */ = {
@@ -331,13 +179,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2D8D35532FA6374E00F1AD64 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		AB0C0E072FB9000000A10C01 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -355,7 +196,6 @@
 				054981822EE9F81400C56E5A /* SAMpTests */,
 				0549818C2EE9F81400C56E5A /* SAMpUITests */,
 				2D8D33B52FA0B80800F1AD64 /* SAMWidgets */,
-				2D8D35572FA6374E00F1AD64 /* HoopwiseMac */,
 				AB0C0E062FB9000000A10C01 /* HoopwiseNotifications */,
 				2D8D33552FA0B74100F1AD64 /* Frameworks */,
 				0549816F2EE9F81300C56E5A /* Products */,
@@ -370,7 +210,6 @@
 				0549817F2EE9F81400C56E5A /* HoopwiseTests.xctest */,
 				054981892EE9F81400C56E5A /* HoopwiseUITests.xctest */,
 				2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */,
-				2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */,
 				AB0C0E032FB9000000A10C01 /* HoopwiseNotifications.appex */,
 			);
 			name = Products;
@@ -481,28 +320,6 @@
 			productReference = 2D8D33B22FA0B80800F1AD64 /* SAMWidgetsExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		2D8D35552FA6374E00F1AD64 /* HoopwiseMac */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2D8D355E2FA6375000F1AD64 /* Build configuration list for PBXNativeTarget "HoopwiseMac" */;
-			buildPhases = (
-				2D8D35522FA6374E00F1AD64 /* Sources */,
-				2D8D35532FA6374E00F1AD64 /* Frameworks */,
-				2D8D35542FA6374E00F1AD64 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				2D8D35572FA6374E00F1AD64 /* HoopwiseMac */,
-			);
-			name = HoopwiseMac;
-			packageProductDependencies = (
-			);
-			productName = HoopwiseMac;
-			productReference = 2D8D35562FA6374E00F1AD64 /* HoopwiseMac.app */;
-			productType = "com.apple.product-type.application";
-		};
 		AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AB0C0E0E2FB9000000A10C01 /* Build configuration list for PBXNativeTarget "HoopwiseNotifications" */;
@@ -549,9 +366,6 @@
 					2D8D33B12FA0B80800F1AD64 = {
 						CreatedOnToolsVersion = 26.3;
 					};
-					2D8D35552FA6374E00F1AD64 = {
-						CreatedOnToolsVersion = 26.3;
-					};
 					AB0C0E0A2FB9000000A10C01 = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -575,7 +389,6 @@
 				0549817E2EE9F81400C56E5A /* HoopwiseTests */,
 				054981882EE9F81400C56E5A /* HoopwiseUITests */,
 				2D8D33B12FA0B80800F1AD64 /* SAMWidgetsExtension */,
-				2D8D35552FA6374E00F1AD64 /* HoopwiseMac */,
 				AB0C0E0A2FB9000000A10C01 /* HoopwiseNotifications */,
 			);
 		};
@@ -604,13 +417,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2D8D33B02FA0B80800F1AD64 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2D8D35542FA6374E00F1AD64 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -649,13 +455,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2D8D33AE2FA0B80800F1AD64 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2D8D35522FA6374E00F1AD64 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -1118,76 +917,6 @@
 			};
 			name = Release;
 		};
-		2D8D355F2FA6375000F1AD64 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HoopwiseMac/HoopwiseMac.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3SGGYH29MQ;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.HoopwiseMac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		2D8D35602FA6375000F1AD64 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = HoopwiseMac/HoopwiseMac.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3SGGYH29MQ;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = OKTO.SAMp.HoopwiseMac;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		AB0C0E0C2FB9000000A10C01 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1301,15 +1030,6 @@
 			buildConfigurations = (
 				2D8D33C52FA0B80800F1AD64 /* Debug */,
 				2D8D33C62FA0B80800F1AD64 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2D8D355E2FA6375000F1AD64 /* Build configuration list for PBXNativeTarget "HoopwiseMac" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2D8D355F2FA6375000F1AD64 /* Debug */,
-				2D8D35602FA6375000F1AD64 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

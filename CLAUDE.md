@@ -7,8 +7,8 @@
 
 ## What this is
 Basketball coaching management app. SwiftUI + SwiftData. iOS is the
-primary, mature target; a macOS version (HoopwiseMac) is in active
-development and currently raw. Version 2, Build 2.
+primary, mature target. The macOS version was retired on 6 November 2026
+(tag mac-app-final); the iPad is the next platform. Version 2, Build 2.
 
 ## Sync architecture
 - CloudKit, via SwiftData's built-in integration. ModelConfiguration in
@@ -155,54 +155,67 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   from AI agent sessions and it poisoned the repo.
 
 ## Targets
-- Hoopwise (iOS) — primary, builds and runs
-- HoopwiseMac (macOS) — in progress; has its own HoopwiseMac/Views/ and
-  HoopwiseMac/HoopwiseMac.entitlements
-- HoopwiseTests, HoopwiseUITests, SAMWidgetsExtension
-- Bundle IDs: OKTO.SAMp (iOS), OKTO.SAMp.HoopwiseMac (Mac). Legacy
-  names — do not change either; provisioning and the iCloud container
-  depend on current values.
+- Hoopwise (iOS) — the app. iPhone today; the iPad version is the current
+  direction (November 2026).
+- HoopwiseTests, HoopwiseUITests, SAMWidgetsExtension, HoopwiseNotifications
+- Bundle ID: OKTO.SAMp — legacy name, do not change; provisioning and the
+  iCloud container depend on it.
 - Signing: automatic, team Beidy Dubhe Franco Parra
 
+## THE MAC APP IS RETIRED (6 November 2026, Luther)
+"The Mac version is behind in many aspects … we've failed to make something
+remotely close to usable." The HoopwiseMac target, its folder and scheme are
+DELETED; its last state is the git tag `mac-app-final` (court/play editor,
+Whistle assistant, Mac directory pages, Mac Settings). Consequences:
+- There is ONE app target. Shared code no longer needs a second membership,
+  and the `membershipExceptions` opt-in list described below no longer
+  exists for a Mac target.
+- `#if os(macOS)` branches in shared files are now dead code. Remove them
+  when touching a file; there is no rush.
+- The SwiftData models only the Mac wrote (SDPlay, SDPlayDiagram,
+  SDConceptNode, SDConceptLink, SDDirectoryGroup) STAY in the schema:
+  CloudKit record types cannot be removed, and dropping a model from the
+  schema is a schema change (rule 5).
+- Sections below that describe Mac screens, the court editor, the Whistle or
+  Mac attendance are HISTORY — they describe code that now lives only at
+  `mac-app-final`. Do not build against them.
+
 ## Hard rules
-1. TARGET MEMBERSHIP: every new file in Hoopwise/Models, Managers,
-   Services, or Utilities MUST be added to BOTH Hoopwise and
-   HoopwiseMac. This is the #1 recurring bug from past agent sessions —
-   files created iOS-only broke the Mac build with hundreds of cascade
-   errors. Views are per-platform; shared layers are both-targets.
+1. (Retired with the Mac app.) It said every shared file needed BOTH
+   target memberships. One app target now; new files in Hoopwise/ join it
+   automatically (synchronized folder). Widget/notification-extension
+   membership is still an explicit opt-in list in project.pbxproj.
 2. NEVER commit Configuration.xcconfig. It is gitignored and holds AI
    API keys (Anthropic/Gemini/Groq) for the Assistant Coach feature,
    surfaced via INFOPLIST_KEY_* substitutions. If it is missing, the
    build fails with "Unable to open base configuration reference file."
-3. Platform-specific code in shared files gets #if os(iOS) /
-   #if os(macOS) guards. Prefer platform-neutral types (Data over
-   UIImage) in models. Once a view diverges more than trivially, split
-   it into a separate Mac view rather than branching heavily.
+3. iPhone/iPad differences go by size class (horizontalSizeClass), not by
+   device checks, so Split View and Stage Manager work. Prefer
+   platform-neutral types (Data over UIImage) in models.
 4. Do not add .claude/, build/, or xcuserdata to git. Check .gitignore
    before staging.
 5. Do not change SwiftData model schemas without explicit approval. The
    schema is already CloudKit-compatible and iOS depends on it.
-6. Never replicate a non-functional control to a second platform. Fix
-   it on both or remove it.
+6. Never replicate a non-functional control to a second layout. Fix it on
+   iPhone and iPad or remove it.
 7. ADDING A SWIFTDATA MODEL is a five-step operation, in this order.
-   Skipping 3 or 4 makes Mac write record types Production does not know,
-   which fails silently — the failure mode this project already suffers.
-   a. New model in Hoopwise/Models/SwiftData/, BOTH target memberships.
+   Skipping 3 or 4 makes a released build write record types Production
+   does not know, which fails silently.
+   a. New model in Hoopwise/Models/SwiftData/.
       Every property needs a default or must be optional; no
       @Attribute(.unique); all relationships optional. CloudKit requires
       this and the existing models already follow it.
    b. Register it in the Schema([...]) array in SwiftDataManager.
-   c. Run both targets once in Debug so SwiftData materializes the
+   c. Run the app once in Debug so SwiftData materializes the
       Development schema.
    d. Deploy Development to Production in CloudKit Console by hand.
       Nothing automates this.
-   e. Ship an iOS build carrying the types — even with no UI — before Mac
-      authoring writes any of them.
+   e. Ship a build carrying the types before relying on them in a release.
    Define new record types in ONE pass and deploy once. Each extra deploy
    costs another iOS release, and TestFlight review time gates it. Empty
    models cost nothing to carry.
 
-## macOS gotchas specific to this setup
+## iCloud / CloudKit environment gotchas (written for the Mac; still true)
 - The macOS user account is new. A Mac with no system-level iCloud
   account, or one signed into a different Apple ID than the iPhone,
   gets an empty CloudKit private database with no error. Signing into
@@ -508,10 +521,10 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   two runs cannot differ in how they navigated there); scratchpad
   `pixdiff` does the comparison. Phase 2.5 is the worked example: four
   createSession() bodies replaced, four sheets identical to the pixel.
-- iOS/Mac feature parity is CANCELLED as a goal. Do not pursue it.
-- The Mac app becomes an authoring tool for basketball research and video
-  production: court/play editor, PDF play sheets, animation export for
-  DaVinci Resolve, and a linked knowledge base.
+- iOS/Mac feature parity is CANCELLED as a goal. (Superseded 6 November
+  2026: the Mac app is retired — see "THE MAC APP IS RETIRED".)
+- (History) The Mac app was to become an authoring tool: court/play editor,
+  PDF play sheets, animation export, knowledge base. Retired with it.
 
 ## Current state (August 2026, restructure complete)
 - CloudKit sync works. Both apps see the same private-database data.
@@ -650,7 +663,7 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
 - A planner-made session with no block minutes gets its length split evenly
   over warm-up/skills/game before planning. Tests: CyclePlannerTests.
 
-## Mac directory pattern (August 2026)
+## Mac directory pattern (August 2026) — HISTORY (Mac retired; code at tag mac-app-final)
 - DirectoryView (HoopwiseMac/Views/Directory/) is the Contacts skeleton:
   groups column → indexed list → detail card, three columns inside the
   page. Instances: AthletesDirectoryView, SessionsDirectoryView. Pages own
@@ -730,7 +743,7 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   Exports must be flat 2D media, not 3D scene data. This constraint lives
   in the editing suite, not in this repo — it is not greppable here.
 
-## Court editor (step 5, in progress)
+## Court editor (step 5, in progress) — HISTORY (Mac retired; code at tag mac-app-final)
 - HoopwiseMac/Views/PlayEditor/: PlayEditorModel (authoring state, the only
   place the diagram is mutated), DiagramCanvasView, TimelineView,
   PlayEditorView. Reachable from the sidebar under Library > Court Editor.
@@ -757,7 +770,7 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   both had to be split into explicit statements. Write geometry as explicit
   typed steps, not one expression.
 
-## Court editor phase (August 2026) — what landed and its rules
+## Court editor phase (August 2026) — what landed and its rules — HISTORY (Mac retired; code at tag mac-app-final)
 - Playhead is ABSOLUTE branch time. Chained playback resolution lives in
   PlayDiagram (segmentIndex/resolvedPosition/segmentPosition over
   BranchSteps), NOT the view model — the frame exporter uses the same
@@ -904,7 +917,7 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   only after the snapshot you want rendered is already on disk, or the
   renders come from the stale one.
 
-## Play Editor v2 Phase D (August 2026) — playback, print, playbook
+## Play Editor v2 Phase D (August 2026) — playback, print, playbook — HISTORY (Mac retired; code at tag mac-app-final)
 - PLAYBACK CONSUMES FRAMES. `FramePlayback` (Models/, both targets) re-expresses
   the presentation consumption rules on ACTIONS: draw-on tip-first, consumed
   behind motion, tail tucked in FEET, hold guard, one head. The look is
@@ -1166,7 +1179,7 @@ found two bugs, and both were in code that renders documents sent to clients.
   section (both platforms). The session-row Refund swipe was removed in
   October 2026 at Luther's request.
 
-## Mac attendance marking (decision REVERSED August 2026)
+## Mac attendance marking (decision REVERSED August 2026) — HISTORY (Mac retired; code at tag mac-app-final)
 (October 2026: the Mac row follows the three-position model too — segments
 Excused · — · Present, no Absent segment, inferred absence in the caption.)
 The earlier rule was "Mac does not mark attendance — phone for operations,
@@ -1353,7 +1366,7 @@ any attendance surface.
   second source of truth will drift) and do not drop it (removing a column
   from a live CloudKit schema is a sync risk for no gain).
 
-## The Whistle — integrated LLM assistant (Mac only, August 2026)
+## The Whistle — integrated LLM assistant (Mac only, August 2026) — HISTORY (Mac retired; code at tag mac-app-final)
 - HoopwiseMac/Assistant/: AssistantTools (tool registry), AnthropicClient
   (raw URLSession Messages API — no Swift SDK exists), AssistantEngine
   (conversation store + agent loop + Today curation), WhistleBubble
@@ -1791,4 +1804,3 @@ STILL OPEN, needs a decision rather than a verdict:
 
 ## Build commands
 - iOS:  xcodebuild -project Hoopwise.xcodeproj -scheme Hoopwise -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-- Mac:  xcodebuild -project Hoopwise.xcodeproj -scheme HoopwiseMac -destination 'platform=macOS' build
