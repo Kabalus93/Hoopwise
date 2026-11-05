@@ -212,30 +212,53 @@ struct FlightyActionableDashboard: View {
     /// goes through `heroPick`.
     private var heroPlayer: Student? { heroPick?.student }
     
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    @ViewBuilder
+    private var dayCards: some View {
+        if let session = liveSession {
+            LiveSessionActivityCard(session: session)
+        }
+
+        todayBriefingCard
+
+        if !liveGames.isEmpty {
+            liveGameAlert
+        }
+    }
+
+    @ViewBuilder
+    private var actionCards: some View {
+        if totalActionItems > 0 {
+            attentionRequiredCard
+        }
+
+        if !todaysPlayers.isEmpty {
+            todaysPlayersCard
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 GlassEffectContainer(spacing: 16) {
-                    VStack(spacing: 16) {
-                        if let session = liveSession {
-                            LiveSessionActivityCard(session: session)
+                    if horizontalSizeClass == .regular {
+                        // iPad (November 2026): two columns — the day on the
+                        // left, what needs doing on the right.
+                        HStack(alignment: .top, spacing: 16) {
+                            VStack(spacing: 16) { dayCards }
+                                .frame(maxWidth: .infinity)
+                            VStack(spacing: 16) { actionCards }
+                                .frame(maxWidth: .infinity)
                         }
-
-                        todayBriefingCard
-
-                        if !liveGames.isEmpty {
-                            liveGameAlert
+                        .padding(.top, 4)
+                    } else {
+                        VStack(spacing: 16) {
+                            dayCards
+                            actionCards
                         }
-
-                        if totalActionItems > 0 {
-                            attentionRequiredCard
-                        }
-
-                        if !todaysPlayers.isEmpty {
-                            todaysPlayersCard
-                        }
+                        .padding(.top, 4)
                     }
-                    .padding(.top, 4)
                 }
                 .padding(.bottom, 120)
             }
