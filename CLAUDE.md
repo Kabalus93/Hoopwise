@@ -209,6 +209,18 @@ idiom). What differs on the Mac:
 - LSSupportsOpeningDocumentsInPlace is YES (Catalyst refuses NO with
   document types); the .hoopwise import already takes security-scoped
   access, so iPhone behaviour is unchanged.
+- EVERY POPUP ON THE MAC opens without animation and window-sized (Luther):
+  Utilities/MacPresentation.swift swizzles UIViewController.present (and the
+  preferredContentSize setter, because SwiftUI resets a sheet to its ~620×680
+  form size after presenting) — Catalyst only, installed in SAMApp.init.
+  Alerts, menus, popovers, share sheets and full-screen covers are untouched.
+  Each sheet logs its final size: `/usr/bin/log show --predicate
+  'subsystem == "hoopwise.mac"'` (zsh's own `log` shadows /usr/bin/log; and
+  NSLog text is <private> on macOS — use Logger with privacy: .public).
+  Verified with HOOPWISE_SHOT=quickPeep: 620×680 → 962×1410.
+- Run a Mac debug shot: `open -n --env HOOPWISE_SCREENSHOT_STORE=1 --env
+  HOOPWISE_SHOT=<shot> <Debug-maccatalyst>/Hoopwise.app` (screencapture is not
+  permitted here, so check results through that log).
 - Build: `xcodebuild -scheme Hoopwise -destination 'platform=macOS,variant=Mac Catalyst'`.
   The Mac build uses the SAME bundle ID as iPhone/iPad, OKTO.SAMp
   (DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO — Luther, 6 November

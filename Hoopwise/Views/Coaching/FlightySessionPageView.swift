@@ -1850,7 +1850,6 @@ struct FlightySessionPageView: View {
             StudentQuickPeepView(student: student, sessionId: session.id)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .macPopupSizing()
         }
         .sheet(isPresented: $showingAddAthleteSheet) {
             // Available pool = all students not already enrolled in this
@@ -2335,7 +2334,7 @@ struct FlightySessionPageView: View {
         let attendanceState: AttendanceMark = session.effectiveAttendanceMark(for: student.id)
         return HStack(spacing: 10) {
             // Main tappable area - opens Quick Peep
-            Button(action: { presentWithoutAnimationOnMac { selectedStudentForPeep = student } }) {
+            Button(action: { selectedStudentForPeep = student }) {
                 HStack(spacing: 10) {
                     // Avatar with presence indicator
                     ZStack(alignment: .bottomTrailing) {

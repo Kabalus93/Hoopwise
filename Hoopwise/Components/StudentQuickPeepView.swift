@@ -399,7 +399,6 @@ struct StudentQuickPeepView: View {
             }
             .sheet(isPresented: $showingEditStudent) {
                 EditStudentView(student: student, player: player)
-                    .macPopupSizing()
             }
             .sheet(isPresented: $showingParentReport) {
                 ParentReportSheet(
