@@ -55,8 +55,21 @@ struct StudentQuickPeepView: View {
         dataManager.programs.first { $0.enrolledStudentIds.contains(student.id) }
     }
     
+    /// The two expensive numbers, worked out once per open (November 2026:
+    /// they were recomputed on every read — the peer comparison scanned every
+    /// session once per classmate per class — and the sheet waited for it).
+    /// Cleared when the sessions change.
+    private final class StatsCache {
+        var trainingStats: TrainingSessionStats?
+        var programContext: ProgramStatsContext?
+    }
+    @State private var statsCache = StatsCache()
+
     private var trainingStats: TrainingSessionStats {
-        TrainingSessionStats.calculate(for: student.id, from: dataManager.sessionEvents)
+        if let cached = statsCache.trainingStats { return cached }
+        let stats = TrainingSessionStats.calculate(for: student.id, from: dataManager.sessionEvents)
+        statsCache.trainingStats = stats
+        return stats
     }
     
     private var skills: SkillsEvaluation {
@@ -64,17 +77,28 @@ struct StudentQuickPeepView: View {
     }
     
     private var programContext: ProgramStatsContext {
+        if let cached = statsCache.programContext { return cached }
         // Get all peer stats from the same program for comparison
         guard let programId = student.programId else { return .empty }
+        // Each classmate's stats once, then the same list as before (one entry
+        // per class they are on), so the averages are weighted exactly as
+        // they were.
+        var byStudent: [UUID: TrainingSessionStats] = [:]
         let peerStats = dataManager.sessionEvents
             .filter { $0.programId == programId }
             .flatMap { session in
                 session.attendeeIds.compactMap { studentId -> TrainingSessionStats? in
-                    let stats = TrainingSessionStats.calculate(for: studentId, from: dataManager.sessionEvents)
+                    let stats = byStudent[studentId] ?? {
+                        let computed = TrainingSessionStats.calculate(for: studentId, from: dataManager.sessionEvents)
+                        byStudent[studentId] = computed
+                        return computed
+                    }()
                     return stats.hasStats ? stats : nil
                 }
             }
-        return ProgramStatsContext.calculate(from: peerStats)
+        let context = ProgramStatsContext.calculate(from: peerStats)
+        statsCache.programContext = context
+        return context
     }
     
     private var performanceMetrics: PerformanceRadarMetrics {
@@ -369,8 +393,13 @@ struct StudentQuickPeepView: View {
                     .disabled(isExportingCard)
                 }
             }
+            .onChange(of: dataManager.sessionEvents) { _, _ in
+                statsCache.trainingStats = nil
+                statsCache.programContext = nil
+            }
             .sheet(isPresented: $showingEditStudent) {
                 EditStudentView(student: student, player: player)
+                    .macPopupSizing()
             }
             .sheet(isPresented: $showingParentReport) {
                 ParentReportSheet(
