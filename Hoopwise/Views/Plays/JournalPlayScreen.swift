@@ -134,7 +134,9 @@ struct JournalPlayScreen: View {
 
     /// The concept's first diagram; tap to study it.
     private func hero(_ concept: JournalPlayPart) -> some View {
-        NavigationLink(value: JournalPlayStudyRoute(part: concept, editing: isUndrawn)) {
+        NavigationLink {
+            JournalPlayStudyScreen(part: concept, editsFirstStep: isUndrawn)
+        } label: {
             JCard(verticalPadding: JSpacing.s) {
                 VStack(alignment: .leading, spacing: JSpacing.s) {
                     JournalPlayDiagramView(diagram: concept.sortedSteps.first?.diagram ?? JournalPlayDiagram(), court: play.court)
@@ -163,6 +165,7 @@ struct JournalPlayScreen: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("plays.hero")
         .contextMenu {
             Button { partSheet = .edit(concept) } label: {
                 Label { JText("Rename") } icon: { Image(systemName: "pencil") }
@@ -213,10 +216,13 @@ struct JournalPlayScreen: View {
                     VStack(spacing: 0) {
                         ForEach(Array(parts.enumerated()), id: \.element.id) { i, part in
                             if i > 0 { Divider() }
-                            NavigationLink(value: JournalPlayStudyRoute(part: part)) {
+                            NavigationLink {
+                                JournalPlayStudyScreen(part: part)
+                            } label: {
                                 JournalPlayPartRow(part: part, court: play.court)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("plays.part.\(kind.rawValue).\(i)")
                             .contextMenu { partMenu(part, index: i, count: parts.count) }
                         }
                     }

@@ -10,7 +10,7 @@ struct FlightyHubView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var currentTime = Date()
     @State private var showingRevenueHistory = false
-    @Query private var journalPlays: [JournalPlay]
+    @Environment(\.modelContext) private var modelContext
     
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
@@ -167,13 +167,18 @@ struct FlightyHubView: View {
         return VStack(spacing: 10) {
             // Plays replaced League here (Luther, November 2026): HoopWise
             // Journal's Plays tab, taken as is (Views/Plays/).
+            // The glass goes on the LINK, never inside its label: a
+            // glassEffect in a NavigationLink's label swallowed every tap on
+            // iOS 26 — none of the three Hub cards (League included) opened.
             NavigationLink(destination: JournalPlaysScreen()) {
                 hubNavCardWide(
                     icon: "sportscourt",
                     title: jp("Plays"),
-                    subtitle: jp("\(journalPlays.count) plays")
+                    subtitle: jp("\((try? modelContext.fetchCount(FetchDescriptor<JournalPlay>())) ?? 0) plays")
                 )
             }
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .accessibilityIdentifier("hub.plays")
             .buttonStyle(.plain)
 
             HStack(spacing: 10) {
@@ -184,6 +189,7 @@ struct FlightyHubView: View {
                         subtitle: isChinese ? "\(dataManager.drills.count) 个训练" : "\(dataManager.drills.count) drills"
                     )
                 }
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
                 .buttonStyle(.plain)
 
                 NavigationLink(destination: OrganizationView()) {
@@ -193,6 +199,7 @@ struct FlightyHubView: View {
                         subtitle: organizationSubtitle(isChinese: isChinese)
                     )
                 }
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
                 .buttonStyle(.plain)
             }
         }
@@ -240,7 +247,7 @@ private func hubNavCardWide(icon: String, title: String, subtitle: String, badge
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .contentShape(.rect(cornerRadius: 16))
     }
 
     private func hubNavCard(icon: String, title: String, subtitle: String) -> some View {
@@ -273,7 +280,7 @@ private func hubNavCardWide(icon: String, title: String, subtitle: String, badge
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .contentShape(.rect(cornerRadius: 16))
     }
     
 }

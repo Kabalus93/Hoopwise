@@ -461,7 +461,18 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   it was seeded, as in the Journal. DEBUG: HOOPWISE_SHOT=plays (or =hub),
   HOOPWISE_PLAYS_OPEN=play|study|playback|legend|editor|details|newpart|
   newplay, HOOPWISE_PLAYS_PLAY=<starter key>, _PART, _STEP. Tests:
-  SAMpTests/JournalPlays (the Journal's play tests, Swift Testing).
+  SAMpTests/JournalPlays (the Journal's play tests, Swift Testing) and
+  SAMpUITests/PlaysUITests (real taps: Hub → Plays → play → steps → editor
+  → wrinkle; Coach and Organization open).
+  TWO TRAPS FOUND ON THE FIRST PORT (it shipped inert):
+  · A `.glassEffect` INSIDE a NavigationLink's label swallows every tap on
+    iOS 26. All three Hub cards had it — League, Coach and Organization had
+    never opened. Put the glass on the link itself.
+  · The Journal's value links (`NavigationLink(value:)` +
+    `navigationDestination(for:)`) do not resolve on a screen pushed by the
+    Hub's `NavigationLink(destination:)`; the Plays screens use destination
+    links. Simulator taps from the agent tool are unreliable on these
+    cards (a system gesture claims them) — verify with XCUITest.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

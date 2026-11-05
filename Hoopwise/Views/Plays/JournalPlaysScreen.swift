@@ -65,12 +65,6 @@ struct JournalPlaysScreen: View {
             .navigationSubtitle(JText("\(plays.count) plays"))
             .toolbarTitleDisplayMode(.inlineLarge)
             .searchable(text: $search, prompt: JText("Search plays"))
-            .navigationDestination(for: JournalPlay.self) { play in
-                JournalPlayScreen(play: play)
-            }
-            .navigationDestination(for: JournalPlayStudyRoute.self) { route in
-                JournalPlayStudyScreen(part: route.part, editsFirstStep: route.editing)
-            }
             .navigationDestination(item: $created) { opened in
                 JournalPlayScreen(play: opened.play, opening: opened.route)
             }
@@ -125,10 +119,16 @@ struct JournalPlaysScreen: View {
                 VStack(spacing: 0) {
                     ForEach(Array(group.plays.enumerated()), id: \.element.id) { i, play in
                         if i > 0 { Divider() }
-                        NavigationLink(value: play) {
+                        // Destination links, not value links: this screen is pushed by
+                        // the Hub's NavigationLink(destination:), and value routes
+                        // declared here never resolved (rows did nothing).
+                        NavigationLink {
+                            JournalPlayScreen(play: play)
+                        } label: {
                             JournalPlayRow(play: play)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("plays.row.\(play.starterKey ?? play.name)")
                         .contextMenu {
                             Button(role: .destructive) { deleting = play } label: {
                                 Label { JText("Delete play") } icon: { Image(systemName: "trash") }

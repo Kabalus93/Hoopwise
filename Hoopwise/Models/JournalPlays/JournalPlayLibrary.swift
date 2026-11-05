@@ -79,7 +79,12 @@ enum JournalPlayLibrary {
                              language: Language = appLanguage) -> Int {
         guard let file = load(), defaults.integer(forKey: seededKey) < file.version else { return 0 }
         let added = addMissing(file, to: context, language: language)
-        defaults.set(file.version, forKey: seededKey)
+        // Only once they are on disk: a run that ends before the save lands
+        // must seed again, not leave an empty library marked as seeded.
+        if (try? context.fetchCount(FetchDescriptor<JournalPlay>(
+            predicate: #Predicate { $0.starterKey != nil }))) ?? 0 > 0 || added == 0 {
+            defaults.set(file.version, forKey: seededKey)
+        }
         return added
     }
 
