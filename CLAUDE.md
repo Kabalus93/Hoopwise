@@ -214,6 +214,10 @@ idiom). What differs on the Mac:
   preferredContentSize setter, because SwiftUI resets a sheet to its ~620×680
   form size after presenting) — Catalyst only, installed in SAMApp.init.
   Alerts, menus, popovers, share sheets and full-screen covers are untouched.
+  A CLICK OUTSIDE a popup closes it like an iPad swipe-down
+  (OutsideClickDismiss): the presentation delegate is asked first, so
+  interactiveDismissDisabled sheets stay open; SwiftUI is told via
+  presentationControllerDidDismiss.
   Each sheet logs its final size: `/usr/bin/log show --predicate
   'subsystem == "hoopwise.mac"'` (zsh's own `log` shadows /usr/bin/log; and
   NSLog text is <private> on macOS — use Logger with privacy: .public).

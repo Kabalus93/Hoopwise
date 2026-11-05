@@ -89,10 +89,55 @@ extension UIViewController {
         UIView.setAnimationsEnabled(false)
         defer { UIView.setAnimationsEnabled(true) }
         hw_present(controller, animated: false) {
+            OutsideClickDismiss.attach(to: controller)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 popupLog.log("popup \(type(of: controller), privacy: .public) target \(String(describing: target), privacy: .public) now \(Int(controller.view.bounds.width), privacy: .public)×\(Int(controller.view.bounds.height), privacy: .public) pcs \(String(describing: controller.preferredContentSize), privacy: .public)")
             }
             completion?()
+        }
+    }
+}
+
+/// A click on the dimmed window around a Mac popup closes it (Luther,
+/// November 2026), exactly as swiping a sheet down does on iPad: the sheet's
+/// presentation delegate is asked first, so a sheet that refuses dismissal
+/// (`interactiveDismissDisabled`, e.g. a step with unsaved drawing) stays and
+/// gets its "attempted to dismiss" callback instead, and SwiftUI's binding is
+/// told the sheet went away.
+private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
+    private weak var controller: UIViewController?
+    private static var key: UInt8 = 0
+
+    static func attach(to controller: UIViewController) {
+        guard let container = controller.presentationController?.containerView else { return }
+        let handler = OutsideClickDismiss()
+        handler.controller = controller
+        let tap = UITapGestureRecognizer(target: handler, action: #selector(clicked))
+        tap.delegate = handler
+        tap.cancelsTouchesInView = false
+        container.addGestureRecognizer(tap)
+        objc_setAssociatedObject(controller, &key, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+    }
+
+    /// Only clicks OUTSIDE the popup itself.
+    func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let view = controller?.view else { return false }
+        return !view.bounds.contains(touch.location(in: view))
+    }
+
+    @objc private func clicked() {
+        guard let controller, controller.presentedViewController == nil,
+              let presentation = controller.presentationController else { return }
+        let delegate = presentation.delegate
+        if delegate?.presentationControllerShouldDismiss?(presentation) == false {
+            macPopupTrace("outside click: sheet refuses dismissal")
+            delegate?.presentationControllerDidAttemptToDismiss?(presentation)
+            return
+        }
+        macPopupTrace("outside click: dismissed \(type(of: controller))")
+        delegate?.presentationControllerWillDismiss?(presentation)
+        controller.dismiss(animated: false) {
+            delegate?.presentationControllerDidDismiss?(presentation)
         }
     }
 }
