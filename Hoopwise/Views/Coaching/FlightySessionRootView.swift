@@ -17,47 +17,26 @@ struct FlightySessionRootView: View {
     
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     var body: some View {
-        if horizontalSizeClass == .regular {
-            // iPad (November 2026): the list on the left, the program or
-            // session it opens on the right. The rows' NavigationLinks land
-            // in the detail column by themselves.
-            NavigationSplitView {
-                listColumn
-                    .navigationSplitViewColumnWidth(min: 340, ideal: 400, max: 480)
-            } detail: {
-                NavigationStack {
-                    ContentUnavailableView(
-                        LocalizationManager.shared.currentLanguage == .chinese ? "选择一节课或一个训练计划" : "Choose a session or a program",
-                        systemImage: "calendar")
+        NavigationStack {
+            VStack(spacing: 0) {
+                // Compact header with title, count, and picker
+                compactHeader
+
+                // Content - Programs OR Calendar, same as iPhone (no dual-pane)
+                if selectedSegment == 0 {
+                    FlightyProgramsListView()
+                } else {
+                    FlightySessionsCalendarView()
                 }
             }
-            .navigationSplitViewStyle(.balanced)
-        } else {
-            NavigationStack { listColumn }
-        }
-    }
-
-    private var listColumn: some View {
-        VStack(spacing: 0) {
-            // Compact header with title, count, and picker
-            compactHeader
-
-            // Content - Programs OR Calendar
-            if selectedSegment == 0 {
-                FlightyProgramsListView()
-            } else {
-                FlightySessionsCalendarView()
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            #if os(iOS)
+            .navigationBarHidden(true)
+            #endif
+            .onReceive(timer) { _ in
+                currentTime = Date()
             }
-        }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        #if os(iOS)
-        .navigationBarHidden(true)
-        #endif
-        .onReceive(timer) { _ in
-            currentTime = Date()
         }
     }
     

@@ -182,10 +182,11 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   (`contentSizeClass`) — split views inside the tabs still see .regular.
   `.sidebarAdaptable` (the top bar + sidebar toggle) is gone.
 - PHASE 1 DONE (6 November 2026): regular width only —
-  Sessions (FlightySessionRootView) and the Hub (FlightyHubView) are
-  NavigationSplitViews: their list on the left, and the rows'
+  the Hub (FlightyHubView) is a NavigationSplitView: their list on the left, and the rows'
   `NavigationLink(destination:)` land in the detail column by themselves
-  (the Hub's detail opens on Plays). Athletes already was one. Home
+  (the Hub's detail opens on Plays). Athletes already was one. SESSIONS AS A
+  SPLIT VIEW WAS TRIED AND REVERTED (Luther: "not looking good") — the
+  Sessions tab stays the full-width calendar/programs page that pushes. Home
   (FlightyActionableDashboard) is two columns: the day (live, briefing, live
   games) | what needs doing (attention, today's athletes). Compact width keeps
   each tab's original NavigationStack.
