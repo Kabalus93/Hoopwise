@@ -688,6 +688,8 @@ struct FlightySessionPageView: View {
                     } label: {
                         Label(isChinese ? "取消" : "Cancel", systemImage: "xmark.circle.fill")
                             .font(.body.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -700,6 +702,8 @@ struct FlightySessionPageView: View {
                     } label: {
                         Label(isChinese ? "标记已完成" : "Mark Completed", systemImage: "checkmark.circle.fill")
                             .font(.body.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
@@ -708,6 +712,9 @@ struct FlightySessionPageView: View {
                     .tint(.green)
                     .sensoryFeedback(.success, trigger: session.status == .completed)
                 }
+                // One size for both (Luther, November 2026): "Mark Completed"
+                // wrapped to two lines and stood taller than Cancel. One line
+                // each, shrinking slightly before it would wrap.
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
             }

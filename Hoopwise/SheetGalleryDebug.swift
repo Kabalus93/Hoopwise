@@ -235,6 +235,19 @@ enum SheetGalleryDebug {
                 missing("sessionPage: no program session in the store")
             }
 
+        case "pastSession":
+            // A class whose time has passed but is still scheduled: the
+            // Cancel / Mark Completed pair.
+            if let session = dm.sessionEvents
+                .filter({ $0.status == .scheduled && $0.endTime < Date() })
+                .max(by: { $0.startTime < $1.startTime }) {
+                NavigationStack {
+                    FlightySessionPageView(session: session, accessMode: .architect)
+                }
+            } else {
+                missing("pastSession: no past scheduled session")
+            }
+
         case "programDetail":
             // The first program's page: hero header, mascot/category tile.
             if let program = dm.programs.first {
