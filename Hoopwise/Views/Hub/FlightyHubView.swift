@@ -42,8 +42,27 @@ struct FlightyHubView: View {
         dataManager.sessionEvents.filter { $0.isUpcoming }.count
     }
     
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     var body: some View {
-        NavigationStack {
+        if horizontalSizeClass == .regular {
+            // iPad (November 2026): the Hub on the left, what it opens
+            // (Plays, Coach, Organization) on the right.
+            NavigationSplitView {
+                hubColumn
+                    .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 440)
+            } detail: {
+                NavigationStack {
+                    JournalPlaysScreen()
+                }
+            }
+            .navigationSplitViewStyle(.balanced)
+        } else {
+            NavigationStack { hubColumn }
+        }
+    }
+
+    private var hubColumn: some View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
                     // Header with time
@@ -74,7 +93,6 @@ struct FlightyHubView: View {
             .onReceive(timer) { _ in
                 currentTime = Date()
             }
-        }
     }
     
     // MARK: - Header Section

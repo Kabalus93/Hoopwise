@@ -181,6 +181,14 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   hands each tab's content the window's real size class back
   (`contentSizeClass`) — split views inside the tabs still see .regular.
   `.sidebarAdaptable` (the top bar + sidebar toggle) is gone.
+- PHASE 1 DONE (6 November 2026): regular width only —
+  Sessions (FlightySessionRootView) and the Hub (FlightyHubView) are
+  NavigationSplitViews: their list on the left, and the rows'
+  `NavigationLink(destination:)` land in the detail column by themselves
+  (the Hub's detail opens on Plays). Athletes already was one. Home
+  (FlightyActionableDashboard) is two columns: the day (live, briefing, live
+  games) | what needs doing (attention, today's athletes). Compact width keeps
+  each tab's original NavigationStack.
 - Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
   and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
   simulator's (demo data only).
