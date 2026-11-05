@@ -34,28 +34,41 @@ struct MainTabView: View {
 
     private var isChinese: Bool { localizationManager.currentLanguage == .chinese }
 
+    /// The window's real width class, handed back to each tab's content
+    /// (the TabView itself is forced compact for a bottom tab bar).
+    @Environment(\.horizontalSizeClass) private var contentSizeClass
+
     var body: some View {
         ZStack(alignment: .top) {
             TabView(selection: $selectedTab) {
                 Tab(isChinese ? "首页" : "Home", systemImage: "house.fill", value: 0) {
                     FlightyActionableDashboard()
+                        .environment(\.horizontalSizeClass, contentSizeClass)
                 }
 
                 Tab(isChinese ? "课程" : "Sessions", systemImage: "calendar", value: 1) {
                     FlightySessionRootView()
+                        .environment(\.horizontalSizeClass, contentSizeClass)
                 }
 
                 Tab(isChinese ? "学员" : "Athletes", systemImage: "person.2.fill", value: 2) {
                     NavigationStack {
                         StudentIntelligenceListView()
                     }
+                    .environment(\.horizontalSizeClass, contentSizeClass)
                 }
 
                 Tab(isChinese ? "中心" : "Hub", systemImage: "square.grid.2x2.fill", value: 3) {
                     FlightyHubView()
+                        .environment(\.horizontalSizeClass, contentSizeClass)
                 }
             }
-            .tabViewStyle(.sidebarAdaptable)
+            // The tab bar sits at the BOTTOM on iPad too (Luther, November
+            // 2026). iPadOS draws a top bar for a regular-width TabView, so
+            // the TabView is told it is compact (the bottom bar) and every
+            // tab's content gets the real size class back — the iPad split
+            // views still see .regular.
+            .environment(\.horizontalSizeClass, .compact)
 
             // No in-app live pill (October 2026, Luther): it floated over
             // the app's own screens. The live session lives where iOS puts

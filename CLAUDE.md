@@ -176,6 +176,11 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
 - State at the start: Athletes already had a NavigationSplitView on iPad
   (StudentIntelligenceListView.shouldUseSplitView) and works; Home and
   Sessions are the iPhone layout stretched; detail pages push full screen.
+- TAB BAR AT THE BOTTOM on iPad too (Luther). iPadOS puts a regular-width
+  TabView's bar at the top, so MainTabView forces the TabView compact and
+  hands each tab's content the window's real size class back
+  (`contentSizeClass`) — split views inside the tabs still see .regular.
+  `.sidebarAdaptable` (the top bar + sidebar toggle) is gone.
 - Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
   and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
   simulator's (demo data only).
