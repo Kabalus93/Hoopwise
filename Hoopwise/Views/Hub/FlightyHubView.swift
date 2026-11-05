@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Combine
 import Charts
 
@@ -9,6 +10,7 @@ struct FlightyHubView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var currentTime = Date()
     @State private var showingRevenueHistory = false
+    @Query private var journalPlays: [JournalPlay]
     
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
@@ -163,11 +165,13 @@ struct FlightyHubView: View {
     private var navigationGrid: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return VStack(spacing: 10) {
-            NavigationLink(destination: FlightyLeagueView()) {
+            // Plays replaced League here (Luther, November 2026): HoopWise
+            // Journal's Plays tab, taken as is (Views/Plays/).
+            NavigationLink(destination: JournalPlaysScreen()) {
                 hubNavCardWide(
-                    icon: "trophy.fill",
-                    title: isChinese ? "联赛" : "League",
-                    subtitle: isChinese ? "比赛与排名" : "Games & standings"
+                    icon: "sportscourt",
+                    title: jp("Plays"),
+                    subtitle: jp("\(journalPlays.count) plays")
                 )
             }
             .buttonStyle(.plain)

@@ -251,7 +251,13 @@ class SwiftDataManager: ObservableObject {
             // Directory groups (Contacts-style custom groups on the Mac).
             // Same deploy-once rule as the play types above: registered now so
             // the next CloudKit schema deploy carries it.
-            SDDirectoryGroup.self
+            SDDirectoryGroup.self,
+            // The Plays library from HoopWise Journal (Hub → Plays, November
+            // 2026): play → part → step. Pending the same Dev→Production
+            // deploy (rule 7d) as everything above.
+            JournalPlay.self,
+            JournalPlayPart.self,
+            JournalPlayStep.self
     ])
 
     #if DEBUG
@@ -307,6 +313,9 @@ class SwiftDataManager: ObservableObject {
         try? modelContext.delete(model: SDContract.self)
         try? modelContext.delete(model: SDPlayer.self)
         try? modelContext.delete(model: SDStudent.self)
+        try? modelContext.delete(model: JournalPlay.self)
+        try? modelContext.delete(model: JournalPlayPart.self)
+        try? modelContext.delete(model: JournalPlayStep.self)
         try? modelContext.save()
         refreshCachesSync()
     }

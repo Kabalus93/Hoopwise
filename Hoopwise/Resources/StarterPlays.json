@@ -1,0 +1,3969 @@
+{
+ "version": 1,
+ "plays": [
+  {
+   "key": "numbered-break",
+   "category": "transition",
+   "court": "full",
+   "name": {
+    "en": "Numbered break",
+    "zh": "编号快攻"
+   },
+   "situation": {
+    "en": "After a defensive rebound or a made basket",
+    "zh": "后场篮板或对方投进后"
+   },
+   "concept": {
+    "en": "Score before the zone sets: each number runs a fixed lane, and the first look is the rim and the corners. Whoever rebounds is 4, the other big is 5. 2 and 3 take the nearer side; if both are on the same side, the one behind switches. Passing the ball up the floor is quicker than dribbling it.",
+    "zh": "先在联防落位前出手：5个人按号码跑固定路线，第一眼找篮下和底角。谁抢到篮板谁当4，另一个大个子当5；2、3谁离哪边近就跑哪边，两人在同一侧时，后面那个换到另一侧。传球推进比运球快。"
+   },
+   "source": "FIBA WABC Coaching Manual, Level 2 – Structured fast break",
+   "sourceURL": "https://wabc-chn.fiba.com/?p=1205",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "Lanes",
+      "zh": "分路"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Outlet",
+        "zh": "一传"
+       },
+       "text": {
+        "en": "4 rebounds (or inbounds after a make) and outlets to 1.",
+        "zh": "4抢篮板（对方投进后就发球），一传给1。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 4,
+          "at": {
+           "x": 2.75,
+           "y": 8.92
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 2.58,
+           "y": 5.92
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 6.67,
+           "y": 12.75
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 9.33,
+           "y": 14.08
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 7.75,
+           "y": 1.33
+          }
+         }
+        ],
+        "ball": 4,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 4,
+          "receiver": 1,
+          "path": [
+           {
+            "x": 2.75,
+            "y": 8.92
+           },
+           {
+            "x": 6.67,
+            "y": 12.75
+           }
+          ]
+         }
+        ],
+        "notes": [
+         {
+          "text": {
+           "en": "Rebound",
+           "zh": "抢篮板"
+          },
+          "at": {
+           "x": 2.6,
+           "y": 10.6
+          }
+         }
+        ]
+       }
+      },
+      {
+       "caption": {
+        "en": "Push",
+        "zh": "推进"
+       },
+       "text": {
+        "en": "1 pushes: pass ahead if a teammate is ahead, dribble only if not. 2 and 3 run the lanes as wide as possible, to below the FT line extended. 5 sprints to the rim, not to the side of the lane. 4 trails last to the FT line, and often arrives unguarded: shoot it, or pass high-to-low to 5.",
+        "zh": "1推进：前面有队友就传，没有才运球。2、3沿两侧尽量贴边线跑到罚球线延长线以下。5直线冲到篮下，不是跑到禁区边。4最后跟进到罚球线，经常没人防：可以直接投，或高位传给篮下的5。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 4,
+          "at": {
+           "x": 2.75,
+           "y": 8.92
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 2.58,
+           "y": 5.92
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 6.67,
+           "y": 12.75
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 9.33,
+           "y": 14.08
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 7.75,
+           "y": 1.33
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "dribble",
+          "player": 1,
+          "path": [
+           {
+            "x": 6.67,
+            "y": 12.75
+           },
+           {
+            "x": 17.93,
+            "y": 10.35
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 2.58,
+            "y": 5.92
+           },
+           {
+            "x": 24.33,
+            "y": 6.81
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 2.75,
+            "y": 8.92
+           },
+           {
+            "x": 21.5,
+            "y": 8.19
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 9.33,
+            "y": 14.08
+           },
+           {
+            "x": 22.33,
+            "y": 13.68
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 7.75,
+            "y": 1.33
+           },
+           {
+            "x": 22.33,
+            "y": 1.33
+           }
+          ]
+         }
+        ],
+        "notes": [
+         {
+          "text": {
+           "en": "Rim run",
+           "zh": "冲筐"
+          },
+          "at": {
+           "x": 25.9,
+           "y": 5.1
+          }
+         },
+         {
+          "text": {
+           "en": "Right lane",
+           "zh": "右路"
+          },
+          "at": {
+           "x": 22.3,
+           "y": 15.6
+          }
+         },
+         {
+          "text": {
+           "en": "Left lane",
+           "zh": "左路"
+          },
+          "at": {
+           "x": 22.3,
+           "y": -0.6
+          }
+         }
+        ]
+       }
+      },
+      {
+       "caption": {
+        "en": "Nothing there: the 1-3-1",
+        "zh": "没有机会：落成1-3-1"
+       },
+       "text": {
+        "en": "2 and 3 lift to the wings, 1 at the top, 4 at the FT line, 5 on the baseline: that's the 1-3-1. Run Zone-23.",
+        "zh": "2、3上提到侧翼，1在弧顶，4在罚球线，5在底线 = 1-3-1，直接打Zone-23。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 17.93,
+           "y": 10.35
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 22.33,
+           "y": 13.68
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 22.33,
+           "y": 1.33
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 21.5,
+           "y": 8.19
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 24.33,
+           "y": 6.81
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 17.93,
+            "y": 10.35
+           },
+           {
+            "x": 19.0,
+            "y": 7.5
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 22.33,
+            "y": 13.68
+           },
+           {
+            "x": 21.5,
+            "y": 13.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 22.33,
+            "y": 1.33
+           },
+           {
+            "x": 21.5,
+            "y": 2.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 21.5,
+            "y": 8.19
+           },
+           {
+            "x": 22.2,
+            "y": 7.5
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 24.33,
+            "y": 6.81
+           },
+           {
+            "x": 27.0,
+            "y": 11.6
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "zone-23",
+   "category": "halfCourt",
+   "court": "half",
+   "name": {
+    "en": "Zone-23 (1-3-1 vs 2-3)",
+    "zh": "Zone-23（1-3-1进攻2-3联防）"
+   },
+   "situation": {
+    "en": "Half court against a 2-3 zone",
+    "zh": "半场对2-3联防"
+   },
+   "concept": {
+    "en": "A one-guard 1-3-1 splits the zone's two top defenders; the goal is to get the ball to the high post (4) or the short corner (5). Run it patiently, make the zone shift and work it inside. One post touch: before any outside shot the ball must touch 4 or 5 once (transition excepted). Gap penetration is for a pull-up jumper in the gap; the weak-side wing crashes the back-side boards. Against a one-guard front (1-3-1, 1-2-2), switch to a two-guard set.",
+    "zh": "用单后卫的1-3-1站位劈开2-3联防的两个后卫，目标是把球送进高位(4)或短底角(5)。耐心、让联防移动、把球打进内线。一次内线触球：外线投篮前，球必须先进过4或5一次（快攻除外）。运球突破找的是缝隙里的急停跳投；弱侧翼必须冲后场侧的进攻篮板。如果对手是单后卫在前的联防（1-3-1、1-2-2），改用双后卫站位。"
+   },
+   "source": "Coach's Clipboard – Attacking the 2-3 Zone (“Zone-23”)",
+   "sourceURL": "https://www.coachesclipboard.net/youth/23ZoneOffense.html",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "High-post entry",
+      "zh": "高位传球"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Alignment",
+        "zh": "站位"
+       },
+       "text": {
+        "en": "1 at the top; 2 and 3 on the wings, a bit wider than usual so the two top defenders can't reach 1's passing lanes. Ball at the top: 4 at the FT line; ball on a wing: 4 just below the elbow, in the gap. 5 runs the baseline behind the zone, short corner to short corner; never post on the block.",
+        "zh": "1在弧顶；2、3在两侧侧翼，比平时站得更开，让对方两个后卫够不到1的传球线路。球在弧顶，4站罚球线；球到侧翼，4站肘区稍下方，卡在空隙里。5在联防身后从一侧短底角跑到另一侧，不要在低位要球。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 10.3
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.7,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.3,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 7.5,
+           "y": 5.9
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 11.6,
+           "y": 0.7
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [
+         {
+          "at": {
+           "x": 5.5,
+           "y": 7.55
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 9.5,
+           "y": 7.55
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 3.7,
+           "y": 3.35
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 11.3,
+           "y": 3.35
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 7.5,
+           "y": 3.85
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 11.6,
+            "y": 0.7
+           },
+           {
+            "x": 6.0,
+            "y": 0.7
+           },
+           {
+            "x": 2.9,
+            "y": 0.7
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "High-post catch",
+        "zh": "球进高位"
+       },
+       "text": {
+        "en": "1 hits 4 at the FT line. 4 pivots, faces the rim, shoots or passes right away; no dribble. On the high-post catch, 5 ducks in under the zone, seals, and takes the quick pass.",
+        "zh": "1传给罚球线的4。4转身面筐，马上投或传，不要运球。球进高位时，5从联防下面钻进来卡位接快传。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 10.3
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.7,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.3,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 7.5,
+           "y": 5.9
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 2.9,
+           "y": 0.7
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [
+         {
+          "at": {
+           "x": 5.5,
+           "y": 7.55
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 9.5,
+           "y": 7.55
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 3.7,
+           "y": 3.35
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 11.3,
+           "y": 3.35
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 7.5,
+           "y": 3.85
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 4,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 10.3
+           },
+           {
+            "x": 7.5,
+            "y": 5.9
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 2.9,
+            "y": 0.7
+           },
+           {
+            "x": 5.2,
+            "y": 2.4
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "variation",
+     "name": {
+      "en": "Short corner",
+      "zh": "短底角"
+     },
+     "notes": {
+      "en": "Ball to the wing, then the short corner: 5 against the middle defender, 4 diving behind.",
+      "zh": "球先到侧翼，再到短底角：5对位中路防守人，4从身后下切。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Ball to the wing",
+        "zh": "球到侧翼"
+       },
+       "text": {
+        "en": "1 dribbles to the right wing to engage the top defender, 2 drops to the corner, and 1 passes to him.",
+        "zh": "1运球到右翼吸住上线防守人，2下到底角，1传给2。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 10.3
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.7,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.3,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 7.5,
+           "y": 5.9
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 11.6,
+           "y": 0.7
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [
+         {
+          "at": {
+           "x": 5.5,
+           "y": 7.55
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 9.5,
+           "y": 7.55
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 3.7,
+           "y": 3.35
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 11.3,
+           "y": 3.35
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 7.5,
+           "y": 3.85
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [
+         {
+          "kind": "dribble",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 10.3
+           },
+           {
+            "x": 13.1,
+            "y": 7.4
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 13.7,
+            "y": 7.0
+           },
+           {
+            "x": 14.4,
+            "y": 4.1
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 11.6,
+            "y": 0.7
+           },
+           {
+            "x": 12.2,
+            "y": 0.8
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 2,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.4
+           },
+           {
+            "x": 14.4,
+            "y": 4.1
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Short corner",
+        "zh": "短底角"
+       },
+       "text": {
+        "en": "2 lifts the low defender, then passes to 5 in the short corner as 4 dives to the ball-side block. Middle defender steps out to 5 → pass to 4 for the layup. He stays home → 5 shoots the short-corner jumper or drives. Weak-side low defender helps on 4 → 3 cuts to the weak-side block.",
+        "zh": "2往上带一两步把下线防守人带出来，再传给短底角的5，同时4下切到强侧低位。中路防守人出来防5 → 传给下切的4上篮。中路防守人不动 → 5短底角跳投或突破。弱侧下线防守人去补4 → 3切到弱侧低位接球。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 13.1,
+           "y": 7.4
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 14.4,
+           "y": 4.1
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.3,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 7.5,
+           "y": 5.9
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 12.2,
+           "y": 0.8
+          }
+         }
+        ],
+        "ball": 2,
+        "defense": [
+         {
+          "at": {
+           "x": 11.3,
+           "y": 6.95
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 5.7,
+           "y": 5.45
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 12.8,
+           "y": 4.05
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 10.0,
+           "y": 2.05
+          },
+          "isRead": true
+         },
+         {
+          "at": {
+           "x": 3.5,
+           "y": 2.75
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 5,
+          "path": [
+           {
+            "x": 14.4,
+            "y": 4.1
+           },
+           {
+            "x": 12.2,
+            "y": 0.8
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 5.9
+           },
+           {
+            "x": 9.3,
+            "y": 2.8
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 1.3,
+            "y": 7.0
+           },
+           {
+            "x": 4.4,
+            "y": 3.7
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "23-stack",
+   "category": "baselineInbound",
+   "court": "half",
+   "name": {
+    "en": "23 Stack",
+    "zh": "23 Stack"
+   },
+   "situation": {
+    "en": "Baseline out of bounds against a 2-3 zone",
+    "zh": "底线发球（对2-3联防）"
+   },
+   "concept": {
+    "en": "Four players stack on the ball side and the inbounder, 3, reads one defender: the ball-side low defender. 2 is the best shooter, 4 and 5 are the posts, 1 is the point guard.",
+    "zh": "四人在强侧纵列站位，发球人3只读一个人——强侧下线防守人。2是最好的射手，4、5是内线，1是控卫。"
+   },
+   "source": "Coach's Clipboard – Baseline Out-of-Bounds Plays vs the 2-3 Zone (“23 Stack”)",
+   "sourceURL": "https://www.coachesclipboard.net/OBPlay23zone.html",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "Stack",
+      "zh": "纵列"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Setup",
+        "zh": "站位"
+       },
+       "text": {
+        "en": "3 inbounds just right of the basket. 2, 5, 4, 1 stack just outside the right lane line from the baseline up; the top of the stack sits near the elbow, so don't start it too low.",
+        "zh": "3在篮下右侧发球。2、5、4、1在右侧禁区线外从底线往上排成纵列，最上面一个靠近肘区，不要站得太低。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 3,
+          "at": {
+           "x": 10.3,
+           "y": -0.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 10.6,
+           "y": 2.55
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.6,
+           "y": 3.75
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 10.6,
+           "y": 4.95
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 10.6,
+           "y": 6.15
+          }
+         }
+        ],
+        "ball": 3,
+        "defense": [
+         {
+          "at": {
+           "x": 11.6,
+           "y": 1.45
+          },
+          "isRead": true
+         },
+         {
+          "at": {
+           "x": 7.5,
+           "y": 3.05
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 4.3,
+           "y": 2.65
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 4.4,
+           "y": 6.65
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 8.8,
+           "y": 5.25
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Break the stack",
+        "zh": "散开"
+       },
+       "text": {
+        "en": "2 cuts to the right corner calling for the ball, and 1 pops to the right wing as the safety.",
+        "zh": "2喊着要球切到右侧底角，1拉到右侧翼做安全出球点。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 3,
+          "at": {
+           "x": 10.3,
+           "y": -0.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 10.6,
+           "y": 2.55
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.6,
+           "y": 3.75
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 10.6,
+           "y": 4.95
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 10.6,
+           "y": 6.15
+          }
+         }
+        ],
+        "ball": 3,
+        "defense": [
+         {
+          "at": {
+           "x": 11.6,
+           "y": 1.45
+          },
+          "isRead": true
+         },
+         {
+          "at": {
+           "x": 7.5,
+           "y": 3.05
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 4.3,
+           "y": 2.65
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 4.4,
+           "y": 6.65
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 8.8,
+           "y": 5.25
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 10.6,
+            "y": 2.55
+           },
+           {
+            "x": 14.55,
+            "y": 2.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 10.6,
+            "y": 6.15
+           },
+           {
+            "x": 13.3,
+            "y": 7.8
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "The read",
+        "zh": "读法"
+       },
+       "text": {
+        "en": "5 screens the middle defender and 4 slides into the gap. Ball-side low defender goes out with 2 → pass inside to 4. He stays inside → pass to 2 in the corner for the three. Both covered → pass to 1, 3 steps in, and everyone resets to the 1-3-1.",
+        "zh": "5掩护中路防守人，4滑进空隙。强侧下线防守人跟2去底角 → 传内线给4。他留在里面 → 传底角给2投三分。两边都被封住 → 传给1，3进场，全队回到1-3-1。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 3,
+          "at": {
+           "x": 10.3,
+           "y": -0.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 14.55,
+           "y": 2.0
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.6,
+           "y": 3.75
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 10.6,
+           "y": 4.95
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 13.3,
+           "y": 7.8
+          }
+         }
+        ],
+        "ball": 3,
+        "defense": [
+         {
+          "at": {
+           "x": 13.3,
+           "y": 2.35
+          },
+          "isRead": true
+         },
+         {
+          "at": {
+           "x": 7.8,
+           "y": 3.15
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 4.3,
+           "y": 2.65
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 7.0,
+           "y": 6.85
+          },
+          "isRead": false
+         },
+         {
+          "at": {
+           "x": 11.5,
+           "y": 6.35
+          },
+          "isRead": false
+         }
+        ],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 10.6,
+            "y": 3.75
+           },
+           {
+            "x": 8.8,
+            "y": 3.2
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 10.6,
+            "y": 4.95
+           },
+           {
+            "x": 12.1,
+            "y": 3.2
+           },
+           {
+            "x": 10.4,
+            "y": 2.0
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 3,
+          "receiver": 4,
+          "path": [
+           {
+            "x": 10.3,
+            "y": -0.7
+           },
+           {
+            "x": 10.4,
+            "y": 2.0
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "box-1",
+   "category": "sidelineInbound",
+   "court": "half",
+   "name": {
+    "en": "Box-1",
+    "zh": "Box-1"
+   },
+   "situation": {
+    "en": "Sideline out of bounds",
+    "zh": "边线发球"
+   },
+   "concept": {
+    "en": "Safety first: two down-screens give two receivers, 1 catches and you go straight into the half-court offense; the back-screen layup for the inbounder is a bonus. Numbers are swapped from the source so 3 always inbounds.",
+    "zh": "边线发球先求安全：两个下掩护保证有两个接球点，1接球后直接进入半场进攻；给发球人的背掩护上篮是额外机会。号码与原文对调，让3始终是发球人。"
+   },
+   "source": "Coach's Clipboard – Sideline Out-of-Bounds Plays (“Box-1”)",
+   "sourceURL": "https://www.coachesclipboard.net/SidelinePlays.html",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "Box",
+      "zh": "箱形"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Box + down-screens",
+        "zh": "箱形 + 下掩护"
+       },
+       "text": {
+        "en": "3 inbounds from the sideline around the FT line extended. Box: 1 and 2 on the low blocks, 5 and 4 at the elbows. 5 down-screens for 1 and 4 for 2; 1 and 2 come off to the three-point line. 3 inbounds to 1; 2 is the safety and the first one back on defense.",
+        "zh": "3在罚球线延长线附近的边线发球。箱形站位：1、2在两侧低位，5、4在两侧肘区。5给1下掩护，4给2下掩护；1、2绕出到三分线外。3把球发给1；2是安全接应，也负责第一个回防。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 3,
+          "at": {
+           "x": -0.8,
+           "y": 6.1
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 4.3,
+           "y": 2.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 10.7,
+           "y": 2.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 4.3,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 10.7,
+           "y": 5.8
+          }
+         }
+        ],
+        "ball": 3,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 4.3,
+            "y": 5.8
+           },
+           {
+            "x": 4.3,
+            "y": 3.85
+           }
+          ]
+         },
+         {
+          "kind": "screen",
+          "player": 4,
+          "path": [
+           {
+            "x": 10.7,
+            "y": 5.8
+           },
+           {
+            "x": 10.7,
+            "y": 3.85
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 4.3,
+            "y": 2.8
+           },
+           {
+            "x": 2.2,
+            "y": 5.0
+           },
+           {
+            "x": 2.4,
+            "y": 7.4
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 10.7,
+            "y": 2.8
+           },
+           {
+            "x": 12.8,
+            "y": 6.1
+           },
+           {
+            "x": 9.1,
+            "y": 9.1
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 3,
+          "receiver": 1,
+          "path": [
+           {
+            "x": -0.8,
+            "y": 6.1
+           },
+           {
+            "x": 2.4,
+            "y": 7.4
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": -0.8,
+            "y": 6.1
+           },
+           {
+            "x": 0.9,
+            "y": 5.2
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Back-screen for 3",
+        "zh": "背掩护：3走底线侧"
+       },
+       "text": {
+        "en": "After the catch, 5 back-screens for the inbounder 3, who cuts baseline-side to the rim for 1's return pass. Second option: 5 seals and rolls to the rim.",
+        "zh": "1接球后，5给发球人3做背掩护，3从底线一侧切向篮下，1回传上篮。第二选择：5掩护后转身下顺。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 3,
+          "at": {
+           "x": 0.9,
+           "y": 5.2
+          }
+         },
+         {
+          "number": 1,
+          "at": {
+           "x": 2.4,
+           "y": 7.4
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 4.3,
+           "y": 3.85
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 10.7,
+           "y": 3.85
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 9.1,
+           "y": 9.1
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 4.3,
+            "y": 3.85
+           },
+           {
+            "x": 2.5,
+            "y": 4.5
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 0.9,
+            "y": 5.2
+           },
+           {
+            "x": 2.0,
+            "y": 1.7
+           },
+           {
+            "x": 6.0,
+            "y": 2.0
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 3,
+          "path": [
+           {
+            "x": 2.4,
+            "y": 7.4
+           },
+           {
+            "x": 6.0,
+            "y": 2.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 9.1,
+            "y": 9.1
+           },
+           {
+            "x": 7.4,
+            "y": 10.3
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Into Zone-23",
+        "zh": "接Zone-23"
+       },
+       "text": {
+        "en": "Nothing there: 1 passes to 2 at the top, 3 runs through to the opposite wing, 4 goes to the FT line and 5 to the baseline, into Zone-23.",
+        "zh": "没有机会：1传给弧顶的2，3穿过去补到另一侧侧翼，4到罚球线、5走底线，进入Zone-23。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 2.4,
+           "y": 7.4
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 7.4,
+           "y": 10.3
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.0,
+           "y": 2.0
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 10.7,
+           "y": 3.85
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 2.5,
+           "y": 4.5
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 2,
+          "path": [
+           {
+            "x": 2.4,
+            "y": 7.4
+           },
+           {
+            "x": 7.4,
+            "y": 10.3
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 6.0,
+            "y": 2.0
+           },
+           {
+            "x": 13.4,
+            "y": 6.8
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 10.7,
+            "y": 3.85
+           },
+           {
+            "x": 7.5,
+            "y": 5.9
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 2.5,
+            "y": 4.5
+           },
+           {
+            "x": 3.6,
+            "y": 0.8
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "5-out-cutters",
+   "category": "versusMan",
+   "court": "half",
+   "name": {
+    "en": "5-out Cutters",
+    "zh": "5外拉开传切"
+   },
+   "situation": {
+    "en": "When they switch to man-to-man",
+    "zh": "对手改打人盯人时"
+   },
+   "concept": {
+    "en": "Five rules you can teach in one practice. 1: pass, then basket cut; if you don't get it, fill the open spot along the baseline. 2: if the player in front of you cuts, replace him. 3: cut only after you pass, or when the ball handler is looking at you. 4: dribble only to improve floor balance or to beat your man. 5: avoid passing to the corner; keep the ball above the FT line extended. Every cut finishes at the rim; back-cut when your defender is up on the three-point line.",
+    "zh": "五条规则，一节训练就能教会。1：传球后直切篮下，没接到球就补到底线一侧的空位。2：前面的人切走了，你补他的位置。3：只有传完球、或持球人在看你时才切。4：运球只用来平衡场地或过人。5：少传底角，球尽量保持在罚球线延长线以上。所有切入都切到篮下；防守人贴到三分线上时就反跑。"
+   },
+   "source": "Breakthrough Basketball – 5 Out Motion Offense: Cutters",
+   "sourceURL": "https://www.breakthroughbasketball.com/offense/cutters",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "Pass and cut",
+      "zh": "传切"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Spacing",
+        "zh": "站位"
+       },
+       "text": {
+        "en": "1 at the top, 2 and 3 on the wings near the FT line extended, 4 and 5 in the corners.",
+        "zh": "1在弧顶，2、3在罚球线延长线附近的两翼，4、5在两个底角。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.6
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 12.6,
+           "y": 6.6
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 2.4,
+           "y": 6.6
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 13.9,
+           "y": 1.2
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 1.1,
+           "y": 1.2
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Pass and basket cut",
+        "zh": "传球后直切"
+       },
+       "text": {
+        "en": "1 passes to 2 and cuts to the rim, looking for the return pass.",
+        "zh": "1传给2后直切篮下，准备接回传。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.6
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 12.6,
+           "y": 6.6
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 2.4,
+           "y": 6.6
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 13.9,
+           "y": 1.2
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 1.1,
+           "y": 1.2
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 2,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.6
+           },
+           {
+            "x": 12.6,
+            "y": 6.6
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.6
+           },
+           {
+            "x": 7.5,
+            "y": 2.2
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Fill and replace",
+        "zh": "补位"
+       },
+       "text": {
+        "en": "1 doesn't get it, so he fills the open spot along the baseline. The players in front move up to replace: 3 to the top, 5 to the wing.",
+        "zh": "1没接到球，补到底线一侧的空位；前面的人依次上提补位：3到弧顶，5到侧翼。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 2.2
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 12.6,
+           "y": 6.6
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 2.4,
+           "y": 6.6
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 13.9,
+           "y": 1.2
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 1.1,
+           "y": 1.2
+          }
+         }
+        ],
+        "ball": 2,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 2.2
+           },
+           {
+            "x": 1.1,
+            "y": 1.2
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 2.4,
+            "y": 6.6
+           },
+           {
+            "x": 7.5,
+            "y": 9.6
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 1.1,
+            "y": 1.2
+           },
+           {
+            "x": 2.4,
+            "y": 6.6
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "triangle",
+   "category": "versusMan",
+   "court": "half",
+   "name": {
+    "en": "Triangle",
+    "zh": "三角进攻"
+   },
+   "situation": {
+    "en": "Against man-to-man, instead of 5-out",
+    "zh": "对手打人盯人时（与5外拉开二选一）"
+   },
+   "concept": {
+    "en": "A sideline triangle (5 on the ball-side block, 2 on the wing, 1 in the corner) and a weak-side pair (3 at the top, 4 at the weak-side elbow extended, the pinch post). About 4.5–5.5 m between players, and all five spots must be filled. 2 has three passes: the post, the corner, back to the top; each one starts its own options. It's complex and slow to learn: pick it or 5-out, not both.",
+    "zh": "强侧三角：5在强侧低位、2在侧翼、1在底角；弱侧二人：3在弧顶、4在弱侧肘区延长线（pinch post）。球员间距约4.5–5.5米，五个位置必须站满。2有三个传球：传内线、传底角、传回弧顶，每个传球后面都有自己的选择。这套进攻复杂、学得慢：和5外拉开二选一，不要两套都装。"
+   },
+   "source": "Coach's Clipboard – The Triangle Offense",
+   "sourceURL": "https://www.coachesclipboard.net/TriangleOffense.html",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "Forming the triangle",
+      "zh": "进入三角"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Pass and cut in",
+        "zh": "传切进入"
+       },
+       "text": {
+        "en": "1 passes to 2 and cuts to the ball-side corner; he can look for the give-and-go on the way. 3 rotates to the top and 4 steps out to the weak-side elbow extended.",
+        "zh": "1传给2后切到强侧底角，途中可以要回传上篮。3转到弧顶，4拉到弱侧肘区延长线。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 10.3
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.9,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 4.3,
+           "y": 2.8
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 2,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 10.3
+           },
+           {
+            "x": 13.1,
+            "y": 7.5
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 10.3
+           },
+           {
+            "x": 11.8,
+            "y": 4.8
+           },
+           {
+            "x": 14.5,
+            "y": 1.7
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 1.9,
+            "y": 7.5
+           },
+           {
+            "x": 6.2,
+            "y": 11.1
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 4.3,
+            "y": 2.8
+           },
+           {
+            "x": 3.7,
+            "y": 6.1
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "2's three passes",
+        "zh": "2的三个传球"
+       },
+       "text": {
+        "en": "With the ball on the wing, 2 has three passes: ① the post, always the first look; ② the corner; ③ back to the top. If the wing pass is denied, 1 dribbles to the wing as 2 slides to the corner.",
+        "zh": "球在侧翼时，2有三个传球：①传内线，永远是第一选择；②传底角；③传回弧顶。侧翼被封时，1运球到侧翼，2下到底角。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 2,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 5,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 10.7,
+            "y": 2.7
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 1,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 14.5,
+            "y": 1.7
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 3,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 6.2,
+            "y": 11.1
+           }
+          ]
+         }
+        ],
+        "notes": [
+         {
+          "text": {
+           "en": "①",
+           "zh": "①"
+          },
+          "at": {
+           "x": 11.2,
+           "y": 5.4
+          }
+         },
+         {
+          "text": {
+           "en": "②",
+           "zh": "②"
+          },
+          "at": {
+           "x": 14.55,
+           "y": 4.9
+          }
+         },
+         {
+          "text": {
+           "en": "③",
+           "zh": "③"
+          },
+          "at": {
+           "x": 9.8,
+           "y": 10.2
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "kind": "variation",
+     "name": {
+      "en": "Post pass",
+      "zh": "传内线"
+     },
+     "notes": {
+      "en": "① The first look: feed 5, then split the post.",
+      "zh": "①第一选择：传给5，然后绕内线分切。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Feed the post",
+        "zh": "传内线"
+       },
+       "text": {
+        "en": "The first look is always the post: 2 feeds 5.",
+        "zh": "第一选择永远是传内线：2传给5。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 2,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 5,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 10.7,
+            "y": 2.7
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Post split",
+        "zh": "内线分切"
+       },
+       "text": {
+        "en": "2 and 1 cut around 5, the passer first; 5 hands off or dumps it to a cutter. If 5's defender worries about the cutters, 5 fakes the hand-off and goes to the rim.",
+        "zh": "2和1绕5交叉切，传球人先切；5手递手或小抛传给切入的人。若5的防守人去管切入的人，5假递真攻。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 5,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 11.4,
+            "y": 4.6
+           },
+           {
+            "x": 8.4,
+            "y": 1.6
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 14.5,
+            "y": 1.7
+           },
+           {
+            "x": 12.4,
+            "y": 3.9
+           },
+           {
+            "x": 11.9,
+            "y": 7.0
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "variation",
+     "name": {
+      "en": "Corner pass",
+      "zh": "传底角"
+     },
+     "notes": {
+      "en": "② 2 passes to the corner and cuts; then 5 screens for 1.",
+      "zh": "②2传底角后切入，然后5给1挡拆。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Give-and-go",
+        "zh": "传切"
+       },
+       "text": {
+        "en": "2 passes to 1 and cuts for the return pass; 5 slides up to the elbow for spacing.",
+        "zh": "2传给1后切向篮下要回传，5上提到肘区拉开空间。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 2,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 1,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 14.5,
+            "y": 1.7
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 11.4,
+            "y": 4.6
+           },
+           {
+            "x": 8.9,
+            "y": 1.9
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 10.7,
+            "y": 2.7
+           },
+           {
+            "x": 9.95,
+            "y": 5.6
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Screen and roll",
+        "zh": "挡拆下顺"
+       },
+       "text": {
+        "en": "2 clears to the weak side, and 5 ball-screens for 1 and rolls. 5 can also pop after the screen, or slip it and cut to the rim.",
+        "zh": "2拉到弱侧，5给1做持球掩护并下顺。5也可以掩护后外弹接球，或不挡直接溜向篮下。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 8.9,
+           "y": 1.9
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.6
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 8.9,
+            "y": 1.9
+           },
+           {
+            "x": 1.3,
+            "y": 1.3
+           }
+          ]
+         },
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 9.95,
+            "y": 5.6
+           },
+           {
+            "x": 13.2,
+            "y": 3.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 13.2,
+            "y": 3.0
+           },
+           {
+            "x": 9.4,
+            "y": 1.8
+           }
+          ]
+         },
+         {
+          "kind": "dribble",
+          "player": 1,
+          "path": [
+           {
+            "x": 14.5,
+            "y": 1.7
+           },
+           {
+            "x": 13.0,
+            "y": 4.6
+           },
+           {
+            "x": 10.8,
+            "y": 5.9
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "variation",
+     "name": {
+      "en": "Reversal to the top",
+      "zh": "传回弧顶"
+     },
+     "notes": {
+      "en": "③ Back to 3, who feeds 4 and comes around for the hand-off.",
+      "zh": "③回传给3，3传给4后绕出来接手递手。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Back to the top",
+        "zh": "回传弧顶"
+       },
+       "text": {
+        "en": "2 passes back out to 3 at the top.",
+        "zh": "2把球回传给弧顶的3。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 2,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 2,
+          "receiver": 3,
+          "path": [
+           {
+            "x": 13.1,
+            "y": 7.5
+           },
+           {
+            "x": 6.2,
+            "y": 11.1
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Feed and follow",
+        "zh": "传球后跟进"
+       },
+       "text": {
+        "en": "3 feeds 4 at the pinch post and follows the pass around 4 for the hand-off. Defender trailing → take it and drive. Defender goes under → pull-up jumper. Switch → 3 and 4 play pick-and-roll. Hand-off denied → 3 back-cuts down the lane.",
+        "zh": "3传给pinch post的4，然后跟着传球绕4要手递手。防守人在后面追 → 接球直接突破。防守人绕下面 → 急停跳投。换防 → 3和4打挡拆。手递手路线被封 → 3反跑沿禁区切篮下。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 14.5,
+           "y": 1.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.1,
+           "y": 7.5
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 6.2,
+           "y": 11.1
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 10.7,
+           "y": 2.7
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 3.7,
+           "y": 6.1
+          }
+         }
+        ],
+        "ball": 3,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 3,
+          "receiver": 4,
+          "path": [
+           {
+            "x": 6.2,
+            "y": 11.1
+           },
+           {
+            "x": 3.7,
+            "y": 6.1
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 3,
+          "path": [
+           {
+            "x": 6.2,
+            "y": 11.1
+           },
+           {
+            "x": 4.9,
+            "y": 8.3
+           },
+           {
+            "x": 2.3,
+            "y": 6.9
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "key": "horns",
+   "category": "halfCourt",
+   "court": "half",
+   "name": {
+    "en": "Horns",
+    "zh": "牛角战术"
+   },
+   "situation": {
+    "en": "Half court, early in the shot clock",
+    "zh": "半场进攻，进攻时间早段"
+   },
+   "concept": {
+    "en": "Two bigs at the elbows, two shooters in the corners, the point guard at the top. The elbows give a ball screen on either side, a roll and a pop threat on every screen, and empty corners for drives. 1 ball handler; 2 and 3 shooters; 4 the big who pops; 5 the big who rolls.",
+    "zh": "两个内线站肘区，两个射手在底角，控卫在弧顶。两个肘区随时可以在任意一侧挡拆，每次掩护都有下顺和外弹两个威胁，底角拉开给突破空间。1控球；2、3射手；4外弹的大个子；5下顺的大个子。"
+   },
+   "source": "",
+   "parts": [
+    {
+     "kind": "concept",
+     "name": {
+      "en": "Horns pick and roll",
+      "zh": "牛角挡拆"
+     },
+     "notes": {
+      "en": "",
+      "zh": ""
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Set",
+        "zh": "站位"
+       },
+       "text": {
+        "en": "1 brings it to the top. 4 and 5 at the elbows, 2 and 3 in the corners. 5 steps up to set the ball screen.",
+        "zh": "1把球带到弧顶。4、5在两侧肘区，2、3在两个底角。5上提给1做挡拆。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 9.95,
+            "y": 5.8
+           },
+           {
+            "x": 8.4,
+            "y": 8.7
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Pick and roll",
+        "zh": "挡拆"
+       },
+       "text": {
+        "en": "1 comes off the screen hard to the right. 5 rolls to the rim, 4 pops to the top, and 2 and 3 stay in the corners.",
+        "zh": "1借掩护全速向右突破。5下顺冲筐，4外弹到弧顶，2、3留在底角。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 8.4,
+           "y": 8.7
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "dribble",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 10.6,
+            "y": 8.4
+           },
+           {
+            "x": 11.6,
+            "y": 6.8
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 8.4,
+            "y": 8.7
+           },
+           {
+            "x": 8.6,
+            "y": 2.6
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 5.05,
+            "y": 5.8
+           },
+           {
+            "x": 6.0,
+            "y": 8.9
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "The read",
+        "zh": "读法"
+       },
+       "text": {
+        "en": "Read the help on the roll. The low defender stays with 3 → hit 5 rolling. He tags 5 → skip it to 3 in the corner, or swing it to 4 for the pop three.",
+        "zh": "看协防下顺的人。底线防守人留在3身边 → 传给下顺的5。他去补5 → 越顶传给底角的3，或回传给外弹的4投三分。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 11.6,
+           "y": 6.8
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 6.0,
+           "y": 8.9
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 8.6,
+           "y": 2.6
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [
+         {
+          "at": {
+           "x": 6.3,
+           "y": 3.0
+          },
+          "isRead": true
+         }
+        ],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 5,
+          "path": [
+           {
+            "x": 11.6,
+            "y": 6.8
+           },
+           {
+            "x": 8.6,
+            "y": 2.6
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "wrinkle",
+     "name": {
+      "en": "Twist",
+      "zh": "回挡"
+     },
+     "notes": {
+      "en": "4 screens first, then 5 re-screens the other way: the defense has to stop the ball twice.",
+      "zh": "4先掩护，5再从反方向掩护：防守要连续两次挡住持球人。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "First screen",
+        "zh": "第一个掩护"
+       },
+       "text": {
+        "en": "4 sets the first ball screen and 1 starts left off it.",
+        "zh": "4先做第一个挡拆，1借掩护向左运。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 4,
+          "path": [
+           {
+            "x": 5.05,
+            "y": 5.8
+           },
+           {
+            "x": 6.6,
+            "y": 8.7
+           }
+          ]
+         },
+         {
+          "kind": "dribble",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 5.6,
+            "y": 8.6
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Re-screen the other way",
+        "zh": "反方向再掩护"
+       },
+       "text": {
+        "en": "As the defense jumps to the left, 4 pops and 5 re-screens the other way; 1 snaps back right and 5 rolls into the open lane.",
+        "zh": "防守一侧移到左边，4外弹，5从反方向再掩护；1立刻变向向右，5下顺到空出来的禁区。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 5.6,
+           "y": 8.6
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 6.6,
+           "y": 8.7
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 6.6,
+            "y": 8.7
+           },
+           {
+            "x": 3.2,
+            "y": 7.6
+           }
+          ]
+         },
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 9.95,
+            "y": 5.8
+           },
+           {
+            "x": 7.0,
+            "y": 8.2
+           }
+          ]
+         },
+         {
+          "kind": "dribble",
+          "player": 1,
+          "path": [
+           {
+            "x": 5.6,
+            "y": 8.6
+           },
+           {
+            "x": 8.6,
+            "y": 9.3
+           },
+           {
+            "x": 11.2,
+            "y": 7.2
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "wrinkle",
+     "name": {
+      "en": "Flare",
+      "zh": "侧掩护"
+     },
+     "notes": {
+      "en": "The ball goes to 4 on the pop, and 5 screens 1 away from the ball for the three.",
+      "zh": "球传给外弹的4，5给1做背离球的掩护，1接回传投三分。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Entry to 4",
+        "zh": "传给4"
+       },
+       "text": {
+        "en": "4 pops from the elbow and 1 passes to him.",
+        "zh": "4从肘区外弹，1传给4。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "cut",
+          "player": 4,
+          "path": [
+           {
+            "x": 5.05,
+            "y": 5.8
+           },
+           {
+            "x": 5.3,
+            "y": 8.6
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 4,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 5.3,
+            "y": 8.6
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Flare screen",
+        "zh": "侧掩护"
+       },
+       "text": {
+        "en": "5 sets a flare screen and 1 fades off it to the right wing; 4 swings it back for the three. If 1's defender goes under, 5 slips to the rim.",
+        "zh": "5做侧掩护，1借掩护飘到右侧翼，4回传给1投三分。如果1的防守人从下面绕，5直接下顺。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.3,
+           "y": 8.6
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 4,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 9.95,
+            "y": 5.8
+           },
+           {
+            "x": 9.0,
+            "y": 8.9
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 10.2,
+            "y": 9.9
+           },
+           {
+            "x": 12.6,
+            "y": 8.0
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 4,
+          "receiver": 1,
+          "path": [
+           {
+            "x": 5.3,
+            "y": 8.6
+           },
+           {
+            "x": 12.6,
+            "y": 8.0
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "variation",
+     "name": {
+      "en": "Horns Down",
+      "zh": "牛角下掩护"
+     },
+     "notes": {
+      "en": "Entry to the elbow, then a down screen frees the corner shooter.",
+      "zh": "先传肘区，再用下掩护让底角射手绕出来投篮。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Entry to the elbow",
+        "zh": "传肘区"
+       },
+       "text": {
+        "en": "1 passes to 4 at the left elbow.",
+        "zh": "1传给左侧肘区的4。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 4,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 5.05,
+            "y": 5.8
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Down screen",
+        "zh": "下掩护"
+       },
+       "text": {
+        "en": "5 down-screens for 2 in the right corner; 2 comes off it to the wing, and 1 clears to the opposite wing.",
+        "zh": "5给右侧底角的2做下掩护，2绕出到侧翼，1拉到另一侧侧翼。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 4,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 9.95,
+            "y": 5.8
+           },
+           {
+            "x": 12.4,
+            "y": 2.4
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 2,
+          "path": [
+           {
+            "x": 13.9,
+            "y": 1.0
+           },
+           {
+            "x": 12.6,
+            "y": 4.6
+           },
+           {
+            "x": 11.6,
+            "y": 7.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 2.6,
+            "y": 7.4
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Shot or seal",
+        "zh": "投篮或卡位"
+       },
+       "text": {
+        "en": "4 hits 2 coming off for the shot. If 2's defender trails, 5 seals him and posts.",
+        "zh": "4传给绕出来的2投篮。如果2的防守人跟在后面，5卡住他要位。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 2.6,
+           "y": 7.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 12.4,
+           "y": 2.4
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 11.6,
+           "y": 7.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 4,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 4,
+          "receiver": 2,
+          "path": [
+           {
+            "x": 5.05,
+            "y": 5.8
+           },
+           {
+            "x": 11.6,
+            "y": 7.0
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 5,
+          "path": [
+           {
+            "x": 12.4,
+            "y": 2.4
+           },
+           {
+            "x": 9.3,
+            "y": 2.0
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    },
+    {
+     "kind": "variation",
+     "name": {
+      "en": "Horns Rip",
+      "zh": "牛角切入"
+     },
+     "notes": {
+      "en": "Entry to the elbow, then 1 rips off 5's screen to the rim.",
+      "zh": "先传肘区，1借5的掩护切向篮下。"
+     },
+     "steps": [
+      {
+       "caption": {
+        "en": "Entry to 4",
+        "zh": "传给4"
+       },
+       "text": {
+        "en": "1 passes to 4 at the left elbow.",
+        "zh": "1传给左侧肘区的4。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 1,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "pass",
+          "player": 1,
+          "receiver": 4,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 5.05,
+            "y": 5.8
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      },
+      {
+       "caption": {
+        "en": "Rip cut",
+        "zh": "借掩护切入"
+       },
+       "text": {
+        "en": "5 screens for 1, who rips off it to the rim; 4 hits 1 on the cut. Nothing there: 1 fills the right corner and 5 pops for the next action.",
+        "zh": "5给1掩护，1借掩护切向篮下，4在1切入时传球。没有机会：1补到右侧底角，5外弹准备下一个动作。"
+       },
+       "diagram": {
+        "offense": [
+         {
+          "number": 1,
+          "at": {
+           "x": 7.5,
+           "y": 9.4
+          }
+         },
+         {
+          "number": 4,
+          "at": {
+           "x": 5.05,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 5,
+          "at": {
+           "x": 9.95,
+           "y": 5.8
+          }
+         },
+         {
+          "number": 2,
+          "at": {
+           "x": 13.9,
+           "y": 1.0
+          }
+         },
+         {
+          "number": 3,
+          "at": {
+           "x": 1.1,
+           "y": 1.0
+          }
+         }
+        ],
+        "ball": 4,
+        "defense": [],
+        "actions": [
+         {
+          "kind": "screen",
+          "player": 5,
+          "path": [
+           {
+            "x": 9.95,
+            "y": 5.8
+           },
+           {
+            "x": 8.6,
+            "y": 7.6
+           }
+          ]
+         },
+         {
+          "kind": "cut",
+          "player": 1,
+          "path": [
+           {
+            "x": 7.5,
+            "y": 9.4
+           },
+           {
+            "x": 8.9,
+            "y": 7.0
+           },
+           {
+            "x": 7.8,
+            "y": 2.0
+           }
+          ]
+         },
+         {
+          "kind": "pass",
+          "player": 4,
+          "receiver": 1,
+          "path": [
+           {
+            "x": 5.05,
+            "y": 5.8
+           },
+           {
+            "x": 7.8,
+            "y": 2.0
+           }
+          ]
+         }
+        ],
+        "notes": []
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

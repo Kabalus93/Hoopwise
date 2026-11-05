@@ -227,6 +227,15 @@
 				Utilities/PlatformModifiers.swift,
 				Utilities/RenderStyle.swift,
 				Utilities/XLSX.swift,
+				Models/JournalPlays/JournalPlayActions.swift,
+				Models/JournalPlays/JournalPlayDiagram.swift,
+				Models/JournalPlays/JournalPlayEditing.swift,
+				Models/JournalPlays/JournalPlayLibrary.swift,
+				Models/JournalPlays/JournalPlayLocalization.swift,
+				Models/JournalPlays/JournalPlayMath.swift,
+				Models/JournalPlays/JournalPlayModels.swift,
+				Models/JournalPlays/JournalPlaySnapshots.swift,
+				Models/JournalPlays/JournalPlayStrings.swift,
 			);
 			target = 2D8D35552FA6374E00F1AD64 /* HoopwiseMac */;
 		};

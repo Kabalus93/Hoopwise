@@ -433,6 +433,35 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   (the simulators are on Luther's iCloud — never test without it), =remove
   deletes it; verified on the simulator: 18 sessions written, visible in
   Calendar, then removed.
+- NINETEENTH sanctioned exception (November 2026, Luther: "take it as is"):
+  Hub → PLAYS replaced League (FlightyLeagueView is no longer linked from the
+  Hub). It is HoopWise Journal's Plays tab ported whole: library by category
+  with thumbnails and search, play page (concept hero, when/idea, wrinkles,
+  variations, source), step-by-step study with ▶ playback and legend, the
+  step editor (move/cut/dribble/pass/screen/defender/ball/erase, undo/redo),
+  new play / details / part sheets, delete with an undo toast, and the
+  seven starter plays (Resources/StarterPlays.json, seeded once per device in
+  the app language, "Add the starter plays again" in the ⋯ menu).
+  Shared (both targets): Models/JournalPlays/ — three NEW SwiftData models
+  JournalPlay → JournalPlayPart → JournalPlayStep (registered in the schema;
+  RULE 7c–e APPLY: not yet in CloudKit Development until a normal Debug run,
+  and Production needs the deploy Luther does by hand). Plays SYNC, which the
+  Journal did not, so `removeDuplicateStarters` keeps the oldest copy of each
+  starterKey (a reinstall seeds before iCloud returns the library).
+  iOS views: Views/Plays/ (J-prefixed copies of the Journal's tokens and
+  components — JSpacing, JPalette, JCard… — values unchanged). Every Journal
+  type that clashed got a Journal prefix (Play, PlayStep, PlayDiagram,
+  PlayCategory already exist here for the Mac court editor).
+  STRINGS: the Journal localises by String Catalog + system language;
+  Hoopwise has an in-app language and NO catalog, and adding zh-Hans to the
+  bundle would change Locale.current app-wide. So Plays text goes through
+  `jp(_:)` / `JText(_:)` (Models/JournalPlays/JournalPlayLocalization.swift)
+  over JournalPlayStrings (generated from the Journal's catalog — regenerate,
+  don't hand-edit). Starter play TEXT is written in the language active when
+  it was seeded, as in the Journal. DEBUG: HOOPWISE_SHOT=plays (or =hub),
+  HOOPWISE_PLAYS_OPEN=play|study|playback|legend|editor|details|newpart|
+  newplay, HOOPWISE_PLAYS_PLAY=<starter key>, _PART, _STEP. Tests:
+  SAMpTests/JournalPlays (the Journal's play tests, Swift Testing).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

@@ -301,6 +301,14 @@ enum SheetGalleryDebug {
             // The activity-library drills page, as the Hub pushes it.
             NavigationStack { DrillsLibraryView() }
 
+        case "plays":
+            // Hub → Plays (the Journal's Plays tab), as the Hub pushes it.
+            // HOOPWISE_PLAYS_OPEN etc. open a play, a step or a sheet.
+            NavigationStack { JournalPlaysScreen() }
+
+        case "hub":
+            FlightyHubView()
+
         case "liveGame":
             // A live 5-on-5 game over the demo roster (scratch, never saved).
             // The demo roster has five; the second team is scratch players
