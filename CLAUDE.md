@@ -210,8 +210,11 @@ idiom). What differs on the Mac:
   document types); the .hoopwise import already takes security-scoped
   access, so iPhone behaviour is unchanged.
 - Build: `xcodebuild -scheme Hoopwise -destination 'platform=macOS,variant=Mac Catalyst'`.
-  Signing/iCloud for the Mac build needs the Catalyst App ID/profile — an
-  account change, done only with Luther's OK.
+  The Mac build uses the SAME bundle ID as iPhone/iPad, OKTO.SAMp
+  (DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO — Luther, 6 November
+  2026: one App Store listing, Universal Purchase, same iCloud). Signed with
+  "Mac Catalyst Team Provisioning Profile: OKTO.SAMp" (created then, with his
+  OK). A debug Mac build reads CloudKit DEVELOPMENT, like the phone's.
 
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
