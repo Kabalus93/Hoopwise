@@ -162,6 +162,24 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   iCloud container depend on it.
 - Signing: automatic, team Beidy Dubhe Franco Parra
 
+## iPad (decided 6 November 2026, Luther)
+- The app is UNIVERSAL (TARGETED_DEVICE_FAMILY "1,2" on the app and both
+  extensions). Direction: "iPad-first workflows", shipped WITH 1.0 — the 1.0
+  resubmission waits for it and needs iPad screenshots.
+- The iPhone stays frozen: iPad work happens only in regular width
+  (horizontalSizeClass == .regular), so Split View / Stage Manager narrow
+  windows fall back to the iPhone layout.
+- Plan: (1) shell — Sessions and Hub → Plays as list/detail split views like
+  Athletes already is, Home as a card grid; (2) a courtside session page —
+  plan, roster and games visible at once; (3) plays on a big canvas with
+  Apple Pencil; (4) iPad App Store screenshots.
+- State at the start: Athletes already had a NavigationSplitView on iPad
+  (StudentIntelligenceListView.shouldUseSplitView) and works; Home and
+  Sessions are the iPhone layout stretched; detail pages push full screen.
+- Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
+  and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
+  simulator's (demo data only).
+
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
 remotely close to usable." The HoopwiseMac target, its folder and scheme are
