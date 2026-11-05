@@ -30,6 +30,13 @@ struct FlightySessionPageView: View {
     @State private var skipReason: SkipReason = .holiday
     /// The student whose profile photo the leading swipe is retaking.
     @State private var studentForPhoto: Student?
+    /// Marks shown on screen but not written yet: a quick run of taps is
+    /// saved as ONE write (`flushAttendanceMarks`), not one full save and
+    /// reload per tap.
+    @State private var pendingMarks: [UUID: AttendanceMark] = [:]
+    @State private var markFlush: Task<Void, Never>?
+    @State private var confirmingAllPresent = false
+    @Environment(\.scenePhase) private var scenePhase
     /// What the plan generator read and decided on its last run here.
     @State private var planRationale: DrillPlanGenerator.PlanRationale?
     @State private var selectedStudentForPeep: Student?
@@ -371,6 +378,10 @@ struct FlightySessionPageView: View {
         .onChange(of: dataManager.sessionEvents) { _, _ in
             refreshSessionFromStore()
         }
+        .onDisappear { flushAttendanceMarks() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { flushAttendanceMarks() }
+        }
     }
 
     /// Pulls the latest `SessionEvent` out of the dataManager cache and
@@ -384,6 +395,9 @@ struct FlightySessionPageView: View {
         guard let fresh = dataManager.sessionEvents.first(where: { $0.id == session.id }) else {
             return
         }
+        // Marks tapped but not yet written must not be undone by a refresh
+        // arriving in the meantime.
+        defer { for (id, mark) in pendingMarks { applyMarkLocally(mark, to: id) } }
         // Live fields ALWAYS follow the store: every write to them is
         // immediate and field-level, so the store is never behind this copy.
         // (Gating them on updatedAt let this copy keep showing an empty game
@@ -1793,6 +1807,7 @@ struct FlightySessionPageView: View {
         Group {
             #if os(iOS)
             VStack(spacing: 8) {
+                markAllPresentBar
                 attendanceRoster
                     .background(Color(.secondarySystemGroupedBackground))
 
@@ -2401,33 +2416,98 @@ struct FlightySessionPageView: View {
     // MARK: - Attendance State
     
     private func setAttendanceState(for studentId: UUID, state: AttendanceMark) {
-        // Optimistic local update so the toggle animates immediately. The
-        // canonical write goes through the field-level helper below so
-        // siblings (games, photo) survive even if our @State is stale.
+        // Shown at once (the local copy), written shortly after with any
+        // other marks made in the meantime — see `flushAttendanceMarks`.
+        applyMarkLocally(state, to: studentId)
+        pendingMarks[studentId] = state
+        markFlush?.cancel()
+        markFlush = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            flushAttendanceMarks()
+        }
+    }
+
+    private func applyMarkLocally(_ state: AttendanceMark, to studentId: UUID) {
         session.actualAttendeeIds.removeAll { $0 == studentId }
         session.excusedAbsences.removeAll { $0 == studentId }
         session.unexcusedAbsences.removeAll { $0 == studentId }
-
         switch state {
         case .present:  session.actualAttendeeIds.append(studentId)
         case .excused:  session.excusedAbsences.append(studentId)
         case .absent:   session.unexcusedAbsences.append(studentId)
         case .unmarked: break
         }
-        let mappedState = state.triState
-
-        // Redemption is handled inside setStudentAttendanceState via the single
-        // FIFO authority. Do not redeem here — a second call site is exactly
-        // how the two divergent redemption paths arose. Nothing un-charges a
-        // session automatically either; that is refundSessionToBundle, an
-        // explicit correction.
-        dataManager.setStudentAttendanceState(
-            sessionId: session.id,
-            studentId: studentId,
-            state: mappedState
-        )
     }
-    
+
+    /// Writes every pending mark in ONE field-level write (siblings — games,
+    /// photo — survive even if this copy is stale). Redemption happens inside
+    /// the writer via the single FIFO authority; do not redeem here — a second
+    /// call site is how the two divergent redemption paths arose. Runs after
+    /// a pause in tapping, and at once when the page goes away or the app
+    /// goes to the background, so no mark is left unsaved.
+    private func flushAttendanceMarks() {
+        markFlush?.cancel()
+        markFlush = nil
+        guard !pendingMarks.isEmpty else { return }
+        let states = pendingMarks.mapValues(\.triState)
+        pendingMarks = [:]
+        dataManager.setStudentAttendanceStates(sessionId: session.id, states: states)
+    }
+
+    /// Everyone expected who is not marked present or excused (unmarked, or
+    /// absent by inference) — what "All present" marks.
+    private var studentsToMarkPresent: [Student] {
+        enrolledStudents.filter {
+            let mark = session.effectiveAttendanceMark(for: $0.id)
+            return mark != .present && mark != .excused
+        }
+    }
+
+    /// "All present": one write for the whole roster. Excused students keep
+    /// their excuse.
+    private func markAllPresent() {
+        for student in studentsToMarkPresent {
+            applyMarkLocally(.present, to: student.id)
+            pendingMarks[student.id] = .present
+        }
+        flushAttendanceMarks()
+        HapticFeedback.notification(.success)
+    }
+
+    @ViewBuilder
+    private var markAllPresentBar: some View {
+        let remaining = studentsToMarkPresent.count
+        if accessMode.canTakeAttendance, !enrolledStudents.isEmpty {
+            HStack {
+                Spacer()
+                Button {
+                    confirmingAllPresent = true
+                } label: {
+                    Label(isChinese ? "全部到场" : "All present", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .tint(.green)
+                .disabled(remaining == 0)
+                .accessibilityIdentifier("attendance.allPresent")
+            }
+            .padding(.horizontal, 16)
+            .confirmationDialog(
+                isChinese ? "将 \(remaining) 名学员标记为到场？" : "Mark \(remaining) present?",
+                isPresented: $confirmingAllPresent,
+                titleVisibility: .visible
+            ) {
+                Button(isChinese ? "全部到场" : "Mark all present") { markAllPresent() }
+            } message: {
+                Text(isChinese
+                     ? "每位到场学员扣除 1 课时（如有课时包）。请假的学员不变。"
+                     : "Each present student uses 1 session from their balance, if they have one. Excused students stay excused.")
+            }
+        }
+    }
+
     // MARK: - Games Tab (iOS Only)
     #if os(iOS)
     private var gamesTab: some View {

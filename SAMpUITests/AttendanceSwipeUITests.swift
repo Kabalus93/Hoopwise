@@ -2,8 +2,9 @@ import XCTest
 
 /// The session page's attendance roster, driven for real.
 ///
-/// - The three-position switch: right = present, left = excused, middle =
-///   not marked. It never writes absent.
+/// - The three positions (the system segmented control since November
+///   2026): right = present, left = excused, middle = not marked. It never
+///   writes absent.
 /// - The roster is a List (October 2026). In the old LazyVStack `.swipeActions`
 ///   never fired; the leading Photo swipe here proves they now do.
 ///
@@ -34,47 +35,48 @@ final class AttendanceSwipeUITests: XCTestCase {
     }
 
     private func control(in row: XCUIElement) -> XCUIElement {
-        let control = row.descendants(matching: .any)["attendanceControl"]
+        let control = row.segmentedControls["attendanceControl"]
         XCTAssertTrue(control.waitForExistence(timeout: 5), "attendance control missing")
         return control
     }
 
-    private func tap(_ control: XCUIElement, at x: CGFloat) {
-        control.coordinate(withNormalizedOffset: CGVector(dx: x, dy: 0.5)).tap()
+    private func choose(_ control: XCUIElement, _ label: String) {
+        control.buttons[label].tap()
     }
 
-    private func waitForValue(_ control: XCUIElement, _ value: String) -> Bool {
-        let predicate = NSPredicate(format: "value == %@", value)
-        let exp = XCTNSPredicateExpectation(predicate: predicate, object: control)
+    private func isSelected(_ control: XCUIElement, _ label: String) -> Bool {
+        let predicate = NSPredicate(format: "isSelected == true")
+        let exp = XCTNSPredicateExpectation(predicate: predicate, object: control.buttons[label])
         return XCTWaiter().wait(for: [exp], timeout: 5) == .completed
     }
 
     func testThreePositions() {
         let control = control(in: firstRow())
-        tap(control, at: 0.85)
-        XCTAssertTrue(waitForValue(control, "Present"), "right should be present")
-        tap(control, at: 0.15)
-        XCTAssertTrue(waitForValue(control, "Excused"), "left should be excused")
-        tap(control, at: 0.5)
-        XCTAssertTrue(waitForValue(control, "Not marked"), "middle should be not marked")
+        choose(control, "Present")
+        XCTAssertTrue(isSelected(control, "Present"), "right should be present")
+        choose(control, "Excused")
+        XCTAssertTrue(isSelected(control, "Excused"), "left should be excused")
+        choose(control, "Not marked")
+        XCTAssertTrue(isSelected(control, "Not marked"), "middle should be not marked")
     }
 
     /// Right-to-left offers nothing (October 2026): Clear duplicated the
-    /// switch's middle and Refund lives on the contract sheet. Absent was
+    /// control's middle and Refund lives on the contract sheet. Absent was
     /// never a swipe — it is inferred.
     func testTrailingSwipeOffersNothing() {
         let row = firstRow()
         let toggle = control(in: row)
-        tap(toggle, at: 0.85)                      // a recorded mark
-        XCTAssertTrue(waitForValue(toggle, "Present"))
-        // Swipe from the name area, not the control (the control owns drags).
-        row.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.5))
+        choose(toggle, "Present")                  // a recorded mark
+        XCTAssertTrue(isSelected(toggle, "Present"))
+        // Swipe from the name area, not the control.
+        row.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.5))
             .press(forDuration: 0.05,
                    thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)))
         XCTAssertFalse(app.buttons["Clear"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.buttons["Refund session"].exists)
         XCTAssertFalse(app.buttons["Absent"].exists)
-        XCTAssertTrue(waitForValue(control(in: firstRow()), "Present"), "the mark is untouched")
+        XCTAssertTrue(isSelected(control(in: firstRow()), "Present"), "the mark is untouched")
+        choose(control(in: firstRow()), "Not marked")   // leave the demo class unmarked
     }
 
     /// Tapping a student in the session opens the quick peep, and the peep

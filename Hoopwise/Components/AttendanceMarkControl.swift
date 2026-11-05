@@ -64,10 +64,19 @@ enum AttendanceMark: String, CaseIterable, Identifiable {
     }
 }
 
-/// The attendance control, used by every iOS attendance surface: a
-/// THREE-POSITION switch. Left = excused, middle = not marked, right =
-/// present. (October 2026, the coach's design; a sanctioned exception to the
-/// iOS UI freeze, see CLAUDE.md.)
+/// The attendance control, used by every iOS attendance surface: THREE
+/// positions. Left = excused, middle = not marked, right = present.
+/// (October 2026, the coach's design; a sanctioned exception to the iOS UI
+/// freeze, see CLAUDE.md.)
+///
+/// November 2026 (Luther: "they slow down the system and aren't responsive
+/// right away … if there is a native iOS 3-position control, use it"): it is
+/// now the system SEGMENTED control. The hand-built switch sat on a
+/// zero-distance drag gesture inside a List row, so it fought the list's
+/// scroll and swipe recognisers for every touch, and its knob only moved once
+/// the store write had come back. The segmented control answers on touch-down
+/// and shows the new position at once (`selection` is local); the write
+/// follows.
 ///
 /// There is no position for ABSENT. Absent is what the middle MEANS once roll
 /// call has started: `AttendanceInference` shows every still-middle student
@@ -77,24 +86,22 @@ enum AttendanceMark: String, CaseIterable, Identifiable {
 /// "Absent".
 ///
 /// The control itself only ever writes present, excused or unmarked.
-/// Tap a side to move there, tap the middle to return to not marked, or drag
-/// the knob; VoiceOver adjusts it with increment / decrement.
 struct AttendanceMarkControl: View {
     let mark: AttendanceMark
     var onChange: (AttendanceMark) -> Void
 
-    @State private var dragOffset: CGFloat?
+    /// -1 excused, 0 not marked (or absent), +1 present.
+    @State private var selection: Int
+
+    init(mark: AttendanceMark, onChange: @escaping (AttendanceMark) -> Void) {
+        self.mark = mark
+        self.onChange = onChange
+        _selection = State(initialValue: Self.position(of: mark))
+    }
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
-    private static let width: CGFloat = 84
-    private static let height: CGFloat = 32
-    private static let knob: CGFloat = 28
-    /// Knob travel from the middle to either side.
-    private static let travel: CGFloat = (width - 4 - knob) / 2
-
-    /// -1 excused, 0 not marked (or absent), +1 present.
-    private var position: Int {
+    private static func position(of mark: AttendanceMark) -> Int {
         switch mark {
         case .present:            return 1
         case .excused:            return -1
@@ -110,81 +117,38 @@ struct AttendanceMarkControl: View {
         }
     }
 
-    private var trackTint: Color {
-        switch position {
-        case 1:  return .green
-        case -1: return .orange
-        default: return Color(.tertiarySystemFill)
-        }
-    }
-
-    private func move(to newPosition: Int) {
-        let clamped = max(-1, min(1, newPosition))
-        let next = Self.mark(at: clamped)
-        // An absence (recorded or inferred) sits in the middle; landing on the
-        // middle again is not a change.
-        guard clamped != position else { return }
-        onChange(next)
-    }
-
     var body: some View {
-        let knobX = dragOffset ?? CGFloat(position) * Self.travel
-
-        ZStack {
-            Capsule()
-                .fill(trackTint)
-            HStack {
-                Image(systemName: "clock")
-                    .opacity(position == -1 ? 0 : 0.55)
-                Spacer()
-                Image(systemName: "checkmark")
-                    .opacity(position == 1 ? 0 : 0.55)
-            }
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(position == 0 ? Color.secondary : Color.white)
-            .padding(.horizontal, 9)
-
-            Circle()
-                .fill(.white)
-                .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-                .frame(width: Self.knob, height: Self.knob)
-                .offset(x: knobX)
+        Picker(isChinese ? "考勤" : "Attendance", selection: $selection) {
+            Image(systemName: "clock")
+                .accessibilityLabel(AttendanceMark.excused.label(isChinese: isChinese))
+                .tag(-1)
+            Image(systemName: "minus")
+                .accessibilityLabel(AttendanceMark.unmarked.label(isChinese: isChinese))
+                .tag(0)
+            Image(systemName: "checkmark")
+                .accessibilityLabel(AttendanceMark.present.label(isChinese: isChinese))
+                .tag(1)
         }
-        .frame(width: Self.width, height: Self.height)
-        .contentShape(Capsule())
-        .animation(.snappy(duration: 0.2), value: position)
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    guard abs(value.translation.width) > 4 else { return }
-                    let start = CGFloat(position) * Self.travel
-                    dragOffset = max(-Self.travel, min(Self.travel, start + value.translation.width))
-                }
-                .onEnded { value in
-                    defer { dragOffset = nil }
-                    if abs(value.translation.width) <= 4 {
-                        // A tap: left third, middle third, right third.
-                        let x = value.location.x
-                        let third = Self.width / 3
-                        move(to: x < third ? -1 : (x > third * 2 ? 1 : 0))
-                    } else {
-                        let landed = (dragOffset ?? 0) / Self.travel
-                        move(to: Int(landed.rounded()))
-                    }
-                }
-        )
-        .sensoryFeedback(.impact(weight: .light), trigger: mark)
-        .accessibilityElement()
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(width: 132)
+        // The chosen side carries its meaning's colour (excused orange,
+        // present green); the middle stays neutral.
+        .tint(selection == 1 ? .green : (selection == -1 ? .orange : nil))
+        .onChange(of: selection) { _, new in
+            let next = Self.mark(at: new)
+            // An absence (recorded or inferred) sits in the middle; landing on
+            // the middle again is not a change.
+            guard new != Self.position(of: mark) else { return }
+            onChange(next)
+        }
+        // The store (or "All present") moved the mark: follow it.
+        .onChange(of: mark) { _, new in
+            let position = Self.position(of: new)
+            if selection != position { selection = position }
+        }
+        .sensoryFeedback(.selection, trigger: selection)
         .accessibilityIdentifier("attendanceControl")
-        .accessibilityLabel(isChinese ? "考勤" : "Attendance")
-        .accessibilityValue(mark.label(isChinese: isChinese))
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: move(to: position + 1)
-            case .decrement: move(to: position - 1)
-            @unknown default: break
-            }
-        }
     }
 }
 

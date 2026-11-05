@@ -2071,18 +2071,32 @@ class SwiftDataManager: ObservableObject {
     func setStudentAttendanceState(sessionId: UUID,
                                    studentId: UUID,
                                    state: AttendanceTriState) {
+        setStudentAttendanceStates(sessionId: sessionId, states: [studentId: state])
+    }
+
+    /// Several students' marks in ONE write: one revision, one save, one cache
+    /// refresh, then the one redemption authority. Each mark used to cost a
+    /// full save + reload of every record, on the main thread, before the
+    /// switch could move (November 2026, Luther: "they slow down the system").
+    /// The session page batches a quick run of taps, and "All present" marks
+    /// the roster, through here.
+    func setStudentAttendanceStates(sessionId: UUID,
+                                    states: [UUID: AttendanceTriState]) {
+        guard !states.isEmpty else { return }
         mutateSession(id: sessionId, reason: .manualEdit) { sd in
             var actual = Set(sd.actualAttendeeIds)
             var excused = Set(sd.excusedAbsences)
             var unexcused = Set(sd.unexcusedAbsences)
-            actual.remove(studentId)
-            excused.remove(studentId)
-            unexcused.remove(studentId)
-            switch state {
-            case .present:  actual.insert(studentId)
-            case .excused:  excused.insert(studentId)
-            case .absent:   unexcused.insert(studentId)
-            case .unmarked: break  // membership in none of the three
+            for (studentId, state) in states {
+                actual.remove(studentId)
+                excused.remove(studentId)
+                unexcused.remove(studentId)
+                switch state {
+                case .present:  actual.insert(studentId)
+                case .excused:  excused.insert(studentId)
+                case .absent:   unexcused.insert(studentId)
+                case .unmarked: break  // membership in none of the three
+                }
             }
             sd.actualAttendeeIds = Array(actual)
             sd.excusedAbsences = Array(excused)

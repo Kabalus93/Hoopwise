@@ -1120,7 +1120,21 @@ found two bugs, and both were in code that renders documents sent to clients.
   enum. Every iOS attendance surface uses it.
 - SINCE OCTOBER 2026 the control is a THREE-POSITION switch: left =
   excused, middle = not marked, right = present (Luther's design, the fifth
-  sanctioned freeze exception). There is NO absent position and no explicit
+  sanctioned freeze exception). SINCE NOVEMBER 2026 (Luther: "they slow down the
+  system … use the native iOS 3-position control") it is the SYSTEM SEGMENTED
+  control (clock · — · check), same three positions. The hand-built switch's
+  zero-distance drag fought the List's scroll/swipe recognisers and its knob
+  waited for the store. The segmented control's selection is local (instant).
+  WRITES ARE BATCHED: each mark used to be a full save + reload of every
+  record on the main thread. The session page shows a tap at once, holds it in
+  `pendingMarks`, and writes a run of taps in ONE
+  `setStudentAttendanceStates` call (one revision, one save, then the one
+  redemption authority) after 0.6 s idle, on leaving the page, or when the app
+  leaves the foreground; `refreshSessionFromStore` re-applies pending marks so
+  a refresh cannot undo them. "ALL PRESENT" (above the roster, confirmation
+  states the money consequence) marks every expected student not present or
+  excused — excused keep their excuse — in one write. Tests:
+  AttendanceControlUITests (HOOPWISE_SHOT=pastSession), AttendanceSwipeUITests. There is NO absent position and no explicit
   Absent action anywhere (menu, swipe, Mac segment): absent is what the
   middle MEANS once roll call starts (AttendanceInference). Rows pass the
   EFFECTIVE mark (`SessionEvent.effectiveAttendanceMark`) so an inferred or
