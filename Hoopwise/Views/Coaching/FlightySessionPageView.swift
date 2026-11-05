@@ -2334,7 +2334,12 @@ struct FlightySessionPageView: View {
         let attendanceState: AttendanceMark = session.effectiveAttendanceMark(for: student.id)
         return HStack(spacing: 10) {
             // Main tappable area - opens Quick Peep
-            Button(action: { selectedStudentForPeep = student }) {
+            Button(action: {
+                #if targetEnvironment(macCatalyst)
+                macPopupTrace("tap quick peep")
+                #endif
+                selectedStudentForPeep = student
+            }) {
                 HStack(spacing: 10) {
                     // Avatar with presence indicator
                     ZStack(alignment: .bottomTrailing) {

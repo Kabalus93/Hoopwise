@@ -393,6 +393,9 @@ struct StudentQuickPeepView: View {
                     .disabled(isExportingCard)
                 }
             }
+            #if targetEnvironment(macCatalyst)
+            .onAppear { macPopupTrace("quick peep on screen") }
+            #endif
             .onChange(of: dataManager.sessionEvents) { _, _ in
                 statsCache.trainingStats = nil
                 statsCache.programContext = nil

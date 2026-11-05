@@ -346,7 +346,12 @@ enum SheetGalleryDebug {
 
         case "quickPeep":
             // The quick peep as a session opens it, with its Edit button.
-            if let program = dm.programs.first,
+            // HOOPWISE_PEEP=photo: a student with a profile photo, from any
+            // program (the Mac timing check).
+            if ProcessInfo.processInfo.environment["HOOPWISE_PEEP"] == "photo",
+               let student = dm.students.max(by: { ($0.profileImageData?.count ?? 0) < ($1.profileImageData?.count ?? 0) }) {
+                StudentQuickPeepView(student: student, sessionId: nil)
+            } else if let program = dm.programs.first,
                let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
                 StudentQuickPeepView(student: student,
                                      sessionId: dm.sessionEvents.first { $0.programId == program.id }?.id)

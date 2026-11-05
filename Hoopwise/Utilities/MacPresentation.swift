@@ -5,6 +5,11 @@ import ObjectiveC
 import os
 
 private let popupLog = Logger(subsystem: "hoopwise.mac", category: "popup")
+
+/// A timing line in the Mac popup log (tap → requested → on screen).
+func macPopupTrace(_ message: String) {
+    popupLog.log("popup \(message, privacy: .public)")
+}
 #endif
 
 // The Mac app is the iPad app (Mac Catalyst). Luther (November 2026): on the
@@ -78,6 +83,11 @@ extension UIViewController {
             controller.hw_pinnedSize = target
             controller.preferredContentSize = target
         }
+        popupLog.log("popup requested \(type(of: controller), privacy: .public)")
+        // `animated: false` alone still showed a slide: suppress every
+        // implicit animation while the transition is set up.
+        UIView.setAnimationsEnabled(false)
+        defer { UIView.setAnimationsEnabled(true) }
         hw_present(controller, animated: false) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 popupLog.log("popup \(type(of: controller), privacy: .public) target \(String(describing: target), privacy: .public) now \(Int(controller.view.bounds.width), privacy: .public)×\(Int(controller.view.bounds.height), privacy: .public) pcs \(String(describing: controller.preferredContentSize), privacy: .public)")

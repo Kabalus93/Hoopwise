@@ -174,7 +174,10 @@ struct StudentProfileHeaderView: View {
     }
     
     private var positionBadge: some View {
-        VStack(spacing: 4) {
+        // Once per draw (it was worked out twice: for the letter and again
+        // for its colour).
+        let grade = effectiveGrade
+        return VStack(spacing: 4) {
             // Performance grade diamond shape
             ZStack {
                 Rectangle()
@@ -187,9 +190,9 @@ struct StudentProfileHeaderView: View {
                             .rotationEffect(.degrees(45))
                     )
                 
-                Text(effectiveGrade.displayName)
+                Text(grade.displayName)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(gradeColor)
+                    .foregroundColor(gradeColor(grade))
             }
             .frame(width: 60, height: 60)
         }
@@ -212,8 +215,8 @@ struct StudentProfileHeaderView: View {
     }
     
     /// Color for the performance grade
-    private var gradeColor: Color {
-        switch effectiveGrade {
+    private func gradeColor(_ grade: PerformanceGrade) -> Color {
+        switch grade {
         case .A: return Color(red: 0.85, green: 0.65, blue: 0.0)  // Gold
         case .B: return Color(red: 0.5, green: 0.5, blue: 0.5)  // Silver
         case .C: return Color(red: 0.6, green: 0.4, blue: 0.2)  // Bronze

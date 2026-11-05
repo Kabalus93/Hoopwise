@@ -825,13 +825,22 @@ struct ProgramRelativeRadarMetrics {
         let studentStats = TrainingSessionStats.calculate(for: studentId, from: sessions)
         
         // Calculate stats for all peers in program
-        var allPeerStats: [(id: UUID, stats: TrainingSessionStats)] = []
-        for peerId in allStudentIds {
-            let peerStats = TrainingSessionStats.calculate(for: peerId, from: sessions)
-            if peerStats.hasStats {
-                allPeerStats.append((peerId, peerStats))
-            }
-        }
+        let peerStats = allStudentIds.map { ($0, TrainingSessionStats.calculate(for: $0, from: sessions)) }
+        return compute(studentStats: studentStats, peerStats: peerStats, skills: skills)
+    }
+
+    /// The same metrics from stats already worked out — a caller ranking a
+    /// whole group computes each student's stats ONCE instead of once per
+    /// student it compares (StudentPerformanceGrader was quadratic in the
+    /// group's size, and the athlete card waited ~0.6 s for it).
+    static func compute(
+        studentStats: TrainingSessionStats,
+        peerStats: [(UUID, TrainingSessionStats)],
+        skills: SkillsEvaluation
+    ) -> ProgramRelativeRadarMetrics {
+        let allPeerStats: [(id: UUID, stats: TrainingSessionStats)] = peerStats
+            .filter { $0.1.hasStats }
+            .map { (id: $0.0, stats: $0.1) }
         
         // If no peer data or student has no stats, fall back to coach evaluation only
         guard studentStats.hasStats, allPeerStats.count > 0 else {
@@ -967,16 +976,15 @@ struct StudentPerformanceGrader {
         // Calculate stats for all peers
         var peerScores: [(id: UUID, score: Double, gamesPlayed: Int)] = []
         
-        for peer in peers {
-            let stats = TrainingSessionStats.calculate(for: peer.id, from: sessions)
+        // Each peer's stats once (the radar compares every peer to all peers).
+        let peerStats = peers.map { ($0.id, TrainingSessionStats.calculate(for: $0.id, from: sessions)) }
+        for (peer, (_, stats)) in zip(peers, peerStats) {
             let peerSkills = skills[peer.id] ?? SkillsEvaluation()
             
             // Calculate overall performance score (average of radar metrics)
             let metrics = ProgramRelativeRadarMetrics.compute(
-                for: peer.id,
-                programId: nil,
-                sessions: sessions,
-                allStudentIds: peers.map { $0.id },
+                studentStats: stats,
+                peerStats: peerStats,
                 skills: peerSkills
             )
             
