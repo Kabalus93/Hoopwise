@@ -63,6 +63,14 @@ extension UIViewController {
         set { objc_setAssociatedObject(self, &pinnedSizeKey, newValue.map { NSValue(cgSize: $0) }, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
     }
 
+    /// Esc / ⌘W: close the top-most popup above this controller.
+    @objc func hw_closePopup() {
+        var top: UIViewController = self
+        while let next = top.presentedViewController { top = next }
+        guard top.hw_pinnedSize != nil else { return }      // only our popups
+        OutsideClickDismiss.close(top, how: "key")
+    }
+
     @objc func hw_setPreferredContentSize(_ size: CGSize) {
         hw_setPreferredContentSize(hw_pinnedSize ?? size)   // the original setter
     }
@@ -90,6 +98,12 @@ extension UIViewController {
         defer { UIView.setAnimationsEnabled(true) }
         hw_present(controller, animated: false) {
             OutsideClickDismiss.attach(to: controller)
+            #if DEBUG
+            // Agent check: the Esc/⌘W path, without a keyboard.
+            if ProcessInfo.processInfo.environment["HOOPWISE_TEST_POPUP_CLOSE"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { controller.hw_closePopup() }
+            }
+            #endif
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 popupLog.log("popup \(type(of: controller), privacy: .public) target \(String(describing: target), privacy: .public) now \(Int(controller.view.bounds.width), privacy: .public)×\(Int(controller.view.bounds.height), privacy: .public) pcs \(String(describing: controller.preferredContentSize), privacy: .public)")
             }
@@ -104,10 +118,10 @@ extension UIViewController {
 /// (`interactiveDismissDisabled`, e.g. a step with unsaved drawing) stays and
 /// gets its "attempted to dismiss" callback instead, and SwiftUI's binding is
 /// told the sheet went away.
-private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
+final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
     private weak var controller: UIViewController?
     private weak var recognizer: UITapGestureRecognizer?
-    private static var key: UInt8 = 0
+    fileprivate static var key: UInt8 = 0
 
     /// On the WINDOW (every click passes through it), not the sheet's dimming
     /// container — clicks on the Mac's dimmed area never reached a
@@ -119,6 +133,12 @@ private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
         }
         let handler = OutsideClickDismiss()
         handler.controller = controller
+        // Esc and ⌘W close the top popup too (Luther, November 2026: a popup
+        // covering the whole window left nowhere to click and no Done).
+        controller.addKeyCommand(UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [],
+                                              action: #selector(UIViewController.hw_closePopup)))
+        controller.addKeyCommand(UIKeyCommand(input: "w", modifierFlags: .command,
+                                              action: #selector(UIViewController.hw_closePopup)))
         let tap = UITapGestureRecognizer(target: handler, action: #selector(clicked))
         tap.delegate = handler
         tap.cancelsTouchesInView = false
@@ -138,8 +158,9 @@ private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
             return false
         }
         guard controller.presentedViewController == nil else { return false }
-        let outside = !controller.view.bounds.contains(touch.location(in: controller.view))
-        macPopupTrace("click \(outside ? "outside" : "inside") \(type(of: controller))")
+        let point = touch.location(in: controller.view)
+        let outside = !controller.view.bounds.contains(point)
+        macPopupTrace("click \(outside ? "outside" : "inside") \(type(of: controller)) at \(Int(point.x)),\(Int(point.y)) in \(Int(controller.view.bounds.width))×\(Int(controller.view.bounds.height))")
         return outside
     }
 
@@ -149,16 +170,22 @@ private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
                            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
     @objc private func clicked() {
-        guard let controller, controller.presentedViewController == nil,
-              let presentation = controller.presentationController else { return }
+        guard let controller, controller.presentedViewController == nil else { return }
+        Self.close(controller, how: "outside click")
+    }
+
+    /// The one way a Mac popup is closed by the user — click outside, Esc or
+    /// ⌘W — exactly like an iPad swipe-down: the sheet may refuse.
+    static func close(_ controller: UIViewController, how: String) {
+        guard let presentation = controller.presentationController else { return }
         let delegate = presentation.delegate
         if delegate?.presentationControllerShouldDismiss?(presentation) == false {
-            macPopupTrace("outside click: sheet refuses dismissal")
+            macPopupTrace("\(how): sheet refuses dismissal")
             delegate?.presentationControllerDidAttemptToDismiss?(presentation)
             return
         }
-        macPopupTrace("outside click: dismissed \(type(of: controller))")
-        detach()
+        macPopupTrace("\(how): dismissed \(type(of: controller))")
+        (objc_getAssociatedObject(controller, &key) as? OutsideClickDismiss)?.detach()
         delegate?.presentationControllerWillDismiss?(presentation)
         controller.dismiss(animated: false) {
             delegate?.presentationControllerDidDismiss?(presentation)

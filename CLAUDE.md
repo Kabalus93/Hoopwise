@@ -217,7 +217,13 @@ idiom). What differs on the Mac:
   A CLICK OUTSIDE a popup closes it like an iPad swipe-down
   (OutsideClickDismiss): the presentation delegate is asked first, so
   interactiveDismissDisabled sheets stay open; SwiftUI is told via
-  presentationControllerDidDismiss.
+  presentationControllerDidDismiss. ESC and ⌘W close the top popup through the
+  same path (UIKeyCommand on each popup → hw_closePopup → OutsideClickDismiss.
+  close) — added after Luther got STUCK: an athlete page opened from the
+  revenue sheet covered the whole window (no outside left to click) and had
+  no Done. DEBUG HOOPWISE_TEST_POPUP_CLOSE=1 runs that path 2 s after a popup
+  opens (verified: "key: dismissed"). Clicks log their point and the popup's
+  bounds.
   Each sheet logs its final size: `/usr/bin/log show --predicate
   'subsystem == "hoopwise.mac"'` (zsh's own `log` shadows /usr/bin/log; and
   NSLog text is <private> on macOS — use Logger with privacy: .public).
