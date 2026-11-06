@@ -106,24 +106,47 @@ extension UIViewController {
 /// told the sheet went away.
 private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
     private weak var controller: UIViewController?
+    private weak var recognizer: UITapGestureRecognizer?
     private static var key: UInt8 = 0
 
+    /// On the WINDOW (every click passes through it), not the sheet's dimming
+    /// container — clicks on the Mac's dimmed area never reached a
+    /// recognizer there.
     static func attach(to controller: UIViewController) {
-        guard let container = controller.presentationController?.containerView else { return }
+        guard let window = controller.view.window else {
+            macPopupTrace("outside click: no window to attach to")
+            return
+        }
         let handler = OutsideClickDismiss()
         handler.controller = controller
         let tap = UITapGestureRecognizer(target: handler, action: #selector(clicked))
         tap.delegate = handler
         tap.cancelsTouchesInView = false
-        container.addGestureRecognizer(tap)
+        window.addGestureRecognizer(tap)
+        handler.recognizer = tap
         objc_setAssociatedObject(controller, &key, handler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
     }
 
-    /// Only clicks OUTSIDE the popup itself.
-    func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        guard let view = controller?.view else { return false }
-        return !view.bounds.contains(touch.location(in: view))
+    private func detach() {
+        if let recognizer { recognizer.view?.removeGestureRecognizer(recognizer) }
     }
+
+    /// Only clicks OUTSIDE the popup, and only while it is the top popup.
+    func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let controller, controller.presentingViewController != nil else {
+            detach()           // the popup is gone
+            return false
+        }
+        guard controller.presentedViewController == nil else { return false }
+        let outside = !controller.view.bounds.contains(touch.location(in: controller.view))
+        macPopupTrace("click \(outside ? "outside" : "inside") \(type(of: controller))")
+        return outside
+    }
+
+    // A click outside should still close the popup when something else under
+    // it also wants the click.
+    func gestureRecognizer(_ gesture: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
     @objc private func clicked() {
         guard let controller, controller.presentedViewController == nil,
@@ -135,6 +158,7 @@ private final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
             return
         }
         macPopupTrace("outside click: dismissed \(type(of: controller))")
+        detach()
         delegate?.presentationControllerWillDismiss?(presentation)
         controller.dismiss(animated: false) {
             delegate?.presentationControllerDidDismiss?(presentation)

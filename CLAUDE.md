@@ -232,6 +232,34 @@ idiom). What differs on the Mac:
   "Mac Catalyst Team Provisioning Profile: OKTO.SAMp" (created then, with his
   OK). A debug Mac build reads CloudKit DEVELOPMENT, like the phone's.
 
+## Claude Desktop connector (Mac only, 6 November 2026, Luther)
+"A connector for me to tell Claude Desktop to do stuff in the app instead of
+clicking through." Services/ClaudeConnector/ (Catalyst only):
+- ConnectorServer: an MCP server (JSON-RPC 2.0 over HTTP POST) on
+  127.0.0.1:47720 ONLY, started in SAMApp.init. Every request needs the
+  per-Mac access key (Bearer; UserDefaults `connector.token`; DEBUG env
+  HOOPWISE_CONNECTOR_TOKEN forces one for tests). The app is SANDBOXED, so it
+  may listen only through ENABLE_INCOMING_NETWORK_CONNECTIONS, and it cannot
+  write where Claude Desktop reads.
+- The bridge tools/claude-connector/hoopwise-connector.py (stdio ⇄ HTTP,
+  stdlib Python) is installed OUTSIDE the app at ~/Library/Application
+  Support/Hoopwise Connector/. Claude Desktop's config passes HOOPWISE_URL and
+  HOOPWISE_TOKEN as env; Profile → Claude Desktop → "Copy setup" puts that
+  config entry (key included) on the clipboard.
+- ConnectorTools: the retired Mac Whistle's tool registry, ported (tag
+  mac-app-final). THE RULE stands: tools call the shared business layer only
+  (SessionCreation, SessionLifecycle, setStudentEnrollment,
+  setStudentAttendanceStates → the one redemption authority,
+  updateSessionEvent(keepLiveFields: true), updateContract). New:
+  mark_attendance (present / excused / unmarked, or all_present — never
+  absent, it is inferred). open_in_app posts the widget deep-link
+  notifications. NO DELETE TOOLS. Data minimisation ON by default
+  (`assistant.minimized`): guardian contacts and money stay in the app.
+  Claude Desktop asks before each call; there is no in-app confirmation.
+- Verified 6 Nov 2026 on the demo copy: initialize, tools/list (16 tools),
+  search/get/list, a write (record_note), a refusal, and a wrong key (401 →
+  "access key is wrong").
+
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
 remotely close to usable." The HoopwiseMac target, its folder and scheme are

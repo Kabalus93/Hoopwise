@@ -54,6 +54,9 @@ struct FlightyCoachProfileView: View {
                 profileHeaderSection
                 statsSection
                 notificationsSection
+                #if targetEnvironment(macCatalyst)
+                claudeDesktopSection
+                #endif
                 preferencesSection
                 coachingSection
                 syncSection
@@ -406,6 +409,42 @@ struct FlightyCoachProfileView: View {
         #endif
     }
     
+    #if targetEnvironment(macCatalyst)
+    // MARK: - Claude Desktop (Mac only, November 2026)
+    @State private var claudeSetupCopied = false
+
+    /// Lets Claude Desktop work in the app (ClaudeConnector/). The app serves
+    /// on this Mac only; the coach copies Claude Desktop's config entry here.
+    private var claudeDesktopSection: some View {
+        Section {
+            Label {
+                Text(ConnectorSetup.isListening
+                     ? (isChinese ? "已开启 · 仅限本机" : "On · this Mac only")
+                     : (isChinese ? "未运行" : "Not running"))
+            } icon: {
+                Image(systemName: ConnectorSetup.isListening ? "checkmark.circle.fill" : "xmark.circle")
+                    .foregroundStyle(ConnectorSetup.isListening ? .green : .secondary)
+            }
+            Button {
+                UIPasteboard.general.string = ConnectorSetup.claudeDesktopConfig()
+                claudeSetupCopied = true
+            } label: {
+                Label(claudeSetupCopied
+                      ? (isChinese ? "已复制" : "Copied")
+                      : (isChinese ? "复制 Claude Desktop 设置" : "Copy setup for Claude Desktop"),
+                      systemImage: claudeSetupCopied ? "checkmark" : "doc.on.doc")
+            }
+            .accessibilityIdentifier("profile.copyClaudeSetup")
+        } header: {
+            Text("Claude Desktop")
+        } footer: {
+            Text(isChinese
+                 ? "让 Claude Desktop 查找学员和课程、记录考勤、排课。Claude 每次操作前都会征求你的同意；没有删除功能。设置里含有访问密钥，请勿分享。"
+                 : "Lets Claude Desktop look up athletes and sessions, mark attendance and schedule classes. Claude asks you before each action, and nothing can be deleted. The setup contains this Mac's access key — don't share it.")
+        }
+    }
+    #endif
+
     // MARK: - Notifications Section
     private var notificationsSection: some View {
         Section {
