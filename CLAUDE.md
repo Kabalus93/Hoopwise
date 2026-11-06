@@ -256,6 +256,18 @@ clicking through." Services/ClaudeConnector/ (Catalyst only):
   notifications. NO DELETE TOOLS. Data minimisation ON by default
   (`assistant.minimized`): guardian contacts and money stay in the app.
   Claude Desktop asks before each call; there is no in-app confirmation.
+- SHORT REFS (6 Nov 2026, after Claude Desktop's get_session/update_session
+  failed on ids list_sessions had just returned — a model mis-copies 36-char
+  UUIDs): every id the tools RETURN is the first 8 hex chars; every id they
+  TAKE may be a ref (unique prefix ≥ 6), a full id in any case, or for
+  sessions `when` (ISO start) + `program`. Failed lookups name what was sent
+  and list candidates. Roster tools: add_to_session / remove_from_session
+  (ONE session; an empty roster is first filled from AttendanceMath.
+  expectedIds so adding one child doesn't make them the only one expected),
+  add_to_program (addStudentEnrollment — ADDS; set_enrollment MOVES and says
+  so). school_grade on create/update_athlete via Student.setSchoolGrade
+  (K1–K3, P1–P6, H1–H6; 初一…高三 accepted). create_athlete takes a Chinese
+  name alone (pinyin name) and an optional session_id. 19 tools.
 - Verified 6 Nov 2026 on the demo copy: initialize, tools/list (16 tools),
   search/get/list, a write (record_note), a refusal, and a wrong key (401 →
   "access key is wrong").

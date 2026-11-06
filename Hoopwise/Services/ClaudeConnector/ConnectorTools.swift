@@ -116,36 +116,119 @@ final class ConnectorToolRegistry {
 
     // MARK: - Shared lookups
 
+    /// A record's short reference: the first 8 characters of its id. Long
+    /// ids get mis-copied by a model (November 2026: three get_session calls
+    /// failed on ids list_sessions had just returned); short ones rarely do.
+    static func ref(_ id: UUID) -> String { String(id.uuidString.prefix(8)).lowercased() }
+
+    /// The id a caller meant: a full id in any case, or a short ref (a unique
+    /// prefix of at least 6 characters). nil when nothing or several match.
+    private static func resolve(_ raw: String, in ids: [UUID]) -> UUID? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines.union(.init(charactersIn: "\"'`<>#")))
+        if let id = UUID(uuidString: text), ids.contains(id) { return id }
+        let key = text.lowercased().replacingOccurrences(of: "-", with: "")
+        guard key.count >= 6 else { return nil }
+        let hits = ids.filter { $0.uuidString.lowercased().replacingOccurrences(of: "-", with: "").hasPrefix(key) }
+        return hits.count == 1 ? hits[0] : nil
+    }
+
     private func findStudent(_ args: [String: Any]) throws -> Student {
-        if let idString = args["athlete_id"] as? String, let id = UUID(uuidString: idString),
+        let raw = (args["athlete_id"] as? String) ?? (args["query"] as? String) ?? ""
+        if let id = Self.resolve(raw, in: dataManager.students.map(\.id)),
            let student = dataManager.students.first(where: { $0.id == id }) {
             return student
         }
-        if let query = (args["athlete_id"] as? String) ?? (args["query"] as? String) {
+        if !raw.isEmpty {
             let matches = dataManager.students.filter {
-                NameIndex.cached(name: $0.name, secondary: $0.chineseName).matches(query)
+                NameIndex.cached(name: $0.name, secondary: $0.chineseName).matches(raw)
             }
             if matches.count == 1 { return matches[0] }
             if matches.count > 1 {
+                let names = matches.prefix(6).map { "\($0.displayName) [\(Self.ref($0.id))]" }.joined(separator: ", ")
                 throw ConnectorToolError.badArguments(
-                    "\(matches.count) athletes match \"\(query)\" — use search_athletes and pass an exact athlete_id")
+                    "\(matches.count) athletes match \"\(raw)\": \(names). Pass one ref as athlete_id.")
             }
         }
-        throw ConnectorToolError.notFound("No athlete matches — use search_athletes first")
+        throw ConnectorToolError.notFound("No athlete matches \"\(raw)\". Use search_athletes and pass the ref it returns.")
     }
 
+    private func findProgram(_ query: String) throws -> Program {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        if let id = Self.resolve(q, in: dataManager.programs.map(\.id)),
+           let program = dataManager.programs.first(where: { $0.id == id }) { return program }
+        if let exact = dataManager.programs.first(where: { $0.name.caseInsensitiveCompare(q) == .orderedSame }) { return exact }
+        let hits = dataManager.programs.filter { $0.name.localizedCaseInsensitiveContains(q) }
+        if hits.count == 1 { return hits[0] }
+        if hits.isEmpty { throw ConnectorToolError.notFound("No program matches \"\(q)\". Use list_programs.") }
+        throw ConnectorToolError.badArguments("\(hits.count) programs match \"\(q)\": "
+            + hits.prefix(6).map { "\($0.name) [\(Self.ref($0.id))]" }.joined(separator: ", "))
+    }
+
+    private static func grade(_ value: Any?) throws -> SchoolGrade? {
+        guard let raw = (value as? String)?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
+        let chinese = ["初一": "H1", "初二": "H2", "初三": "H3", "高一": "H4", "高二": "H5", "高三": "H6",
+                       "小班": "K1", "中班": "K2", "大班": "K3"]
+        let key = chinese[raw] ?? raw.uppercased()
+        guard let grade = SchoolGrade(rawValue: key) else {
+            throw ConnectorToolError.badArguments("school_grade \"\(raw)\" — use K1–K3, P1–P6 or H1–H6")
+        }
+        return grade
+    }
+
+    /// Adds to ONE session's roster. An empty roster means "the program's
+    /// enrolment", so the stored roster starts from who is expected now —
+    /// otherwise adding one child would leave only that child expected.
+    @discardableResult
+    private func addToRoster(_ session: SessionEvent, _ ids: [UUID]) throws -> Int {
+        guard !SessionLifecycle.didNotHappen(session)
+        else { throw ConnectorToolError.ruleViolation("That session was skipped or cancelled") }
+        var copy = session
+        var roster = AttendanceMath.expectedIds(of: session, programs: dataManager.programs)
+        for id in ids where !roster.contains(id) { roster.append(id) }
+        copy.attendeeIds = roster
+        copy.updatedAt = Date()
+        dataManager.updateSessionEvent(copy, keepLiveFields: true)
+        return roster.count
+    }
+
+    /// Athlete ids or refs (or exact names) → ids; any that resolve to nothing
+    /// is an error naming it, so nothing is silently dropped.
+    private func resolveAthletes(_ raws: [String]) throws -> [UUID] {
+        try raws.map { try findStudent(["athlete_id": $0]).id }
+    }
+
+    /// A session by id or ref — or, without one, by `when` (ISO date-time)
+    /// plus optional `program`, which is how a coach names a class anyway.
     private func findSession(_ args: [String: Any]) throws -> SessionEvent {
-        guard let idString = args["session_id"] as? String, let id = UUID(uuidString: idString),
-              let session = dataManager.sessionEvents.first(where: { $0.id == id })
-        else { throw ConnectorToolError.notFound("No session with that id — use list_sessions first") }
-        return session
+        let sessions = dataManager.sessionEvents
+        if let raw = args["session_id"] as? String, !raw.isEmpty {
+            if let id = Self.resolve(raw, in: sessions.map(\.id)),
+               let session = sessions.first(where: { $0.id == id }) { return session }
+            throw ConnectorToolError.notFound(
+                "No session with id \"\(raw)\". Pass the ref from list_sessions, or when + program instead.")
+        }
+        if let starts = Self.parseDate(args["when"] as? String) {
+            var hits = sessions.filter { abs($0.startTime.timeIntervalSince(starts)) < 60 }
+            if let program = args["program"] as? String, !program.isEmpty {
+                let ids = Set(dataManager.programs.filter { $0.name.localizedCaseInsensitiveContains(program) }.map(\.id))
+                hits = hits.filter { $0.programId.map(ids.contains) ?? false }
+            }
+            if hits.count == 1 { return hits[0] }
+            if hits.count > 1 {
+                let list = hits.map { "\($0.title) [\(Self.ref($0.id))]" }.joined(separator: ", ")
+                throw ConnectorToolError.badArguments("\(hits.count) sessions start then: \(list). Add program or pass a ref.")
+            }
+            throw ConnectorToolError.notFound("No session starts at \(args["when"] as? String ?? "").")
+        }
+        throw ConnectorToolError.badArguments("Pass session_id (a ref from list_sessions) or when (its start, ISO).")
     }
 
     private func studentBrief(_ student: Student) -> [String: Any] {
         var brief: [String: Any] = [
-            "athlete_id": student.id.uuidString,
+            "athlete_id": Self.ref(student.id),
             "name": student.name,
         ]
+        if let grade = student.currentSchoolGrade() { brief["school_grade"] = grade.rawValue }
         if let chinese = student.chineseName { brief["chinese_name"] = chinese }
         if let programId = student.programId,
            let program = dataManager.programs.first(where: { $0.id == programId }) {
@@ -156,11 +239,11 @@ final class ConnectorToolRegistry {
 
     private func sessionBrief(_ session: SessionEvent) -> [String: Any] {
         var brief: [String: Any] = [
-            "session_id": session.id.uuidString,
+            "session_id": Self.ref(session.id),
             "title": session.title,
             "date": Self.isoFormatter.string(from: session.startTime),
             "status": session.status.rawValue,
-            "attendee_count": session.attendeeIds.count,
+            "expected_count": AttendanceMath.expectedIds(of: session, programs: dataManager.programs).count,
         ]
         if let location = session.location { brief["location"] = location }
         if let programId = session.programId,
@@ -291,8 +374,12 @@ final class ConnectorToolRegistry {
 
             ConnectorTool(
                 name: "get_session",
-                description: "Full detail for one session: roster with attendance states, plan, location.",
-                schema: objectSchema(["session_id": ["type": "string"]], ["session_id"]),
+                description: "Full detail for one session: roster with attendance states, plan, location. Identify it by session_id (the short ref list_sessions returns) or by when (its start, ISO) plus optional program.",
+                schema: objectSchema([
+                    "session_id": ["type": "string", "description": "ref from list_sessions"],
+                    "when": ["type": "string", "description": "ISO start date-time, if no session_id"],
+                    "program": ["type": "string"],
+                ], []),
                 category: .read,
                 run: { [self] args in
                     let session = try findSession(args)
@@ -304,7 +391,7 @@ final class ConnectorToolRegistry {
                         else if session.excusedAbsences.contains(id) { state = "excused" }
                         else if session.unexcusedAbsences.contains(id) { state = "absent" }
                         else { state = "unmarked" }
-                        return ["name": student.displayName, "athlete_id": id.uuidString, "attendance": state]
+                        return ["name": student.displayName, "athlete_id": Self.ref(id), "attendance": state]
                     }
                     payload["roster"] = roster
                     if let notes = session.notes, !notes.isEmpty { payload["notes"] = notes }
@@ -319,7 +406,7 @@ final class ConnectorToolRegistry {
                 category: .read,
                 run: { [self] _ in
                     let list = dataManager.programs.map { program -> [String: Any] in
-                        ["program_id": program.id.uuidString,
+                        ["program_id": Self.ref(program.id),
                          "name": program.name,
                          "type": program.programType.rawValue,
                          "status": program.status.rawValue,
@@ -351,7 +438,7 @@ final class ConnectorToolRegistry {
                         guard let rate = attendance.rate else { continue }
                         if let threshold, rate >= threshold { continue }
                         rows.append(["name": student.displayName,
-                                     "athlete_id": student.id.uuidString,
+                                     "athlete_id": Self.ref(student.id),
                                      "attendance_percent": Int(rate * 100),
                                      "attended": attendance.attended,
                                      "of": attendance.of])
@@ -386,7 +473,7 @@ final class ConnectorToolRegistry {
                         }) else { throw ConnectorToolError.notFound("No program matches \"\(programQuery)\"") }
                         programId = program.id
                     }
-                    var attendees = (args["athlete_ids"] as? [String] ?? []).compactMap(UUID.init(uuidString:))
+                    var attendees = try resolveAthletes(args["athlete_ids"] as? [String] ?? [])
                     if attendees.isEmpty, let programId,
                        let program = dataManager.programs.first(where: { $0.id == programId }) {
                         attendees = program.enrolledStudentIds
@@ -405,7 +492,7 @@ final class ConnectorToolRegistry {
                         createdByCoachId: dataManager.loggedInCoachId))
                     let session = result.session
                     return ConnectorToolResult(
-                        payload: Self.encode(["created": true, "session_id": session.id.uuidString]),
+                        payload: Self.encode(["created": true, "session_id": Self.ref(session.id)]),
                         summary: "created session \(title) ✓")
                 }),
 
@@ -426,7 +513,7 @@ final class ConnectorToolRegistry {
                     let old = session
                     var copy = session
                     if let title = args["title"] as? String { copy.title = title }
-                    if let starts = Self.parseDate(args["starts"] as? String) {
+                    if let starts = Self.parseDate(args["when"] as? String) {
                         let duration = copy.durationMinutes
                         copy.date = starts; copy.startTime = starts
                         copy.endTime = Calendar.current.date(byAdding: .minute, value: duration, to: starts) ?? starts
@@ -436,12 +523,12 @@ final class ConnectorToolRegistry {
                     }
                     if let location = args["location"] as? String { copy.location = location }
                     if let ids = args["athlete_ids"] as? [String] {
-                        copy.attendeeIds = ids.compactMap(UUID.init(uuidString:))
+                        copy.attendeeIds = try resolveAthletes(ids)
                     }
                     copy.updatedAt = Date()
                     dataManager.updateSessionEvent(copy, keepLiveFields: true)
                     return ConnectorToolResult(
-                        payload: Self.encode(["updated": true, "session_id": session.id.uuidString]),
+                        payload: Self.encode(["updated": true, "session_id": Self.ref(session.id)]),
                         summary: "updated session \(copy.title) ✓")
                 }),
 
@@ -467,38 +554,106 @@ final class ConnectorToolRegistry {
 
             ConnectorTool(
                 name: "create_athlete",
-                description: "Add a new athlete to the roster. Name required; chinese_name and program optional.",
+                description: "Add a new athlete. name required (a Chinese name alone is fine as chinese_name — the name then becomes its pinyin). Optional: school_grade, program (ADDS them to that program's roster, keeping any other class), session_id (also puts them on that one session's roster).",
                 schema: objectSchema([
                     "name": ["type": "string"],
                     "chinese_name": ["type": "string"],
+                    "school_grade": ["type": "string", "description": "School grade: K1–K3 kindergarten, P1–P6 primary (小学一至六年级), H1–H6 secondary (初一=H1, 初二=H2, 初三=H3, 高一=H4, 高二=H5, 高三=H6). It promotes itself each 1 September."],
                     "program": ["type": "string"],
-                ], ["name"]),
+                    "session_id": ["type": "string", "description": "ref from list_sessions"],
+                ], []),
                 category: .athleteWrite,
                 run: { [self] args in
-                    guard let name = args["name"] as? String, !name.isEmpty
-                    else { throw ConnectorToolError.badArguments("name is required") }
-                    var student = Student(id: UUID(), name: name)
-                    student.chineseName = args["chinese_name"] as? String
-                    dataManager.addStudent(student)
-                    if let programQuery = args["program"] as? String,
-                       let program = dataManager.programs.first(where: {
-                           $0.name.localizedCaseInsensitiveContains(programQuery)
-                       }) {
-                        // THE shared enrollment writer — keeps both link fields in step.
-                        dataManager.setStudentEnrollment(studentId: student.id, programId: program.id)
+                    let chinese = (args["chinese_name"] as? String)?.trimmingCharacters(in: .whitespaces)
+                    var name = (args["name"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+                    if name.isEmpty, let chinese, !chinese.isEmpty { name = PinyinConverter.toPinyin(chinese) }
+                    guard !name.isEmpty else { throw ConnectorToolError.badArguments("name or chinese_name is required") }
+                    let grade = try Self.grade(args["school_grade"])
+                    var program: Program?
+                    if let query = args["program"] as? String, !query.isEmpty {
+                        program = try findProgram(query)
                     }
-                    return ConnectorToolResult(
-                        payload: Self.encode(["created": true, "athlete_id": student.id.uuidString]),
-                        summary: "added \(name) ✓")
+                    let session = (args["session_id"] as? String).flatMap { $0.isEmpty ? nil : $0 } != nil
+                        ? try findSession(args) : nil
+                    var student = Student(id: UUID(), name: name)
+                    if let chinese, !chinese.isEmpty { student.chineseName = chinese }
+                    if let grade { student.setSchoolGrade(grade) }
+                    dataManager.addStudent(student)
+                    if let program {
+                        // ADDS (never moves): the shared writer keeps both link fields in step.
+                        dataManager.addStudentEnrollment(studentId: student.id, programId: program.id)
+                    }
+                    if let session { try addToRoster(session, [student.id]) }
+                    var done = ["created": true, "athlete_id": Self.ref(student.id)] as [String: Any]
+                    if let grade { done["school_grade"] = grade.rawValue }
+                    if let program { done["program"] = program.name }
+                    if let session { done["added_to_session"] = Self.ref(session.id) }
+                    return ConnectorToolResult(payload: Self.encode(done), summary: "added \(name) ✓")
+                }),
+
+            ConnectorTool(
+                name: "add_to_session",
+                description: "Put athletes on ONE session's roster (that class only — the program's other sessions are unchanged). athlete_ids are refs from search_athletes.",
+                schema: objectSchema([
+                    "session_id": ["type": "string", "description": "ref from list_sessions"],
+                    "when": ["type": "string"], "program": ["type": "string"],
+                    "athlete_ids": ["type": "array", "items": ["type": "string"]],
+                ], ["athlete_ids"]),
+                category: .sessionWrite,
+                run: { [self] args in
+                    let session = try findSession(args)
+                    let ids = try resolveAthletes(args["athlete_ids"] as? [String] ?? [])
+                    guard !ids.isEmpty else { throw ConnectorToolError.badArguments("athlete_ids is empty") }
+                    let count = try addToRoster(session, ids)
+                    return ConnectorToolResult(payload: Self.encode(["roster_size": count]),
+                                               summary: "added \(ids.count) to \(session.title)")
+                }),
+
+            ConnectorTool(
+                name: "remove_from_session",
+                description: "Take athletes off ONE session's roster (that class only). Their marks for it are kept; use mark_attendance to change those.",
+                schema: objectSchema([
+                    "session_id": ["type": "string", "description": "ref from list_sessions"],
+                    "when": ["type": "string"], "program": ["type": "string"],
+                    "athlete_ids": ["type": "array", "items": ["type": "string"]],
+                ], ["athlete_ids"]),
+                category: .sessionWrite,
+                run: { [self] args in
+                    let session = try findSession(args)
+                    let ids = Set(try resolveAthletes(args["athlete_ids"] as? [String] ?? []))
+                    var copy = session
+                    copy.attendeeIds = AttendanceMath.expectedIds(of: session, programs: dataManager.programs)
+                        .filter { !ids.contains($0) }
+                    copy.updatedAt = Date()
+                    dataManager.updateSessionEvent(copy, keepLiveFields: true)
+                    return ConnectorToolResult(payload: Self.encode(["roster_size": copy.attendeeIds.count]),
+                                               summary: "removed \(ids.count) from \(session.title)")
+                }),
+
+            ConnectorTool(
+                name: "add_to_program",
+                description: "Add an athlete to a program's roster — they are then expected at its upcoming sessions. Keeps every other class they are in.",
+                schema: objectSchema([
+                    "athlete_id": ["type": "string"],
+                    "program": ["type": "string", "description": "Program name"],
+                ], ["athlete_id", "program"]),
+                category: .athleteWrite,
+                run: { [self] args in
+                    let student = try findStudent(args)
+                    let program = try findProgram(args["program"] as? String ?? "")
+                    dataManager.addStudentEnrollment(studentId: student.id, programId: program.id)
+                    return ConnectorToolResult(payload: Self.encode(["enrolled": true, "program": program.name]),
+                                               summary: "\(student.displayName) → \(program.name)")
                 }),
 
             ConnectorTool(
                 name: "update_athlete",
-                description: "Edit an athlete's name, chinese_name, or notes.",
+                description: "Edit an athlete's name, chinese_name or school_grade.",
                 schema: objectSchema([
                     "athlete_id": ["type": "string"],
                     "name": ["type": "string"],
                     "chinese_name": ["type": "string"],
+                    "school_grade": ["type": "string", "description": "School grade: K1–K3 kindergarten, P1–P6 primary (小学一至六年级), H1–H6 secondary (初一=H1, 初二=H2, 初三=H3, 高一=H4, 高二=H5, 高三=H6). It promotes itself each 1 September."],
                 ], ["athlete_id"]),
                 category: .athleteWrite,
                 run: { [self] args in
@@ -506,6 +661,7 @@ final class ConnectorToolRegistry {
                     let old = student
                     if let name = args["name"] as? String, !name.isEmpty { student.name = name }
                     if let chinese = args["chinese_name"] as? String { student.chineseName = chinese }
+                    if let grade = try Self.grade(args["school_grade"]) { student.setSchoolGrade(grade) }
                     student.updatedAt = Date()
                     dataManager.updateStudent(student)
                     return ConnectorToolResult(
@@ -515,7 +671,7 @@ final class ConnectorToolRegistry {
 
             ConnectorTool(
                 name: "set_enrollment",
-                description: "Enroll an athlete in a program (or unenroll with program null). Goes through the app's single enrollment writer.",
+                description: "MOVE an athlete to one program: it removes them from EVERY other program roster (program null unenrolls them everywhere). To add a class without leaving the others, use add_to_program.",
                 schema: objectSchema([
                     "athlete_id": ["type": "string"],
                     "program": ["type": ["string", "null"], "description": "Program name, or null to unenroll"],
@@ -633,8 +789,9 @@ final class ConnectorToolRegistry {
                         }
                     }
                     for mark in args["marks"] as? [[String: Any]] ?? [] {
-                        guard let idString = mark["athlete_id"] as? String, let id = UUID(uuidString: idString)
+                        guard let idString = mark["athlete_id"] as? String
                         else { throw ConnectorToolError.badArguments("each mark needs an athlete_id") }
+                        let id = try findStudent(["athlete_id": idString]).id
                         switch mark["state"] as? String {
                         case "present": states[id] = .present
                         case "excused": states[id] = .excused
@@ -658,12 +815,15 @@ final class ConnectorToolRegistry {
                     "record_id": ["type": "string"],
                 ], ["record_type", "record_id"]),
                 category: .meta,
-                run: { args in
-                    guard let idString = args["record_id"] as? String, let id = UUID(uuidString: idString)
-                    else { throw ConnectorToolError.badArguments("record_id must be an id") }
+                run: { [self] args in
+                    let raw = args["record_id"] as? String ?? ""
                     switch args["record_type"] as? String {
-                    case "athlete": NotificationCenter.default.post(name: .hoopwiseOpenAthleteRequest, object: id)
-                    case "session": NotificationCenter.default.post(name: .hoopwiseOpenSessionRequest, object: id)
+                    case "athlete":
+                        let id = try findStudent(["athlete_id": raw]).id
+                        NotificationCenter.default.post(name: .hoopwiseOpenAthleteRequest, object: id)
+                    case "session":
+                        let id = try findSession(["session_id": raw]).id
+                        NotificationCenter.default.post(name: .hoopwiseOpenSessionRequest, object: id)
                     default: throw ConnectorToolError.badArguments("record_type is athlete or session")
                     }
                     return ConnectorToolResult(payload: "{\"opened\": true}", summary: "opened in app")

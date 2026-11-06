@@ -136,9 +136,13 @@ final class ConnectorServer {
                 "serverInfo": ["name": "hoopwise", "version": "1.0"],
                 "instructions": """
                 Hoopwise is a basketball coach's app. Find people with search_athletes and classes \
-                with list_sessions before acting; pass the ids they return. Names may be Chinese, \
-                pinyin or English. Writes go through the app's own rules and are refused when a \
-                rule says no — relay the reason. There is no delete.
+                with list_sessions before acting, and pass the short refs they return (8 characters) \
+                as athlete_id / session_id — a session can also be named by when (its start) plus \
+                program. Names may be Chinese, pinyin or English. To put someone in ONE class use \
+                add_to_session; to make them a regular of a program use add_to_program (set_enrollment \
+                MOVES them out of every other class). School grades go in school_grade, not notes. \
+                Writes go through the app's own rules and are refused when a rule says no — relay \
+                the reason. There is no delete.
                 """,
             ])
         case "ping":
