@@ -2323,10 +2323,15 @@ struct CompactSessionRow: View {
     private var isSkipped: Bool { session.status == .skipped }
     private var isInProgress: Bool { session.status == .inProgress }
     private var isNow: Bool {
-        // "NOW" badge fires on explicit in-progress status only — the coach
-        // taps Start, this lights up. Time alone does not.
-        isInProgress
+        // In progress AND inside its hours (November 2026, Luther: five classes
+        // at different times all read "NOW"). Sessions start themselves and
+        // stay in progress until completed (or auto-closed 12 h after the
+        // end), so status alone kept every class of the day "live" all evening.
+        let now = Date()
+        return isInProgress && session.startTime <= now && now < session.endTime
     }
+    /// In progress past its end: it ran, nobody pressed Complete yet.
+    private var isEndedOpen: Bool { isInProgress && Date() >= session.endTime }
     private var format: SessionFormat {
         program?.format ?? dataManager.sessionFormat(session)
     }
@@ -2362,6 +2367,14 @@ struct CompactSessionRow: View {
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(Color.green, in: .rect(cornerRadius: 4))
+                    } else if isEndedOpen {
+                        Text(LocalizationManager.shared.currentLanguage == .chinese ? "已结束" : "ENDED")
+                            .font(.system(size: 9, weight: .bold))
+                            .monospaced()
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.orange, in: .rect(cornerRadius: 4))
                     } else if isCompleted {
                         // Mirrors the green dot in the phase view — "you marked
                         // this done."
@@ -2437,7 +2450,8 @@ struct CompactSessionRow: View {
     /// Bar color mirrors `FlightyPhaseSessionRow.statusColor` so calendar
     /// and phase views never disagree:
     ///   • cancelled → red
-    ///   • in progress → green (matches the "NOW" badge)
+    ///   • in progress → green (matches the "NOW" badge); orange once its end
+    ///     has passed without Complete (matches "ENDED")
     ///   • completed → green
     ///   • skipped → gray
     ///   • scheduled → program color (or accent for program-less sessions)
@@ -2445,7 +2459,7 @@ struct CompactSessionRow: View {
     private var barColor: Color {
         switch session.status {
         case .cancelled: return .red
-        case .inProgress: return .green
+        case .inProgress: return isEndedOpen ? .orange : .green
         case .completed: return .green
         case .skipped: return Color.gray.opacity(0.4)
         case .scheduled: return programColor
