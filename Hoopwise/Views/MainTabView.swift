@@ -91,7 +91,16 @@ struct MainTabView: View {
         // Widget deep links (the one sanctioned freeze exception). onReceive
         // handles warm taps; onAppear drains a route queued during cold start,
         // when the URL arrived before this view existed.
-        .onAppear { consumePendingWidgetRoute() }
+        .onAppear {
+            consumePendingWidgetRoute()
+            #if targetEnvironment(macCatalyst)
+            MacWindow.configure()
+            #endif
+        }
+        // ⌘1–⌘4 (the Mac's View menu).
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseSelectTab)) { note in
+            if let tab = note.object as? Int { selectedTab = tab }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenSessionRequest)) { note in
             PendingWidgetRoute.pending = nil
             if let id = note.object as? UUID { openWidgetSession(id) }

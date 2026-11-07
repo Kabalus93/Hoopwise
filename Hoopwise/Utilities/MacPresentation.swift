@@ -192,4 +192,27 @@ final class OutsideClickDismiss: NSObject, UIGestureRecognizerDelegate {
         }
     }
 }
+
+// MARK: - The Mac window (November 2026, Luther: "more adapted to the Mac,
+// without drifting too far"). Only window chrome: the title bar's text and
+// toolbar strip go so the app's own content reaches the top of the window
+// (the traffic lights stay), and the window cannot be squeezed below a size
+// the iPad layouts were built for. The screens themselves are unchanged.
+enum MacWindow {
+    static let minimumSize = CGSize(width: 900, height: 680)
+
+    static func configure() {
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            scene.titlebar?.titleVisibility = .hidden
+            scene.titlebar?.toolbar = nil
+            scene.sizeRestrictions?.minimumSize = minimumSize
+        }
+        popupLog.log("window configured")
+    }
+}
 #endif
+
+extension Notification.Name {
+    /// ⌘1–⌘4 on the Mac: switch the main tab (MainTabView observes).
+    static let hoopwiseSelectTab = Notification.Name("hoopwiseSelectTab")
+}

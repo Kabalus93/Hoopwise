@@ -228,6 +228,12 @@ idiom). What differs on the Mac:
   'subsystem == "hoopwise.mac"'` (zsh's own `log` shadows /usr/bin/log; and
   NSLog text is <private> on macOS — use Logger with privacy: .public).
   Verified with HOOPWISE_SHOT=quickPeep: 620×680 → 962×1410.
+- MAC WINDOW (Luther: "more adapted to the Mac, without drifting too far"):
+  only chrome — MacWindow.configure() (MainTabView.onAppear, Catalyst) hides
+  the title text and toolbar strip and sets a 900×680 minimum; SAMApp adds a
+  View menu with ⌘1–⌘4 for the four tabs (.hoopwiseSelectTab). The screens
+  keep the iPad look; Catalyst's "Optimize for Mac" idiom (Mac-drawn controls)
+  was deliberately NOT taken — that is the drift he did not want.
 - Run a Mac debug shot: `open -n --env HOOPWISE_SCREENSHOT_STORE=1 --env
   HOOPWISE_SHOT=<shot> <Debug-maccatalyst>/Hoopwise.app` (screencapture is not
   permitted here, so check results through that log).

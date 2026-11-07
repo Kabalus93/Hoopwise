@@ -124,6 +124,23 @@ struct SAMApp: App {
                 break
             }
         }
+        #if targetEnvironment(macCatalyst)
+        // The Mac's menu bar: View → the four tabs, ⌘1–⌘4.
+        .commands {
+            CommandGroup(before: .toolbar) {
+                let zh = LocalizationManager.shared.currentLanguage == .chinese
+                Button(zh ? "首页" : "Home") { selectTab(0) }.keyboardShortcut("1")
+                Button(zh ? "课程" : "Sessions") { selectTab(1) }.keyboardShortcut("2")
+                Button(zh ? "学员" : "Athletes") { selectTab(2) }.keyboardShortcut("3")
+                Button(zh ? "中心" : "Hub") { selectTab(3) }.keyboardShortcut("4")
+                Divider()
+            }
+        }
+        #endif
+    }
+
+    private func selectTab(_ tab: Int) {
+        NotificationCenter.default.post(name: .hoopwiseSelectTab, object: tab)
     }
 
     private var splashView: some View {
