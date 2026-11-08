@@ -259,6 +259,9 @@ struct StudentIntelligenceListView: View {
                     NavigationStack {
                         mainContent
                     }
+                    // Contacts-like proportions (November 2026): a list wide
+                    // enough to read, the profile beside it.
+                    .navigationSplitViewColumnWidth(min: 340, ideal: 420, max: 560)
                 } detail: {
                     if let student = selectedStudent {
                         // Unified profile — same view used everywhere else
@@ -301,9 +304,11 @@ struct StudentIntelligenceListView: View {
     private var mainContent: some View {
         studentListSection
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle(LocalizationManager.shared.currentLanguage == .chinese ? "学员档案" : "Student Intelligence")
+            .navigationTitle(shouldUseSplitView
+                ? (LocalizationManager.shared.currentLanguage == .chinese ? "学员" : "Athletes")
+                : (LocalizationManager.shared.currentLanguage == .chinese ? "学员档案" : "Student Intelligence"))
             #if os(iOS)
-            .navigationBarTitleDisplayModeCompat(.large)
+            .navigationBarTitleDisplayModeCompat(shouldUseSplitView ? .inline : .large)
             #endif
             .searchable(
                 text: $searchText,
@@ -693,11 +698,26 @@ struct StudentIntelligenceListView: View {
             ForEach(grades, id: \.grade) { gradeGroup in
                 Section {
                     ForEach(gradeGroup.students) { student in
-                        Button(action: { selectStudent(student) }) {
-                            studentRowCompact(student: student, isChinese: isChinese)
+                        if shouldUseSplitView {
+                            let selected = selectedStudent?.id == student.id && !isSelecting
+                            Button(action: { selectStudent(student) }) {
+                                contactsRow(student: student, selected: selected)
+                            }
+                            .buttonStyle(.plain)
+                            .athleteMacMenu(student)
+                            .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
+                            .listRowBackground(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(selected ? Color.accentColor : Color.clear)
+                                    .padding(.horizontal, 8))
+                            .listRowSeparator(selected ? .hidden : .visible)
+                        } else {
+                            Button(action: { selectStudent(student) }) {
+                                studentRowCompact(student: student, isChinese: isChinese)
+                            }
+                            .buttonStyle(.plain)
+                            .athleteMacMenu(student)
                         }
-                        .buttonStyle(.plain)
-                        .athleteMacMenu(student)
                     }
                 } header: {
                     HStack(spacing: 6) {
@@ -715,8 +735,33 @@ struct StudentIntelligenceListView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
+        .modifier(AthleteListStyle(contacts: shouldUseSplitView))
+    }
+
+    /// iPad / Mac list row in the Contacts manner (November 2026, Luther):
+    /// a bigger avatar, the name at reading size with the second name under
+    /// it, and a solid accent highlight on the athlete whose profile is open.
+    private func contactsRow(student: Student, selected: Bool) -> some View {
+        HStack(spacing: 12) {
+            StudentAvatarView(student: student, size: 40)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(student.primaryDisplayName)
+                    .font(.body)
+                    .foregroundStyle(selected ? Color.white : Color.primary)
+                    .lineLimit(1)
+                if let second = student.secondaryNameLine {
+                    Text(second)
+                        .font(.subheadline)
+                        .foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            FormatBadge(format: dataManager.studentFormat(student), size: .mini)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
     
     // MARK: - Grade Sidebar (Left Column) - Liquid Glass Style
@@ -5168,4 +5213,17 @@ struct VisibleGradePreferenceKey: PreferenceKey {
 private struct ClassListExportFile: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+/// The athlete list's style: inset groups on iPhone (unchanged), a plain
+/// Contacts-like list beside the profile on iPad and Mac.
+private struct AthleteListStyle: ViewModifier {
+    let contacts: Bool
+    func body(content: Content) -> some View {
+        if contacts {
+            content.listStyle(.plain).scrollContentBackground(.hidden)
+        } else {
+            content.listStyle(.insetGrouped).scrollContentBackground(.hidden)
+        }
+    }
 }

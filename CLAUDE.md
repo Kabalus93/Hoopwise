@@ -190,6 +190,14 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   (FlightyActionableDashboard) is two columns: the day (live, briefing, live
   games) | what needs doing (attention, today's athletes). Compact width keeps
   each tab's original NavigationStack.
+- ATHLETES LIST LIKE CONTACTS (November 2026, Luther: "size and panel
+  arrangement, clarity and style … not a total makeover"), regular width only:
+  the list column 340–560 pt (ideal 420), a PLAIN list (grade = small section
+  header), `contactsRow` — 40 pt avatar, primaryDisplayName at body size,
+  secondaryNameLine under it, the format dot — and the open athlete's row in a
+  solid accent highlight with white text; title "Athletes"/学员 inline. The
+  profile (StudentDetailView) already had Contacts' shape and is unchanged.
+  iPhone keeps the inset-grouped Student Intelligence list.
 - Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
   and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
   simulator's (demo data only).
