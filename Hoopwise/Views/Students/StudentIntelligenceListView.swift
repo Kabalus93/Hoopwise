@@ -26,6 +26,7 @@ struct StudentIntelligenceListView: View {
     @State private var selectedStudent: Student?
     @State private var sheetStudent: Student?
     @State private var showingAddStudent = false
+    @FocusState private var searchFocused: Bool
     @State private var transferMode: StudentTransferView.Mode? = nil
     @State private var showingClassListImport = false
     @State private var classListExportFile: ClassListExportFile?
@@ -309,6 +310,14 @@ struct StudentIntelligenceListView: View {
                 placement: .navigationBarDrawer(displayMode: .always),
                 prompt: LocalizationManager.shared.currentLanguage == .chinese ? "搜索运动员" : "Search athletes"
             )
+            .searchFocused($searchFocused)
+            // ⌘F / ⇧⌘N on the Mac (MainTabView switches here first).
+            .onReceive(NotificationCenter.default.publisher(for: .hoopwiseFocusAthleteSearch)) { _ in
+                searchFocused = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAddAthlete)) { _ in
+                showingAddStudent = true
+            }
             .onChange(of: searchText) { _, newValue in
                 NSObject.cancelPreviousPerformRequests(withTarget: self)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -683,6 +692,7 @@ struct StudentIntelligenceListView: View {
                             studentRowCompact(student: student, isChinese: isChinese)
                         }
                         .buttonStyle(.plain)
+                        .athleteMacMenu(student)
                     }
                 } header: {
                     HStack(spacing: 6) {
@@ -769,6 +779,7 @@ struct StudentIntelligenceListView: View {
                                 studentRowCompact(student: student, isChinese: isChinese)
                             }
                             .buttonStyle(.plain)
+                            .athleteMacMenu(student)
                             
                             Divider()
                                 .background(AppTheme.isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06))

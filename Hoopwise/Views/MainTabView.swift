@@ -34,6 +34,15 @@ struct MainTabView: View {
 
     private var isChinese: Bool { localizationManager.currentLanguage == .chinese }
 
+    /// A Mac command that belongs to one tab: show the tab, then tell it
+    /// (after it has appeared) what to do.
+    private func switchThenPost(tab: Int, _ name: Notification.Name) {
+        selectedTab = tab
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            NotificationCenter.default.post(name: name, object: nil)
+        }
+    }
+
     /// The window's real width class, handed back to each tab's content
     /// (the TabView itself is forced compact for a bottom tab bar).
     @Environment(\.horizontalSizeClass) private var contentSizeClass
@@ -95,11 +104,31 @@ struct MainTabView: View {
             consumePendingWidgetRoute()
             #if targetEnvironment(macCatalyst)
             MacWindow.configure()
+            #if DEBUG
+            // Agent check of the Mac commands without a keyboard:
+            // HOOPWISE_MAC_COMMAND=newSession|newAthlete|find.
+            if let command = ProcessInfo.processInfo.environment["HOOPWISE_MAC_COMMAND"] {
+                let name: Notification.Name = command == "newSession" ? .hoopwiseNewSessionCommand
+                    : command == "newAthlete" ? .hoopwiseNewAthlete : .hoopwiseFindAthlete
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    NotificationCenter.default.post(name: name, object: nil)
+                }
+            }
+            #endif
             #endif
         }
         // ⌘1–⌘4 (the Mac's View menu).
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseSelectTab)) { note in
             if let tab = note.object as? Int { selectedTab = tab }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseFindAthlete)) { _ in
+            switchThenPost(tab: 2, .hoopwiseFocusAthleteSearch)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseNewAthlete)) { _ in
+            switchThenPost(tab: 2, .hoopwiseOpenAddAthlete)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseNewSessionCommand)) { _ in
+            switchThenPost(tab: 1, .hoopwiseNewSession)
         }
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenSessionRequest)) { note in
             PendingWidgetRoute.pending = nil

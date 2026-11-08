@@ -127,6 +127,20 @@ struct SAMApp: App {
         #if targetEnvironment(macCatalyst)
         // The Mac's menu bar: View → the four tabs, ⌘1–⌘4.
         .commands {
+            CommandGroup(replacing: .newItem) {
+                let zh = LocalizationManager.shared.currentLanguage == .chinese
+                Button(zh ? "新建课程…" : "New Session…") {
+                    NotificationCenter.default.post(name: .hoopwiseNewSessionCommand, object: nil)
+                }.keyboardShortcut("n")
+                Button(zh ? "新建学员…" : "New Athlete…") {
+                    NotificationCenter.default.post(name: .hoopwiseNewAthlete, object: nil)
+                }.keyboardShortcut("n", modifiers: [.command, .shift])
+            }
+            CommandGroup(after: .textEditing) {
+                Button(LocalizationManager.shared.currentLanguage == .chinese ? "查找学员" : "Find Athlete") {
+                    NotificationCenter.default.post(name: .hoopwiseFindAthlete, object: nil)
+                }.keyboardShortcut("f")
+            }
             CommandGroup(before: .toolbar) {
                 let zh = LocalizationManager.shared.currentLanguage == .chinese
                 Button(zh ? "首页" : "Home") { selectTab(0) }.keyboardShortcut("1")

@@ -37,6 +37,13 @@ struct FlightySessionRootView: View {
             .onReceive(timer) { _ in
                 currentTime = Date()
             }
+            // ⌘N on the Mac: the calendar, then its Add Session sheet.
+            .onReceive(NotificationCenter.default.publisher(for: .hoopwiseNewSession)) { _ in
+                selectedSegment = 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: .hoopwiseOpenAddSession, object: nil)
+                }
+            }
         }
     }
     
@@ -1666,6 +1673,9 @@ struct FlightySessionsCalendarView: View {
             sessionsListView
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAddSession)) { _ in
+            showingCreateSession = true      // ⌘N on the Mac
+        }
         .sheet(isPresented: $showingCreateSession) {
             AddSessionOnboardingView(initialDate: selectedDate)
         }
@@ -1811,6 +1821,7 @@ struct FlightySessionsCalendarView: View {
         return NavigationLink(destination: FlightySessionPageView(session: session, accessMode: .execution)) {
             CompactSessionRow(session: session, program: dataManager.programs.first { $0.id == session.programId })
         }
+        .sessionMacMenu(session)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 dataManager.deleteSessionEvent(session)
@@ -2115,6 +2126,7 @@ struct FlightySessionsCalendarView: View {
             content()
         }
         .buttonStyle(.plain)
+        .sessionMacMenu(session)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 dataManager.deleteSessionEvent(session)

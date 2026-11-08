@@ -234,6 +234,17 @@ idiom). What differs on the Mac:
   View menu with ⌘1–⌘4 for the four tabs (.hoopwiseSelectTab). The screens
   keep the iPad look; Catalyst's "Optimize for Mac" idiom (Mac-drawn controls)
   was deliberately NOT taken — that is the drift he did not want.
+- RIGHT-CLICK MENUS + COMMANDS (Luther, November 2026), Catalyst only —
+  Views/Components/MacMenus.swift: `.sessionMacMenu(session)` on calendar rows
+  (Open → .hoopwiseOpenSessionRequest; Mark Everyone Present, confirmed, via
+  setStudentAttendanceStates; Copy Details) and `.athleteMacMenu(student)` on
+  athlete rows (Open Profile, Edit → EditStudentView, Copy Name). On iPhone
+  and iPad they add NOTHING (no long-press menus — the freeze). File: ⌘N New
+  Session (Sessions → calendar → Add Session sheet), ⇧⌘N New Athlete
+  (Athletes → Add); Edit: ⌘F Find Athlete (Athletes, search focused via
+  .searchFocused). MainTabView.switchThenPost shows the tab, then signals it.
+  DEBUG HOOPWISE_MAC_COMMAND=newSession|newAthlete|find fires one at launch
+  (verified: both sheets open). Right-click and ⌘F still need a human check.
 - Run a Mac debug shot: `open -n --env HOOPWISE_SCREENSHOT_STORE=1 --env
   HOOPWISE_SHOT=<shot> <Debug-maccatalyst>/Hoopwise.app` (screencapture is not
   permitted here, so check results through that log).
