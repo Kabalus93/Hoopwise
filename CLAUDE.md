@@ -200,6 +200,9 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   iPhone keeps the inset-grouped Student Intelligence list. On the Mac the
   list hides the iOS 26 scroll-edge effect (`scrollEdgeEffectHidden`): the
   soft edge blur got stuck over the rows after scrolling, sometimes resizing.
+  In its place the navigation bar (title + search field) has a fixed `.bar`
+  material (toolbarBackgroundVisibility .visible), so rows blur only under
+  the header — without it rows ran visibly under the title and search.
 - Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
   and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
   simulator's (demo data only).

@@ -5225,8 +5225,12 @@ private struct AthleteListStyle: ViewModifier {
                 #if targetEnvironment(macCatalyst)
                 // The soft scroll-edge blur stuck over the list on the Mac
                 // (Luther, November 2026: it stayed, or changed size, after
-                // scrolling). No edge effect there; iPhone/iPad keep theirs.
+                // scrolling). No edge effect there; instead the header — the
+                // title row and the search field under it — gets a fixed
+                // frosted bar, so rows blur only where they pass beneath it.
                 .scrollEdgeEffectHidden(true, for: .all)
+                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+                .toolbarBackground(.bar, for: .navigationBar)
                 #endif
         } else {
             content.listStyle(.insetGrouped).scrollContentBackground(.hidden)
