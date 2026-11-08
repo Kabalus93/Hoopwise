@@ -805,6 +805,14 @@ struct FlightySessionPageView: View {
                     section: .main
                 )
 
+                // Plays from the Hub's library this session runs.
+                SessionPlanPlaysSection(
+                    plays: $session.curriculum.plays,
+                    canEdit: accessMode.canEdit,
+                    color: Color.accentColor,
+                    onChange: saveSession
+                )
+
                 Spacer(minLength: 100)
             }
             .padding(.horizontal, 12)
@@ -927,11 +935,12 @@ struct FlightySessionPageView: View {
         )
 
         let result = DrillPlanGenerator.generatePlan(in: ctx)
-        // Preserve the coach's hand-typed notes if any.
+        // Preserve the coach's hand-typed notes and chosen plays.
         var merged = result.curriculum
         if let existingNotes = session.curriculum.notes, !existingNotes.isEmpty {
             merged.notes = existingNotes
         }
+        merged.plays = session.curriculum.plays
         session.curriculum = merged
         planRationale = result.rationale
         saveSession()

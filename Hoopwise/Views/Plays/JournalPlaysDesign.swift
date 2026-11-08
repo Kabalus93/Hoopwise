@@ -35,6 +35,8 @@ enum JPalette {
     static let courtLine = Color(uiColor: .jAdaptive(light: 0xC3C2B7, dark: 0x4A4945))
     static let play = Color(uiColor: .jAdaptive(light: 0x2A78D6, dark: 0x3987E5))
     static let read = Color(uiColor: .jAdaptive(light: 0xB27200, dark: 0xFAB219))
+    /// Shots, and dribbles that finish at the rim.
+    static let shot = Color(uiColor: .jAdaptive(light: 0xD8342C, dark: 0xFF5A4F))
 }
 
 enum JMotion {

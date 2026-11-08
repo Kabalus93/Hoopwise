@@ -21,6 +21,12 @@ struct JournalPlayScreen: View {
     @State private var deletingPart: JournalPlayPart?
     @State private var confirmingDelete = false
     @State private var openedPart: JournalPlayStudyRoute?
+    /// The concept's step on show: the page plays it in place.
+    @State private var conceptStep = 0
+    @State private var editingStep: JournalPlayStep?
+    @State private var showingLegend = false
+    /// The concept's step screen, for adding, moving and deleting steps.
+    @State private var editingSteps = false
 
     /// Opens straight on a part (a new play: its first step, to draw).
     init(play: JournalPlay, opening: JournalPlayStudyRoute? = nil) {
@@ -59,10 +65,31 @@ struct JournalPlayScreen: View {
         .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { menu }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if !isUndrawn, let step = currentConceptStep {
+                    Button { showingLegend = true } label: {
+                        Label { JText("Legend") } icon: { Image(systemName: "info.circle") }
+                    }
+                    Button { editingStep = step } label: {
+                        Label { JText("Draw this step") } icon: { Image(systemName: "pencil") }
+                    }
+                }
+                menu
+            }
         }
         .navigationDestination(item: $openedPart) { route in
             JournalPlayStudyScreen(part: route.part, editsFirstStep: route.editing)
+        }
+        .navigationDestination(isPresented: $editingSteps) {
+            if let concept = play.conceptPart {
+                JournalPlayStudyScreen(part: concept, startingAt: conceptStep)
+            }
+        }
+        .sheet(isPresented: $showingLegend) {
+            JournalPlayLegendSheet()
+        }
+        .fullScreenCover(item: $editingStep) { step in
+            JournalPlayStepEditor(step: step, court: play.court)
         }
         .sheet(isPresented: $editingDetails) {
             JournalPlayDetailsSheet(play: play)
@@ -112,6 +139,11 @@ struct JournalPlayScreen: View {
             Button { editingDetails = true } label: {
                 Label { JText("Edit details") } icon: { Image(systemName: "pencil") }
             }
+            if !isUndrawn, play.conceptPart != nil {
+                Button { editingSteps = true } label: {
+                    Label { JText("Edit steps") } icon: { Image(systemName: "list.number") }
+                }
+            }
             Button { partSheet = .add(.wrinkle) } label: {
                 Label { JText("Add a wrinkle") } icon: { Image(systemName: "plus") }
             }
@@ -132,8 +164,47 @@ struct JournalPlayScreen: View {
         (play.parts ?? []).allSatisfy { part in (part.steps ?? []).allSatisfy { $0.diagram.actions.isEmpty } }
     }
 
-    /// The concept's first diagram; tap to study it.
+    private var currentConceptStep: JournalPlayStep? {
+        let steps = play.conceptPart?.sortedSteps ?? []
+        return steps.indices.contains(conceptStep) ? steps[conceptStep] : nil
+    }
+
+    /// The concept, played in place: ‹ ▶ › under its diagram, its steps'
+    /// text below. Undrawn, the hero offers to draw instead.
+    @ViewBuilder
     private func hero(_ concept: JournalPlayPart) -> some View {
+        if isUndrawn || concept.sortedSteps.isEmpty {
+            drawHero(concept)
+        } else {
+            VStack(alignment: .leading, spacing: JSpacing.xs) {
+                conceptLabel(concept)
+                JournalPlayStepPlayer(part: concept, index: $conceptStep,
+                                      paused: editingStep != nil || showingLegend || editingSteps)
+            }
+            // Steps deleted on the step screen: stay on one that exists.
+            .onAppear { conceptStep = max(0, min(conceptStep, concept.sortedSteps.count - 1)) }
+        }
+    }
+
+    /// "Concept", and its name when it isn't the play's.
+    private func conceptLabel(_ concept: JournalPlayPart) -> some View {
+        HStack(spacing: JSpacing.xxs) {
+            JEyebrowLabel(title: JournalPlayPartKind.concept.label)
+            if concept.name != play.name, !concept.name.isEmpty {
+                Text(verbatim: "· \(concept.name)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .contextMenu {
+            Button { partSheet = .edit(concept) } label: {
+                Label { JText("Rename") } icon: { Image(systemName: "pencil") }
+            }
+        }
+    }
+
+    /// A play with nothing drawn yet: its first diagram; tap to draw it.
+    private func drawHero(_ concept: JournalPlayPart) -> some View {
         NavigationLink {
             JournalPlayStudyScreen(part: concept, editsFirstStep: isUndrawn)
         } label: {
@@ -216,8 +287,9 @@ struct JournalPlayScreen: View {
                     VStack(spacing: 0) {
                         ForEach(Array(parts.enumerated()), id: \.element.id) { i, part in
                             if i > 0 { Divider() }
+                            // Opening a wrinkle or variation plays it at once.
                             NavigationLink {
-                                JournalPlayStudyScreen(part: part)
+                                JournalPlayStudyScreen(part: part, autoplay: true)
                             } label: {
                                 JournalPlayPartRow(part: part, court: play.court)
                             }

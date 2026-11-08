@@ -21,6 +21,7 @@ enum ConnectorToolCategory: String, Codable {
     case sessionWrite = "session"
     case athleteWrite = "athlete"
     case contractWrite = "contract"
+    case playWrite = "play"
 
     var isWrite: Bool { self != .read && self != .meta }
     /// Contract changes always confirm — no always-allow, ever.
@@ -61,7 +62,7 @@ enum ConnectorToolError: LocalizedError {
 
 @MainActor
 final class ConnectorToolRegistry {
-    private unowned let dataManager: DataManager
+    unowned let dataManager: DataManager
     private(set) var tools: [ConnectorTool] = []
 
     /// Data-minimization mode (on by default): guardian contacts, money
@@ -107,7 +108,7 @@ final class ConnectorToolRegistry {
         return object
     }
 
-    private static func encode(_ object: Any) -> String {
+    static func encode(_ object: Any) -> String {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
               let string = String(data: data, encoding: .utf8) else { return "{}" }
@@ -199,7 +200,7 @@ final class ConnectorToolRegistry {
 
     /// A session by id or ref — or, without one, by `when` (ISO date-time)
     /// plus optional `program`, which is how a coach names a class anyway.
-    private func findSession(_ args: [String: Any]) throws -> SessionEvent {
+    func findSession(_ args: [String: Any]) throws -> SessionEvent {
         let sessions = dataManager.sessionEvents
         if let raw = args["session_id"] as? String, !raw.isEmpty {
             if let id = Self.resolve(raw, in: sessions.map(\.id)),
@@ -395,6 +396,8 @@ final class ConnectorToolRegistry {
                     }
                     payload["roster"] = roster
                     if let notes = session.notes, !notes.isEmpty { payload["notes"] = notes }
+                    // The plan's plays (add_play_to_session), by name.
+                    if !session.curriculum.plays.isEmpty { payload["plan_plays"] = session.curriculum.plays.map(\.name) }
                     return ConnectorToolResult(payload: Self.encode(payload),
                                                summary: "read session \(session.title)")
                 }),
@@ -828,7 +831,7 @@ final class ConnectorToolRegistry {
                     }
                     return ConnectorToolResult(payload: "{\"opened\": true}", summary: "opened in app")
                 }),
-        ]
+        ] + playTools()
     }
 
 }

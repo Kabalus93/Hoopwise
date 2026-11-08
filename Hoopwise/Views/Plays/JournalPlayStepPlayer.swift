@@ -1,0 +1,214 @@
+import SwiftUI
+
+/// A part played step by step: the caption and "Step 1 of 3", the diagram
+/// (swipe between steps), ‹ ▶ › under it, and the step's text in a card
+/// below. Shared by the play page (the concept, playable in place — Luther,
+/// November 2026: the hero's ▶ used to open a second screen where ▶ then
+/// played) and the step screen of every part.
+///
+/// The host owns which step is shown (`index`) so its toolbar can draw,
+/// add, move or delete that step; playback stops whenever the host moves
+/// the index itself or `paused` turns on (an editor or dialog open).
+struct JournalPlayStepPlayer<Leading: View>: View {
+    let part: JournalPlayPart
+    @Binding var index: Int
+    var paused = false
+    /// Start playing as soon as the player appears.
+    var autoplay = false
+    /// DEBUG: a frozen moment of the playback, for screenshots.
+    var frozenT: Double?
+    /// Shown before the caption (the play page puts "Concept" there).
+    @ViewBuilder var leading: () -> Leading
+
+    @State private var playing = false
+    @State private var stepStart = Date.now
+    @State private var playback: Task<Void, Never>?
+    /// The index playback last moved to, to tell its own moves from the host's.
+    @State private var playedIndex: Int?
+    @State private var frozen: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var steps: [JournalPlayStep] { part.sortedSteps }
+    private var court: JournalCourtKind { part.play?.court ?? .half }
+    private var current: JournalPlayStep? { steps.indices.contains(index) ? steps[index] : nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JSpacing.m) {
+            JCard(verticalPadding: JSpacing.s) {
+                VStack(alignment: .leading, spacing: JSpacing.s) {
+                    header
+                    pager
+                    controls
+                }
+            }
+            stepText
+        }
+        .onAppear {
+            frozen = frozenT
+            if autoplay, frozen == nil, steps.count > 0 { play() }
+        }
+        .onDisappear(perform: stop)
+        .onChange(of: paused) { _, isPaused in if isPaused { stop() } }
+        .onChange(of: index) { _, newIndex in
+            if playing, newIndex != playedIndex { stop() }
+        }
+    }
+
+    // MARK: - Diagram
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: JSpacing.xs) {
+            leading()
+            Text(verbatim: current?.caption ?? "")
+                .font(.headline)
+            Spacer(minLength: JSpacing.xs)
+            JText("Step \(index + 1) of \(steps.count)")
+                .font(.subheadline)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var pager: some View {
+        TabView(selection: $index) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
+                diagram(step, isCurrent: i == index)
+                    .padding(JSpacing.xs)
+                    .tag(i)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .aspectRatio(JournalPlayCourt.aspectRatio(court), contentMode: .fit)
+        .background(JPalette.background, in: .rect(cornerRadius: JRadius.tile))
+        .accessibilityElement()
+        .accessibilityLabel(Text(verbatim: current?.caption ?? ""))
+        .accessibilityValue(JText("Step \(index + 1) of \(steps.count)"))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: go(to: index + 1)
+            case .decrement: go(to: index - 1)
+            @unknown default: break
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func diagram(_ step: JournalPlayStep, isCurrent: Bool) -> some View {
+        if isCurrent, let frozen {
+            JournalPlayDiagramView(diagram: step.diagram, court: court, frame: JournalPlayMath.frame(step.diagram, at: frozen))
+        } else if isCurrent, playing, !reduceMotion {
+            let diagram = step.diagram
+            let duration = Self.duration(diagram)
+            TimelineView(.animation) { timeline in
+                let t = timeline.date.timeIntervalSince(stepStart) / duration
+                JournalPlayDiagramView(diagram: diagram, court: court, frame: JournalPlayMath.frame(diagram, at: t))
+            }
+        } else {
+            JournalPlayDiagramView(diagram: step.diagram, court: court)
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: JSpacing.s) {
+            stepButton("chevron.left", label: "Previous step", enabled: index > 0) { go(to: index - 1) }
+            Spacer(minLength: 0)
+            Button {
+                playing ? stop() : play()
+            } label: {
+                Label {
+                    playing ? JText("Pause") : JText("Play")
+                } icon: {
+                    Image(systemName: playing ? "pause.fill" : "play.fill")
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(JPalette.background)
+                .padding(.horizontal, JSpacing.l)
+                .frame(minHeight: JTouchTarget.standard)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(JPalette.ink)
+            .accessibilityIdentifier("plays.player.play")
+            Spacer(minLength: 0)
+            stepButton("chevron.right", label: "Next step", enabled: index < steps.count - 1) { go(to: index + 1) }
+        }
+    }
+
+    private func stepButton(_ symbol: String, label: JPString, enabled: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label { JText(label) } icon: { Image(systemName: symbol) }
+                .labelStyle(.iconOnly)
+                .font(.body.weight(.semibold))
+                .frame(width: JTouchTarget.standard, height: JTouchTarget.standard)
+        }
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .disabled(!enabled)
+    }
+
+    @ViewBuilder
+    private var stepText: some View {
+        if let text = current?.text, !text.isEmpty {
+            JCard {
+                Text(verbatim: text)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id(index)
+            }
+        }
+    }
+
+    // MARK: - Playback
+
+    /// Seconds a step plays: 1.2 s a beat (`JournalPlayMath.playBeats`).
+    private static func duration(_ diagram: JournalPlayDiagram) -> Double {
+        max(1.2, 1.2 * JournalPlayMath.playBeats(diagram))
+    }
+
+    private func go(to newIndex: Int) {
+        stop()
+        guard steps.indices.contains(newIndex) else { return }
+        withAnimation(JMotion.expand) { index = newIndex }
+    }
+
+    /// From this step to the last; from the start when already on the last.
+    private func play() {
+        frozen = nil
+        if index >= steps.count - 1 { setIndex(0) }
+        playing = true
+        playedIndex = index
+        playback = Task { @MainActor in
+            while !Task.isCancelled, steps.indices.contains(index) {
+                stepStart = .now
+                let hold = reduceMotion ? 2.4 : Self.duration(steps[index].diagram) + 0.8
+                try? await Task.sleep(for: .seconds(hold))
+                guard !Task.isCancelled else { return }
+                guard index < steps.count - 1 else { break }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { setIndex(index + 1) }
+            }
+            playing = false
+        }
+    }
+
+    private func setIndex(_ newIndex: Int) {
+        playedIndex = newIndex
+        index = newIndex
+    }
+
+    private func stop() {
+        playback?.cancel()
+        playback = nil
+        playing = false
+    }
+}
+
+extension JournalPlayStepPlayer where Leading == EmptyView {
+    init(part: JournalPlayPart, index: Binding<Int>, paused: Bool = false, autoplay: Bool = false,
+         frozenT: Double? = nil) {
+        self.init(part: part, index: index, paused: paused, autoplay: autoplay, frozenT: frozenT) { EmptyView() }
+    }
+}

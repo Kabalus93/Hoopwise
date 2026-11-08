@@ -143,6 +143,7 @@ final class ConnectorServer {
                 MOVES them out of every other class). School grades go in school_grade, not notes. \
                 Writes go through the app's own rules and are refused when a rule says no — relay \
                 the reason. There is no delete.
+                PLAYS: the coach's play library (Hub → Plays). Before creating or changing a play call                 get_play_drawing_guide, and read a similar play with get_play to see the format filled in.                 create_play saves a whole play (steps, wrinkles, variations) after checking every field;                 read it back with get_play. add_play_to_session puts a play in a session's plan.
                 """,
             ])
         case "ping":

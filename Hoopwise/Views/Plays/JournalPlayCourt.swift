@@ -113,6 +113,10 @@ struct JournalPlayDiagramView: View {
     let court: JournalCourtKind
     var frame: JournalPlayMath.PlayFrame?
     var compact = false
+    /// The editor's Move tool: a dot on each bend point, to drag.
+    var showsBends = false
+    /// The editor's selection, haloed in the offense blue.
+    var highlight: JournalPlayMath.PlayHit?
 
     /// Marks grow in thumbnails and on a small court (the full court on a
     /// phone) so players and numbers stay readable.
@@ -140,8 +144,25 @@ struct JournalPlayDiagramView: View {
         // Actions under the players; faint while the play moves.
         var actionLayer = context
         if frame != nil { actionLayer.opacity = 0.22 }
+        if case .action(let i)? = highlight, diagram.actions.indices.contains(i) {
+            var halo = context
+            halo.opacity = 0.35
+            drawAction(diagram.actions[i], in: &halo, scale: s, k: k, shading: .color(JPalette.play),
+                       width: width * 3.2, radius: r, keepsColor: true)
+        }
         for action in diagram.actions {
             drawAction(action, in: &actionLayer, scale: s, k: k, shading: ink, width: width, radius: r)
+        }
+        if showsBends {
+            let dot = max(4, r * 0.32)
+            for action in diagram.actions {
+                for bend in action.path.dropFirst().dropLast() {
+                    let c = JournalPlayCourt.point(bend, scale: s)
+                    let circle = Path(ellipseIn: CGRect(x: c.x - dot, y: c.y - dot, width: 2 * dot, height: 2 * dot))
+                    context.fill(circle, with: .color(JPalette.background))
+                    context.stroke(circle, with: .color(JPalette.play), lineWidth: max(1, width))
+                }
+            }
         }
 
         // Where players end up.
@@ -182,16 +203,37 @@ struct JournalPlayDiagramView: View {
             context.draw(label("\(player.number)", size: JournalPlayCourt.numberSize * s * k, weight: .semibold)
                 .foregroundStyle(JPalette.ink), at: c)
         }
-        let ballAt: CGPoint? = {
-            if let frame { return frame.ball.map { JournalPlayCourt.point($0, scale: s) } }
-            return diagram.ball.flatMap { diagram.player($0) }.map { JournalPlayCourt.point($0.at, scale: s) }
+        // Every ball beside its holder (a second ball on the same player on
+        // the other shoulder), or in flight.
+        let ballsAt: [CGPoint] = {
+            if let frame { return frame.balls.map { JournalPlayCourt.point($0.at, scale: s) } }
+            return diagram.balls.compactMap { diagram.player($0) }.map { JournalPlayCourt.point($0.at, scale: s) }
         }()
-        if let ball = ballAt {
+        var drawnAt: [CGPoint] = []
+        for ball in ballsAt {
             let br = JournalPlayCourt.ballRadius * s * k
-            let c = CGPoint(x: ball.x + r * 0.78, y: ball.y - r * 0.78)
+            let shared = drawnAt.filter { hypot($0.x - ball.x, $0.y - ball.y) < 0.5 }.count
+            drawnAt.append(ball)
+            let side: CGFloat = shared % 2 == 0 ? 1 : -1
+            let c = CGPoint(x: ball.x + side * r * 0.78, y: ball.y - r * (0.78 - 0.9 * CGFloat(shared / 2)))
             let dot = Path(ellipseIn: CGRect(x: c.x - br, y: c.y - br, width: 2 * br, height: 2 * br))
             context.fill(dot, with: .color(JCategory.court.color))
             context.stroke(dot, with: .color(JPalette.background), lineWidth: max(1, width * 0.7))
+        }
+
+        // The selected player or defender: a ring around it.
+        let ringAt: CGPoint? = {
+            switch highlight {
+            case .player(let n)?: return diagram.player(n).map { JournalPlayCourt.point($0.at, scale: s) }
+            case .defender(let i)? where diagram.defense.indices.contains(i):
+                return JournalPlayCourt.point(diagram.defense[i].at, scale: s)
+            default: return nil
+            }
+        }()
+        if let c = ringAt {
+            let rr = r * 1.4
+            let ring = Path(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr, width: 2 * rr, height: 2 * rr))
+            context.stroke(ring, with: .color(JPalette.play), lineWidth: max(1.5, width * 1.3))
         }
 
         // Notes on the court; a lone mark (①) in ink, like the game plan.
@@ -211,7 +253,8 @@ struct JournalPlayDiagramView: View {
     // MARK: - Actions
 
     private func drawAction(_ action: JournalPlayDiagram.Action, in context: inout GraphicsContext, scale s: CGFloat,
-                            k: CGFloat, shading: GraphicsContext.Shading, width: CGFloat, radius r: CGFloat) {
+                            k: CGFloat, shading: GraphicsContext.Shading, width: CGFloat, radius r: CGFloat,
+                            keepsColor: Bool = false) {
         var points = action.path.map { JournalPlayCourt.point($0, scale: s) }
         guard points.count >= 2 else { return }
         // Leave the player's circle, and stop short of where it lands.
@@ -220,9 +263,14 @@ struct JournalPlayDiagramView: View {
             let n = points.count - 1
             points[n] = Self.moved(points[n], toward: points[n - 1], by: r + width)
         }
-        let curve = Self.smooth(points)
+        let curve = action.isStraight ? Self.polyline(points) : Self.smooth(points)
+        // A shot is red, and so is a dribble that finishes at the rim (a drive).
+        let toRim = action.kind == .shot
+            || (action.kind == .dribble && action.path.last.map(court.isAtBasket) == true)
+        // (The selection halo keeps its blue.)
+        let shading = toRim && !keepsColor ? GraphicsContext.Shading.color(JPalette.shot) : shading
         switch action.kind {
-        case .cut:
+        case .cut, .shot:
             context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
             arrow(at: points, in: &context, scale: s, k: k, shading: shading)
         case .pass:
@@ -266,6 +314,13 @@ struct JournalPlayDiagramView: View {
         let len = (dx * dx + dy * dy).squareRoot()
         guard len > distance * 1.5 else { return p }
         return CGPoint(x: p.x + dx / len * distance, y: p.y + dy / len * distance)
+    }
+
+    /// Straight segments through the points, corners kept.
+    static func polyline(_ points: [CGPoint]) -> Path {
+        var path = Path()
+        path.addLines(points)
+        return path
     }
 
     /// Straight for two points, a curve through the middle points otherwise
@@ -375,6 +430,8 @@ struct JournalPlayLegend: View {
             item(1, "Defender", JournalPlayDiagram(defense: [.init(at: P(1, 1))])),
             item(2, "Cut or run", JournalPlayDiagram(actions: [.init(kind: .cut, player: 0, path: line)])),
             item(3, "Pass", JournalPlayDiagram(actions: [.init(kind: .pass, player: 0, path: line)])),
+            item(9, "Shot (a drive to the basket is red too)",
+                 JournalPlayDiagram(actions: [.init(kind: .shot, player: 0, path: line)])),
             item(4, "legend.dribble",
                  JournalPlayDiagram(actions: [.init(kind: .dribble, player: 0, path: line)])),
             item(5, "Screen", JournalPlayDiagram(actions: [.init(kind: .screen, player: 0, path: [P(-0.6, 1), P(2.2, 1)])])),

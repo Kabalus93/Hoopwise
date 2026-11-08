@@ -1,8 +1,8 @@
 import XCTest
 
 /// Hub → Plays (HoopWise Journal's Plays tab, November 2026) clicks through:
-/// the library opens a play, the play opens its steps and a wrinkle, and the
-/// pencil opens the step editor. Luther found the first port inert — a
+/// the library opens a play, the play plays its concept in place, the
+/// pencil opens the step editor, and a wrinkle opens playing. Luther found the first port inert — a
 /// play row did nothing — so this runs the real taps. Isolated demo store.
 final class PlaysUITests: XCTestCase {
 
@@ -34,24 +34,28 @@ final class PlaysUITests: XCTestCase {
         XCTAssertTrue(horns.exists, "the starter plays are not in the library")
         horns.tap()
 
-        let hero = app.buttons["plays.hero"].firstMatch
-        XCTAssertTrue(hero.waitForExistence(timeout: 10), "the play did not open")
-        hero.tap()
-
+        // The play page plays its concept in place (Luther, November 2026:
+        // the hero's ▶ used to open a second screen where ▶ then played).
         let step = app.staticTexts["Step 1 of 3"].firstMatch
-        XCTAssertTrue(step.waitForExistence(timeout: 10), "the concept's steps did not open")
+        XCTAssertTrue(step.waitForExistence(timeout: 10), "the play page does not show the concept's steps")
         app.buttons["Next step"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Step 2 of 3"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["plays.player.play"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 3), "Play did not play in place")
+        XCTAssertTrue(app.buttons["plays.part.wrinkle.0"].firstMatch.exists, "Play left the play page")
+        app.buttons["plays.player.play"].firstMatch.tap()
 
         app.buttons["Draw this step"].firstMatch.tap()
         XCTAssertTrue(app.buttons["Erase"].firstMatch.waitForExistence(timeout: 5), "the step editor did not open")
         app.buttons["Cancel"].firstMatch.tap()
 
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // A wrinkle opens already playing.
         let wrinkle = app.buttons["plays.part.wrinkle.0"].firstMatch
         XCTAssertTrue(wrinkle.waitForExistence(timeout: 10))
         wrinkle.tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 2"].firstMatch.waitForExistence(timeout: 10), "the wrinkle did not open")
+        let ofTwo = app.staticTexts.matching(NSPredicate(format: "label ENDSWITH %@", "of 2")).firstMatch
+        XCTAssertTrue(ofTwo.waitForExistence(timeout: 10), "the wrinkle did not open")
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.exists, "the wrinkle did not start playing")
     }
 
     /// The other Hub cards open too: a glassEffect inside each card's label

@@ -82,9 +82,14 @@ struct SessionCurriculum: Codable, Hashable {
     var skillsMinutes: Int
     var gameMinutes: Int
     var notes: String?
+    /// Plays from the Hub's Plays library this session runs, in order
+    /// (November 2026, Luther). Inside the curriculum JSON, so no schema
+    /// change; a plan saved before this has none.
+    var plays: [SessionPlayRef]
     
     init(warmupDrillIds: [UUID] = [], skillDrillIds: [UUID] = [], gameDrillIds: [UUID] = [],
-         warmupMinutes: Int = 30, skillsMinutes: Int = 30, gameMinutes: Int = 30, notes: String? = nil) {
+         warmupMinutes: Int = 30, skillsMinutes: Int = 30, gameMinutes: Int = 30, notes: String? = nil,
+         plays: [SessionPlayRef] = []) {
         self.warmupDrillIds = warmupDrillIds
         self.skillDrillIds = skillDrillIds
         self.gameDrillIds = gameDrillIds
@@ -92,6 +97,23 @@ struct SessionCurriculum: Codable, Hashable {
         self.skillsMinutes = skillsMinutes
         self.gameMinutes = gameMinutes
         self.notes = notes
+        self.plays = plays
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case warmupDrillIds, skillDrillIds, gameDrillIds, warmupMinutes, skillsMinutes, gameMinutes, notes, plays
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        warmupDrillIds = try c.decode([UUID].self, forKey: .warmupDrillIds)
+        skillDrillIds = try c.decode([UUID].self, forKey: .skillDrillIds)
+        gameDrillIds = try c.decode([UUID].self, forKey: .gameDrillIds)
+        warmupMinutes = try c.decode(Int.self, forKey: .warmupMinutes)
+        skillsMinutes = try c.decode(Int.self, forKey: .skillsMinutes)
+        gameMinutes = try c.decode(Int.self, forKey: .gameMinutes)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        plays = try c.decodeIfPresent([SessionPlayRef].self, forKey: .plays) ?? []
     }
     
     var totalDrillCount: Int { warmupDrillIds.count + skillDrillIds.count + gameDrillIds.count }

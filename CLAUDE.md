@@ -311,6 +311,31 @@ clicking through." Services/ClaudeConnector/ (Catalyst only):
 - Verified 6 Nov 2026 on the demo copy: initialize, tools/list (16 tools),
   search/get/list, a write (record_note), a refusal, and a wrong key (401 →
   "access key is wrong").
+- PLAYS TOOLS (November 2026, Luther: Claude creates plays and saves them in
+  the library, from conversations or concepts he feeds it — "accurate and
+  fully use the capabilities"). Services/ClaudeConnector/ConnectorPlayTools.
+  swift, thin over Models/JournalPlays/JournalPlayAuthoring.swift (shared,
+  pure-ish, tested on the simulator — JournalPlayAuthoringTests):
+  get_play_drawing_guide (READ FIRST: court metres + landmarks, the format,
+  playback rules — `JournalPlayAuthoring.guide`), list_plays, get_play (the
+  SAME format create_play takes, so a play round-trips), create_play (whole
+  play: steps + wrinkles + variations), update_play (details; court change
+  converts), add_play_part, add_play_step, update_play_step,
+  add_play_to_session (curriculum.plays, keepLiveFields); get_session shows
+  plan_plays. FORMAT = the drawing model in metres with three conveniences:
+  a step CARRIES OVER from the previous step's end; a move's path may be just
+  its destination (it starts at the player); a pass names its receiver
+  ("to") and a shot nothing — drawn from where players are at that moment,
+  as the editor snaps. Validate everything, then write (a bad field names
+  itself — "steps[1].actions[0]: …" — and saves nothing); warnings (a pass
+  without a ball, crowded players, long notes) save but come back. play_id =
+  starter key, else "p" + creation ms in base 36; a name also resolves. NO
+  DELETE TOOLS. 28 tools. Verified 8 Nov 2026 over HTTP on the Mac demo copy
+  (HOOPWISE_SCREENSHOT_STORE=1 + HOOPWISE_CONNECTOR_TOKEN): initialize
+  mentions plays, tools/list, guide, create_play, a refused bad pass,
+  get_play, list_plays, add_play_to_session twice (second: already_in_plan),
+  get_session plan_plays. The coach's running app holds port 47720 — quit
+  it before a demo-copy run and reopen it after.
 
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
@@ -636,6 +661,83 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
     Hub's `NavigationLink(destination:)`; the Plays screens use destination
     links. Simulator taps from the agent tool are unreliable on these
     cards (a system gesture claims them) — verify with XCUITest.
+- TWENTIETH sanctioned exception (November 2026, Luther's request: drills
+  where more than one player has a ball, and plays in the training plan).
+  (a) SEVERAL BALLS: `JournalPlayDiagram.balls: [Int]` (one entry per ball);
+  `ball` is now the first holder, computed. The JSON keeps writing `ball`
+  beside `balls`, so an older build reads the first ball and a drawing it
+  saved reads back as that one ball. The editor's Ball tool gives or takes a
+  ball per player. Playback (`JournalPlayMath.frame`) moves each pass's
+  PASSER'S ball (`ballIndex`; with one ball on the floor any pass moves it, as
+  before); passes still fly one at a time. A second ball on one player sits on
+  the other shoulder. (b) PLAYS IN THE PLAN: the session Plan tab has a PLAYS
+  card under Skills (Views/Plays/SessionPlanPlays.swift — picker by category
+  with search, tap opens the play, ⋯ moves/removes). Stored in
+  `SessionCurriculum.plays` inside the curriculum JSON (no schema change; old
+  plans decode with none; Generate Plan keeps them). JournalPlay has NO stored
+  id and adding one is a schema change, so `SessionPlayRef` names a play by
+  `starter:<key>` else `created:<ms since 1970>` (matched ±1 ms — CloudKit
+  keeps dates to the millisecond) and keeps the name for a play since
+  deleted. New Plays strings go in JournalPlayStringsAdded (the generated
+  table stays untouched). Tests: JournalPlayBallsTests.
+  (c) ONE TAP TO PLAY (Luther: the hero's ▶ opened a second screen where ▶
+  then played — "redundant"): the play page's hero IS the step player
+  (Views/Plays/JournalPlayStepPlayer.swift, shared with the step screen) —
+  caption, Step N of M, diagram, ‹ ▶ ›, the step's text; Legend and the
+  pencil (draw this step) are in the play page toolbar, ⋯ → Edit steps pushes
+  the step screen for add/move/delete. An undrawn play keeps its Draw hero.
+  A wrinkle or variation opens already playing. PlaysUITests pins it.
+  (d) STRAIGHT OR CURVED LINES (Luther: lines drawn with a mouse or on a
+  small screen came out wobbly — every hand shake became a bend, drawn as a
+  curve). `Action.shape` (.straight / .curved; nil = drawn before, still
+  curved through its points). The editor's Straight | Curved switch (cut,
+  dribble, screen; `plays.lineShape`, device-local) shapes the stroke LIVE
+  via `JournalPlayMath.shaped`: straight = one segment, a corner only where
+  the hand turned > 1 m (≤ 2); curved = ≤ 2 bends, Catmull-Rom. Move tool:
+  tap a line to toggle (`toggledShape` — curved gains a mid bend), drag a
+  bend dot (`moving(bend:)`, hit `.actionBend`). Playback and touches follow
+  the DRAWN path (`drawnPath`). Tests: JournalPlayShapeTests.
+  (e) THE EDITOR WORKSPACE (Luther: "like Pixelmator Pro … most plays will be
+  edited from here" — the Mac). Regular width only; the iPhone keeps the
+  Journal layout. JournalPlayStepEditor = vertical TOOL RAIL (select | cut
+  dribble pass screen | defender ball | erase; pointer icon; tooltips with
+  keys) · the court as large as the window · INSPECTOR (This step: caption +
+  notes; the tool: hint + Straight|Curved; the SELECTION). No shortcut list
+  (Luther removed it); hovering a rail tool shows its NAME beside the rail at
+  once (onHover overlay — a system tooltip waits and sits under the pointer).
+  Move SELECTS (player: has a ball, erase their lines; defender: the one to
+  read, delete; line: kind, shape, delete) — on the phone a tap still
+  toggles a line's shape. Keys: V C D P S X B E (SwiftUI shortcuts), ⌘Z ⇧⌘Z,
+  ⌘↩ Done; ⌫ Esc and arrows (⇧ = 0.5 m) go through JournalEditorKeys, a
+  UIKit first-responder catcher: SwiftUI shortcuts NEVER fire for those keys
+  on iPadOS/Catalyst (the system keeps them). All keys stand down while a
+  text field is focused. Pointer hit radius is the circle (≥ 12 pt), not a
+  finger's 22 pt. XCUITest cannot send Esc/⌫/Return on the simulator (only
+  their modifiers arrive) — PlayEditorWorkspaceUITests (iPad) covers letters,
+  selection, inspector, arrows, ⌘Z; it skips on a phone.
+  (f) SHOTS (November 2026): ActionKind `.shot` — a solid RED line
+  (JPalette.shot) from the shooter into the NEAREST RIM
+  (`JournalCourtKind.baskets`: half (7.5, 1.575); full (26.425, 7.5) then
+  (1.575, 7.5)); tool H, between Pass and Screen (phone grid now 5 + 4). A
+  DRIBBLE whose end is within `basketReach` (1.4 m) of a rim is drawn red (a
+  drive) — computed at render, never stored. `kind.movesPlayer` (cut, dribble,
+  screen) / `kind.throwsBall` (pass, shot) replace every old `!= .pass` test.
+  Playback: a shot flies like a late pass and its ball RESTS AT THE RIM for
+  the rest of the step; next step it is out of play (`transfer` removes it).
+  OLDER BUILDS cannot decode "shot": a step containing one reads as an empty
+  drawing there (until they update). Tests: JournalPlayShotTests.
+  (g) SEVERAL STEPS PER EDITOR (Luther: edit more than one step without
+  Done): JournalPlayStepEditor(step:court:) edits the step's whole PART. The
+  title is a menu "Step N of M ▾" (all steps + Add a step); the workspace
+  inspector starts with a STEPS list (thumbnails of the drafts, ‹ › with
+  ⌘[ ⌘], Add a step). Each step keeps a DRAFT (drawing, caption, text, its
+  own undo/redo) while you move between them; Done writes every draft in one
+  save; Cancel discards them all AND deletes steps added in the editor. An
+  added step starts from the current step's DRAFT end. DELETE STEP (trash in
+  the Steps row, and the title menu; asks first; never the last step): a step
+  added in this editor goes at once, a saved one is hidden and only deleted
+  on Done — Cancel brings it back. The Screen icon is
+  upright — a T. PlayEditorWorkspaceUITests.testMovingBetweenSteps (iPad).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

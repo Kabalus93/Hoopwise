@@ -56,7 +56,7 @@ enum JournalPlayLanguage {
 /// The string in the app's language. English uses the singular form when
 /// the only number is 1 ("1 step").
 func jp(_ string: JPString, chinese: Bool = JournalPlayLanguage.isChinese) -> String {
-    let entry = JournalPlayStrings.table[string.key]
+    let entry = JournalPlayStrings.table[string.key] ?? JournalPlayStringsAdded.table[string.key]
     var format = string.key
     if let entry {
         if chinese, let zh = entry.zh {

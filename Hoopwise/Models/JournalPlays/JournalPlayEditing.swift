@@ -38,7 +38,7 @@ nonisolated extension JournalPlayMath {
         out.offense = diagram.offense.map { .init(number: $0.number, at: map($0.at)) }
         out.defense = diagram.defense.map { .init(at: map($0.at), isRead: $0.isRead) }
         out.actions = diagram.actions.map { .init(kind: $0.kind, player: $0.player, path: $0.path.map(map),
-                                                  receiver: $0.receiver) }
+                                                  receiver: $0.receiver, shape: $0.shape) }
         out.notes = diagram.notes.map { .init(text: $0.text, at: map($0.at)) }
         return out
     }
@@ -80,6 +80,38 @@ nonisolated extension JournalPlayMath {
         return p.distance(to: JournalCourtPoint(a.x + t * dx, a.y + t * dy))
     }
 
+    /// A finger's path as the line it means. Straight: one segment, with a
+    /// corner only where the hand clearly turned (over a metre off the
+    /// line) — at most two. Curved: one or two bends, drawn as a smooth
+    /// curve, so the hand's shake never reaches the drawing.
+    static func shaped(_ points: [JournalCourtPoint], _ shape: JournalPlayDiagram.PathShape) -> [JournalCourtPoint] {
+        switch shape {
+        case .straight: simplified(points, tolerance: 1.0, maxPoints: 3)
+        case .curved: simplified(points, tolerance: 0.7, maxPoints: 4)
+        }
+    }
+
+    /// The line as it is drawn, in metres: the bend points for a straight
+    /// line, else the smooth curve through them (Catmull-Rom, as the
+    /// diagram draws it), sampled. Playback and touches follow this.
+    static func drawnPath(_ action: JournalPlayDiagram.Action) -> [JournalCourtPoint] {
+        let p = action.path
+        guard !action.isStraight else { return p }
+        var out = [p[0]]
+        for i in 0..<(p.count - 1) {
+            let p0 = p[max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[min(i + 2, p.count - 1)]
+            let c1 = JournalCourtPoint(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6)
+            let c2 = JournalCourtPoint(p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6)
+            for k in 1...12 {
+                let t = Double(k) / 12, u = 1 - t
+                out.append(JournalCourtPoint(
+                    u * u * u * p1.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * p2.x,
+                    u * u * u * p1.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * p2.y))
+            }
+        }
+        return out
+    }
+
     static func length(of path: [JournalCourtPoint]) -> Double {
         zip(path, path.dropFirst()).map { $0.distance(to: $1) }.reduce(0, +)
     }
@@ -94,6 +126,8 @@ nonisolated extension JournalPlayMath {
         case defender(Int)
         /// The end of an action's path (its dashed ring, for a move).
         case actionEnd(Int)
+        /// A bend point inside a line: action, point.
+        case actionBend(Int, Int)
         case action(Int)
         case note(Int)
     }
@@ -108,12 +142,19 @@ nonisolated extension JournalPlayMath {
         }
         if let i = nearest(diagram.offense, { $0.at.distance(to: point) }) { return .player(diagram.offense[i].number) }
         if let i = nearest(diagram.defense, { $0.at.distance(to: point) }) { return .defender(i) }
-        let moves = diagram.actions.indices.filter { diagram.actions[$0].kind != .pass }
+        let moves = diagram.actions.indices.filter { diagram.actions[$0].kind.movesPlayer }
         if let i = nearest(moves, { diagram.actions[$0].path.last?.distance(to: point) ?? .infinity }) {
             return .actionEnd(moves[i])
         }
+        let bends = diagram.actions.indices.flatMap { a in
+            diagram.actions[a].path.indices.dropFirst().dropLast().map { (a, $0) }
+        }
+        if let i = nearest(bends, { diagram.actions[$0.0].path[$0.1].distance(to: point) }) {
+            return .actionBend(bends[i].0, bends[i].1)
+        }
         if let i = nearest(diagram.actions, { action in
-            zip(action.path, action.path.dropFirst()).map { distanceToSegment(point, $0, $1) }.min() ?? .infinity
+            let drawn = drawnPath(action)
+            return zip(drawn, drawn.dropFirst()).map { distanceToSegment(point, $0, $1) }.min() ?? .infinity
         }) { return .action(i) }
         if let i = nearest(diagram.notes, { $0.at.distance(to: point) }) { return .note(i) }
         return nil
@@ -137,9 +178,18 @@ nonisolated extension JournalPlayMath {
     /// nearest the finger's end, snapped to them. `nil` when the line is a
     /// tap, or a pass ends on no teammate.
     static func adding(_ kind: JournalPlayDiagram.ActionKind, by player: Int, along points: [JournalCourtPoint],
-                       to diagram: JournalPlayDiagram, radius: Double) -> JournalPlayDiagram? {
+                       to diagram: JournalPlayDiagram, radius: Double,
+                       shape: JournalPlayDiagram.PathShape = .straight,
+                       court: JournalCourtKind = .half) -> JournalPlayDiagram? {
         guard let start = points.first, let end = points.last else { return nil }
         var out = diagram
+        if kind == .shot {
+            // A shot always ends in the rim: the basket nearest the release.
+            guard let rim = court.baskets.min(by: { $0.distance(to: end) < $1.distance(to: end) }),
+                  start.distance(to: rim) >= shortestAction else { return nil }
+            out.actions.append(.init(kind: .shot, player: player, path: [start, rim]))
+            return out
+        }
         if kind == .pass {
             let receivers = diagram.offense.filter { $0.number != player }.compactMap { other -> (Int, JournalCourtPoint)? in
                 endPosition(of: other.number, in: diagram).map { (other.number, $0) }
@@ -149,9 +199,42 @@ nonisolated extension JournalPlayMath {
             out.actions.append(.init(kind: .pass, player: player, path: [start, at], receiver: receiver))
             return out
         }
-        let path = simplified(points)
+        let path = shaped(points, shape)
         guard length(of: path) >= shortestAction else { return nil }
-        out.actions.append(.init(kind: kind, player: player, path: path))
+        out.actions.append(.init(kind: kind, player: player, path: path, shape: shape))
+        return out
+    }
+
+    /// A line turned straight or curved. Straight runs start to end; curved
+    /// gets a gentle bend at its middle (a fifth of its length to the
+    /// side) when it has none, to drag into the curve wanted.
+    static func toggledShape(of index: Int, in diagram: JournalPlayDiagram) -> JournalPlayDiagram {
+        guard diagram.actions.indices.contains(index), diagram.actions[index].kind.movesPlayer,
+              let first = diagram.actions[index].path.first, let last = diagram.actions[index].path.last else { return diagram }
+        var out = diagram
+        if diagram.actions[index].isStraight {
+            if diagram.actions[index].path.count == 2 {
+                let dx = last.x - first.x, dy = last.y - first.y
+                let length = (dx * dx + dy * dy).squareRoot()
+                guard length > 0 else { return diagram }
+                let off = max(0.6, length * 0.2)
+                out.actions[index].path.insert(JournalCourtPoint((first.x + last.x) / 2 - dy / length * off,
+                                                                 (first.y + last.y) / 2 + dx / length * off), at: 1)
+            }
+            out.actions[index].shape = .curved
+        } else {
+            out.actions[index].path = [first, last]
+            out.actions[index].shape = .straight
+        }
+        return out
+    }
+
+    /// A bend point inside a line dragged to `point`.
+    static func moving(bend point: Int, of index: Int, to at: JournalCourtPoint, in diagram: JournalPlayDiagram) -> JournalPlayDiagram {
+        guard diagram.actions.indices.contains(index),
+              diagram.actions[index].path.indices.dropFirst().dropLast().contains(point) else { return diagram }
+        var out = diagram
+        out.actions[index].path[point] = at
         return out
     }
 
@@ -204,7 +287,8 @@ nonisolated extension JournalPlayMath {
         switch hit {
         case .player: break
         case .defender(let i): if out.defense.indices.contains(i) { out.defense.remove(at: i) }
-        case .action(let i), .actionEnd(let i): if out.actions.indices.contains(i) { out.actions.remove(at: i) }
+        case .action(let i), .actionEnd(let i), .actionBend(let i, _):
+            if out.actions.indices.contains(i) { out.actions.remove(at: i) }
         case .note(let i): if out.notes.indices.contains(i) { out.notes.remove(at: i) }
         }
         return out
