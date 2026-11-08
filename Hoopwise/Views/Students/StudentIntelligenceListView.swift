@@ -314,6 +314,11 @@ struct StudentIntelligenceListView: View {
             // ⌘F / ⇧⌘N on the Mac (MainTabView switches here first).
             .onReceive(NotificationCenter.default.publisher(for: .hoopwiseFocusAthleteSearch)) { _ in
                 searchFocused = true
+                #if targetEnvironment(macCatalyst)
+                // The Mac's search field can ignore .searchFocused; make it
+                // first responder directly.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { MacSearch.focusFirstSearchField() }
+                #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAddAthlete)) { _ in
                 showingAddStudent = true

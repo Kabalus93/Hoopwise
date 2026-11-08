@@ -120,3 +120,34 @@ struct AthleteMacMenu: ViewModifier {
         #endif
     }
 }
+
+#if targetEnvironment(macCatalyst)
+/// ⌘F's last step on the Mac: put the cursor in the visible search field.
+enum MacSearch {
+    static func focusFirstSearchField() {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        for window in windows where window.isKeyWindow || windows.count == 1 {
+            if let field = searchField(in: window) {
+                let ok = field.becomeFirstResponder()
+                macCommandTrace("find: search field focused \(ok)")
+                return
+            }
+        }
+        macCommandTrace("find: no search field on screen")
+    }
+
+    private static func searchField(in view: UIView) -> UISearchTextField? {
+        if let field = view as? UISearchTextField, !field.isHidden, field.window != nil { return field }
+        for sub in view.subviews { if let found = searchField(in: sub) { return found } }
+        return nil
+    }
+}
+#endif
+
+/// A line in the Mac log for menu commands (no-op elsewhere).
+func macCommandTrace(_ message: String) {
+    #if targetEnvironment(macCatalyst)
+    macPopupTrace("command \(message)")
+    #endif
+}

@@ -136,8 +136,11 @@ struct SAMApp: App {
                     NotificationCenter.default.post(name: .hoopwiseNewAthlete, object: nil)
                 }.keyboardShortcut("n", modifiers: [.command, .shift])
             }
-            CommandGroup(after: .textEditing) {
+            // REPLACES the system Find group, whose ⌘F reached the text
+            // system instead of this command (Luther: ⌘F did nothing).
+            CommandGroup(replacing: .textEditing) {
                 Button(LocalizationManager.shared.currentLanguage == .chinese ? "查找学员" : "Find Athlete") {
+                    macCommandTrace("find")
                     NotificationCenter.default.post(name: .hoopwiseFindAthlete, object: nil)
                 }.keyboardShortcut("f")
             }

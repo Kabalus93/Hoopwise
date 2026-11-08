@@ -244,7 +244,11 @@ idiom). What differs on the Mac:
   (Athletes → Add); Edit: ⌘F Find Athlete (Athletes, search focused via
   .searchFocused). MainTabView.switchThenPost shows the tab, then signals it.
   DEBUG HOOPWISE_MAC_COMMAND=newSession|newAthlete|find fires one at launch
-  (verified: both sheets open). Right-click and ⌘F still need a human check.
+  (verified: both sheets open). ⌘F first did nothing: the system Find group
+  owned ⌘F (now `CommandGroup(replacing: .textEditing)`), and `.searchFocused`
+  is not enough on Catalyst — MacSearch.focusFirstSearchField makes the
+  UISearchTextField first responder (verified via the hook: "search field
+  focused true"). Menu commands log "command …" to hoopwise.mac.
 - Run a Mac debug shot: `open -n --env HOOPWISE_SCREENSHOT_STORE=1 --env
   HOOPWISE_SHOT=<shot> <Debug-maccatalyst>/Hoopwise.app` (screencapture is not
   permitted here, so check results through that log).
