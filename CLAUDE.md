@@ -293,7 +293,10 @@ clicking through." Services/ClaudeConnector/ (Catalyst only):
   updateSessionEvent(keepLiveFields: true), updateContract). New:
   mark_attendance (present / excused / unmarked, or all_present — never
   absent, it is inferred). open_in_app posts the widget deep-link
-  notifications. NO DELETE TOOLS. Data minimisation ON by default
+  notifications. DELETE TOOLS SINCE 8 NOV 2026 (Luther reversed "no delete"
+  after Claude Desktop recorded a shared private lesson as two sessions) —
+  see "PUTTING THINGS RIGHT" below; athletes, contracts and payments are
+  still never deleted from here. Data minimisation ON by default
   (`assistant.minimized`): guardian contacts and money stay in the app.
   Claude Desktop asks before each call; there is no in-app confirmation.
 - SHORT REFS (6 Nov 2026, after Claude Desktop's get_session/update_session
@@ -329,13 +332,35 @@ clicking through." Services/ClaudeConnector/ (Catalyst only):
   as the editor snaps. Validate everything, then write (a bad field names
   itself — "steps[1].actions[0]: …" — and saves nothing); warnings (a pass
   without a ball, crowded players, long notes) save but come back. play_id =
-  starter key, else "p" + creation ms in base 36; a name also resolves. NO
-  DELETE TOOLS. 28 tools. Verified 8 Nov 2026 over HTTP on the Mac demo copy
+  starter key, else "p" + creation ms in base 36; a name also resolves.
+  (Play deletes came later — see PUTTING THINGS RIGHT.) Verified 8 Nov 2026 over HTTP on the Mac demo copy
   (HOOPWISE_SCREENSHOT_STORE=1 + HOOPWISE_CONNECTOR_TOKEN): initialize
   mentions plays, tools/list, guide, create_play, a refused bad pass,
   get_play, list_plays, add_play_to_session twice (second: already_in_plan),
-  get_session plan_plays. The coach's running app holds port 47720 — quit
-  it before a demo-copy run and reopen it after.
+  get_session plan_plays. Verify on a demo copy BESIDE the coach's app:
+  `open -n --env HOOPWISE_SCREENSHOT_STORE=1 --env HOOPWISE_CONNECTOR_TOKEN=…
+  --env HOOPWISE_CONNECTOR_PORT=47721 <app>` (DEBUG port override) — never
+  quit his app for it (he may have an edit open; a quit was refused once).
+- FIXES + PUTTING THINGS RIGHT (8 Nov 2026, after the two-sessions /
+  notes-in-the-contact-log / inferred-absent mess). Fixes: create_session
+  and update_session take `notes` (appended; replace_notes); create_session
+  explains a SHARED PRIVATE LESSON = ONE session, every client on the roster
+  (each charged from their own bundle — redeemPrivateAttendance is per
+  athlete), returns the roster's names and says when it came from program
+  enrolment; programs resolve exact-then-unique (findProgram), never "first
+  containing"; update_session's move is `new_start` (it read `when` while the
+  schema said `starts` — every move was silently ignored); record_note says
+  it is the athlete's CONTACT LOG, not session content. New
+  (ConnectorCareTools.swift, each through the one authority): list_charges
+  (bundleSessionIds with marks; flags a session on two balances),
+  list_athlete_notes, delete_session (deleteSessionEvent → refunds),
+  skip_session, complete_session (start→complete for a never-run one),
+  reopen_session, refund_session (refundSessionToBundle), remove_from_program
+  (NEW writer `removeStudentEnrollment` — one roster, primary moves;
+  RemoveEnrollmentTests), delete_athlete_note, remove_play_from_session,
+  delete_play / delete_play_part (not the concept) / delete_play_step (not a
+  part's last). `ConnectorTool.destructive` → MCP destructiveHint. 41 tools.
+  All verified over HTTP on the demo copy, 8 Nov 2026.
 
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
@@ -687,6 +712,11 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   pencil (draw this step) are in the play page toolbar, ⋯ → Edit steps pushes
   the step screen for add/move/delete. An undrawn play keeps its Draw hero.
   A wrinkle or variation opens already playing. PlaysUITests pins it.
+  The player's court FITS THE WINDOW: the page passes its visible height
+  (`viewportHeight`, onGeometryChange) and the court's width is capped so its
+  height + caption row + ‹ ▶ › + the floating tab bar (250 pt) fit — a wide
+  Mac window used to push the half court off the bottom. Pinned by
+  PlayEditorWorkspaceUITests.testPlayPageFitsAWideWindow (iPad landscape).
   (d) STRAIGHT OR CURVED LINES (Luther: lines drawn with a mouse or on a
   small screen came out wobbly — every hand shake became a bend, drawn as a
   curve). `Action.shape` (.straight / .curved; nil = drawn before, still

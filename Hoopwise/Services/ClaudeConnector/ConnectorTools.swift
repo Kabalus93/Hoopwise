@@ -42,6 +42,9 @@ struct ConnectorTool {
     let category: ConnectorToolCategory
     /// Human-readable old → new lines for the confirmation card. Only writes.
     let run: ([String: Any]) throws -> ConnectorToolResult
+    /// Removes something (deletes, refunds). Claude Desktop shows it as
+    /// destructive; the tools say what can be undone and how.
+    var destructive: Bool = false
 }
 
 enum ConnectorToolError: LocalizedError {
@@ -108,6 +111,12 @@ final class ConnectorToolRegistry {
         return object
     }
 
+    /// Notes added below what is there, a blank line between.
+    static func appending(_ text: String, to notes: String?) -> String {
+        guard let notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return text }
+        return notes + "\n\n" + text
+    }
+
     static func encode(_ object: Any) -> String {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
@@ -133,7 +142,7 @@ final class ConnectorToolRegistry {
         return hits.count == 1 ? hits[0] : nil
     }
 
-    private func findStudent(_ args: [String: Any]) throws -> Student {
+    func findStudent(_ args: [String: Any]) throws -> Student {
         let raw = (args["athlete_id"] as? String) ?? (args["query"] as? String) ?? ""
         if let id = Self.resolve(raw, in: dataManager.students.map(\.id)),
            let student = dataManager.students.first(where: { $0.id == id }) {
@@ -153,7 +162,7 @@ final class ConnectorToolRegistry {
         throw ConnectorToolError.notFound("No athlete matches \"\(raw)\". Use search_athletes and pass the ref it returns.")
     }
 
-    private func findProgram(_ query: String) throws -> Program {
+    func findProgram(_ query: String) throws -> Program {
         let q = query.trimmingCharacters(in: .whitespaces)
         if let id = Self.resolve(q, in: dataManager.programs.map(\.id)),
            let program = dataManager.programs.first(where: { $0.id == id }) { return program }
@@ -194,7 +203,7 @@ final class ConnectorToolRegistry {
 
     /// Athlete ids or refs (or exact names) → ids; any that resolve to nothing
     /// is an error naming it, so nothing is silently dropped.
-    private func resolveAthletes(_ raws: [String]) throws -> [UUID] {
+    func resolveAthletes(_ raws: [String]) throws -> [UUID] {
         try raws.map { try findStudent(["athlete_id": $0]).id }
     }
 
@@ -224,7 +233,7 @@ final class ConnectorToolRegistry {
         throw ConnectorToolError.badArguments("Pass session_id (a ref from list_sessions) or when (its start, ISO).")
     }
 
-    private func studentBrief(_ student: Student) -> [String: Any] {
+    func studentBrief(_ student: Student) -> [String: Any] {
         var brief: [String: Any] = [
             "athlete_id": Self.ref(student.id),
             "name": student.name,
@@ -238,7 +247,7 @@ final class ConnectorToolRegistry {
         return brief
     }
 
-    private func sessionBrief(_ session: SessionEvent) -> [String: Any] {
+    func sessionBrief(_ session: SessionEvent) -> [String: Any] {
         var brief: [String: Any] = [
             "session_id": Self.ref(session.id),
             "title": session.title,
@@ -261,7 +270,7 @@ final class ConnectorToolRegistry {
         return formatter
     }()
 
-    private static func parseDate(_ string: String?) -> Date? {
+    static func parseDate(_ string: String?) -> Date? {
         guard let string else { return nil }
         if let date = isoFormatter.date(from: string) { return date }
         let fallback = ISO8601DateFormatter()
@@ -454,7 +463,17 @@ final class ConnectorToolRegistry {
             // ---------------- WRITE ----------------
             ConnectorTool(
                 name: "create_session",
-                description: "Schedule a session. Provide title, ISO start datetime, duration minutes; optionally program name and athlete_ids for the roster.",
+                description: """
+                Schedule (or record, if it is past) a session. title, ISO start, duration_minutes; optional location, \
+                program, athlete_ids, notes (what was worked on). \
+                PRIVATE LESSONS: pass program = the client's "Private · <name>" program (list_programs). A private \
+                lesson with SEVERAL clients is ONE session — put every client in athlete_ids; when each is marked \
+                present, each is charged one session from THEIR OWN private bundle. Do not create one session per \
+                client for a lesson they shared. \
+                ROSTER: athlete_ids sets who is expected; without it the roster is the program's whole enrolment, and \
+                the result lists who that is — check it, because an expected athlete left unmarked once roll call \
+                starts is inferred absent and charged an hour after the end.
+                """,
                 schema: objectSchema([
                     "title": ["type": "string"],
                     "starts": ["type": "string", "description": "ISO 8601 datetime"],
@@ -462,6 +481,7 @@ final class ConnectorToolRegistry {
                     "location": ["type": "string"],
                     "program": ["type": "string"],
                     "athlete_ids": ["type": "array", "items": ["type": "string"]],
+                    "notes": ["type": "string", "description": "The session's notes: what was worked on, how it went"],
                 ], ["title", "starts"]),
                 category: .sessionWrite,
                 run: { [self] args in
@@ -469,46 +489,50 @@ final class ConnectorToolRegistry {
                           let starts = Self.parseDate(args["starts"] as? String)
                     else { throw ConnectorToolError.badArguments("title and a valid ISO 'starts' are required") }
                     let duration = args["duration_minutes"] as? Int ?? 90
-                    var programId: UUID?
-                    if let programQuery = args["program"] as? String {
-                        guard let program = dataManager.programs.first(where: {
-                            $0.name.localizedCaseInsensitiveContains(programQuery)
-                        }) else { throw ConnectorToolError.notFound("No program matches \"\(programQuery)\"") }
-                        programId = program.id
-                    }
-                    var attendees = try resolveAthletes(args["athlete_ids"] as? [String] ?? [])
-                    if attendees.isEmpty, let programId,
-                       let program = dataManager.programs.first(where: { $0.id == programId }) {
-                        attendees = program.enrolledStudentIds
-                    }
+                    // Exact name, else the ONE program containing it — never the first of several.
+                    let program = try (args["program"] as? String).map { try findProgram($0) }
+                    let given = try resolveAthletes(args["athlete_ids"] as? [String] ?? [])
+                    let attendees = given.isEmpty ? (program?.enrolledStudentIds ?? []) : given
                     // Through the shared creation service, so the assistant
                     // gets the same phase derivation, venue default and series
                     // handling as the app — the rule that it never touches the
                     // database except through the business-rule layer.
                     let result = dataManager.createSession(SessionCreation.Intent(
-                        group: programId.map { .program($0) } ?? .unassigned,
+                        group: program.map { .program($0.id) } ?? .unassigned,
                         start: starts,
                         durationMinutes: duration,
                         title: title,
                         location: args["location"] as? String,
                         roster: attendees.isEmpty ? nil : attendees,
                         createdByCoachId: dataManager.loggedInCoachId))
-                    let session = result.session
-                    return ConnectorToolResult(
-                        payload: Self.encode(["created": true, "session_id": Self.ref(session.id)]),
-                        summary: "created session \(title) ✓")
+                    var session = result.session
+                    if let notes = (args["notes"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+                        session.notes = Self.appending(notes, to: session.notes)
+                        session.updatedAt = Date()
+                        dataManager.updateSessionEvent(session, keepLiveFields: true)
+                    }
+                    var payload: [String: Any] = [
+                        "created": true, "session_id": Self.ref(session.id),
+                        "roster": attendees.compactMap { id in dataManager.students.first { $0.id == id }?.displayName },
+                    ]
+                    if given.isEmpty, !attendees.isEmpty {
+                        payload["roster_from"] = "the program's enrolment — remove_from_session anyone who was not expected"
+                    }
+                    return ConnectorToolResult(payload: Self.encode(payload), summary: "created session \(title) ✓")
                 }),
 
             ConnectorTool(
                 name: "update_session",
-                description: "Edit a session's title, time, duration, location, or roster (athlete_ids replaces the roster).",
+                description: "Edit a session's title, start (new_start, ISO; length kept), duration, location, roster (athlete_ids REPLACES it) or notes (notes are ADDED below the existing ones; replace_notes: true replaces them).",
                 schema: objectSchema([
                     "session_id": ["type": "string"],
                     "title": ["type": "string"],
-                    "starts": ["type": "string"],
+                    "new_start": ["type": "string", "description": "ISO 8601 datetime: move the session here"],
                     "duration_minutes": ["type": "integer"],
                     "location": ["type": "string"],
                     "athlete_ids": ["type": "array", "items": ["type": "string"]],
+                    "notes": ["type": "string"],
+                    "replace_notes": ["type": "boolean"],
                 ], ["session_id"]),
                 category: .sessionWrite,
                 run: { [self] args in
@@ -516,7 +540,10 @@ final class ConnectorToolRegistry {
                     let old = session
                     var copy = session
                     if let title = args["title"] as? String { copy.title = title }
-                    if let starts = Self.parseDate(args["when"] as? String) {
+                    // `when` names the session to find; the new time is `new_start`
+                    // (it read `when` while the schema said `starts`, so every
+                    // move was silently ignored).
+                    if let starts = Self.parseDate((args["new_start"] ?? args["starts"]) as? String) {
                         let duration = copy.durationMinutes
                         copy.date = starts; copy.startTime = starts
                         copy.endTime = Calendar.current.date(byAdding: .minute, value: duration, to: starts) ?? starts
@@ -527,6 +554,10 @@ final class ConnectorToolRegistry {
                     if let location = args["location"] as? String { copy.location = location }
                     if let ids = args["athlete_ids"] as? [String] {
                         copy.attendeeIds = try resolveAthletes(ids)
+                    }
+                    if let notes = (args["notes"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        copy.notes = (args["replace_notes"] as? Bool) == true
+                            ? (notes.isEmpty ? nil : notes) : Self.appending(notes, to: copy.notes)
                     }
                     copy.updatedAt = Date()
                     dataManager.updateSessionEvent(copy, keepLiveFields: true)
@@ -685,10 +716,7 @@ final class ConnectorToolRegistry {
                     let oldProgramId = student.programId
                     var newProgramId: UUID?
                     if let programQuery = args["program"] as? String {
-                        guard let program = dataManager.programs.first(where: {
-                            $0.name.localizedCaseInsensitiveContains(programQuery)
-                        }) else { throw ConnectorToolError.notFound("No program matches \"\(programQuery)\"") }
-                        newProgramId = program.id
+                        newProgramId = try findProgram(programQuery).id
                     }
                     dataManager.setStudentEnrollment(studentId: student.id, programId: newProgramId)
                     return ConnectorToolResult(
@@ -698,7 +726,7 @@ final class ConnectorToolRegistry {
 
             ConnectorTool(
                 name: "record_note",
-                description: "Append a dated note to an athlete's notes.",
+                description: "Append a dated note to ONE ATHLETE's contact log (shown on their card with parent touchpoints) — about the athlete or their family. NOT for what a session worked on: that goes in the session's notes (create_session / update_session notes). list_athlete_notes and delete_athlete_note undo a misplaced one.",
                 schema: objectSchema([
                     "athlete_id": ["type": "string"],
                     "note": ["type": "string"],
@@ -831,7 +859,7 @@ final class ConnectorToolRegistry {
                     }
                     return ConnectorToolResult(payload: "{\"opened\": true}", summary: "opened in app")
                 }),
-        ] + playTools()
+        ] + playTools() + careTools()
     }
 
 }

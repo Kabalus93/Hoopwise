@@ -17,6 +17,10 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     var autoplay = false
     /// DEBUG: a frozen moment of the playback, for screenshots.
     var frozenT: Double?
+    /// The height of the window the player sits in: the court is kept small
+    /// enough that it, its caption and ‹ ▶ › fit without scrolling (Luther,
+    /// November 2026: in a wide Mac window the half court ran off the bottom).
+    var viewportHeight: CGFloat?
     /// Shown before the caption (the play page puts "Concept" there).
     @ViewBuilder var leading: () -> Leading
 
@@ -56,6 +60,17 @@ struct JournalPlayStepPlayer<Leading: View>: View {
 
     // MARK: - Diagram
 
+    /// Room for the card's caption row, ‹ ▶ › and paddings, and the floating
+    /// tab bar over the bottom of the window.
+    private static var chrome: CGFloat { 250 }
+
+    /// The widest the court may be so its height fits the window.
+    private var maxCourtWidth: CGFloat {
+        guard let viewportHeight else { return .infinity }
+        let height = max(240, viewportHeight - Self.chrome)
+        return height * JournalPlayCourt.aspectRatio(court)
+    }
+
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: JSpacing.xs) {
             leading()
@@ -80,6 +95,8 @@ struct JournalPlayStepPlayer<Leading: View>: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .aspectRatio(JournalPlayCourt.aspectRatio(court), contentMode: .fit)
+        .frame(maxWidth: maxCourtWidth)
+        .frame(maxWidth: .infinity)
         .background(JPalette.background, in: .rect(cornerRadius: JRadius.tile))
         .accessibilityElement()
         .accessibilityLabel(Text(verbatim: current?.caption ?? ""))
@@ -208,7 +225,8 @@ struct JournalPlayStepPlayer<Leading: View>: View {
 
 extension JournalPlayStepPlayer where Leading == EmptyView {
     init(part: JournalPlayPart, index: Binding<Int>, paused: Bool = false, autoplay: Bool = false,
-         frozenT: Double? = nil) {
-        self.init(part: part, index: index, paused: paused, autoplay: autoplay, frozenT: frozenT) { EmptyView() }
+         frozenT: Double? = nil, viewportHeight: CGFloat? = nil) {
+        self.init(part: part, index: index, paused: paused, autoplay: autoplay, frozenT: frozenT,
+                  viewportHeight: viewportHeight) { EmptyView() }
     }
 }

@@ -27,6 +27,8 @@ struct JournalPlayScreen: View {
     @State private var showingLegend = false
     /// The concept's step screen, for adding, moving and deleting steps.
     @State private var editingSteps = false
+    /// The visible height, so the court fits the window (`JournalPlayStepPlayer`).
+    @State private var viewportHeight: CGFloat?
 
     /// Opens straight on a part (a new play: its first step, to draw).
     init(play: JournalPlay, opening: JournalPlayStudyRoute? = nil) {
@@ -60,6 +62,7 @@ struct JournalPlayScreen: View {
             .padding(.horizontal, JSpacing.screen)
             .padding(.bottom, JSpacing.xxl)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
         .background(JPalette.background)
         .navigationTitle(Text(verbatim: play.name))
         .navigationSubtitle(subtitle)
@@ -179,7 +182,8 @@ struct JournalPlayScreen: View {
             VStack(alignment: .leading, spacing: JSpacing.xs) {
                 conceptLabel(concept)
                 JournalPlayStepPlayer(part: concept, index: $conceptStep,
-                                      paused: editingStep != nil || showingLegend || editingSteps)
+                                      paused: editingStep != nil || showingLegend || editingSteps,
+                                      viewportHeight: viewportHeight)
             }
             // Steps deleted on the step screen: stay on one that exists.
             .onAppear { conceptStep = max(0, min(conceptStep, concept.sortedSteps.count - 1)) }

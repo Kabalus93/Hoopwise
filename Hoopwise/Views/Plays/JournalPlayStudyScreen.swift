@@ -17,6 +17,8 @@ struct JournalPlayStudyScreen: View {
     @State private var renaming = false
     @State private var confirmingDelete = false
     private let autoplay: Bool
+    /// The visible height, so the court fits the window (`JournalPlayStepPlayer`).
+    @State private var viewportHeight: CGFloat?
     @Environment(\.modelContext) private var context
     private var undoCenter: JUndoCenter { .shared }
 
@@ -56,12 +58,13 @@ struct JournalPlayStudyScreen: View {
                 } else {
                     JournalPlayStepPlayer(part: part, index: $index,
                                           paused: editingStep != nil || renaming || confirmingDelete || showingLegend,
-                                          autoplay: autoplay, frozenT: frozenT)
+                                          autoplay: autoplay, frozenT: frozenT, viewportHeight: viewportHeight)
                 }
             }
             .padding(.horizontal, JSpacing.screen)
             .padding(.bottom, JSpacing.xxl)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
         .background(JPalette.background)
         .navigationTitle(Text(verbatim: part.name))
         .navigationSubtitle(subtitle)

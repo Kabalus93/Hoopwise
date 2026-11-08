@@ -24,7 +24,14 @@ import Network
 @MainActor
 final class ConnectorServer {
     static let shared = ConnectorServer()
-    static let port: UInt16 = 47720
+    /// 47720. DEBUG: HOOPWISE_CONNECTOR_PORT lets a demo copy listen beside
+    /// the coach's running app, so verifying the tools never means quitting it.
+    static let port: UInt16 = {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["HOOPWISE_CONNECTOR_PORT"], let forced = UInt16(raw) { return forced }
+        #endif
+        return 47720
+    }()
 
     private var listener: NWListener?
     private(set) var isListening = false
@@ -140,9 +147,18 @@ final class ConnectorServer {
                 as athlete_id / session_id — a session can also be named by when (its start) plus \
                 program. Names may be Chinese, pinyin or English. To put someone in ONE class use \
                 add_to_session; to make them a regular of a program use add_to_program (set_enrollment \
-                MOVES them out of every other class). School grades go in school_grade, not notes. \
+                MOVES them out of every other class; remove_from_program takes them off ONE). School grades \
+                go in school_grade, not notes. \
+                A private lesson shared by several clients is ONE session with every client on the roster \
+                (each is charged from their own bundle) — never one session per client. What a session worked \
+                on goes in the SESSION's notes (create_session / update_session notes), not in record_note, \
+                which is an athlete's contact log. Check create_session's returned roster: anyone expected \
+                and left unmarked once roll call starts is inferred absent and charged. \
                 Writes go through the app's own rules and are refused when a rule says no — relay \
-                the reason. There is no delete.
+                the reason. To put things right: list_charges (what was charged), refund_session, \
+                skip_session / reopen_session / complete_session, delete_session (refunds, but removes marks \
+                and notes for good), delete_athlete_note, remove_play_from_session, delete_play*. Before a \
+                delete, say what will be lost. Athletes, contracts and payments are never deleted here.
                 PLAYS: the coach's play library (Hub → Plays). Before creating or changing a play call                 get_play_drawing_guide, and read a similar play with get_play to see the format filled in.                 create_play saves a whole play (steps, wrinkles, variations) after checking every field;                 read it back with get_play. add_play_to_session puts a play in a session's plan.
                 """,
             ])
@@ -154,7 +170,7 @@ final class ConnectorServer {
                  "description": tool.description,
                  "inputSchema": tool.schema,
                  "annotations": ["readOnlyHint": !tool.category.isWrite,
-                                 "destructiveHint": false]]
+                                 "destructiveHint": tool.destructive]]
             }
             return result(["tools": tools])
         case "tools/call":

@@ -3136,6 +3136,36 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// REMOVES a student from ONE program's roster, keeping every other —
+    /// the reverse of `addStudentEnrollment` (November 2026: a private client
+    /// had been added to another client's private program, so every session
+    /// there expected him and inferred him absent). When it was the student's
+    /// primary class, the primary becomes another class they are still on,
+    /// else none.
+    func removeStudentEnrollment(studentId: UUID, programId: UUID) {
+        do {
+            let studentDescriptor = FetchDescriptor<SDStudent>(
+                predicate: #Predicate { $0.id == studentId })
+            guard let sdStudent = try modelContext.fetch(studentDescriptor).first else { return }
+            let programs = try modelContext.fetch(FetchDescriptor<SDProgram>())
+            guard let sdProgram = programs.first(where: { $0.id == programId }) else { return }
+            if sdProgram.enrolledStudentIds.contains(studentId) {
+                sdProgram.enrolledStudentIds.removeAll { $0 == studentId }
+                sdProgram.updatedAt = Date()
+            }
+            if sdStudent.programId == programId {
+                recordStudentRevision(sdStudent, reason: .manualEdit)
+                sdStudent.programId = programs.first { $0.id != programId && $0.enrolledStudentIds.contains(studentId) }?.id
+                sdStudent.updatedAt = Date()
+            }
+            let programsBefore = cachedPrograms
+            saveAndRefresh()
+            rostersFollowEnrollment(programsBefore: programsBefore)
+        } catch {
+            debugLog("❌ removeStudentEnrollment failed: \(error)")
+        }
+    }
+
     private func mutateDirectoryGroup(id: UUID, _ body: (SDDirectoryGroup) -> Void) {
         let descriptor = FetchDescriptor<SDDirectoryGroup>(
             predicate: #Predicate { $0.id == id })

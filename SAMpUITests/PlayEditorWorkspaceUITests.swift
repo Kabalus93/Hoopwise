@@ -133,6 +133,32 @@ final class PlayEditorWorkspaceUITests: XCTestCase {
                       app.staticTexts["Step 2 of 2"].firstMatch.exists, "Cancel did not restore the steps")
     }
 
+    /// A wide, short window (iPad landscape, like a Mac window): the play
+    /// page's court and ‹ ▶ › fit without scrolling (November 2026: the half
+    /// court ran off the bottom of the Mac window).
+    func testPlayPageFitsAWideWindow() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        app.launchEnvironment["HOOPWISE_SHOT"] = "plays"
+        app.launchEnvironment["HOOPWISE_PLAYS_OPEN"] = "play"
+        app.launchArguments += ["-app_language", "en", "-hasOnboarded", "YES"]
+        app.launch()
+        let play = app.buttons["plays.player.play"].firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 20))
+        guard app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height else {
+            throw XCTSkip("Not a wide window on this destination")
+        }
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(window.contains(play.frame), "Play is below the window: \(play.frame) in \(window)")
+        let next = app.buttons["Next step"].firstMatch
+        XCTAssertTrue(window.contains(next.frame), "the step arrows are below the window")
+        XCTAssertTrue(play.isHittable, "Play is covered")
+        attachScreenshot(app, "play page, wide window")
+    }
+
     private func waitForLabel(_ element: XCUIElement, containing text: String) -> Bool {
         let predicate = NSPredicate(format: "label CONTAINS %@", text)
         return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: 3) == .completed
