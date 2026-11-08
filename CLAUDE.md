@@ -197,7 +197,9 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   secondaryNameLine under it, the format dot — and the open athlete's row in a
   solid accent highlight with white text; title "Athletes"/学员 inline. The
   profile (StudentDetailView) already had Contacts' shape and is unchanged.
-  iPhone keeps the inset-grouped Student Intelligence list.
+  iPhone keeps the inset-grouped Student Intelligence list. On the Mac the
+  list hides the iOS 26 scroll-edge effect (`scrollEdgeEffectHidden`): the
+  soft edge blur got stuck over the rows after scrolling, sometimes resizing.
 - Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
   and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
   simulator's (demo data only).

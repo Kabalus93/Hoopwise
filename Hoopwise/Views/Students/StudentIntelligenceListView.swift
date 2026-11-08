@@ -5222,6 +5222,12 @@ private struct AthleteListStyle: ViewModifier {
     func body(content: Content) -> some View {
         if contacts {
             content.listStyle(.plain).scrollContentBackground(.hidden)
+                #if targetEnvironment(macCatalyst)
+                // The soft scroll-edge blur stuck over the list on the Mac
+                // (Luther, November 2026: it stayed, or changed size, after
+                // scrolling). No edge effect there; iPhone/iPad keep theirs.
+                .scrollEdgeEffectHidden(true, for: .all)
+                #endif
         } else {
             content.listStyle(.insetGrouped).scrollContentBackground(.hidden)
         }
