@@ -33,6 +33,8 @@ enum JournalPlayCourt {
     static let arrowLength = 0.34
     static let screenBar = 0.9
     static let ballRadius = 0.2
+    /// A cone's half width at the base.
+    static let coneSize = 0.32
 }
 
 /// FIBA lines in the game plan's style: half court with the baseline at the
@@ -141,6 +143,19 @@ struct JournalPlayDiagramView: View {
         let width = compact ? max(0.8, JournalPlayCourt.lineWidth * s * k) : max(1.2, JournalPlayCourt.lineWidth * s * min(k, 1.3))
         let r = JournalPlayCourt.playerRadius * s * k
 
+        // Cones on the floor, under everything that moves.
+        for cone in diagram.cones {
+            let c = JournalPlayCourt.point(cone, scale: s)
+            let h = JournalPlayCourt.coneSize * s * (compact ? 1.6 : k)
+            var tri = Path()
+            tri.move(to: CGPoint(x: c.x, y: c.y - h * 1.15))
+            tri.addLine(to: CGPoint(x: c.x + h, y: c.y + h * 0.75))
+            tri.addLine(to: CGPoint(x: c.x - h, y: c.y + h * 0.75))
+            tri.closeSubpath()
+            context.fill(tri, with: .color(JPalette.cone))
+            context.stroke(tri, with: .color(JPalette.background), lineWidth: max(0.6, width * 0.5))
+        }
+
         // Actions under the players; faint while the play moves.
         var actionLayer = context
         if frame != nil { actionLayer.opacity = 0.22 }
@@ -227,6 +242,8 @@ struct JournalPlayDiagramView: View {
             case .player(let n)?: return diagram.player(n).map { JournalPlayCourt.point($0.at, scale: s) }
             case .defender(let i)? where diagram.defense.indices.contains(i):
                 return JournalPlayCourt.point(diagram.defense[i].at, scale: s)
+            case .cone(let i)? where diagram.cones.indices.contains(i):
+                return JournalPlayCourt.point(diagram.cones[i], scale: s)
             default: return nil
             }
         }()

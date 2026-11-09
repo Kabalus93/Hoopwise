@@ -237,6 +237,22 @@ idiom). What differs on the Mac:
   no Done. DEBUG HOOPWISE_TEST_POPUP_CLOSE=1 runs that path 2 s after a popup
   opens (verified: "key: dismissed"). Clicks log their point and the popup's
   bounds.
+  WHY THE OUTSIDE CLICK NEVER WORKED (found 9 Nov 2026): a Catalyst sheet is
+  its OWN window (`_UIBridgedPresentationWindow`, popup-sized) and AppKit
+  blocks the main window behind it — clicks on the dimmed area never reach
+  the app (the log only ever shows "click inside"), and nothing placed
+  outside a popup can be clicked. So PopupDoneButton puts a Done at the
+  LEADING end of the popup's own navigation bar, ONLY when that bar has no
+  leading item and no Done/Cancel/Close/Save/OK (完成/取消/关闭/保存) among
+  its items, on the stack's root (a pushed page has Back). Luther: a second
+  Done beside the popup's own is a blunder — a bottom Done bar on every
+  popup was tried and removed for that. Re-checked every 0.4 s (SwiftUI
+  rebuilds bar items). Popups with no navigation bar get nothing (Esc/⌘W).
+  Verified 9 Nov over 12 gallery shots: added on drillDetail and
+  studentProfile only. DEBUG HOOPWISE_POPUP_NAVDUMP=1 logs each popup's bar
+  items (=exit: the demo copy quits itself after — use it, demo copies
+  cannot be killed from here); HOOPWISE_TEST_POPUP_CLOSE=button reports
+  whether a popup got a Done.
   Each sheet logs its final size: `/usr/bin/log show --predicate
   'subsystem == "hoopwise.mac"'` (zsh's own `log` shadows /usr/bin/log; and
   NSLog text is <private> on macOS — use Logger with privacy: .public).
@@ -247,6 +263,42 @@ idiom). What differs on the Mac:
   View menu with ⌘1–⌘4 for the four tabs (.hoopwiseSelectTab). The screens
   keep the iPad look; Catalyst's "Optimize for Mac" idiom (Mac-drawn controls)
   was deliberately NOT taken — that is the drift he did not want.
+- DESCRIBE A DRILL (9 Nov 2026, Luther: drills could only be found by exact
+  name inside the right age and type). Mac only, in the drills page's OWN
+  search bar (Luther: no special button): typing filters as before; RETURN
+  (`onSubmit(of: .search)`) asks Claude and shows "Claude suggests" above the
+  list (rows: name, age · block · type or Personal, why; a newer search or a
+  changed field drops a slow answer). Services/DrillFinder.swift. CLAUDE (claude-haiku-4-5, raw URLSession —
+  Swift has no Anthropic SDK) reads the WHOLE catalog every search: every
+  plannable library activity (one line: ref | age · block · type | name /
+  中文 | how it runs ≤ 320 chars) — the library half CACHED (cache_control
+  ephemeral; ~35k tokens, above Haiku 4.5's 4096 minimum) — plus personal
+  drills after the breakpoint; strict JSON (output_config.format
+  json_schema): up to 6 {id, why} + note. "why" says what matches and what
+  differs ("counts to 20, not 10"). Only drill text is sent. WHY NOT
+  ON-DEVICE ALONE: for his example ("pass 10 times to score while the other
+  team defends" = "20 Passes, Keeping Off", U7 small games) NLEmbedding,
+  NLContextualEmbedding, BM25 and their fusion ranked it 41st at best. The
+  fused on-device ranking (lemmas + coaching synonyms + sentence embedding)
+  is the FALLBACK with no key / no connection. The key lives in the Mac's
+  Keychain (AnthropicKeyStore), set in Profile → "Claude in the app" (under
+  Claude Desktop); Configuration.xcconfig's
+  ANTHROPIC_API_KEY is empty and unused. The target gained
+  ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES (the sandbox had incoming only).
+  Tests: DrillFinderTests (catalog, request shape/caching, parsing,
+  fallback, Keychain).
+  SESSION PLAN PICKER TOO (9 Nov 2026, Luther: "search when adding drills to
+  the plan"): SmartDrillPickerSheet (FlightySessionPageView). Typing now
+  searches EVERY drill the coach can see (it searched only the suggestions
+  while "Smart Suggestions" was on) and matches every typed word anywhere in
+  name, Chinese name, description and instructions (`DrillFinder.typedMatch`)
+  — all platforms. Mac only: Return asks Claude (same DrillFinder, catalog
+  `DrillFinder.entries(for:)`); its picks sit above the typed matches as
+  normal rows with the why, a tap adds the drill. HOOPWISE_SHOT=drillPicker
+  + HOOPWISE_DRILLPICKER_SEARCH=<text> (+ _ASK=1 on the Mac) logs both to
+  hoopwise.mac / drillPicker. Verified live on the demo copy with the
+  coach's key: his description → 20 Passes, 20 Passes Keeping Off, ….
+  Tests: DrillTypedSearchTests.
 - RIGHT-CLICK MENUS + COMMANDS (Luther, November 2026), Catalyst only —
   Views/Components/MacMenus.swift: `.sessionMacMenu(session)` on calendar rows
   (Open → .hoopwiseOpenSessionRequest; Mark Everyone Present, confirmed, via
@@ -361,6 +413,19 @@ clicking through." Services/ClaudeConnector/ (Catalyst only):
   delete_play / delete_play_part (not the concept) / delete_play_step (not a
   part's last). `ConnectorTool.destructive` → MCP destructiveHint. 41 tools.
   All verified over HTTP on the demo copy, 8 Nov 2026.
+- DRILLS + PERSONAL (8 Nov 2026, Luther: "a category called Personal …
+  where Claude would drop new drills"). The library's "Mine" chip is now
+  PERSONAL (个人) — still every non-library drill (`!isLibraryDrill`): the
+  coach's own and Claude's (twenty-second sanctioned exception, wording only).
+  ConnectorDrillTools.swift: list_drills (personal by default; scope all),
+  get_drill, create_drill (owner = the coach, tags visibility:private +
+  owner: + `by:claude`; refuses a duplicate personal name), update_drill /
+  delete_drill (PERSONAL only — library activities are re-seeded every
+  launch, so they are refused with that reason), add_drill_to_session /
+  remove_drill_from_session (Warm-up or Skills — the plan tab shows no Game
+  section; keepLiveFields). A series of progressions of one exercise is ONE
+  drill, one instruction per progression. 48 tools. Verified over HTTP on the
+  demo copy with "Game simulation action series: Drive and kick".
 
 ## THE MAC APP IS RETIRED (6 November 2026, Luther)
 "The Mac version is behind in many aspects … we've failed to make something
@@ -768,6 +833,62 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   added in this editor goes at once, a saved one is hidden and only deleted
   on Done — Cancel brings it back. The Screen icon is
   upright — a T. PlayEditorWorkspaceUITests.testMovingBetweenSteps (iPad).
+- TWENTY-FIRST sanctioned exception (8 November 2026, Luther's request):
+  on a PRIVATE session (SessionPrivacy), the session page's Add Athlete adds
+  to THAT SESSION ONLY — `addStudentsToSessionOnly` (roster = who was
+  expected + them, then present through setStudentAttendanceStates, so each
+  is charged from their OWN private bundle). It used to enrol them in the
+  program (the group-class behaviour, unchanged for group sessions), which
+  put 大波 on Starbucks dude's private program: expected, and inferred
+  absent, at every later lesson there. Private wording: "Add someone to this
+  session only" / banner "This Session Only"; the picker offers anyone not
+  already expected. PrivateAddToSessionTests (charge, roster, program
+  untouched, later lessons). HOOPWISE_SHOT=privateSession; its UI test skips
+  when the demo store has no private program (the iPhone one has none).
+  SAME DAY, the session page's ROSTER ROWS: `enrolledStudents` (rows, the
+  Expected stat, games, plan, All Present) read the PROGRAM's enrolment, not
+  `AttendanceMath.expectedIds` — after 大波 left Starbucks dude's program, that
+  session (roster: both, both present) counted 2 and listed 1. It is now
+  expectedIds ∪ everyone marked, so a marked athlete never vanishes.
+  (AttendanceSwipeUITests.testQuickPeepFromSessionOffersEdit fails on the
+  previous commit too — pre-existing, not from this; the iPhone 17 Pro sim's
+  demo store has no program sessions, so run attendance UI tests on the
+  Pro Max sim.)
+- DRILL VISUALS ARE DRAWN IN THE PLAYS EDITOR (9 November 2026, Luther's
+  request: "the same editor that's in plays … remove the popup"). The drill
+  page's "Add a visual" (and the carousel's + tile) opens
+  JournalPlayStepEditor(drawing:onSave:) directly; the Add Visual menu
+  (photo / camera / video / YouTube / Instagram / PencilKit sketch —
+  DrillMediaPicker.swift) is DELETED. Existing photos, videos and links still
+  show and open in the viewer; a legacy PencilKit diagram still edits in
+  CourtDiagramEditor. The editor now keeps its steps as VALUES (pages) and
+  writes the store only on Done — for a play it inserts/deletes/reorders the
+  part's JournalPlayStep records there (Cancel has nothing to undo). DRILL
+  MODE adds a Player tool (key O; any number of players, numbered past the
+  highest; Erase / ⌫ removes one with its lines, passes to them and ball —
+  `JournalPlayMath.removing(player:)`) and a Cone tool (key K;
+  `JournalPlayDiagram.cones`, written only when non-empty so plays' JSON is
+  unchanged; hit/move/erase/nudge like a defender). Plays keep their five and
+  get neither tool. Storage (no schema change): a `.courtDiagram` DrillMedia
+  whose strokesPath holds `DrillDrawing` JSON (Models/DrillDrawing.swift;
+  `<id>.drawing.json`) beside a JPEG of step 1 (DrillDrawingMedia) that the
+  carousel, viewer and bundles show; told from a .pkdrawing by CONTENT, since
+  a bundle import names every strokes file .pkdrawing. On-disk like all drill
+  media — it does not sync. DRAWINGS PLAY WHERE THEY ARE READ (Luther: a
+  three-step drawing showed only step 1): JournalPlayStepPlayer takes value
+  steps too (`init(drawing:)`), the drill page shows each drawing as that
+  player (DrillDrawingCard: caption, Step N of M, ‹ ▶ ›, Edit, ⋯ Delete) with
+  photos/videos left in the carousel, the full-screen viewer (session plan
+  taps open it) plays a drawing instead of its JPEG, and a multi-step
+  drawing's thumbnail says "3 steps". Refined the same day (Luther: two Edit
+  buttons, and the viewer blacked out the window): the drill page header
+  has "+ Add" and, with two or more visuals, "Reorder" — the drawing's own
+  Edit is the only Edit; the session plan opens a drawing in a popup
+  (DrillDrawingSheet: drill name, player, Done) and the full-screen viewer
+  pages photos/videos only (`DrillDrawingMedia.viewerMedia`); drawing
+  thumbnails are drawn LIVE from the drawing so they follow dark mode.
+  HOOPWISE_SHOT=drillDrawing / drillDetail. Tests:
+  DrillDrawingTests, DrillVisualUITests (demo store, cleans up after itself).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

@@ -49,12 +49,13 @@ final class DrillMediaStorage {
         case .video:        filename = "\(mediaId.uuidString).mp4"
         case .thumbnail:    filename = "\(mediaId.uuidString)_thumb.jpg"
         case .strokes:      filename = "\(mediaId.uuidString).pkdrawing"
+        case .drawing:      filename = "\(mediaId.uuidString).drawing.json"
         }
         return "\(Self.rootFolder)/\(drillId.uuidString)/\(filename)"
     }
 
     private enum AssetKind {
-        case primaryImage, video, thumbnail, strokes
+        case primaryImage, video, thumbnail, strokes, drawing
     }
 
     // MARK: - Save (images)
@@ -332,6 +333,22 @@ final class DrillMediaStorage {
             return relative
         } catch {
             debugLog("❌ Failed to save drill strokes: \(error)")
+            return nil
+        }
+    }
+
+    /// Saves a drill drawing (`DrillDrawing`, JSON — the Plays editor's
+    /// diagram) as a court diagram's editable file. Read back with
+    /// `loadStrokes`, like a PencilKit drawing.
+    @discardableResult
+    func saveDrawing(_ data: Data, drillId: UUID, mediaId: UUID) -> String? {
+        let relative = relativePath(drillId: drillId, mediaId: mediaId, kind: .drawing)
+        let absolute = drillFolder(drillId).appendingPathComponent("\(mediaId.uuidString).drawing.json")
+        do {
+            try data.write(to: absolute)
+            return relative
+        } catch {
+            debugLog("❌ Failed to save drill drawing: \(error)")
             return nil
         }
     }

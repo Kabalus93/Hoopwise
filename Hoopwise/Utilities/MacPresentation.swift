@@ -98,10 +98,32 @@ extension UIViewController {
         defer { UIView.setAnimationsEnabled(true) }
         hw_present(controller, animated: false) {
             OutsideClickDismiss.attach(to: controller)
+            PopupDoneButton.attach(to: controller)
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["HOOPWISE_POPUP_NAVDUMP"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    PopupNavDump.dump(controller)
+                    // A demo copy run only for the dump closes itself.
+                    if ProcessInfo.processInfo.environment["HOOPWISE_POPUP_NAVDUMP"] == "exit" {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exit(0) }
+                    }
+                }
+            }
+            #endif
             #if DEBUG
             // Agent check: the Esc/⌘W path, without a keyboard.
-            if ProcessInfo.processInfo.environment["HOOPWISE_TEST_POPUP_CLOSE"] != nil {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { controller.hw_closePopup() }
+            // =button reports whether the popup got a Done, then closes it
+            // the way that Done does.
+            if let test = ProcessInfo.processInfo.environment["HOOPWISE_TEST_POPUP_CLOSE"] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    if test == "button" {
+                        let done = PopupDoneButton.item(in: controller)
+                        macPopupTrace("test: done button \(done == nil ? "absent" : "present")")
+                        if done != nil { OutsideClickDismiss.close(controller, how: "done button (test)") }
+                    } else {
+                        controller.hw_closePopup()
+                    }
+                }
             }
             #endif
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -111,6 +133,115 @@ extension UIViewController {
         }
     }
 }
+
+/// A Done button for Mac popups that have no way out of their own (Luther,
+/// November 2026: stuck on a drill page opened from a session plan). On the
+/// Mac a sheet is its OWN window (`_UIBridgedPresentationWindow`) and AppKit
+/// blocks the main window behind it, so a click outside a popup never
+/// reaches the app. The button goes where iOS puts one — the leading end of
+/// the popup's own navigation bar — and ONLY when that bar has nothing
+/// leading (Cancel, Back) and no Done / Cancel / Close / Save anywhere
+/// (Luther: a second Done beside the popup's own is a blunder). A pushed
+/// page has Back, so it gets none; its root does. SwiftUI rebuilds the bar's
+/// items on updates, so the check repeats while the popup is up. It closes
+/// through the same path as Esc: a popup with unsaved changes may refuse.
+/// A popup with no navigation bar gets nothing (Esc and ⌘W still close it).
+enum PopupDoneButton {
+    /// Marks the item this hook added.
+    static let tag = 0x48_57_44_4E   // "HWDN"
+
+    private static let closingTitles: Set<String> = [
+        "Done", "Cancel", "Close", "Save", "OK", "完成", "取消", "关闭", "保存", "好",
+    ]
+
+    static func attach(to controller: UIViewController) {
+        ensure(controller)
+        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak controller] timer in
+            MainActor.assumeIsolated {
+                guard let controller, controller.presentingViewController != nil else {
+                    timer.invalidate()
+                    return
+                }
+                ensure(controller)
+            }
+        }
+    }
+
+    /// The popup's navigation stack, if it has one.
+    private static func navigationController(in controller: UIViewController) -> UINavigationController? {
+        var queue = [controller]
+        while !queue.isEmpty {
+            let vc = queue.removeFirst()
+            if let nav = vc as? UINavigationController { return nav }
+            queue += vc.children
+        }
+        return nil
+    }
+
+    private static func ensure(_ controller: UIViewController) {
+        guard let nav = navigationController(in: controller), !nav.isNavigationBarHidden,
+              let item = nav.topViewController?.navigationItem else { return }
+        let leading = (item.leftBarButtonItems ?? []) + item.leadingItemGroups.flatMap(\.barButtonItems)
+        let trailing = (item.rightBarButtonItems ?? []) + item.trailingItemGroups.flatMap(\.barButtonItems)
+        let ours = leading.contains { $0.tag == tag }
+        let theirsLeading = leading.contains { $0.tag != tag }
+        let closes = trailing.contains { closingTitles.contains(($0.title ?? "").trimmingCharacters(in: .whitespaces)) }
+        let wanted = nav.viewControllers.count <= 1 && !theirsLeading && !closes
+        if wanted, !ours {
+            let chinese = LocalizationManager.shared.currentLanguage == .chinese
+            let done = UIBarButtonItem(title: chinese ? "完成" : "Done", primaryAction: UIAction { [weak controller] _ in
+                guard let controller, controller.presentedViewController == nil else { return }
+                OutsideClickDismiss.close(controller, how: "done button")
+            })
+            done.style = .done
+            done.tag = tag
+            done.accessibilityIdentifier = "mac.popup.done"
+            item.leftBarButtonItems = [done]
+            macPopupTrace("done button added to \(type(of: controller))")
+        } else if !wanted, ours {
+            item.leftBarButtonItems = item.leftBarButtonItems?.filter { $0.tag != tag }
+            macPopupTrace("done button removed from \(type(of: controller))")
+        }
+    }
+
+    /// The Done this hook added to the popup, if any (DEBUG checks).
+    static func item(in controller: UIViewController) -> UIBarButtonItem? {
+        guard let item = navigationController(in: controller)?.topViewController?.navigationItem else { return nil }
+        return ((item.leftBarButtonItems ?? []) + item.leadingItemGroups.flatMap(\.barButtonItems)).first { $0.tag == tag }
+    }
+}
+
+#if DEBUG
+enum PopupNavDump {
+    static func dump(_ controller: UIViewController) {
+        var queue = [controller]
+        var navs: [UINavigationController] = []
+        while !queue.isEmpty {
+            let vc = queue.removeFirst()
+            if let nav = vc as? UINavigationController { navs.append(nav) }
+            queue += vc.children
+        }
+        macPopupTrace("navdump: \(navs.count) nav controllers")
+        for nav in navs {
+            let item = nav.topViewController?.navigationItem
+            func describe(_ items: [UIBarButtonItem]?) -> String {
+                (items ?? []).map { "[title=\($0.title ?? "-") custom=\($0.customView.map { String(describing: type(of: $0)) } ?? "-") ax=\($0.accessibilityLabel ?? $0.customView?.accessibilityLabel ?? "-")]" }.joined()
+            }
+            macPopupTrace("navdump: vcs=\(nav.viewControllers.count) top=\(nav.topViewController.map { String(describing: type(of: $0)) } ?? "-") hidden=\(nav.isNavigationBarHidden) left=\(describe(item?.leftBarButtonItems)) right=\(describe(item?.rightBarButtonItems)) leadingGroups=\(item?.leadingItemGroups.map { describe($0.barButtonItems) } ?? []) trailingGroups=\(item?.trailingItemGroups.map { describe($0.barButtonItems) } ?? []) title=\(item?.title ?? "-")")
+            var labels: [String] = []
+            func walk(_ v: UIView) {
+                if let l = v.accessibilityLabel, !l.isEmpty, v.isAccessibilityElement || v is UIControl { labels.append("\(type(of: v)):\(l)") }
+                for e in (v.accessibilityElements ?? []) {
+                    if let el = e as? NSObject, let l = el.accessibilityLabel { labels.append("el:\(l)") }
+                }
+                v.subviews.forEach(walk)
+            }
+            walk(nav.navigationBar)
+            macPopupTrace("navdump: bar labels \(labels)")
+        }
+    }
+}
+#endif
 
 /// A click on the dimmed window around a Mac popup closes it (Luther,
 /// November 2026), exactly as swiping a sheet down does on iPad: the sheet's

@@ -90,7 +90,14 @@ private struct DrillMediaPage: View {
 
     var body: some View {
         switch media.kind {
-        case .image, .courtDiagram:
+        case .courtDiagram:
+            // A drawing plays its steps; a legacy sketch is a picture.
+            if let drawing = DrillDrawingMedia.drawing(for: media) {
+                drawingPage(drawing)
+            } else {
+                imagePage
+            }
+        case .image:
             imagePage
         case .videoClip:
             videoClipPage
@@ -99,6 +106,20 @@ private struct DrillMediaPage: View {
         case .instagram:
             instagramPage
         }
+    }
+
+    private func drawingPage(_ drawing: DrillDrawing) -> some View {
+        GeometryReader { proxy in
+            ScrollView {
+                DrillDrawingPlayer(drawing: drawing, viewportHeight: proxy.size.height - 40)
+                    .frame(maxWidth: 760)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 64)
+                    .padding(.bottom, 24)
+            }
+        }
+        .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder

@@ -134,6 +134,10 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     var balls: [Int] = []
     var actions: [Action] = []
     var notes: [Note] = []
+    /// Cones on the floor (drill drawings, November 2026). A play has none,
+    /// and a drawing without cones writes no `cones` key, so plays' JSON is
+    /// unchanged and older builds read a drawing with cones minus the cones.
+    var cones: [JournalCourtPoint] = []
 
     /// The first ball's holder: the play's ball when there is only one.
     var ball: Int? {
@@ -142,12 +146,13 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     }
 
     init(offense: [Player] = [], defense: [Defender] = [], ball: Int? = nil, balls: [Int] = [],
-         actions: [Action] = [], notes: [Note] = []) {
+         actions: [Action] = [], notes: [Note] = [], cones: [JournalCourtPoint] = []) {
         self.offense = offense
         self.defense = defense
         self.balls = balls.isEmpty ? (ball.map { [$0] } ?? []) : balls
         self.actions = actions
         self.notes = notes
+        self.cones = cones
     }
 
     func player(_ number: Int) -> Player? { offense.first { $0.number == number } }
@@ -157,7 +162,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     // Stored as before with `ball` (the first holder) beside `balls`, so a
     // build from before several balls still reads a drawing's first ball,
     // and a drawing it saved (no `balls`) reads back as that one ball.
-    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes }
+    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -168,6 +173,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         let first = try c.decodeIfPresent(Int.self, forKey: .ball)
         let all = try c.decodeIfPresent([Int].self, forKey: .balls)
         balls = all ?? first.map { [$0] } ?? []
+        cones = try c.decodeIfPresent([JournalCourtPoint].self, forKey: .cones) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -178,7 +184,11 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         try c.encode(balls, forKey: .balls)
         try c.encode(actions, forKey: .actions)
         try c.encode(notes, forKey: .notes)
+        if !cones.isEmpty { try c.encode(cones, forKey: .cones) }
     }
+
+    /// The number a new player takes: one past the highest on the court.
+    var nextPlayerNumber: Int { (offense.map(\.number).max() ?? 0) + 1 }
 }
 
 import Foundation

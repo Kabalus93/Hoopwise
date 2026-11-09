@@ -37,6 +37,8 @@ enum JPalette {
     static let read = Color(uiColor: .jAdaptive(light: 0xB27200, dark: 0xFAB219))
     /// Shots, and dribbles that finish at the rim.
     static let shot = Color(uiColor: .jAdaptive(light: 0xD8342C, dark: 0xFF5A4F))
+    /// Training cones (drill drawings): safety orange.
+    static let cone = Color(uiColor: .jAdaptive(light: 0xF06A00, dark: 0xFF8A2A))
 }
 
 enum JMotion {

@@ -19,6 +19,7 @@ struct DrillMediaThumb: View {
             kindBadge
                 .padding(8)
             durationBadge
+            stepsBadge
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -31,7 +32,15 @@ struct DrillMediaThumb: View {
     @ViewBuilder
     private var background: some View {
         #if os(iOS)
-        if let path = media.thumbnailOrPrimaryPath,
+        if let drawing = DrillDrawingMedia.drawing(for: media), let first = drawing.steps.first {
+            // Drawn live from the drawing (its first step), so it follows
+            // light and dark like the Plays library; the saved JPEG is for
+            // bundles and older builds.
+            JournalPlayDiagramView(diagram: first.diagram, court: drawing.court, compact: size < 60)
+                .padding(size < 60 ? 2 : 6)
+                .frame(width: size, height: size)
+                .background(JPalette.background)
+        } else if let path = media.thumbnailOrPrimaryPath,
            let image = DrillMediaStorage.shared.loadImage(at: path) {
             Image(uiImage: image)
                 .resizable()
@@ -65,6 +74,22 @@ struct DrillMediaThumb: View {
             .foregroundStyle(.white)
             .frame(width: 22, height: 22)
             .background(.black.opacity(0.55), in: Circle())
+    }
+
+    /// "3 steps" on a drawing with more than one step.
+    @ViewBuilder
+    private var stepsBadge: some View {
+        if media.kind == .courtDiagram, size >= 60,
+           let count = DrillDrawingMedia.drawing(for: media)?.steps.count, count > 1 {
+            Text(LocalizationManager.shared.currentLanguage == .chinese ? "\(count) 步" : "\(count) steps")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.black.opacity(0.55), in: Capsule())
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        }
     }
 
     @ViewBuilder
@@ -127,6 +152,7 @@ struct DrillMediaCarousel: View {
                         DrillMediaThumb(media: item, size: tileSize)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("drill.visual")
                     .contextMenu {
                         Button {
                             onTap?(item, index)
@@ -155,6 +181,7 @@ struct DrillMediaCarousel: View {
                         addTile
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("drill.visual.add")
                 }
             }
             .padding(.horizontal, horizontalPadding)

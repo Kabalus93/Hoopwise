@@ -56,6 +56,7 @@ struct FlightyCoachProfileView: View {
                 notificationsSection
                 #if targetEnvironment(macCatalyst)
                 claudeDesktopSection
+                claudeKeySection
                 #endif
                 preferencesSection
                 coachingSection
@@ -441,6 +442,53 @@ struct FlightyCoachProfileView: View {
             Text(isChinese
                  ? "让 Claude Desktop 查找学员和课程、记录考勤、排课。Claude 每次操作前都会征求你的同意；没有删除功能。设置里含有访问密钥，请勿分享。"
                  : "Lets Claude Desktop look up athletes and sessions, mark attendance and schedule classes. Claude asks you before each action, and nothing can be deleted. The setup contains this Mac's access key — don't share it.")
+        }
+    }
+
+    // MARK: - Claude in the app (Mac only, November 2026)
+    @State private var claudeKeySet = AnthropicKeyStore.key != nil
+    @State private var claudeKeyDraft = ""
+    @State private var claudeKeyEditing = false
+
+    /// The Anthropic API key the app itself uses (the drills search asks
+    /// Claude when Enter is pressed — DrillFinder). Kept in this Mac's
+    /// Keychain only, never in the store or iCloud.
+    private var claudeKeySection: some View {
+        Section {
+            if claudeKeySet && !claudeKeyEditing {
+                HStack {
+                    Label(isChinese ? "已设置 API 密钥" : "API key set", systemImage: "checkmark.seal")
+                    Spacer()
+                    Button(isChinese ? "更换" : "Change") { claudeKeyEditing = true }
+                    Button(isChinese ? "移除" : "Remove", role: .destructive) {
+                        AnthropicKeyStore.remove()
+                        claudeKeySet = false
+                    }
+                }
+            } else {
+                SecureField(isChinese ? "粘贴 Anthropic API 密钥（sk-ant-…）" : "Paste an Anthropic API key (sk-ant-…)",
+                            text: $claudeKeyDraft)
+                    .accessibilityIdentifier("profile.anthropicKey")
+                HStack {
+                    Button(isChinese ? "保存到钥匙串" : "Save to Keychain") {
+                        if AnthropicKeyStore.save(claudeKeyDraft) {
+                            claudeKeySet = true
+                            claudeKeyEditing = false
+                            claudeKeyDraft = ""
+                        }
+                    }
+                    .disabled(!claudeKeyDraft.trimmingCharacters(in: .whitespaces).hasPrefix("sk-ant-"))
+                    if claudeKeyEditing {
+                        Button(isChinese ? "取消" : "Cancel") { claudeKeyEditing = false; claudeKeyDraft = "" }
+                    }
+                }
+            }
+        } header: {
+            Text(isChinese ? "App 中的 Claude" : "Claude in the app")
+        } footer: {
+            Text(isChinese
+                 ? "在训练库的搜索栏输入描述并按回车，Claude 会从整个训练库中找出最接近的训练。只发送训练内容，不含学员信息。密钥只保存在这台 Mac 的钥匙串里，可在 console.anthropic.com 创建；每次查找花费不到一美分。"
+                 : "In the drills library, type a description in the search bar and press Return: Claude finds the closest drills in the whole library. Only drill text is sent, never athletes. The key stays in this Mac's Keychain; create one at console.anthropic.com. A search costs under a cent.")
         }
     }
     #endif

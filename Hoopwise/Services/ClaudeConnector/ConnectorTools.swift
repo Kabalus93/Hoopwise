@@ -859,7 +859,7 @@ final class ConnectorToolRegistry {
                     }
                     return ConnectorToolResult(payload: "{\"opened\": true}", summary: "opened in app")
                 }),
-        ] + playTools() + careTools()
+        ] + playTools() + careTools() + drillTools()
     }
 
 }

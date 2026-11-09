@@ -2133,6 +2133,24 @@ class SwiftDataManager: ObservableObject {
     /// Shared plumbing for every field-level helper. Fetches the canonical
     /// row, records a revision snapshot for recoverability, runs the
     /// caller's mutation, stamps `updatedAt`, saves + refreshes caches.
+    /// Puts athletes on ONE session's roster and marks them present — the
+    /// private session's Add Athlete (November 2026). The program's roster is
+    /// never touched: enrolling a second client in the first client's private
+    /// program made them expected, and inferred absent, at every later lesson.
+    /// The stored roster starts from who is expected now (an empty roster
+    /// means "the program's enrolment"), so adding one person never leaves
+    /// only them expected. Presence goes through the one redemption authority.
+    func addStudentsToSessionOnly(sessionId: UUID, studentIds: [UUID]) {
+        guard !studentIds.isEmpty, let session = cachedSessionEvents.first(where: { $0.id == sessionId }) else { return }
+        var roster = AttendanceMath.expectedIds(of: session, programs: cachedPrograms)
+        for id in studentIds where !roster.contains(id) { roster.append(id) }
+        mutateSession(id: sessionId, reason: .manualEdit) { sd in
+            sd.attendeeIds = roster
+        }
+        setStudentAttendanceStates(sessionId: sessionId,
+                                   states: Dictionary(uniqueKeysWithValues: studentIds.map { ($0, .present) }))
+    }
+
     private func mutateSession(id sessionId: UUID,
                                reason: RevisionReason,
                                apply: (SDSessionEvent) -> Void) {

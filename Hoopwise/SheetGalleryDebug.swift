@@ -235,6 +235,20 @@ enum SheetGalleryDebug {
                 missing("sessionPage: no program session in the store")
             }
 
+        case "privateSession":
+            // A private client's session: Add Athlete adds to THIS session
+            // only (never the program).
+            if let program = dm.programs.first(where: { $0.programType == .privateSessions }),
+               let session = dm.sessionEvents
+                .filter({ $0.programId == program.id })
+                .min(by: { $0.startTime < $1.startTime }) {
+                NavigationStack {
+                    FlightySessionPageView(session: session, accessMode: .execution)
+                }
+            } else {
+                missing("privateSession: no private program session in the store")
+            }
+
         case "pastSession":
             // A class whose time has passed but is still scheduled: the
             // Cancel / Mark Completed pair.
@@ -308,6 +322,45 @@ enum SheetGalleryDebug {
                 CyclePlannerSheet(program: program, defaultStart: Date())
             } else {
                 missing("cyclePlanner: no program")
+            }
+
+        case "drillDetail":
+            // A drill's page as the session plan's Details opens it (a popup
+            // with no Done of its own); prefers a drill with visuals.
+            if let drill = dm.drills.first(where: { !$0.media.isEmpty }) ?? dm.drills.first {
+                NavigationStack { DrillDetailView(drill: drill) }
+            } else {
+                missing("drillDetail: no drills")
+            }
+
+        case "drillDrawing":
+            // A drill drawing as the session plan opens it (scratch, unsaved).
+            DrillDrawingSheet(title: "Drive and Kick", drawing: {
+                var drawing = DrillDrawing.new()
+                drawing.steps[0].caption = "Set"
+                drawing.steps[0].diagram.cones = [JournalCourtPoint(4, 8), JournalCourtPoint(11, 8)]
+                drawing.steps[0].diagram.actions = [.init(kind: .dribble, player: 1,
+                    path: [JournalCourtPoint(7.5, 9.6), JournalCourtPoint(10.5, 5)], shape: .straight)]
+                drawing.steps[0].text = "1 drives the gap between the cones."
+                for caption in ["Kick", "Shot"] {
+                    var next = DrillDrawing.Step(diagram: JournalPlayMath.startOfNextStep(after: drawing.steps.last!.diagram))
+                    next.caption = caption
+                    drawing.steps.append(next)
+                }
+                return drawing
+            }())
+
+        case "drillPicker":
+            // The session plan's Add Drill picker (Skills). DEBUG
+            // HOOPWISE_DRILLPICKER_SEARCH=<text> types into its search field;
+            // on the Mac, HOOPWISE_DRILLPICKER_ASK=1 then presses Return.
+            if let session = dm.sessionEvents.first(where: { $0.programId != nil }) ?? dm.sessionEvents.first {
+                SmartDrillPickerSheet(session: .constant(session), section: .main,
+                                      program: dm.programs.first { $0.id == session.programId }, phase: nil,
+                                      students: [], allDrills: dm.drills,
+                                      currentCoachId: dm.loggedInCoachId ?? dm.coach.id, onSave: {})
+            } else {
+                missing("drillPicker: no session in the store")
             }
 
         case "drillsLibrary":

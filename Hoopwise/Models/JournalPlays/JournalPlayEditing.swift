@@ -40,6 +40,7 @@ nonisolated extension JournalPlayMath {
         out.actions = diagram.actions.map { .init(kind: $0.kind, player: $0.player, path: $0.path.map(map),
                                                   receiver: $0.receiver, shape: $0.shape) }
         out.notes = diagram.notes.map { .init(text: $0.text, at: map($0.at)) }
+        out.cones = diagram.cones.map(map)
         return out
     }
 
@@ -124,6 +125,8 @@ nonisolated extension JournalPlayMath {
     enum PlayHit: Equatable, Sendable {
         case player(Int)
         case defender(Int)
+        /// A cone (drill drawings).
+        case cone(Int)
         /// The end of an action's path (its dashed ring, for a move).
         case actionEnd(Int)
         /// A bend point inside a line: action, point.
@@ -133,7 +136,7 @@ nonisolated extension JournalPlayMath {
     }
 
     /// What a touch at `point` lands on, nearest first within `radius`
-    /// metres: players, defenders, the ends of lines, lines, notes. Of two
+    /// metres: players, defenders, cones, the ends of lines, lines, notes. Of two
     /// on the same spot, the one drawn on top (the later one).
     static func hit(_ point: JournalCourtPoint, in diagram: JournalPlayDiagram, radius: Double) -> PlayHit? {
         func nearest<T>(_ items: [T], _ distance: (T) -> Double) -> Int? {
@@ -142,6 +145,7 @@ nonisolated extension JournalPlayMath {
         }
         if let i = nearest(diagram.offense, { $0.at.distance(to: point) }) { return .player(diagram.offense[i].number) }
         if let i = nearest(diagram.defense, { $0.at.distance(to: point) }) { return .defender(i) }
+        if let i = nearest(diagram.cones, { $0.distance(to: point) }) { return .cone(i) }
         let moves = diagram.actions.indices.filter { diagram.actions[$0].kind.movesPlayer }
         if let i = nearest(moves, { diagram.actions[$0].path.last?.distance(to: point) ?? .infinity }) {
             return .actionEnd(moves[i])
@@ -280,17 +284,30 @@ nonisolated extension JournalPlayMath {
         return out
     }
 
-    /// Takes away what was hit: a line, a defender or a note. Players
-    /// stay (always five); a player's own lines are erased one by one.
+    /// Takes away what was hit: a line, a defender, a cone or a note.
+    /// Players stay (a play always has five; a drill drawing removes one
+    /// with `removing(player:)`); a player's own lines are erased one by one.
     static func erasing(_ hit: PlayHit, in diagram: JournalPlayDiagram) -> JournalPlayDiagram {
         var out = diagram
         switch hit {
         case .player: break
         case .defender(let i): if out.defense.indices.contains(i) { out.defense.remove(at: i) }
+        case .cone(let i): if out.cones.indices.contains(i) { out.cones.remove(at: i) }
         case .action(let i), .actionEnd(let i), .actionBend(let i, _):
             if out.actions.indices.contains(i) { out.actions.remove(at: i) }
         case .note(let i): if out.notes.indices.contains(i) { out.notes.remove(at: i) }
         }
+        return out
+    }
+
+    /// A player taken off the court (drill drawings): their lines, the
+    /// passes thrown to them and their ball go with them. The others keep
+    /// their numbers.
+    static func removing(player number: Int, from diagram: JournalPlayDiagram) -> JournalPlayDiagram {
+        var out = diagram
+        out.offense.removeAll { $0.number == number }
+        out.actions.removeAll { $0.player == number || ($0.kind == .pass && $0.receiver == number) }
+        out.balls.removeAll { $0 == number }
         return out
     }
 }

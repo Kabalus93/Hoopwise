@@ -48,5 +48,18 @@ nonisolated enum JournalPlayStringsAdded {
         "Tap a player to give or take a ball. Several players can each have one.":
             .init(en: "Tap a player to give or take a ball. Several players can each have one.", enOne: nil,
                   zh: "点一下球员给球或收回球。可以让几名球员各拿一个球。"),
+        // Drill drawings (November 2026): players and cones.
+        "Player": .init(en: "Player", enOne: nil, zh: "球员"),
+        "Cone": .init(en: "Cone", enOne: nil, zh: "标志桶"),
+        "Tap the court to add a player.": .init(en: "Tap the court to add a player.", enOne: nil,
+                                                zh: "点一下球场，添加一名球员。"),
+        "Tap the court to add a cone.": .init(en: "Tap the court to add a cone.", enOne: nil,
+                                              zh: "点一下球场，放一个标志桶。"),
+        "Tap a player, a line, a defender, a cone or a note to erase it.":
+            .init(en: "Tap a player, a line, a defender, a cone or a note to erase it.", enOne: nil,
+                  zh: "点一下球员、线条、防守人、标志桶或文字即可擦掉。"),
+        "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line.":
+            .init(en: "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line.",
+                  enOne: nil, zh: "点击选中球员、防守人、标志桶或线条；拖动可移动它，或拖动线的终点和弯折点。"),
     ]
 }

@@ -6,11 +6,22 @@ import SwiftUI
 /// November 2026: the hero's ▶ used to open a second screen where ▶ then
 /// played) and the step screen of every part.
 ///
+/// A drill's drawing plays the same way (`init(steps:court:…)`, November
+/// 2026): its steps are values rather than a part's records.
+///
 /// The host owns which step is shown (`index`) so its toolbar can draw,
 /// add, move or delete that step; playback stops whenever the host moves
 /// the index itself or `paused` turns on (an editor or dialog open).
 struct JournalPlayStepPlayer<Leading: View>: View {
-    let part: JournalPlayPart
+    /// One step as the player shows it.
+    struct Step {
+        var diagram: JournalPlayDiagram
+        var caption: String
+        var text: String
+    }
+
+    let steps: [Step]
+    let court: JournalCourtKind
     @Binding var index: Int
     var paused = false
     /// Start playing as soon as the player appears.
@@ -32,9 +43,7 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     @State private var frozen: Double?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var steps: [JournalPlayStep] { part.sortedSteps }
-    private var court: JournalCourtKind { part.play?.court ?? .half }
-    private var current: JournalPlayStep? { steps.indices.contains(index) ? steps[index] : nil }
+    private var current: Step? { steps.indices.contains(index) ? steps[index] : nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: JSpacing.m) {
@@ -111,7 +120,7 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     }
 
     @ViewBuilder
-    private func diagram(_ step: JournalPlayStep, isCurrent: Bool) -> some View {
+    private func diagram(_ step: Step, isCurrent: Bool) -> some View {
         if isCurrent, let frozen {
             JournalPlayDiagramView(diagram: step.diagram, court: court, frame: JournalPlayMath.frame(step.diagram, at: frozen))
         } else if isCurrent, playing, !reduceMotion {
@@ -223,10 +232,26 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     }
 }
 
+extension JournalPlayStepPlayer {
+    /// A play's part, its steps read from the store.
+    init(part: JournalPlayPart, index: Binding<Int>, paused: Bool = false, autoplay: Bool = false,
+         frozenT: Double? = nil, viewportHeight: CGFloat? = nil, @ViewBuilder leading: @escaping () -> Leading) {
+        self.init(steps: part.sortedSteps.map { Step(diagram: $0.diagram, caption: $0.caption, text: $0.text) },
+                  court: part.play?.court ?? .half, index: index, paused: paused, autoplay: autoplay,
+                  frozenT: frozenT, viewportHeight: viewportHeight, leading: leading)
+    }
+}
+
 extension JournalPlayStepPlayer where Leading == EmptyView {
     init(part: JournalPlayPart, index: Binding<Int>, paused: Bool = false, autoplay: Bool = false,
          frozenT: Double? = nil, viewportHeight: CGFloat? = nil) {
         self.init(part: part, index: index, paused: paused, autoplay: autoplay, frozenT: frozenT,
                   viewportHeight: viewportHeight) { EmptyView() }
+    }
+
+    /// A drill's drawing.
+    init(drawing: DrillDrawing, index: Binding<Int>, viewportHeight: CGFloat? = nil) {
+        self.init(steps: drawing.steps.map { Step(diagram: $0.diagram, caption: $0.caption, text: $0.text) },
+                  court: drawing.court, index: index, viewportHeight: viewportHeight) { EmptyView() }
     }
 }

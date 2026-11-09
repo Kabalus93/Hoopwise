@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MapKit
+import os
 #if os(iOS)
 import UIKit
 import AudioToolbox
@@ -51,6 +52,8 @@ struct FlightySessionPageView: View {
     /// Open media viewer keyed to a (drillId, index) pair so the cover
     /// rebuilds correctly when the user taps different tiles.
     @State private var plannerMediaViewer: PlannerMediaViewerTarget?
+    /// A drill drawing opened from the plan: a popup with its step player.
+    @State private var plannerDrawing: DrillMedia?
 
     fileprivate struct PlannerMediaViewerTarget: Identifiable, Hashable {
         let drillId: UUID
@@ -109,11 +112,18 @@ struct FlightySessionPageView: View {
         return dataManager.microCycles.first { $0.id == microCycleId }
     }
     
+    /// Who this session is for: `AttendanceMath.expectedIds` (the session's
+    /// own roster, else its program's enrolment — the ONE roster definition),
+    /// plus anyone already marked on it, so a marked athlete never vanishes
+    /// from the page. It read the program's enrolment alone, so a session
+    /// whose roster differed (a second private client added to one lesson)
+    /// counted 2 expected and listed 1 (November 2026).
     var enrolledStudents: [Student] {
-        guard let program = parentProgram else {
-            return dataManager.students.filter { session.attendeeIds.contains($0.id) }
-        }
-        return dataManager.students.filter { program.enrolledStudentIds.contains($0.id) }
+        var ids = Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
+        ids.formUnion(session.actualAttendeeIds)
+        ids.formUnion(session.excusedAbsences)
+        ids.formUnion(session.unexcusedAbsences)
+        return dataManager.students.filter { ids.contains($0.id) }
     }
     
     var programColor: Color {
@@ -829,9 +839,15 @@ struct FlightySessionPageView: View {
             // Resolve the drill out of the latest dataManager state so the
             // viewer reflects any media edits made elsewhere while planning.
             if let drill = dataManager.drills.first(where: { $0.id == target.drillId }) {
-                DrillMediaViewer(media: drill.media, initialIndex: target.index)
+                DrillMediaViewer(media: DrillDrawingMedia.viewerMedia(drill.media), initialIndex: target.index)
             } else {
                 EmptyView()
+            }
+        }
+        .sheet(item: $plannerDrawing) { media in
+            if let drawing = DrillDrawingMedia.drawing(for: media) {
+                DrillDrawingSheet(title: dataManager.drills.first { $0.id == media.drillId }?.localizedName ?? "",
+                                  drawing: drawing)
             }
         }
         .sheet(isPresented: $showingSmartDrillPicker) {
@@ -1293,11 +1309,18 @@ struct FlightySessionPageView: View {
                             media: drill.media,
                             tileSize: 84,
                             horizontalPadding: 0,
-                            onTap: { _, idx in
+                            onTap: { item, _ in
                                 HapticFeedback.impact(.light)
-                                plannerMediaViewer = PlannerMediaViewerTarget(
-                                    drillId: drill.id, index: idx
-                                )
+                                // A drawing plays in a popup; photos and
+                                // videos open the full-screen viewer.
+                                if DrillDrawingMedia.drawing(for: item) != nil {
+                                    plannerDrawing = item
+                                } else if let idx = DrillDrawingMedia.viewerMedia(drill.media)
+                                            .firstIndex(where: { $0.id == item.id }) {
+                                    plannerMediaViewer = PlannerMediaViewerTarget(
+                                        drillId: drill.id, index: idx
+                                    )
+                                }
                             },
                             onAdd: nil
                         )
@@ -1864,15 +1887,28 @@ struct FlightySessionPageView: View {
             // Available pool = all students not already enrolled in this
             // program. Mirrors the legacy `AddAthleteFromAttendanceView`
             // behavior; we just route it through the shared picker now.
-            let enrolledIds = Set(parentProgram?.enrolledStudentIds ?? [])
-            let available = dataManager.students.filter { !enrolledIds.contains($0.id) }
-            let banner = AthletePickerSheet.Banner(
-                title: isChinese ? "从此课程开始计费" : "Sessions Count From Here",
-                subtitle: isChinese
-                    ? "学员的合约课时将从本节课开始计算"
-                    : "The student's contract sessions will count starting from this session",
-                tint: programColor
-            )
+            // A private session offers anyone not already expected at it
+            // (they join this session only); a group class, anyone not on
+            // the program's roster.
+            let takenIds = isPrivateSession
+                ? Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
+                    .union(session.actualAttendeeIds)
+                : Set(parentProgram?.enrolledStudentIds ?? [])
+            let available = dataManager.students.filter { !takenIds.contains($0.id) }
+            let banner = isPrivateSession
+                ? AthletePickerSheet.Banner(
+                    title: isChinese ? "仅加入本节课" : "This Session Only",
+                    subtitle: isChinese
+                        ? "学员会被标记为出席，并从他自己的私教课包扣一节课；不会加入这个项目"
+                        : "They're marked present and one session comes off their own private bundle. They don't join this program.",
+                    tint: programColor)
+                : AthletePickerSheet.Banner(
+                    title: isChinese ? "从此课程开始计费" : "Sessions Count From Here",
+                    subtitle: isChinese
+                        ? "学员的合约课时将从本节课开始计算"
+                        : "The student's contract sessions will count starting from this session",
+                    tint: programColor
+                )
             AthletePickerSheet(
                 title: isChinese ? "添加学员" : "Add Athlete",
                 students: available,
@@ -1939,7 +1975,9 @@ struct FlightySessionPageView: View {
                     Text(isChinese ? "添加学员" : "Add Athlete")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(programColor)
-                    Text(isChinese ? "将新学员加入此项目" : "Enroll a new student in this program")
+                    Text(isPrivateSession
+                         ? (isChinese ? "加入本节课（不加入项目）" : "Add someone to this session only")
+                         : (isChinese ? "将新学员加入此项目" : "Enroll a new student in this program"))
                         .font(.system(size: 12))
                         .foregroundStyle(.tertiary)
                 }
@@ -1961,8 +1999,34 @@ struct FlightySessionPageView: View {
         }
     }
     
+    /// Private by the program's TYPE (SessionPrivacy, the one answer).
+    private var isPrivateSession: Bool {
+        SessionPrivacy.isPrivate(session, programs: dataManager.programs, contracts: dataManager.contracts)
+    }
+
+    /// Add Athlete on a PRIVATE session (November 2026, Luther): the athlete
+    /// joins THIS session's roster and is marked present — never the program.
+    /// Enrolling them there (the group-class behaviour) made a second client
+    /// "expected" at every later lesson of the first client's private
+    /// program, and inferred absent — charged — when not marked.
+    private func addToThisSessionOnly(studentIds: [UUID]) {
+        dataManager.addStudentsToSessionOnly(sessionId: session.id, studentIds: studentIds)
+        refreshSessionFromStore()
+        // The roster is not a live field, so a later save from this copy must
+        // carry the new one rather than restore the old.
+        if let fresh = dataManager.sessionEvents.first(where: { $0.id == session.id }) {
+            session.attendeeIds = fresh.attendeeIds
+        }
+        HapticFeedback.notification(.success)
+    }
+
     private func enrollStudentsFromAttendance(studentIds: [UUID]) {
-        guard !studentIds.isEmpty, var program = parentProgram else { return }
+        guard !studentIds.isEmpty else { return }
+        if isPrivateSession {
+            addToThisSessionOnly(studentIds: studentIds)
+            return
+        }
+        guard var program = parentProgram else { return }
 
         var didChangeProgram = false
         var didChangeSession = false
@@ -6471,6 +6535,12 @@ struct SmartDrillPickerSheet: View {
     @State private var selectedCategory: DrillCategory?
     @State private var selectedDifficulty: DifficultyLevel?
     @State private var showOnlySuggested = true
+    /// Mac: Return in the search field asks Claude for the closest drills in
+    /// the whole library (as on the drills page — DrillFinder).
+    @State private var claudeQuery: String?
+    @State private var claudeResult: DrillFinderResult?
+    @State private var claudeAsking = false
+    @State private var claudeProblem: String?
     
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
 
@@ -6600,10 +6670,18 @@ struct SmartDrillPickerSheet: View {
     }
     
     private var filteredDrills: [DrillItem] {
-        var drills = showOnlySuggested ? suggestedDrills : coachVisibleDrills
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Typing searches EVERY drill the coach can see, not only the
+        // suggestions, and reads the description and instructions as well as
+        // the name (Luther, November 2026: a drill could only be found by its
+        // exact name, and only if it happened to be suggested).
+        var drills = (showOnlySuggested && query.isEmpty) ? suggestedDrills : coachVisibleDrills
         
-        if !searchText.isEmpty {
-            drills = drills.filter { $0.name.localizedCaseInsensitiveContains(searchText) || $0.localizedName.localizedCaseInsensitiveContains(searchText) }
+        if !query.isEmpty {
+            drills = drills.filter { drill in
+                DrillFinder.typedMatch(query, in: [drill.name, drill.localizedName, drill.description,
+                                                   drill.localizedDescription] + drill.instructions)
+            }
         }
         
         if let category = selectedCategory {
@@ -6633,11 +6711,14 @@ struct SmartDrillPickerSheet: View {
                 // Drill list
                 ScrollView {
                     LazyVStack(spacing: 10) {
+                        #if targetEnvironment(macCatalyst)
+                        claudeSuggestions
+                        #endif
                         ForEach(filteredDrills) { drill in
                             drillSelectionRow(drill: drill)
                         }
                         
-                        if filteredDrills.isEmpty {
+                        if filteredDrills.isEmpty && !claudeAsking && (claudeResult?.matches.isEmpty ?? true) {
                             emptyState
                         }
                     }
@@ -6646,6 +6727,9 @@ struct SmartDrillPickerSheet: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle(isChinese ? "添加训练" : "Add Drill")
+            #if DEBUG
+            .onAppear(perform: debugSearch)
+            #endif
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -6714,9 +6798,17 @@ struct SmartDrillPickerSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField(isChinese ? "搜索训练..." : "Search drills...", text: $searchText)
+                TextField(searchPrompt, text: $searchText)
                     .font(.subheadline)
                     .textFieldStyle(.plain)
+                    .submitLabel(.search)
+                    .accessibilityIdentifier("drillPicker.search")
+                    #if targetEnvironment(macCatalyst)
+                    .onSubmit { askClaude() }
+                    .onChange(of: searchText) { _, text in
+                        if text.trimmingCharacters(in: .whitespacesAndNewlines) != claudeQuery { clearClaude() }
+                    }
+                    #endif
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -6786,7 +6878,132 @@ struct SmartDrillPickerSheet: View {
         }
     }
     
-    private func drillSelectionRow(drill: DrillItem) -> some View {
+    #if DEBUG
+    /// HOOPWISE_SHOT=drillPicker: types HOOPWISE_DRILLPICKER_SEARCH, logs
+    /// what the typed search finds and (Mac, HOOPWISE_DRILLPICKER_ASK=1)
+    /// what Return brings back.
+    private func debugSearch() {
+        let env = ProcessInfo.processInfo.environment
+        guard let text = env["HOOPWISE_DRILLPICKER_SEARCH"] else { return }
+        let log = Logger(subsystem: "hoopwise.mac", category: "drillPicker")
+        searchText = text
+        DispatchQueue.main.async {
+            let found = filteredDrills.prefix(5).map(\.name).joined(separator: " | ")
+            log.notice("typed \(text, privacy: .public): \(filteredDrills.count) of \(coachVisibleDrills.count) — \(found, privacy: .public)")
+            #if targetEnvironment(macCatalyst)
+            guard env["HOOPWISE_DRILLPICKER_ASK"] == "1" else { return }
+            askClaude()
+            Task {
+                while claudeAsking || claudeResult == nil { try? await Task.sleep(for: .milliseconds(300)) }
+                let names = (claudeResult?.matches ?? []).compactMap { m in coachVisibleDrills.first { $0.id == m.drillId }?.name }
+                log.notice("asked (\(claudeResult?.source == .claude ? "claude" : "on device", privacy: .public)): \(names.joined(separator: " | "), privacy: .public)")
+            }
+            #endif
+        }
+    }
+    #endif
+
+    private var searchPrompt: String {
+        #if targetEnvironment(macCatalyst)
+        isChinese ? "搜索训练，或描述玩法后按回车" : "Search drills, or describe one and press Return"
+        #else
+        isChinese ? "搜索训练..." : "Search drills..."
+        #endif
+    }
+
+    #if targetEnvironment(macCatalyst)
+    private func clearClaude() {
+        claudeQuery = nil
+        claudeResult = nil
+        claudeProblem = nil
+    }
+
+    private func askClaude() {
+        let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 3, !claudeAsking else { return }
+        let entries = DrillFinder.entries(for: coachVisibleDrills)
+        let chinese = isChinese
+        claudeQuery = text
+        claudeResult = nil
+        claudeProblem = nil
+        claudeAsking = true
+        Task {
+            defer { claudeAsking = false }
+            var result: DrillFinderResult?
+            if let key = AnthropicKeyStore.key {
+                do {
+                    result = try await DrillFinder.askClaude(description: text, entries: entries, chinese: chinese, key: key)
+                } catch {
+                    claudeProblem = (chinese ? "Claude 暂时无法回答，以下为本机查找结果。" : "Claude couldn't answer, so this Mac searched instead. ")
+                        + error.localizedDescription
+                }
+            }
+            // A newer search (or a cleared field) wins over a slow answer.
+            guard claudeQuery == text else { return }
+            claudeResult = result ?? DrillFinder.rankOnDevice(text, entries: entries)
+        }
+    }
+
+    /// Claude's picks above the typed matches; tapping one adds it, like any row.
+    @ViewBuilder
+    private var claudeSuggestions: some View {
+        if claudeAsking || claudeResult != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Label {
+                    Text(claudeResult?.source == .onDevice
+                         ? (isChinese ? "最接近的训练 · 本机" : "Closest drills · on this Mac")
+                         : (isChinese ? "Claude 推荐" : "Claude suggests"))
+                } icon: {
+                    Image(systemName: "sparkles")
+                }
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+
+                if claudeAsking {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(isChinese ? "Claude 正在查找整个训练库…" : "Claude is looking through the whole library…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let result = claudeResult {
+                    if result.matches.isEmpty {
+                        Text(isChinese ? "没有找到相近的训练。" : "No drill comes close.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(result.matches, id: \.drillId) { match in
+                        if let drill = coachVisibleDrills.first(where: { $0.id == match.drillId }) {
+                            drillSelectionRow(drill: drill, why: match.why)
+                                .accessibilityIdentifier("drillPicker.suggestion")
+                        }
+                    }
+                    if !result.note.isEmpty {
+                        Text(result.note).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let claudeProblem {
+                    Text(claudeProblem).font(.caption).foregroundStyle(.orange)
+                }
+                if claudeResult?.source == .onDevice && AnthropicKeyStore.key == nil {
+                    Text(isChinese ? "在「个人资料 → App 中的 Claude」加入 API 密钥，按玩法描述也能找到训练。"
+                                   : "Add an API key in Profile → Claude in the app to find drills by how they work.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !filteredDrills.isEmpty {
+                    Text(isChinese ? "名称或内容包含所输入文字" : "Drills containing what you typed")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 6)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    #endif
+
+    private func drillSelectionRow(drill: DrillItem, why: String? = nil) -> some View {
         let isAlreadyAdded = isDrillInSection(drill.id)
         let isSuggested = suggestedDrills.prefix(10).contains(where: { $0.id == drill.id })
 
@@ -6865,6 +7082,13 @@ struct SmartDrillPickerSheet: View {
                         }
                         .foregroundStyle(.secondary)
                     }
+
+                    if let why, !why.isEmpty {
+                        Text(why)
+                            .font(.caption)
+                            .foregroundStyle(.primary.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer()
@@ -6888,7 +7112,7 @@ struct SmartDrillPickerSheet: View {
         ContentUnavailableView {
             Label(isChinese ? "没有找到训练" : "No drills found", systemImage: "tray")
         } actions: {
-            if showOnlySuggested {
+            if showOnlySuggested && searchText.isEmpty {
                 Button(isChinese ? "查看所有训练" : "View all drills") {
                     showOnlySuggested = false
                 }

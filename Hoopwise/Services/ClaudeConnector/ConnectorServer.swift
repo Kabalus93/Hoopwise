@@ -159,7 +159,11 @@ final class ConnectorServer {
                 skip_session / reopen_session / complete_session, delete_session (refunds, but removes marks \
                 and notes for good), delete_athlete_note, remove_play_from_session, delete_play*. Before a \
                 delete, say what will be lost. Athletes, contracts and payments are never deleted here.
-                PLAYS: the coach's play library (Hub → Plays). Before creating or changing a play call                 get_play_drawing_guide, and read a similar play with get_play to see the format filled in.                 create_play saves a whole play (steps, wrinkles, variations) after checking every field;                 read it back with get_play. add_play_to_session puts a play in a session's plan.
+                PLAYS: the coach's play library (Hub → Plays). Before creating or changing a play call                 get_play_drawing_guide, and read a similar play with get_play to see the format filled in.                 create_play saves a whole play (steps, wrinkles, variations) after checking every field;                 read it back with get_play. add_play_to_session puts a play in a session's plan. \
+                DRILLS: a new drill the coach describes goes in his PERSONAL drills with create_drill \
+                (check list_drills first; update_drill rather than duplicate); a series of progressions of \
+                one exercise is ONE drill with one instruction per progression. add_drill_to_session puts a \
+                drill in a session's Warm-up or Skills.
                 """,
             ])
         case "ping":

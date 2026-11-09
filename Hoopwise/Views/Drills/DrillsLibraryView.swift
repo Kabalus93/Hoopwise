@@ -1,8 +1,10 @@
 import SwiftUI
 
 /// The drills screen, built on the activity library (October 2026, Luther):
-/// pick an AGE, a session BLOCK and an activity TYPE. "Mine" lists the
-/// drills coaches create themselves. Rule options live under the Game block
+/// pick an AGE, a session BLOCK and an activity TYPE. "Personal" (was
+/// "Mine", renamed November 2026 — Luther) lists every drill that is not from
+/// the library: the coach's own and the ones Claude creates through the
+/// connector (create_drill). Rule options live under the Game block
 /// and are read from the library directly — they are not drills and never
 /// reach session planning.
 struct DrillsLibraryView: View {
@@ -17,6 +19,12 @@ struct DrillsLibraryView: View {
     @State private var showGuidance = false
     @State private var openRule: LibraryActivity?
     @State private var mineCategory: DrillCategory?
+    /// Mac: Return in the search bar asks Claude for the closest drills in
+    /// the whole library (DrillFinder); they show above the list.
+    @State private var claudeQuery: String?
+    @State private var claudeResult: DrillFinderResult?
+    @State private var claudeAsking = false
+    @State private var claudeProblem: String?
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private var currentCoachId: UUID { dataManager.loggedInCoachId ?? dataManager.coach.id }
@@ -95,6 +103,9 @@ struct DrillsLibraryView: View {
 
     var body: some View {
         List {
+            #if targetEnvironment(macCatalyst)
+            claudeSection
+            #endif
             Section {
                 ageChips
                     .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
@@ -118,6 +129,13 @@ struct DrillsLibraryView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(isChinese ? "训练库" : "Activity library")
         .searchable(text: $searchText, prompt: isChinese ? "搜索训练" : "Search")
+        #if targetEnvironment(macCatalyst)
+        // Typing filters as before; Return asks Claude about the whole library.
+        .onSubmit(of: .search) { askClaude() }
+        .onChange(of: searchText) { _, text in
+            if text.trimmingCharacters(in: .whitespacesAndNewlines) != claudeQuery { clearClaude() }
+        }
+        #endif
         .onChange(of: block) { _, _ in type = nil }
         .onChange(of: ageChoice) { _, _ in type = nil }
         .toolbar {
@@ -150,6 +168,95 @@ struct DrillsLibraryView: View {
         }
     }
 
+    // MARK: Claude suggestions (Mac)
+
+    #if targetEnvironment(macCatalyst)
+    /// Every drill the finder may return: library activities the store has and
+    /// personal drills.
+    private var finderEntries: [DrillFinderEntry] { DrillFinder.entries(for: visibleDrills) }
+
+    private func clearClaude() {
+        claudeQuery = nil
+        claudeResult = nil
+        claudeProblem = nil
+    }
+
+    private func askClaude() {
+        let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 3, !claudeAsking else { return }
+        let entries = finderEntries
+        let chinese = isChinese
+        claudeQuery = text
+        claudeResult = nil
+        claudeProblem = nil
+        claudeAsking = true
+        Task {
+            defer { claudeAsking = false }
+            var result: DrillFinderResult?
+            if let key = AnthropicKeyStore.key {
+                do {
+                    result = try await DrillFinder.askClaude(description: text, entries: entries, chinese: chinese, key: key)
+                } catch {
+                    claudeProblem = (chinese ? "Claude 暂时无法回答，以下为本机查找结果。" : "Claude couldn't answer, so this Mac searched instead. ")
+                        + error.localizedDescription
+                }
+            }
+            // A newer search (or a cleared field) wins over a slow answer.
+            guard claudeQuery == text else { return }
+            claudeResult = result ?? DrillFinder.rankOnDevice(text, entries: entries)
+        }
+    }
+
+    @ViewBuilder
+    private var claudeSection: some View {
+        if claudeAsking || claudeResult != nil {
+            Section {
+                if claudeAsking {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(isChinese ? "Claude 正在查找整个训练库…" : "Claude is looking through the whole library…")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let result = claudeResult {
+                    if result.matches.isEmpty {
+                        Text(isChinese ? "没有找到相近的训练。" : "No drill comes close.").foregroundStyle(.secondary)
+                    }
+                    ForEach(result.matches, id: \.drillId) { match in
+                        if let drill = visibleDrills.first(where: { $0.id == match.drillId }) {
+                            NavigationLink(destination: DrillDetailView(drill: drill)) { suggestionRow(drill, why: match.why) }
+                                .accessibilityIdentifier("library.suggestion")
+                        }
+                    }
+                }
+            } header: {
+                Text(claudeResult?.source == .onDevice
+                     ? (isChinese ? "最接近的训练 · 本机" : "Closest drills · on this Mac")
+                     : (isChinese ? "Claude 推荐" : "Claude suggests"))
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let note = claudeResult?.note, !note.isEmpty { Text(note) }
+                    if let claudeProblem { Text(claudeProblem).foregroundStyle(.orange) }
+                    if claudeResult?.source == .onDevice && AnthropicKeyStore.key == nil {
+                        Text(isChinese ? "在「个人资料 → App 中的 Claude」加入 API 密钥，按玩法描述也能找到训练。"
+                                       : "Add an API key in Profile → Claude in the app to find drills by how they work.")
+                    }
+                }
+            }
+        }
+    }
+
+    private func suggestionRow(_ drill: DrillItem, why: String) -> some View {
+        let activity = ActivityLibrary.shared.items.first { $0.id == drill.id }
+        let place = activity.map { "\($0.age.title) · \($0.block.title) · \($0.type.title)" } ?? (isChinese ? "个人" : "Personal")
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(activity?.displayName ?? drill.localizedName).font(.body.weight(.semibold))
+            Text(place).font(.caption).foregroundStyle(.secondary)
+            if !why.isEmpty { Text(why).font(.subheadline).foregroundStyle(.primary.opacity(0.85)) }
+        }
+        .padding(.vertical, 2)
+    }
+    #endif
+
     // MARK: Age chips
 
     private var ageChips: some View {
@@ -158,7 +265,7 @@ struct DrillsLibraryView: View {
                 ForEach(ActivityAge.allCases) { a in
                     chip(a.title, selected: ageChoice == a.rawValue) { ageChoice = a.rawValue }
                 }
-                chip(isChinese ? "我的" : "Mine", selected: age == nil, icon: "person.crop.circle") {
+                chip(isChinese ? "个人" : "Personal", selected: age == nil, icon: "person.crop.circle") {
                     ageChoice = "mine"
                 }
             }
@@ -284,7 +391,7 @@ struct DrillsLibraryView: View {
         .tint(.pink)
     }
 
-    // MARK: Mine
+    // MARK: Personal (the "mine" choice)
 
     @ViewBuilder
     private var mineContent: some View {
@@ -294,9 +401,9 @@ struct DrillsLibraryView: View {
                     Image(systemName: "figure.basketball")
                         .font(.system(size: 36, weight: .light))
                         .foregroundStyle(.tertiary)
-                    Text(isChinese ? "还没有自己的训练" : "No drills of your own yet")
+                    Text(isChinese ? "还没有个人训练" : "No personal drills yet")
                         .font(.headline)
-                    Text(isChinese ? "你创建的训练会出现在这里。" : "Drills you create appear here.")
+                    Text(isChinese ? "你或 Claude 创建的训练会出现在这里。" : "Drills you or Claude create appear here.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Button(DrillLocalization.L("Add Drill")) { showingAddDrill = true }
@@ -314,7 +421,7 @@ struct DrillsLibraryView: View {
                         .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(drill) }
                 }
             } header: {
-                Text(isChinese ? "我的训练" : "My drills")
+                Text(isChinese ? "个人训练" : "Personal drills")
             }
         }
     }
@@ -605,7 +712,10 @@ struct DrillDetailView: View {
     let drill: DrillItem
     @State private var showEditSheet = false
     @State private var showDeleteConfirm = false
-    @State private var showingMediaPicker = false
+    /// The Plays editor on a drill drawing (new, or one being edited) —
+    /// "Add a visual" opens it directly (Luther, November 2026: the photo /
+    /// video / link menu is gone).
+    @State private var drawingEditor: DrawingEdit?
     @State private var showingMediaEditor = false
     @State private var viewerInitialIndex: Int?
     @State private var editingDiagram: DrillMedia?
@@ -622,6 +732,39 @@ struct DrillDetailView: View {
     @State private var newKeyPoint = ""
     @FocusState private var focusedField: InlineEditField?
     
+    private struct DrawingEdit: Identifiable {
+        let id = UUID()
+        var existing: DrillMedia?
+        var drawing: DrillDrawing
+    }
+
+    /// Opens the editor on a new drawing.
+    private func drawNew() {
+        drawingEditor = DrawingEdit(existing: nil, drawing: .new())
+    }
+
+    /// A drawn visual opens in the editor; a legacy PencilKit diagram in
+    /// its old editor. Nil when `item` is not a diagram.
+    private func edit(diagram item: DrillMedia) {
+        if let drawing = DrillDrawingMedia.drawing(for: item) {
+            drawingEditor = DrawingEdit(existing: item, drawing: drawing)
+        } else if item.kind == .courtDiagram {
+            editingDiagram = item
+        }
+    }
+
+    private func saveDrawing(_ drawing: DrillDrawing, existing: DrillMedia?) {
+        let drill = currentDrill
+        guard let media = DrillDrawingMedia.save(drawing, drillId: drill.id, existing: existing,
+                                                 sortOrder: (drill.media.map(\.sortOrder).max() ?? -1) + 1) else { return }
+        if existing == nil {
+            dataManager.addDrillMedia(media, toDrillId: drill.id)
+        } else {
+            dataManager.updateDrillMedia(media)
+        }
+        HapticFeedback.notification(.success)
+    }
+
     /// Wrapper that lets us drive `fullScreenCover(item:)` from an `Int?`
     /// state — the cover needs an Identifiable, an Int alone won't do.
     private struct IdentifiedIndex: Identifiable, Hashable {
@@ -791,12 +934,9 @@ struct DrillDetailView: View {
             AddEditDrillSheet(drill: currentDrill)
                 .environmentObject(dataManager)
         }
-        .sheet(isPresented: $showingMediaPicker) {
-            DrillMediaPicker(
-                drillId: currentDrill.id,
-                existingMediaCount: currentDrill.media.count
-            ) { newMedia in
-                dataManager.addDrillMedia(newMedia, toDrillId: currentDrill.id)
+        .fullScreenCover(item: $drawingEditor) { edit in
+            JournalPlayStepEditor(drawing: edit.drawing) { drawing in
+                saveDrawing(drawing, existing: edit.existing)
             }
         }
         .sheet(isPresented: $showingMediaEditor) {
@@ -817,7 +957,7 @@ struct DrillDetailView: View {
             get: { viewerInitialIndex.map(IdentifiedIndex.init) },
             set: { viewerInitialIndex = $0?.value }
         )) { wrapper in
-            DrillMediaViewer(media: currentDrill.media, initialIndex: wrapper.value)
+            DrillMediaViewer(media: DrillDrawingMedia.viewerMedia(currentDrill.media), initialIndex: wrapper.value)
         }
         .alert(isChinese ? "删除训练" : "Delete Drill", isPresented: $showDeleteConfirm) {
             Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
@@ -836,26 +976,30 @@ struct DrillDetailView: View {
     /// with a trailing "+ add" tile and tap-to-open full-screen viewer.
     @ViewBuilder
     private var mediaSection: some View {
-        let media = currentDrill.media
+        let media = currentDrill.media.sorted { $0.sortOrder < $1.sortOrder }
+        // Drawings play in place (every step); photos, videos and links stay
+        // in the carousel.
+        let drawn = media.compactMap { item in DrillDrawingMedia.drawing(for: item).map { (item, $0) } }
+        let others = media.filter { item in !drawn.contains { $0.0.id == item.id } }
         if media.isEmpty {
             Button {
                 HapticFeedback.impact(.light)
-                showingMediaPicker = true
+                drawNew()
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "photo.badge.plus")
+                    Image(systemName: "pencil.and.scribble")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.accent)
                         .frame(width: 34, height: 34)
                         .background(Color.accentColor.opacity(0.12),
                                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(isChinese ? "添加图片/视频" : "Add a visual")
+                        Text(isChinese ? "添加图示" : "Add a visual")
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.primary)
                         Text(isChinese
-                             ? "让训练更容易记住，球场也能离线看"
-                             : "Photos & videos make this easier to recall — offline-ready")
+                             ? "在球场上画出球员、防守人、标志桶和路线"
+                             : "Draw it on the court — players, defenders, cones and lines")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -870,11 +1014,12 @@ struct DrillDetailView: View {
                             in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("drill.addVisual")
             .padding(.horizontal, AppTheme.spacing)
         } else {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text(isChinese ? "图片与视频" : "Visuals")
+                    Text(isChinese ? "图示" : "Visuals")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
@@ -882,38 +1027,72 @@ struct DrillDetailView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.tertiary)
                     Spacer()
-                    Button {
-                        HapticFeedback.impact(.light)
-                        showingMediaEditor = true
-                    } label: {
-                        Text(isChinese ? "编辑" : "Edit")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.accent)
+                    if others.isEmpty {
+                        Button {
+                            HapticFeedback.impact(.light)
+                            drawNew()
+                        } label: {
+                            Label(isChinese ? "添加" : "Add", systemImage: "plus")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .accessibilityIdentifier("drill.visual.add")
+                    }
+                    // Order, captions and deleting, for two or more visuals;
+                    // a drawing's own Edit is on the drawing (one "Edit" only).
+                    if media.count > 1 {
+                        Button {
+                            HapticFeedback.impact(.light)
+                            showingMediaEditor = true
+                        } label: {
+                            Label(isChinese ? "排序" : "Reorder", systemImage: "arrow.up.arrow.down")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .accessibilityIdentifier("drill.visual.reorder")
                     }
                 }
                 .padding(.horizontal, AppTheme.spacing)
 
-                DrillMediaCarousel(
-                    media: media,
-                    tileSize: 132,
-                    horizontalPadding: AppTheme.spacing,
-                    onTap: { _, index in
-                        HapticFeedback.impact(.light)
-                        viewerInitialIndex = index
-                    },
-                    onAdd: {
-                        HapticFeedback.impact(.light)
-                        showingMediaPicker = true
-                    },
-                    onDelete: { item in
-                        HapticFeedback.impact(.medium)
-                        dataManager.deleteDrillMedia(item)
-                    },
-                    onEditDiagram: { item in
-                        HapticFeedback.impact(.light)
-                        editingDiagram = item
-                    }
-                )
+                ForEach(Array(drawn.enumerated()), id: \.element.0.id) { i, pair in
+                    DrillDrawingCard(
+                        drawing: pair.1,
+                        title: drawn.count > 1
+                            ? (isChinese ? "图示 \(i + 1)" : "Drawing \(i + 1)")
+                            : (isChinese ? "图示" : "Drawing"),
+                        onEdit: {
+                            HapticFeedback.impact(.light)
+                            edit(diagram: pair.0)
+                        },
+                        onDelete: {
+                            HapticFeedback.impact(.medium)
+                            dataManager.deleteDrillMedia(pair.0)
+                        }
+                    )
+                    .padding(.horizontal, AppTheme.spacing)
+                }
+
+                if !others.isEmpty {
+                    DrillMediaCarousel(
+                        media: others,
+                        tileSize: 132,
+                        horizontalPadding: AppTheme.spacing,
+                        onTap: { item, _ in
+                            HapticFeedback.impact(.light)
+                            viewerInitialIndex = DrillDrawingMedia.viewerMedia(media).firstIndex { $0.id == item.id }
+                        },
+                        onAdd: {
+                            HapticFeedback.impact(.light)
+                            drawNew()
+                        },
+                        onDelete: { item in
+                            HapticFeedback.impact(.medium)
+                            dataManager.deleteDrillMedia(item)
+                        },
+                        onEditDiagram: { item in
+                            HapticFeedback.impact(.light)
+                            edit(diagram: item)
+                        }
+                    )
+                }
             }
         }
     }

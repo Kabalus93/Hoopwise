@@ -15,32 +15,58 @@ import SwiftUI
 /// vertical tool rail, the court as large as the window allows, and an
 /// inspector for the step, the tool and the SELECTION (Move selects a
 /// player, defender or line to edit), with keyboard shortcuts.
+///
+/// The same editor draws a DRILL's visual (`init(drawing:onSave:)`, Luther,
+/// November 2026): steps as values handed back on Done, plus a Player tool
+/// (any number of players; Erase removes one) and a Cone tool.
 struct JournalPlayStepEditor: View {
     let court: JournalCourtKind
-    /// The step on screen; `diagram`, `caption`, `text` and the undo stacks
-    /// are its working copy.
-    @State private var step: JournalPlayStep
-    /// Other steps' drafts, stashed when the editor moved off them.
-    @State private var drafts: [PersistentIdentifier: Draft] = [:]
-    /// Steps added in this editor (Cancel removes them).
-    @State private var added: [JournalPlayStep] = []
-    /// Saved steps deleted in this editor: hidden now, deleted on Done,
-    /// back on Cancel.
-    @State private var deleted: [JournalPlayStep] = []
+    /// The play part whose steps are drawn; nil for a drill's drawing.
+    private let part: JournalPlayPart?
+    /// A drill's drawing (November 2026, Luther: drill visuals use this
+    /// editor): handed back on Done instead of written to a part. A drill
+    /// also gets as many players as it wants (Player tool, erase removes
+    /// one) and cones; a play keeps its five.
+    private let onSaveDrill: ((DrillDrawing) -> Void)?
+    private var isDrill: Bool { onSaveDrill != nil }
+
+    /// Every step, in order, as values: the one on screen is `current`, and
+    /// `diagram`, `caption`, `text` and the undo stacks are its working copy;
+    /// the others keep their drafts here. Nothing touches the store until
+    /// Done, so Cancel only has to drop them.
+    @State private var pages: [Page]
+    @State private var current: UUID
+    /// Saved steps deleted in this editor: deleted on Done, back on Cancel.
+    @State private var deleted: [Page] = []
     @State private var confirmingDeleteStep = false
+
+    private struct Content: Equatable {
+        var diagram: JournalPlayDiagram
+        var caption: String
+        var text: String
+    }
 
     private struct Draft {
         var diagram: JournalPlayDiagram
         var caption: String
         var text: String
-        var undo: [JournalPlayDiagram]
-        var redo: [JournalPlayDiagram]
+        var undo: [JournalPlayDiagram] = []
+        var redo: [JournalPlayDiagram] = []
+
+        var content: Content { Content(diagram: diagram, caption: caption, text: text) }
     }
 
-    private var steps: [JournalPlayStep] {
-        (step.part?.sortedSteps ?? [step]).filter { other in !deleted.contains { $0 === other } }
+    private struct Page: Identifiable {
+        let id = UUID()
+        /// The play step it edits; nil for a step added here, and in a drill.
+        var model: JournalPlayStep?
+        /// What it held when the editor opened; nil for a step added here.
+        var saved: Content?
+        var draft: Draft
     }
-    private var number: Int { (steps.firstIndex { $0 === step } ?? 0) + 1 }
+
+    private var currentIndex: Int { pages.firstIndex { $0.id == current } ?? 0 }
+    private var number: Int { currentIndex + 1 }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -64,12 +90,14 @@ struct JournalPlayStepEditor: View {
     enum Selection: Equatable {
         case player(Int)
         case defender(Int)
+        case cone(Int)
         case action(Int)
 
         var hit: JournalPlayMath.PlayHit {
             switch self {
             case .player(let n): .player(n)
             case .defender(let i): .defender(i)
+            case .cone(let i): .cone(i)
             case .action(let i): .action(i)
             }
         }
@@ -86,8 +114,13 @@ struct JournalPlayStepEditor: View {
     }
 
     enum Tool: String, CaseIterable, Identifiable {
-        case move, cut, dribble, pass, shot, screen, defender, ball, erase
+        case move, cut, dribble, pass, shot, screen, player, defender, ball, cone, erase
         var id: String { rawValue }
+
+        /// Player and Cone are a drill's: a play always has its five.
+        static func available(drill: Bool) -> [Tool] {
+            drill ? allCases : allCases.filter { $0 != .player && $0 != .cone }
+        }
 
         var label: JPString {
             switch self {
@@ -97,9 +130,20 @@ struct JournalPlayStepEditor: View {
             case .pass: "Pass"
             case .shot: "Shot"
             case .screen: "Screen"
+            case .player: "Player"
             case .defender: "Defender"
             case .ball: "Ball"
+            case .cone: "Cone"
             case .erase: "Erase"
+            }
+        }
+
+        /// The hint in a drill, where players can be added and removed.
+        func hint(drill: Bool) -> JPString {
+            guard drill else { return hint }
+            switch self {
+            case .erase: return "Tap a player, a line, a defender, a cone or a note to erase it."
+            default: return hint
             }
         }
 
@@ -111,8 +155,10 @@ struct JournalPlayStepEditor: View {
             case .pass: "Drag from the passer to a teammate."
             case .shot: "Drag from the shooter toward the basket; the line ends in the rim."
             case .screen: "Drag from a player to where they set the screen."
+            case .player: "Tap the court to add a player."
             case .defender: "Tap the court to add a defender; tap one to mark the one to read."
             case .ball: "Tap a player to give or take a ball. Several players can each have one."
+            case .cone: "Tap the court to add a cone."
             case .erase: "Tap a line, a defender or a note to erase it."
             }
         }
@@ -141,20 +187,26 @@ struct JournalPlayStepEditor: View {
             case .pass: "p"
             case .shot: "h"
             case .screen: "s"
+            case .player: "o"
             case .defender: "x"
             case .ball: "b"
+            case .cone: "k"
             case .erase: "e"
             }
         }
 
         /// The rail's groups: select | lines | marks | erase.
-        static let railGroups: [[Tool]] = [[.move], [.cut, .dribble, .pass, .shot, .screen], [.defender, .ball], [.erase]]
+        static func railGroups(drill: Bool) -> [[Tool]] {
+            [[.move], [.cut, .dribble, .pass, .shot, .screen],
+             drill ? [.player, .defender, .ball, .cone] : [.defender, .ball], [.erase]]
+        }
     }
 
     /// What the finger is doing.
     private enum Drag {
         case player(Int)
         case defender(Int)
+        case cone(Int)
         case actionEnd(Int)
         case bend(action: Int, point: Int)
         case line(player: Int, points: [JournalCourtPoint])
@@ -164,97 +216,112 @@ struct JournalPlayStepEditor: View {
     /// Opens on `step`; its part's other steps are a menu away.
     init(step: JournalPlayStep, court: JournalCourtKind) {
         self.court = court
-        _step = State(initialValue: step)
-        _diagram = State(initialValue: step.diagram)
-        _caption = State(initialValue: step.caption)
-        _text = State(initialValue: step.text)
+        part = step.part
+        onSaveDrill = nil
+        let models = step.part?.sortedSteps ?? [step]
+        let pages = models.map { model in
+            Page(model: model, saved: Content(diagram: model.diagram, caption: model.caption, text: model.text),
+                 draft: Draft(diagram: model.diagram, caption: model.caption, text: model.text))
+        }
+        let first = pages.first { $0.model === step } ?? pages[0]
+        _pages = State(initialValue: pages)
+        _current = State(initialValue: first.id)
+        _diagram = State(initialValue: first.draft.diagram)
+        _caption = State(initialValue: first.draft.caption)
+        _text = State(initialValue: first.draft.text)
+    }
+
+    /// A drill's drawing, opened on its first step; Done hands it back.
+    init(drawing: DrillDrawing, onSave: @escaping (DrillDrawing) -> Void) {
+        court = drawing.court
+        part = nil
+        onSaveDrill = onSave
+        let steps = drawing.steps.isEmpty ? DrillDrawing.new(court: drawing.court).steps : drawing.steps
+        let pages = steps.map { step in
+            Page(saved: Content(diagram: step.diagram, caption: step.caption, text: step.text),
+                 draft: Draft(diagram: step.diagram, caption: step.caption, text: step.text))
+        }
+        _pages = State(initialValue: pages)
+        _current = State(initialValue: pages[0].id)
+        _diagram = State(initialValue: pages[0].draft.diagram)
+        _caption = State(initialValue: pages[0].draft.caption)
+        _text = State(initialValue: pages[0].draft.text)
     }
 
     private var changed: Bool {
-        if !added.isEmpty || !deleted.isEmpty { return true }
-        if diagram != step.diagram || caption != step.caption || text != step.text { return true }
-        return steps.contains { other in
-            guard let draft = drafts[other.persistentModelID] else { return false }
-            return draft.diagram != other.diagram || draft.caption != other.caption || draft.text != other.text
+        if !deleted.isEmpty || pages.contains(where: { $0.saved == nil }) { return true }
+        return pages.contains { page in
+            let content = page.id == current ? Content(diagram: diagram, caption: caption, text: text) : page.draft.content
+            return content != page.saved
         }
     }
 
     // MARK: - Steps
 
-    /// The working copy goes back into the drafts.
+    /// The working copy goes back into its page.
     private func stash() {
-        drafts[step.persistentModelID] = Draft(diagram: diagram, caption: caption, text: text,
-                                               undo: undoStack, redo: redoStack)
+        let i = currentIndex
+        guard pages.indices.contains(i) else { return }
+        pages[i].draft = Draft(diagram: diagram, caption: caption, text: text, undo: undoStack, redo: redoStack)
     }
 
-    /// Another step on screen, with its draft if it has one.
-    private func show(_ other: JournalPlayStep) {
-        guard other !== step else { return }
+    /// Another step on screen, with its draft.
+    private func show(_ id: UUID) {
+        guard id != current, let page = pages.first(where: { $0.id == id }) else { return }
         stash()
-        let draft = drafts[other.persistentModelID]
-        step = other
-        diagram = draft?.diagram ?? other.diagram
-        caption = draft?.caption ?? other.caption
-        text = draft?.text ?? other.text
-        undoStack = draft?.undo ?? []
-        redoStack = draft?.redo ?? []
+        current = id
+        diagram = page.draft.diagram
+        caption = page.draft.caption
+        text = page.draft.text
+        undoStack = page.draft.undo
+        redoStack = page.draft.redo
         selection = nil
         drag = nil
         focus = nil
     }
 
     private func go(by offset: Int) {
-        let all = steps
-        guard let i = all.firstIndex(where: { $0 === step }), all.indices.contains(i + offset) else { return }
-        show(all[i + offset])
+        let i = currentIndex
+        guard pages.indices.contains(i + offset) else { return }
+        show(pages[i + offset].id)
     }
 
     /// A step after this one, starting where this one's DRAFT ends.
     private func addStep() {
-        guard let part = step.part else { return }
-        let new = part.addStep(after: step, in: context)
-        new.diagram = JournalPlayMath.startOfNextStep(after: diagram)
-        added.append(new)
-        show(new)
+        let new = Page(draft: Draft(diagram: JournalPlayMath.startOfNextStep(after: diagram), caption: "", text: ""))
+        pages.insert(new, at: currentIndex + 1)
+        show(new.id)
     }
 
     /// The step on screen goes; its neighbour (the next, else the one before)
-    /// comes up. A step added here is deleted outright; a saved one waits
-    /// for Done, so Cancel brings it back. The last step stays.
+    /// comes up. A saved step waits for Done, so Cancel brings it back. The
+    /// last step stays.
     private func deleteStep() {
-        let all = steps
-        guard all.count > 1, let i = all.firstIndex(where: { $0 === step }) else { return }
-        let gone = step
-        let neighbour = all.indices.contains(i + 1) ? all[i + 1] : all[i - 1]
-        show(neighbour)
-        drafts[gone.persistentModelID] = nil
-        if let a = added.firstIndex(where: { $0 === gone }) {
-            added.remove(at: a)
-            let part = gone.part
-            context.delete(gone)
-            try? context.save()
-            part?.renumberSteps()
-        } else {
-            deleted.append(gone)
-        }
+        let i = currentIndex
+        guard pages.count > 1, pages.indices.contains(i) else { return }
+        let gone = pages[i]
+        show(pages.indices.contains(i + 1) ? pages[i + 1].id : pages[i - 1].id)
+        pages.removeAll { $0.id == gone.id }
+        if gone.saved != nil { deleted.append(gone) }
     }
 
-    /// The diagram a step shows in the Steps list: its draft, else saved.
-    private func shownDiagram(_ other: JournalPlayStep) -> JournalPlayDiagram {
-        other === step ? diagram : drafts[other.persistentModelID]?.diagram ?? other.diagram
+    /// The diagram a step shows in the Steps list: the working copy for the
+    /// one on screen, else its draft.
+    private func shownDiagram(_ page: Page) -> JournalPlayDiagram {
+        page.id == current ? diagram : page.draft.diagram
     }
 
-    private func caption(of other: JournalPlayStep) -> String {
-        other === step ? caption : drafts[other.persistentModelID]?.caption ?? other.caption
+    private func caption(of page: Page) -> String {
+        page.id == current ? caption : page.draft.caption
     }
 
     /// The title: "Step 2 of 3" opening a menu of the part's steps.
     private var stepMenu: some View {
         Menu {
-            ForEach(Array(steps.enumerated()), id: \.offset) { i, other in
-                Button { show(other) } label: {
+            ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
+                Button { show(other.id) } label: {
                     let name = caption(of: other)
-                    if other === step {
+                    if other.id == current {
                         Label { Text(verbatim: name.isEmpty ? jp("Step \(i + 1)") : "\(i + 1). \(name)") } icon: {
                             Image(systemName: "checkmark")
                         }
@@ -267,14 +334,14 @@ struct JournalPlayStepEditor: View {
             Button(action: addStep) {
                 Label { JText("Add a step after this one") } icon: { Image(systemName: "plus") }
             }
-            if steps.count > 1 {
+            if pages.count > 1 {
                 Button(role: .destructive) { confirmingDeleteStep = true } label: {
                     Label { JText("Delete step") } icon: { Image(systemName: "trash") }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                JText("Step \(number) of \(steps.count)")
+                JText("Step \(number) of \(pages.count)")
                     .font(.headline)
                     .monospacedDigit()
                 Image(systemName: "chevron.down")
@@ -289,8 +356,8 @@ struct JournalPlayStepEditor: View {
     /// The workspace's list of steps: small drawings, click to edit.
     private var stepsSection: some View {
         inspectorSection("Steps") {
-            ForEach(Array(steps.enumerated()), id: \.offset) { i, other in
-                Button { show(other) } label: {
+            ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
+                Button { show(other.id) } label: {
                     HStack(spacing: JSpacing.s) {
                         JournalPlayThumbnail(diagram: shownDiagram(other), court: court, width: 56, height: 44)
                         VStack(alignment: .leading, spacing: 1) {
@@ -304,9 +371,9 @@ struct JournalPlayStepEditor: View {
                         Spacer(minLength: 0)
                     }
                     .padding(4)
-                    .background(other === step ? JPalette.fill : .clear, in: .rect(cornerRadius: 8))
+                    .background(other.id == current ? JPalette.fill : .clear, in: .rect(cornerRadius: 8))
                     .overlay {
-                        if other === step { RoundedRectangle(cornerRadius: 8).strokeBorder(JPalette.ink, lineWidth: 1) }
+                        if other.id == current { RoundedRectangle(cornerRadius: 8).strokeBorder(JPalette.ink, lineWidth: 1) }
                     }
                     .contentShape(.rect)
                 }
@@ -319,7 +386,7 @@ struct JournalPlayStepEditor: View {
                     .keyboardShortcut(keysActive ? KeyboardShortcut("[", modifiers: .command) : nil)
                     .help(jp("Previous step") + " (⌘[)")
                 Button { go(by: 1) } label: { Image(systemName: "chevron.right") }
-                    .disabled(number >= steps.count)
+                    .disabled(number >= pages.count)
                     .keyboardShortcut(keysActive ? KeyboardShortcut("]", modifiers: .command) : nil)
                     .help(jp("Next step") + " (⌘])")
                 Spacer()
@@ -327,7 +394,7 @@ struct JournalPlayStepEditor: View {
                     Label { JText("Delete step") } icon: { Image(systemName: "trash") }
                         .labelStyle(.iconOnly)
                 }
-                .disabled(steps.count <= 1)
+                .disabled(pages.count <= 1)
                 .help(jp("Delete step"))
                 .accessibilityIdentifier("plays.editor.deleteStep")
                 Button(action: addStep) {
@@ -399,7 +466,7 @@ struct JournalPlayStepEditor: View {
                     .frame(maxHeight: .infinity, alignment: .top)
                 tools
                 HStack(alignment: .top, spacing: JSpacing.s) {
-                    JText(tool.hint)
+                    JText(tool.hint(drill: isDrill))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(2, reservesSpace: true)
@@ -447,7 +514,7 @@ struct JournalPlayStepEditor: View {
     /// lines, the marks, erase. Each says its name and key on hover.
     private var toolRail: some View {
         VStack(spacing: JSpacing.xs) {
-            ForEach(Array(Tool.railGroups.enumerated()), id: \.offset) { i, group in
+            ForEach(Array(Tool.railGroups(drill: isDrill).enumerated()), id: \.offset) { i, group in
                 if i > 0 {
                     Divider().frame(width: 28)
                 }
@@ -528,7 +595,10 @@ struct JournalPlayStepEditor: View {
                         .textFieldStyle(.roundedBorder)
                 }
                 inspectorSection(tool.label) {
-                    JText(tool == .move ? "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line." : tool.hint)
+                    JText(tool == .move
+                          ? (isDrill ? "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line."
+                             : "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line.")
+                          : tool.hint(drill: isDrill))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -579,6 +649,11 @@ struct JournalPlayStepEditor: View {
                         diagram.actions.removeAll { $0.player == n }
                     } label: { JText("Erase their lines") }
                 }
+                if isDrill { deleteSelectionButton }
+            }
+        case .cone(let i):
+            if diagram.cones.indices.contains(i) {
+                inspectorSection("Cone") { deleteSelectionButton }
             }
         case .defender(let i):
             if diagram.defense.indices.contains(i) {
@@ -656,9 +731,18 @@ struct JournalPlayStepEditor: View {
         .accessibilityHidden(true)
     }
 
-    /// ⌫: a defender or a line goes; players stay (always five).
+    /// ⌫: a defender, a cone or a line goes; players stay (a play always has
+    /// five), except in a drill.
     private func deleteSelection() {
         switch selection {
+        case .player(let n)?:
+            guard isDrill, diagram.player(n) != nil else { return }
+            pushUndo()
+            diagram = JournalPlayMath.removing(player: n, from: diagram)
+        case .cone(let i)?:
+            guard diagram.cones.indices.contains(i) else { return }
+            pushUndo()
+            diagram.cones.remove(at: i)
         case .defender(let i)?:
             guard diagram.defense.indices.contains(i) else { return }
             pushUndo()
@@ -685,6 +769,11 @@ struct JournalPlayStepEditor: View {
             pushUndo()
             diagram.defense[i].at.x += dx
             diagram.defense[i].at.y += dy
+        case .cone(let i)?:
+            guard diagram.cones.indices.contains(i) else { return }
+            pushUndo()
+            diagram.cones[i].x += dx
+            diagram.cones[i].y += dy
         default:
             break
         }
@@ -695,6 +784,7 @@ struct JournalPlayStepEditor: View {
         switch selection {
         case .player(let n)?: if diagram.player(n) == nil { selection = nil }
         case .defender(let i)?: if !diagram.defense.indices.contains(i) { selection = nil }
+        case .cone(let i)?: if !diagram.cones.indices.contains(i) { selection = nil }
         case .action(let i)?: if !diagram.actions.indices.contains(i) { selection = nil }
         case nil: break
         }
@@ -716,7 +806,7 @@ struct JournalPlayStepEditor: View {
             .overlay(RoundedRectangle(cornerRadius: JRadius.tile).strokeBorder(JPalette.courtLine, lineWidth: 0.5))
             .accessibilityElement()
             .accessibilityLabel(JText("Drawing of step \(number)"))
-            .accessibilityHint(JText(tool.hint))
+            .accessibilityHint(JText(tool.hint(drill: isDrill)))
     }
 
     /// The drawing with the line being drawn, already straight or curved
@@ -774,6 +864,7 @@ struct JournalPlayStepEditor: View {
                 switch hit {
                 case .player(let n): selection = .player(n)
                 case .defender(let i): selection = .defender(i)
+                case .cone(let i): selection = .cone(i)
                 case .actionEnd(let i), .actionBend(let i, _), .action(let i): selection = .action(i)
                 case .note, nil: selection = nil
                 }
@@ -781,6 +872,7 @@ struct JournalPlayStepEditor: View {
             switch hit {
             case .player(let n): pushUndo(); return .player(n)
             case .defender(let i): pushUndo(); return .defender(i)
+            case .cone(let i): pushUndo(); return .cone(i)
             case .actionEnd(let i): pushUndo(); return .actionEnd(i)
             case .actionBend(let a, let p): pushUndo(); return .bend(action: a, point: p)
             default: return .tap
@@ -796,6 +888,7 @@ struct JournalPlayStepEditor: View {
         switch drag {
         case .player(let n): diagram = JournalPlayMath.moving(player: n, to: point, in: diagram)
         case .defender(let i): if diagram.defense.indices.contains(i) { diagram.defense[i].at = point }
+        case .cone(let i): if diagram.cones.indices.contains(i) { diagram.cones[i] = point }
         case .actionEnd(let i): diagram = JournalPlayMath.moving(endOf: i, to: point, in: diagram)
         case .bend(let a, let p): diagram = JournalPlayMath.moving(bend: p, of: a, to: point, in: diagram)
         case .line(let player, var points):
@@ -816,7 +909,7 @@ struct JournalPlayStepEditor: View {
                 pushUndo()
                 diagram = added
             }
-        case .player, .defender, .actionEnd:
+        case .player, .defender, .cone, .actionEnd:
             // A touch that didn't move changes nothing.
             if isTap, let previous = undoStack.popLast() { diagram = previous }
         case .bend(let a, _):
@@ -842,6 +935,14 @@ struct JournalPlayStepEditor: View {
             guard !isWorkspace, case .action(let i)? = hit, diagram.actions[i].kind.movesPlayer else { return }
             pushUndo()
             diagram = JournalPlayMath.toggledShape(of: i, in: diagram)
+        case .player:
+            // A new player where the court is free; a tap on one does nothing.
+            if case .player? = hit { return }
+            pushUndo()
+            diagram.offense.append(.init(number: diagram.nextPlayerNumber, at: point))
+        case .cone:
+            pushUndo()
+            diagram.cones.append(point)
         case .defender:
             pushUndo()
             if case .defender(let i)? = hit {
@@ -861,7 +962,13 @@ struct JournalPlayStepEditor: View {
             }
         case .erase:
             guard let hit else { return }
-            if case .player = hit { return }
+            if case .player(let n) = hit {
+                guard isDrill else { return }
+                pushUndo()
+                diagram = JournalPlayMath.removing(player: n, from: diagram)
+                selection = nil
+                return
+            }
             pushUndo()
             diagram = JournalPlayMath.erasing(hit, in: diagram)
             selection = nil
@@ -873,18 +980,21 @@ struct JournalPlayStepEditor: View {
     // MARK: - Tools
 
     /// Two rows (five, then four), all in reach: 44 pt high, icon and name.
+    /// A drill's eleven tools sit six and five, the name under the icon.
     private var tools: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: JSpacing.xxs), count: 5)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: JSpacing.xxs), count: isDrill ? 6 : 5)
         return LazyVGrid(columns: columns, spacing: JSpacing.xxs) {
-            ForEach(Tool.allCases) { item in
+            ForEach(Tool.available(drill: isDrill)) { item in
                 Button {
                     tool = item
                 } label: {
-                    HStack(spacing: 2) {
+                    let layout = isDrill ? AnyLayout(VStackLayout(spacing: 1)) : AnyLayout(HStackLayout(spacing: 2))
+                    layout {
                         icon(item)
                             .frame(width: 24, height: 20)
                         JText(item.label)
-                            .font(.caption.weight(tool == item ? .semibold : .regular))
+                            .font(isDrill ? .caption2.weight(tool == item ? .semibold : .regular)
+                                  : .caption.weight(tool == item ? .semibold : .regular))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
@@ -901,6 +1011,7 @@ struct JournalPlayStepEditor: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(tool == item ? .isSelected : [])
+                .accessibilityIdentifier("plays.editor.tool.\(item.rawValue)")
             }
         }
     }
@@ -918,8 +1029,10 @@ struct JournalPlayStepEditor: View {
         case .shot: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .shot, player: 0, path: line)]))
         // Upright, so the screen's bar reads as a T.
         case .screen: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .screen, player: 0, path: [JournalCourtPoint(1, 2.4), JournalCourtPoint(1, 0.15)])]))
+        case .player: JournalPlayMark(diagram: JournalPlayDiagram(offense: [.init(number: 1, at: JournalCourtPoint(1, 1))]))
         case .defender: JournalPlayMark(diagram: JournalPlayDiagram(defense: [.init(at: JournalCourtPoint(1, 1))]))
         case .ball: Image(systemName: "basketball").font(.body).foregroundStyle(JCategory.court.iconColor)
+        case .cone: JournalPlayMark(diagram: JournalPlayDiagram(cones: [JournalCourtPoint(1, 1.1)]))
         case .erase: Image(systemName: "eraser").font(.body)
         }
     }
@@ -948,31 +1061,40 @@ struct JournalPlayStepEditor: View {
     /// Every step's draft is written, then saved once.
     private func save() {
         stash()
-        if !deleted.isEmpty {
-            let part = step.part
-            for gone in deleted { context.delete(gone) }
-            try? context.save()
-            part?.renumberSteps()
+        func trimmed(_ string: String) -> String { string.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let onSaveDrill {
+            onSaveDrill(DrillDrawing(court: court, steps: pages.map { page in
+                DrillDrawing.Step(diagram: page.draft.diagram, caption: trimmed(page.draft.caption),
+                                  text: trimmed(page.draft.text))
+            }))
+            dismiss()
+            return
         }
-        for other in steps {
-            guard let draft = drafts[other.persistentModelID] else { continue }
-            other.caption = draft.caption.trimmingCharacters(in: .whitespacesAndNewlines)
-            other.text = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            other.diagram = draft.diagram
+        for gone in deleted { if let model = gone.model { context.delete(model) } }
+        for (order, page) in pages.enumerated() {
+            let model: JournalPlayStep
+            if let existing = page.model {
+                model = existing
+            } else {
+                guard let part else { continue }
+                model = JournalPlayStep(order: order)
+                context.insert(model)
+                part.steps?.append(model)
+            }
+            if model.order != order { model.order = order }
+            let content = Content(diagram: page.draft.diagram, caption: trimmed(page.draft.caption),
+                                  text: trimmed(page.draft.text))
+            guard page.model == nil || content != page.saved else { continue }
+            model.caption = content.caption
+            model.text = content.text
+            model.diagram = content.diagram
         }
         try? context.save()
         dismiss()
     }
 
-    /// Cancel: drafts dropped, steps added here removed.
+    /// Cancel: the drafts are dropped. Nothing was written, so nothing to undo.
     private func discard() {
-        if !added.isEmpty {
-            let part = step.part
-            for new in added { context.delete(new) }
-            try? context.save()
-            part?.renumberSteps()
-            try? context.save()
-        }
         dismiss()
     }
 }
