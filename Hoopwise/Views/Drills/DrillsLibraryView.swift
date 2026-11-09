@@ -46,18 +46,15 @@ struct DrillsLibraryView: View {
         }
     }
 
-    private func matchesSearch(_ text: String...) -> Bool {
-        searchText.isEmpty || text.contains { $0.localizedCaseInsensitiveContains(searchText) }
-    }
+    private var query: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isSearching: Bool { !query.isEmpty }
 
     /// Library drills for the chosen ages and block (all types), library order.
     private var blockPairs: [(activity: LibraryActivity, drill: DrillItem)] {
         let byId = Dictionary(visibleDrills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return ActivityLibrary.shared.plannable.compactMap { activity in
             guard ages.contains(activity.age), activity.block == block,
-                  let drill = byId[activity.id],
-                  matchesSearch(drill.name, drill.localizedName, drill.description,
-                                activity.nameZh ?? "", activity.howItRunsZh ?? "") else { return nil }
+                  let drill = byId[activity.id] else { return nil }
             return (activity, drill)
         }
     }
@@ -72,7 +69,6 @@ struct DrillsLibraryView: View {
         guard block == .game, type == nil || type == .rules else { return [] }
         return ActivityLibrary.shared.items.filter {
             $0.isRule && ages.contains($0.age)
-                && matchesSearch($0.name, $0.howItRuns, $0.nameZh ?? "", $0.howItRunsZh ?? "")
         }
     }
 
@@ -97,8 +93,119 @@ struct DrillsLibraryView: View {
     private var mine: [DrillItem] {
         visibleDrills.filter { !$0.isLibraryDrill }
             .filter { mineCategory == nil || $0.category == mineCategory }
-            .filter { matchesSearch($0.name, $0.localizedName, $0.description) }
             .sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
+    }
+
+    // MARK: Search — the WHOLE library, whatever age/block/type is chosen
+    // (Luther, November 2026: searching only inside the selected category hid
+    // drills he knew were there). Every typed word must appear somewhere in
+    // the name, Chinese name, how it runs or instructions (DrillFinder.typedMatch).
+
+    private var searchHits: [(activity: LibraryActivity, drill: DrillItem)] {
+        let byId = Dictionary(visibleDrills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return ActivityLibrary.shared.plannable.compactMap { activity in
+            guard let drill = byId[activity.id],
+                  DrillFinder.typedMatch(query, in: [drill.name, drill.localizedName, drill.description,
+                                                     drill.localizedDescription, activity.nameZh ?? "",
+                                                     activity.howItRunsZh ?? ""] + drill.instructions)
+            else { return nil }
+            return (activity, drill)
+        }
+    }
+
+    private var personalHits: [DrillItem] {
+        visibleDrills.filter { !$0.isLibraryDrill }
+            .filter { DrillFinder.typedMatch(query, in: [$0.name, $0.localizedName, $0.description] + $0.instructions) }
+            .sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
+    }
+
+    private var ruleHits: [LibraryActivity] {
+        ActivityLibrary.shared.items.filter {
+            $0.isRule && DrillFinder.typedMatch(query, in: [$0.name, $0.howItRuns, $0.nameZh ?? "", $0.howItRunsZh ?? ""])
+        }
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        let hits = searchHits
+        let personal = personalHits
+        let ruleMatches = ruleHits
+        if hits.isEmpty && personal.isEmpty && ruleMatches.isEmpty {
+            #if targetEnvironment(macCatalyst)
+            if !claudeAsking && claudeResult == nil {
+                ContentUnavailableView.search(text: query)
+                    .listRowBackground(Color.clear)
+            }
+            #else
+            ContentUnavailableView.search(text: query)
+                .listRowBackground(Color.clear)
+            #endif
+        }
+        if !personal.isEmpty {
+            Section {
+                ForEach(personal) { drill in
+                    NavigationLink(destination: DrillDetailView(drill: drill)) { DrillRow(drill: drill) }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(drill) }
+                }
+            } header: {
+                Text(isChinese ? "个人 · \(personal.count)" : "Personal · \(personal.count)")
+            }
+        }
+        ForEach(ActivityAge.allCases) { a in
+            let rows = hits.filter { $0.activity.age == a }
+            if !rows.isEmpty {
+                Section {
+                    ForEach(rows, id: \.activity.key) { pair in
+                        NavigationLink(destination: DrillDetailView(drill: pair.drill)) {
+                            LibraryRow(activity: pair.activity, drill: pair.drill, showAge: false, showBlock: true)
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(pair.drill) }
+                    }
+                } header: {
+                    Text("\(a.title) · \(rows.count)")
+                }
+            }
+        }
+        if !ruleMatches.isEmpty {
+            Section {
+                ForEach(ruleMatches) { rule in
+                    Button { openRule = rule } label: { LibraryRuleRow(rule: rule, showAge: true) }
+                        .buttonStyle(.plain)
+                }
+            } header: {
+                Text("\(ActivityType.rules.title) · \(ruleMatches.count)")
+            }
+        }
+    }
+
+    // MARK: Filters — one compact block: age, then block, then type
+
+    private var filterSection: some View {
+        Section {
+            VStack(spacing: 10) {
+                ageChips
+                // The switch lives in the ⓘ sheet; while it is on, say so here
+                // so the list is never filtered by something out of sight.
+                if includeEarlier, let age, age != .u6 {
+                    earlierAgesNote(age).padding(.horizontal, 20)
+                }
+                if age != nil {
+                    Picker(isChinese ? "环节" : "Block", selection: $block) {
+                        ForEach(ActivityBlock.allCases) { b in
+                            Text(b.title).tag(b)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 20)
+                    if typeCounts.count > 1 {
+                        typeChips
+                    }
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        }
     }
 
     var body: some View {
@@ -106,34 +213,34 @@ struct DrillsLibraryView: View {
             #if targetEnvironment(macCatalyst)
             claudeSection
             #endif
-            Section {
-                ageChips
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                // The switch lives in the ⓘ sheet; while it is on, say so here
-                // so the list is never filtered by something out of sight.
-                if includeEarlier, let age, age != .u6 {
-                    earlierAgesNote(age)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                }
-            }
-            if let age {
-                libraryContent(age)
+            if isSearching {
+                searchResults
             } else {
-                mineContent
+                filterSection
+                if let age {
+                    libraryContent(age)
+                } else {
+                    mineContent
+                }
             }
         }
         .listStyle(.insetGrouped)
+        // The filters sit right on top of the list (Luther, November 2026:
+        // there was a section gap between ages, blocks and the list).
+        .listSectionSpacing(.compact)
         .navigationTitle(isChinese ? "训练库" : "Activity library")
-        .searchable(text: $searchText, prompt: isChinese ? "搜索训练" : "Search")
+        .searchable(text: $searchText, prompt: isChinese ? "搜索全部训练" : "Search all drills")
         #if targetEnvironment(macCatalyst)
         // Typing filters as before; Return asks Claude about the whole library.
         .onSubmit(of: .search) { askClaude() }
         .onChange(of: searchText) { _, text in
             if text.trimmingCharacters(in: .whitespacesAndNewlines) != claudeQuery { clearClaude() }
+        }
+        #endif
+        #if DEBUG
+        // HOOPWISE_LIBRARY_SEARCH=<text>: open with that search typed.
+        .onAppear {
+            if let text = ProcessInfo.processInfo.environment["HOOPWISE_LIBRARY_SEARCH"] { searchText = text }
         }
         #endif
         .onChange(of: block) { _, _ in type = nil }
@@ -294,29 +401,9 @@ struct DrillsLibraryView: View {
 
     @ViewBuilder
     private func libraryContent(_ age: ActivityAge) -> some View {
-        Section {
-            Picker(isChinese ? "环节" : "Block", selection: $block) {
-                ForEach(ActivityBlock.allCases) { b in
-                    Text(b.title).tag(b)
-                }
-            }
-            .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-            .listRowBackground(Color.clear)
-
-            if typeCounts.count > 1 {
-                typeChips
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 4, trailing: 0))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            }
-        }
-
         if shownPairs.isEmpty && rules.isEmpty {
             Section {
-                Text(searchText.isEmpty
-                     ? (isChinese ? "这个环节暂无内容" : "Nothing in this block for this age")
-                     : (isChinese ? "没有匹配的结果" : "No matches"))
+                Text(isChinese ? "这个环节暂无内容" : "Nothing in this block for this age")
                     .foregroundStyle(.secondary)
             }
         }
@@ -433,6 +520,8 @@ private struct LibraryRow: View {
     let activity: LibraryActivity
     let drill: DrillItem
     let showAge: Bool
+    /// Search results span every block, so they say which one.
+    var showBlock = false
 
     private var leadingMedia: DrillMedia? { drill.media.min(by: { $0.sortOrder < $1.sortOrder }) }
 
@@ -451,7 +540,8 @@ private struct LibraryRow: View {
                 Text(drill.localizedName)
                     .font(.body)
                     .lineLimit(2)
-                Text([showAge ? activity.age.rawValue : nil, activity.type.title, activity.sourceText]
+                Text([showAge ? activity.age.rawValue : nil, showBlock ? activity.block.title : nil,
+                      activity.type.title, showBlock ? nil : activity.sourceText]
                         .compactMap { $0 }.joined(separator: " · "))
                     .font(.caption)
                     .foregroundStyle(.secondary)

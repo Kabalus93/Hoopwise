@@ -854,6 +854,19 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   previous commit too — pre-existing, not from this; the iPhone 17 Pro sim's
   demo store has no program sessions, so run attendance UI tests on the
   Pro Max sim.)
+- TWENTY-THIRD sanctioned exception (9 November 2026, Luther's request,
+  iPhone + iPad + Mac): the drills page (DrillsLibraryView). (a) No gaps:
+  age chips, the block segments and the type chips are ONE compact filter
+  row block (`filterSection`) with `.listSectionSpacing(.compact)` — they
+  were three List sections with a section gap between each. (b) SEARCH IS
+  THE WHOLE LIBRARY ("Search all drills"): while text is typed the filters
+  step aside and results come from every age and block, every typed word
+  anywhere in name / Chinese name / how it runs / instructions
+  (`DrillFinder.typedMatch`), grouped Personal, then by age (rows say block ·
+  type), then rule options. Browsing lists no longer filter by the search.
+  The Mac's Return → Claude section still sits above. DEBUG
+  HOOPWISE_LIBRARY_SEARCH=<text> opens with a search typed. Pinned by
+  ActivityLibraryUITests.testSearchCoversTheWholeLibrary.
 - DRILL VISUALS ARE DRAWN IN THE PLAYS EDITOR (9 November 2026, Luther's
   request: "the same editor that's in plays … remove the popup"). The drill
   page's "Add a visual" (and the carousel's + tile) opens

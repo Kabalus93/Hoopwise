@@ -54,4 +54,17 @@ final class ActivityLibraryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["HOW IT RUNS"].waitForExistence(timeout: 8)
                       || app.staticTexts["How it runs"].exists)
     }
+
+    /// Searching covers the WHOLE library, not the chosen age and block: from
+    /// U8 · Routine, "keeping off" finds the U7 small game, words in any order.
+    func testSearchCoversTheWholeLibrary() {
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        let field = app.searchFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("off keeping")
+        XCTAssertTrue(app.staticTexts["20 Passes, Keeping Off"].waitForExistence(timeout: 5),
+                      "a U7 small game is found from U8 · Routine")
+        XCTAssertFalse(app.buttons["Routine"].exists, "the filters step aside while searching")
+    }
 }
