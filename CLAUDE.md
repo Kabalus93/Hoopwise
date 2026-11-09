@@ -886,8 +886,20 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   whose strokesPath holds `DrillDrawing` JSON (Models/DrillDrawing.swift;
   `<id>.drawing.json`) beside a JPEG of step 1 (DrillDrawingMedia) that the
   carousel, viewer and bundles show; told from a .pkdrawing by CONTENT, since
-  a bundle import names every strokes file .pkdrawing. On-disk like all drill
-  media — it does not sync. DRAWINGS PLAY WHERE THEY ARE READ (Luther: a
+  a bundle import names every strokes file .pkdrawing. DRAWINGS SYNC (9 Nov
+  2026, Luther: "visible on all devices"): drill media FILES never reach
+  CloudKit, so the drawing also rides in its synced SDDrillMedia row —
+  `DrillDrawing.syncPayload` ("hoopwise-drawing:" + base64 JSON, ≤ 400 KB) in
+  the `remoteURL` column a court diagram never used (no schema change).
+  `DrillDrawingMedia.drawing(for:)` reads the payload first;
+  `syncDrillDrawings` (both refresh paths) stamps the payload on drawings
+  made before (on the device holding the file) and, on a receiving device,
+  writes the drawing + JPEG + thumbnail to the row's paths
+  (`restoreFiles`, also when an edit elsewhere made the file stale).
+  `deduplicateDrills` now MOVES the visuals of a deleted duplicate to the
+  survivor — library drills are seeded on every device, and a drawing on the
+  losing copy used to go with it. Photos and videos still do not sync.
+  Tests: DrillDrawingSyncTests. DRAWINGS PLAY WHERE THEY ARE READ (Luther: a
   three-step drawing showed only step 1): JournalPlayStepPlayer takes value
   steps too (`init(drawing:)`), the drill page shows each drawing as that
   player (DrillDrawingCard: caption, Step N of M, ‹ ▶ ›, Edit, ⋯ Delete) with
@@ -902,6 +914,21 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   thumbnails are drawn LIVE from the drawing so they follow dark mode.
   HOOPWISE_SHOT=drillDrawing / drillDetail. Tests:
   DrillDrawingTests, DrillVisualUITests (demo store, cleans up after itself).
+- DRAW WHILE CREATING + PHONE STEPS BAR (9 November 2026, Luther's
+  request). (a) New Drill (AddDrillView) ends with a VISUAL section: "Draw
+  on the court" opens the same editor (JournalPlayStepEditor(drawing:));
+  the drawing plays in the form with Edit / Remove and is saved on Create as
+  the drill's first visual (DrillDrawingMedia.save with the new drill's id).
+  (b) The editor's title menu never showed on the iPhone (no room beside
+  Cancel / undo / redo / Done), so steps could not be added, moved or
+  deleted there. Compact width now has a STEPS BAR under the caption:
+  ‹ "Step N of M ▾" › and "+ Add a step"; the menu lists every step, Add,
+  MOVE EARLIER / LATER (new — `moveStep`, also in the workspace's Steps row)
+  and Delete. The principal title menu is workspace-only, and the phone's
+  title is empty (the bar says which step). On the iPhone a coach's own drill
+  has no Delete (only quick-note drills do) — UI tests clean up through DEBUG
+  HOOPWISE_DELETE_DRILLS_NAMED=<name> (demo store only). Pinned by
+  DrillVisualUITests.testNewDrillCanBeDrawnWithStepsOrganisedOnThePhone.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

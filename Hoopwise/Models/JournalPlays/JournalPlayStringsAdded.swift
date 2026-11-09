@@ -18,6 +18,7 @@ nonisolated enum JournalPlayStringsAdded {
         "Shot (a drive to the basket is red too)": .init(en: "Shot (a drive to the basket is red too)", enOne: nil,
                                                           zh: "投篮（运球突破到篮下也是红色）"),
         "Steps": .init(en: "Steps", enOne: nil, zh: "步骤"),
+        "Move step": .init(en: "Move step", enOne: nil, zh: "移动这一步"),
         "Its drawing and notes go with it. Cancel brings it back until you press Done.":
             .init(en: "Its drawing and notes go with it. Cancel brings it back until you press Done.", enOne: nil,
                   zh: "这一步的图和说明会一起删除。按“完成”之前，点“取消”可以恢复。"),

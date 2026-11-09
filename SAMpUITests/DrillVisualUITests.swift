@@ -80,4 +80,68 @@ final class DrillVisualUITests: XCTestCase {
             if confirm.waitForExistence(timeout: 4) { confirm.tap() }
         }
     }
+
+    /// New Drill offers "Draw on the court"; on the iPhone the editor's steps
+    /// bar adds, moves and deletes steps; Create saves the drawing as the
+    /// drill's first visual. Deletes the drill afterwards.
+    func testNewDrillCanBeDrawnWithStepsOrganisedOnThePhone() {
+        XCTAssertTrue(element("library.row").waitForExistence(timeout: 30))
+        app.buttons["Add Drill"].firstMatch.tap()
+        let name = app.textFields["Drill Name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 8))
+        name.tap()
+        name.typeText("UITest drawn drill")
+
+        let draw = element("newDrill.draw")
+        for _ in 0..<6 where !draw.isHittable { app.swipeUp() }
+        draw.tap()
+
+        // Three steps; the third moves to second, then the first is deleted.
+        let add = element("plays.editor.addStep")
+        XCTAssertTrue(add.waitForExistence(timeout: 8), "the phone editor has a steps bar")
+        add.tap()
+        add.tap()
+        XCTAssertTrue(app.staticTexts["Step 3 of 3"].waitForExistence(timeout: 4))
+        element("plays.editor.steps").tap()
+        app.buttons["Move step earlier"].tap()
+        XCTAssertTrue(app.staticTexts["Step 2 of 3"].waitForExistence(timeout: 4), "the step moved earlier")
+        app.buttons["Previous step"].tap()
+        element("plays.editor.steps").tap()
+        app.buttons["Delete step"].tap()
+        let confirm = app.buttons["Delete step"]
+        if confirm.waitForExistence(timeout: 4) { confirm.tap() }
+        XCTAssertTrue(app.staticTexts["Step 1 of 2"].waitForExistence(timeout: 4), "a step was deleted")
+        attach("phone editor steps bar")
+        app.buttons["Done"].tap()
+
+        let editDrawing = app.buttons["Edit drawing"]
+        for _ in 0..<6 where !editDrawing.exists { app.swipeUp() }
+        XCTAssertTrue(editDrawing.waitForExistence(timeout: 6), "the form shows the drawing")
+        XCTAssertTrue(app.staticTexts["Step 1 of 2"].exists, "with both steps")
+        attach("new drill with a drawing")
+        app.buttons["Create"].tap()
+
+        // The drill has the drawing; then leave the demo store as it was.
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 8))
+        search.tap()
+        search.typeText("UITest drawn drill")
+        let created = app.staticTexts["UITest drawn drill"].firstMatch
+        XCTAssertTrue(created.waitForExistence(timeout: 6))
+        created.tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "drill.drawing.edit").firstMatch.waitForExistence(timeout: 8),
+                      "the drawing is the drill's visual")
+
+        // Leave the demo store as it was: the phone has no Delete for a
+        // coach's drill, so a relaunch removes it (every copy, should an
+        // earlier run have failed).
+        app.terminate()
+        app.launchEnvironment["HOOPWISE_DELETE_DRILLS_NAMED"] = "UITest drawn drill"
+        app.launch()
+        XCTAssertTrue(element("library.row").waitForExistence(timeout: 30))
+        let field = app.searchFields.firstMatch
+        field.tap()
+        field.typeText("UITest drawn drill")
+        XCTAssertFalse(app.staticTexts["UITest drawn drill"].waitForExistence(timeout: 3), "cleaned up")
+    }
 }

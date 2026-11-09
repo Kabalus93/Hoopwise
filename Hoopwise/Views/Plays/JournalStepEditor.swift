@@ -305,6 +305,15 @@ struct JournalPlayStepEditor: View {
         if gone.saved != nil { deleted.append(gone) }
     }
 
+    /// The step on screen trades places with its neighbour (-1 earlier, +1
+    /// later). Done writes the new order.
+    private func moveStep(by offset: Int) {
+        let i = currentIndex
+        guard pages.indices.contains(i), pages.indices.contains(i + offset) else { return }
+        stash()
+        pages.swapAt(i, i + offset)
+    }
+
     /// The diagram a step shows in the Steps list: the working copy for the
     /// one on screen, else its draft.
     private func shownDiagram(_ page: Page) -> JournalPlayDiagram {
@@ -318,6 +327,24 @@ struct JournalPlayStepEditor: View {
     /// The title: "Step 2 of 3" opening a menu of the part's steps.
     private var stepMenu: some View {
         Menu {
+            stepMenuItems
+        } label: {
+            HStack(spacing: 4) {
+                JText("Step \(number) of \(pages.count)")
+                    .font(.headline)
+                    .monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+        }
+        .accessibilityIdentifier("plays.editor.steps")
+    }
+
+    /// Every step, then add / move / delete.
+    @ViewBuilder
+    private var stepMenuItems: some View {
             ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
                 Button { show(other.id) } label: {
                     let name = caption(of: other)
@@ -335,22 +362,59 @@ struct JournalPlayStepEditor: View {
                 Label { JText("Add a step after this one") } icon: { Image(systemName: "plus") }
             }
             if pages.count > 1 {
+                Button { moveStep(by: -1) } label: {
+                    Label { JText("Move step earlier") } icon: { Image(systemName: "arrow.up") }
+                }
+                .disabled(number <= 1)
+                Button { moveStep(by: 1) } label: {
+                    Label { JText("Move step later") } icon: { Image(systemName: "arrow.down") }
+                }
+                .disabled(number >= pages.count)
                 Button(role: .destructive) { confirmingDeleteStep = true } label: {
                     Label { JText("Delete step") } icon: { Image(systemName: "trash") }
                 }
             }
-        } label: {
-            HStack(spacing: 4) {
-                JText("Step \(number) of \(pages.count)")
-                    .font(.headline)
-                    .monospacedDigit()
-                Image(systemName: "chevron.down")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+    }
+
+    /// The phone's steps bar, under the caption: ‹ Step 2 of 3 › and ⋯ (the
+    /// toolbar has no room for the title menu there — Luther, November 2026:
+    /// on the iPhone steps could not be added, moved or deleted).
+    private var compactStepsBar: some View {
+        HStack(spacing: JSpacing.s) {
+            Button { go(by: -1) } label: {
+                Label { JText("Previous step") } icon: { Image(systemName: "chevron.left") }
+                    .labelStyle(.iconOnly)
+                    .frame(width: 36, height: 36)
             }
-            .foregroundStyle(.primary)
+            .disabled(number <= 1)
+            Menu { stepMenuItems } label: {
+                HStack(spacing: 4) {
+                    JText("Step \(number) of \(pages.count)")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.primary)
+                .frame(minHeight: 36)
+            }
+            .accessibilityIdentifier("plays.editor.steps")
+            Button { go(by: 1) } label: {
+                Label { JText("Next step") } icon: { Image(systemName: "chevron.right") }
+                    .labelStyle(.iconOnly)
+                    .frame(width: 36, height: 36)
+            }
+            .disabled(number >= pages.count)
+            Spacer(minLength: 0)
+            Button(action: addStep) {
+                Label { JText("Add a step") } icon: { Image(systemName: "plus") }
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .accessibilityIdentifier("plays.editor.addStep")
         }
-        .accessibilityIdentifier("plays.editor.steps")
     }
 
     /// The workspace's list of steps: small drawings, click to edit.
@@ -390,6 +454,21 @@ struct JournalPlayStepEditor: View {
                     .keyboardShortcut(keysActive ? KeyboardShortcut("]", modifiers: .command) : nil)
                     .help(jp("Next step") + " (⌘])")
                 Spacer()
+                Menu {
+                    Button { moveStep(by: -1) } label: {
+                        Label { JText("Move step earlier") } icon: { Image(systemName: "arrow.up") }
+                    }
+                    .disabled(number <= 1)
+                    Button { moveStep(by: 1) } label: {
+                        Label { JText("Move step later") } icon: { Image(systemName: "arrow.down") }
+                    }
+                    .disabled(number >= pages.count)
+                } label: {
+                    Label { JText("Move step") } icon: { Image(systemName: "arrow.up.arrow.down") }
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(pages.count <= 1)
+                .help(jp("Move step"))
                 Button(role: .destructive) { confirmingDeleteStep = true } label: {
                     Label { JText("Delete step") } icon: { Image(systemName: "trash") }
                         .labelStyle(.iconOnly)
@@ -412,10 +491,13 @@ struct JournalPlayStepEditor: View {
                 if isWorkspace { workspace } else { compactLayout }
             }
             .background(JPalette.background)
-            .navigationTitle(JText("Step \(number)"))
+            // The phone's steps bar says which step; the title would repeat it.
+            .navigationTitle(isWorkspace ? JText("Step \(number)") : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) { stepMenu }
+                if isWorkspace {
+                    ToolbarItem(placement: .principal) { stepMenu }
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     // Esc deselects first, then cancels (`shortcutKeys`).
                     Button { changed ? confirmingDiscard = true : dismiss() } label: { JText("Cancel") }
@@ -462,6 +544,7 @@ struct JournalPlayStepEditor: View {
                     .padding(.horizontal, JSpacing.m)
                     .frame(minHeight: JTouchTarget.standard)
                     .background(JPalette.card, in: .rect(cornerRadius: JRadius.tile))
+                compactStepsBar
                 canvas
                     .frame(maxHeight: .infinity, alignment: .top)
                 tools

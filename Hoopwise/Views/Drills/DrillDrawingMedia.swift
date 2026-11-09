@@ -7,8 +7,38 @@ enum DrillDrawingMedia {
     /// The drawing behind `media`, or nil for a photo, a video, a link or a
     /// legacy PencilKit diagram.
     static func drawing(for media: DrillMedia) -> DrillDrawing? {
-        guard media.kind == .courtDiagram, let path = media.strokesPath else { return nil }
+        guard media.kind == .courtDiagram else { return nil }
+        // The synced copy first: on a device that did not draw it there is
+        // no file.
+        if let synced = DrillDrawing.decode(syncPayload: media.remoteURL) { return synced }
+        guard let path = media.strokesPath else { return nil }
         return DrillDrawing.decode(DrillMediaStorage.shared.loadStrokes(at: path))
+    }
+
+    /// A drawing whose row came from another device has no files here (or old
+    /// ones, after an edit there): write the drawing and its pictures
+    /// (bundles and older builds read them) to the paths the row names. True
+    /// when something was written.
+    @MainActor
+    @discardableResult
+    static func restoreFiles(for media: DrillMedia) -> Bool {
+        guard media.kind == .courtDiagram,
+              let drawing = DrillDrawing.decode(syncPayload: media.remoteURL) else { return false }
+        let storage = DrillMediaStorage.shared
+        guard let data = drawing.encoded else { return false }
+        let missing = [media.strokesPath, media.localPath, media.thumbnailPath].contains { path in
+            guard let path else { return false }
+            return storage.absolutePath(forRelative: path) == nil
+        }
+        // Edited on another device: the file here is the old drawing.
+        let stale = media.strokesPath.flatMap { storage.loadStrokes(at: $0) }.map { $0 != data } ?? false
+        guard missing || stale else { return false }
+        storage.saveDrawing(data, drillId: media.drillId, mediaId: media.id)
+        if let image = picture(of: drawing) {
+            storage.saveImage(image, drillId: media.drillId, mediaId: media.id, targetKB: 500)
+            storage.saveThumbnail(image, drillId: media.drillId, mediaId: media.id)
+        }
+        return true
     }
 
     /// What the full-screen viewer pages through: photos, videos and links,
@@ -37,6 +67,8 @@ enum DrillDrawingMedia {
             drillId: drillId,
             kind: .courtDiagram,
             localPath: primaryPath,
+            // The drawing itself, so it syncs (see DrillDrawing.syncPayload).
+            remoteURL: drawing.syncPayload,
             thumbnailPath: DrillMediaStorage.shared.saveThumbnail(image, drillId: drillId, mediaId: mediaId),
             strokesPath: drawingPath,
             caption: existing?.caption,

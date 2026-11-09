@@ -239,8 +239,14 @@ struct DrillsLibraryView: View {
         #endif
         #if DEBUG
         // HOOPWISE_LIBRARY_SEARCH=<text>: open with that search typed.
+        // HOOPWISE_DELETE_DRILLS_NAMED=<name>: UI tests clean up the drills
+        // they created — demo store only.
         .onAppear {
-            if let text = ProcessInfo.processInfo.environment["HOOPWISE_LIBRARY_SEARCH"] { searchText = text }
+            let env = ProcessInfo.processInfo.environment
+            if let text = env["HOOPWISE_LIBRARY_SEARCH"] { searchText = text }
+            if let name = env["HOOPWISE_DELETE_DRILLS_NAMED"], ScreenshotStore.isActive {
+                for drill in dataManager.drills where drill.name == name { dataManager.deleteDrill(drill) }
+            }
         }
         #endif
         .onChange(of: block) { _, _ in type = nil }
@@ -1960,6 +1966,10 @@ struct AddDrillView: View {
     @State private var instructions: [String] = [""]
     @State private var keyPoints: [String] = [""]
     @State private var minPlayers = 1
+    /// A court drawing made while creating the drill (Luther, November
+    /// 2026): saved as the drill's first visual on Create.
+    @State private var drawing: DrillDrawing?
+    @State private var drawingOpen = false
     
     var body: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
@@ -2006,6 +2016,11 @@ struct AddDrillView: View {
                         keyPoints.append("")
                     }
                 }
+
+                visualSection(isChinese: isChinese)
+            }
+            .fullScreenCover(isPresented: $drawingOpen) {
+                JournalPlayStepEditor(drawing: drawing ?? DrillDrawing.new()) { drawing = $0 }
             }
             .navigationTitle(isChinese ? "新训练" : "New Drill")
             .navigationBarTitleDisplayModeCompat(.inline)
@@ -2023,8 +2038,49 @@ struct AddDrillView: View {
         }
     }
     
+    @ViewBuilder
+    private func visualSection(isChinese: Bool) -> some View {
+        Section {
+            if let drawing {
+                DrillDrawingPlayer(drawing: drawing)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                    .listRowBackground(Color.clear)
+                Button {
+                    drawingOpen = true
+                } label: {
+                    Label(isChinese ? "编辑图示" : "Edit drawing", systemImage: "pencil.and.outline")
+                }
+                Button(role: .destructive) {
+                    self.drawing = nil
+                } label: {
+                    Label(isChinese ? "移除图示" : "Remove drawing", systemImage: "trash")
+                }
+            } else {
+                Button {
+                    drawingOpen = true
+                } label: {
+                    Label(isChinese ? "在球场上绘制" : "Draw on the court", systemImage: "pencil.and.outline")
+                }
+                .accessibilityIdentifier("newDrill.draw")
+            }
+        } header: {
+            Text(isChinese ? "图示" : "Visual")
+        } footer: {
+            if drawing == nil {
+                Text(isChinese ? "可选。用战术板的工具画出球员、跑位、传球和标志桶，可分多步。"
+                               : "Optional. Draw players, runs, passes and cones with the plays editor, in as many steps as you need.")
+            }
+        }
+    }
+
     private func createDrill() {
+        let id = UUID()
+        var media: [DrillMedia] = []
+        if let drawing, let saved = DrillDrawingMedia.save(drawing, drillId: id, existing: nil, sortOrder: 0) {
+            media.append(saved)
+        }
         let drill = DrillItem(
+            id: id,
             name: name,
             category: category,
             difficulty: difficulty,
@@ -2032,7 +2088,8 @@ struct AddDrillView: View {
             description: description,
             instructions: instructions.filter { !$0.isEmpty },
             keyPoints: keyPoints.filter { !$0.isEmpty },
-            minPlayers: minPlayers
+            minPlayers: minPlayers,
+            media: media
         )
         dataManager.addDrill(drill)
         dismiss()

@@ -720,6 +720,7 @@ class SwiftDataManager: ObservableObject {
             // skips them. Thumbnail caching is fire-and-forget so refresh
             // isn't gated on network.
             migrateLegacyVideoUrls(in: sdDrills)
+            syncDrillDrawings(in: sdDrills)
             cachedDrills = sdDrills.map { $0.toStruct() }
 
             let sdMeasurements = try modelContext.fetch(FetchDescriptor<SDMeasurement>())
@@ -2513,7 +2514,15 @@ class SwiftDataManager: ObservableObject {
                     if am != bm { return am > bm }
                     return a.createdAt < b.createdAt
                 }
+                // The survivor takes the others' visuals: a library drill is
+                // seeded on every device, and a drawing made on one copy must
+                // not go with the copy that is deleted.
+                let survivor = sorted[0]
+                let kept = Set((survivor.media ?? []).map(\.id))
                 for drill in sorted.dropFirst() {
+                    for media in drill.media ?? [] where !kept.contains(media.id) {
+                        media.drill = survivor
+                    }
                     modelContext.delete(drill)
                     deletedCount += 1
                 }
@@ -2684,6 +2693,31 @@ class SwiftDataManager: ObservableObject {
         } catch {
             debugLog("❌ Failed to delete drill media: \(error)")
         }
+    }
+
+    /// Drill drawings sync through their SDDrillMedia row
+    /// (`DrillDrawing.syncPayload` in `remoteURL`). Run from both refresh
+    /// paths: a drawing made before that rode in the row gets its payload from
+    /// its file (on the device that drew it), and a row that arrived from
+    /// another device gets its files written here. Idempotent.
+    private func syncDrillDrawings(in sdDrills: [SDDrill]) {
+        var stamped = 0, restored = 0
+        for sdMedia in sdDrills.flatMap({ $0.media ?? [] }) where sdMedia.kindRaw == DrillMediaKind.courtDiagram.rawValue {
+            if DrillDrawing.decode(syncPayload: sdMedia.remoteURL) == nil {
+                guard let path = sdMedia.strokesPath,
+                      let drawing = DrillDrawing.decode(DrillMediaStorage.shared.loadStrokes(at: path)),
+                      let payload = drawing.syncPayload else { continue }
+                sdMedia.remoteURL = payload
+                stamped += 1
+            } else if DrillDrawingMedia.restoreFiles(for: sdMedia.toStruct()) {
+                restored += 1
+            }
+        }
+        guard stamped > 0 || restored > 0 else { return }
+        if stamped > 0 {
+            do { try modelContext.save() } catch { debugLog("❌ Drill drawing sync save failed: \(error)") }
+        }
+        debugLog("🖍️ Drill drawings: \(stamped) now sync, \(restored) restored from iCloud")
     }
 
     /// One-shot migration: promotes legacy `DrillItem.videoUrl` strings into
@@ -4563,6 +4597,7 @@ class SwiftDataManager: ObservableObject {
 
             let sdDrills = try modelContext.fetch(FetchDescriptor<SDDrill>())
             migrateLegacyVideoUrls(in: sdDrills)
+            syncDrillDrawings(in: sdDrills)
             cachedDrills = sdDrills.map { $0.toStruct() }
 
             let sdMeasurements = try modelContext.fetch(FetchDescriptor<SDMeasurement>())
