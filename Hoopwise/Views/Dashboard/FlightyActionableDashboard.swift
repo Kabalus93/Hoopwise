@@ -15,6 +15,8 @@ struct FlightyActionableDashboard: View {
     @State private var showingAllAttentionItems = false
     @State private var attentionCategoryFocus: AttentionCategory?
     @State private var showingAllPlayers = false
+    /// The Today's Athletes card's width — sizes its roster cluster.
+    @State private var todaysCardWidth: CGFloat = 360
     @State private var selectedLiveGame: Game?
     @State private var showingLiveScoring = false
     
@@ -1047,7 +1049,10 @@ struct FlightyActionableDashboard: View {
                     members: TodaysRosterCluster.members(hero: hero, students: todaysPlayers,
                                                          sessions: dataManager.sessionEvents),
                     total: todaysPlayers.count,
-                    scale: horizontalSizeClass == .regular ? 1.6 : 1.3,
+                    // At most ~38 % of the card, so the words on the left
+                    // never break mid-word (an iPad mini's half-width card).
+                    scale: min(horizontalSizeClass == .regular ? 1.6 : 1.3,
+                               max(0.9, todaysCardWidth * 0.38 / 124)),
                     onSelect: { selectedStudent = $0 },
                     onMore: { showingAllPlayers = true })
                     .padding(.trailing, 16)
@@ -1081,6 +1086,7 @@ struct FlightyActionableDashboard: View {
             .sensoryFeedback(.selection, trigger: showingAllPlayers)
         }
         .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { todaysCardWidth = $0 }
     }
     
     /// Small reason chip shown below the hero player's name. Tells the
