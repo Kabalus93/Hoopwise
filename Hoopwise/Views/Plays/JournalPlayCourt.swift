@@ -286,18 +286,23 @@ struct JournalPlayDiagramView: View {
             || (action.kind == .dribble && action.path.last.map(court.isAtBasket) == true)
         // (The selection halo keeps its blue.)
         let shading = toRim && !keepsColor ? GraphicsContext.Shading.color(JPalette.shot) : shading
+        // An arrowed line stops at the arrow's BASE and the arrow points the
+        // way the line arrives (Luther, November 2026: a dribble's last tooth
+        // ran into the triangle's corner).
+        let head = Self.arrowFit(curve, length: JournalPlayCourt.arrowLength * s * k)
+        let line = head?.line ?? curve
         switch action.kind {
         case .cut, .shot:
-            context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-            arrow(at: points, in: &context, scale: s, k: k, shading: shading)
+            context.stroke(line, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
+            if let head { arrow(head, in: &context, scale: s, k: k, shading: shading) }
         case .pass:
-            context.stroke(curve, with: shading,
+            context.stroke(line, with: shading,
                            style: StrokeStyle(lineWidth: width, lineCap: .round, dash: [5 * width / 1.5, 4 * width / 1.5]))
-            arrow(at: points, in: &context, scale: s, k: k, shading: shading)
+            if let head { arrow(head, in: &context, scale: s, k: k, shading: shading) }
         case .dribble:
-            context.stroke(Self.zigzag(along: curve, scale: s * k), with: shading,
+            context.stroke(Self.zigzag(along: line, scale: s * k), with: shading,
                            style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-            arrow(at: points, in: &context, scale: s, k: k, shading: shading)
+            if let head { arrow(head, in: &context, scale: s, k: k, shading: shading) }
         case .screen:
             context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
             let end = points[points.count - 1], before = points[points.count - 2]
@@ -311,12 +316,39 @@ struct JournalPlayDiagramView: View {
         }
     }
 
-    private func arrow(at points: [CGPoint], in context: inout GraphicsContext, scale s: CGFloat, k: CGFloat,
-                       shading: GraphicsContext.Shading) {
-        let end = points[points.count - 1], before = points[points.count - 2]
-        let dx = end.x - before.x, dy = end.y - before.y
+    /// Where an arrowhead of `length` sits on `curve`: its tip at the end,
+    /// the direction the curve arrives from (over the head's own length, not
+    /// the last drawn point, which a curve does not head straight from), and
+    /// the curve trimmed to end at the head's base.
+    struct ArrowFit {
+        var line: Path
+        var tip: CGPoint
+        var ux: CGFloat
+        var uy: CGFloat
+    }
+
+    static func arrowFit(_ curve: Path, length l: CGFloat) -> ArrowFit? {
+        let points = sample(curve, step: max(l / 6, 0.5))
+        guard points.count >= 2, let tip = points.last else { return nil }
+        var total: CGFloat = 0
+        for i in 1..<points.count { total += hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y) }
+        guard total > 0.001 else { return nil }
+        // The point one head-length back along the curve.
+        var back = points[0], walked: CGFloat = 0
+        for i in stride(from: points.count - 1, to: 0, by: -1) {
+            walked += hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+            back = points[i - 1]
+            if walked >= l { break }
+        }
+        let dx = tip.x - back.x, dy = tip.y - back.y
         let len = max((dx * dx + dy * dy).squareRoot(), 0.001)
-        let ux = dx / len, uy = dy / len
+        let line = total > l * 1.2 ? curve.trimmedPath(from: 0, to: 1 - l / total) : curve
+        return ArrowFit(line: line, tip: tip, ux: dx / len, uy: dy / len)
+    }
+
+    private func arrow(_ fit: ArrowFit, in context: inout GraphicsContext, scale s: CGFloat, k: CGFloat,
+                       shading: GraphicsContext.Shading) {
+        let end = fit.tip, ux = fit.ux, uy = fit.uy
         let l = JournalPlayCourt.arrowLength * s * k, w = l * 0.55
         var head = Path()
         head.move(to: end)
@@ -358,21 +390,30 @@ struct JournalPlayDiagramView: View {
         return path
     }
 
-    /// The dribble's zigzag: half-metre teeth either side of the path,
-    /// straight for the last stretch before the arrow.
+    /// The dribble's zigzag: half-metre teeth either side of the path (at
+    /// least six on a short line, so a small one still reads as a zigzag
+    /// rather than a bent stroke), back on the path for one straight tooth
+    /// into the arrow's base.
     static func zigzag(along curve: Path, scale s: CGFloat) -> Path {
-        let samples = sample(curve, step: 0.5 * s)
+        let dense = sample(curve, step: max(0.05 * s, 0.5))
+        var length: CGFloat = 0
+        if dense.count > 1 {
+            for i in 1..<dense.count { length += hypot(dense[i].x - dense[i - 1].x, dense[i].y - dense[i - 1].y) }
+        }
+        let step = min(0.5 * s, max(length / 7, 1))
+        let samples = sample(curve, step: step)
         var zig = Path()
         guard let first = samples.first else { return curve }
         zig.move(to: first)
-        let amplitude = 0.25 * s
-        for i in 1..<max(samples.count - 1, 1) {
+        let amplitude = min(0.25 * s, step * 0.6)
+        for i in 1..<max(samples.count - 2, 1) {
             let a = samples[i - 1], b = samples[i]
             let dx = b.x - a.x, dy = b.y - a.y
             let len = max((dx * dx + dy * dy).squareRoot(), 0.001)
             let o = (i % 2 == 0 ? 1 : -1) * amplitude
             zig.addLine(to: CGPoint(x: b.x - dy / len * o, y: b.y + dx / len * o))
         }
+        if samples.count >= 3 { zig.addLine(to: samples[samples.count - 2]) }
         if let last = samples.last { zig.addLine(to: last) }
         return zig
     }

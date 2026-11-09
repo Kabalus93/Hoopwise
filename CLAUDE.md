@@ -821,6 +821,14 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   the rest of the step; next step it is out of play (`transfer` removes it).
   OLDER BUILDS cannot decode "shot": a step containing one reads as an empty
   drawing there (until they update). Tests: JournalPlayShotTests.
+  ARROWHEADS (9 Nov 2026, Luther: a dribble's last tooth ran into the
+  triangle's corner, and the Dribble icon read as an oblique stroke):
+  `JournalPlayDiagramView.arrowFit` — the line is TRIMMED to end at the
+  head's base and the head points the way the drawn curve ARRIVES over its
+  own length (it used the last two raw points, which a curve does not head
+  straight from). The zigzag has at least ~6 teeth on a short line (step =
+  min(0.5 m, length ÷ 7)) and returns to the path for one straight tooth into
+  the base — so the tool icon is a zigzag too.
   (g) SEVERAL STEPS PER EDITOR (Luther: edit more than one step without
   Done): JournalPlayStepEditor(step:court:) edits the step's whole PART. The
   title is a menu "Step N of M ▾" (all steps + Add a step); the workspace
