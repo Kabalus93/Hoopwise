@@ -99,7 +99,14 @@ enum SheetGalleryDebug {
     static func root(shot: String, dataManager dm: DataManager) -> some View {
         Color.black
             .ignoresSafeArea()
-            .sheet(isPresented: .constant(true)) {
+            // The live game is a full-screen cover in the app (an iPad shows
+            // its wide layout there); everything else is a sheet.
+            .sheet(isPresented: .constant(shot != "liveGame")) {
+                sheetContent(shot: shot, dataManager: dm)
+                    .environmentObject(dm)
+                    .modelContainer(dm.modelContainer)
+            }
+            .fullScreenCover(isPresented: .constant(shot == "liveGame")) {
                 sheetContent(shot: shot, dataManager: dm)
                     .environmentObject(dm)
                     .modelContainer(dm.modelContainer)

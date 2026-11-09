@@ -91,7 +91,8 @@ struct LiveTeamPanel: View {
         GeometryReader { proxy in
             let count = max(players.count, 5)
             let spacing: CGFloat = 8
-            let rowHeight = max(56, (proxy.size.height - spacing * CGFloat(count - 1)) / CGFloat(count))
+            // Tall enough for a thumb, never a slab (an iPad's height / 5).
+            let rowHeight = min(150, max(56, (proxy.size.height - spacing * CGFloat(count - 1)) / CGFloat(count)))
             VStack(spacing: spacing) {
                 ForEach(players) { student in
                     row(student, height: rowHeight)
@@ -101,7 +102,19 @@ struct LiveTeamPanel: View {
             .overlay { assistLine }
         }
         .coordinateSpace(name: Self.space)
-        .onPreferenceChange(RowFrameKey.self) { rowFrames = $0 }
+        .onPreferenceChange(RowFrameKey.self) { frames in
+            rowFrames = frames
+            #if DEBUG
+            // HOOPWISE_LIVE_ASSIST_DEMO=1: a pass held from the second row
+            // onto the first, frozen, for screenshots of the assist line.
+            if ProcessInfo.processInfo.environment["HOOPWISE_LIVE_ASSIST_DEMO"] == "1",
+               dragFrom == nil, players.count >= 2,
+               let a = frames[players[1].id], let b = frames[players[0].id] {
+                dragFrom = (players[1].id, CGPoint(x: a.minX + 40, y: a.midY))
+                dragTo = CGPoint(x: b.minX + 120, y: b.midY)
+            }
+            #endif
+        }
         .sensoryFeedback(.impact(weight: .medium), trigger: basketTick)
     }
 
@@ -142,13 +155,16 @@ struct LiveTeamPanel: View {
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(teamColor.opacity(isSource || isTarget ? 0.28 : 0.12))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(teamColor.opacity(isSource ? 0.2 : 0.1))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isTarget ? teamColor : teamColor.opacity(0.35), lineWidth: isTarget ? 3 : 1)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(isTarget ? Color.accentColor : teamColor.opacity(0.22),
+                                  lineWidth: isTarget ? 2 : 0.75)
             )
+            .scaleEffect(isTarget ? 1.015 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isTarget)
             .contentShape(RoundedRectangle(cornerRadius: 14))
             .background(GeometryReader { geo in
                 Color.clear.preference(key: RowFrameKey.self,
@@ -234,20 +250,93 @@ struct LiveTeamPanel: View {
                                 kind: .points(pointValue), assistId: assist))
     }
 
+    /// The pass being drawn: a fine curved line in the accent colour from
+    /// the scorer to the finger (or, over a teammate, to that teammate's
+    /// avatar, with an arrowhead and their name) — the team colour is for
+    /// rows and scores, and a black team made a thick black dashed line.
     @ViewBuilder
     private var assistLine: some View {
         if let from = dragFrom, let to = dragTo {
-            Path { path in
-                path.move(to: from.start)
-                path.addLine(to: to)
+            let target = rowFrames.first { $0.value.contains(to) && $0.key != from.id }
+            let start = anchor(of: from.id) ?? from.start
+            let landing = target.flatMap { anchor(of: $0.key) } ?? to
+            let control = Self.control(from: start, to: landing)
+            // Over a teammate the arrow stops at the edge of their photo.
+            let end = target.map { Self.moved(landing, toward: control, by: avatarRadius($0.value) + 3) } ?? landing
+            let accent = Color.accentColor
+            ZStack {
+                Path { path in
+                    path.move(to: start)
+                    path.addQuadCurve(to: end, control: control)
+                }
+                .stroke(accent.opacity(0.25), style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                Path { path in
+                    path.move(to: start)
+                    path.addQuadCurve(to: end, control: control)
+                }
+                .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                if target != nil {
+                    Self.arrowHead(at: end, from: control)
+                        .fill(accent)
+                } else {
+                    Circle()
+                        .strokeBorder(accent, lineWidth: 2)
+                        .background(Circle().fill(.background))
+                        .frame(width: 14, height: 14)
+                        .position(end)
+                }
+                Circle().fill(accent).frame(width: 8, height: 8).position(start)
+                if let target, let passer = students.first(where: { $0.id == target.key }) {
+                    Text(LocalizationManager.shared.currentLanguage == .chinese
+                         ? "助攻 · \(passer.primaryDisplayName)" : "Assist · \(passer.primaryDisplayName)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(accent, in: Capsule())
+                        // On the target row's top edge, clear of its name.
+                        .position(x: target.value.midX, y: target.value.minY)
+                }
             }
-            .stroke(teamColor, style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [8, 6]))
             .allowsHitTesting(false)
-            Circle()
-                .fill(teamColor)
-                .frame(width: 18, height: 18)
-                .position(to)
-                .allowsHitTesting(false)
+            .animation(.easeOut(duration: 0.12), value: target?.key)
         }
+    }
+
+    private func avatarRadius(_ frame: CGRect) -> CGFloat { min(56, frame.height - 16) / 2 }
+
+    /// The avatar's centre in a row: where a pass starts and lands.
+    private func anchor(of id: UUID) -> CGPoint? {
+        guard let frame = rowFrames[id] else { return nil }
+        return CGPoint(x: frame.minX + 10 + avatarRadius(frame), y: frame.midY)
+    }
+
+    static func moved(_ p: CGPoint, toward q: CGPoint, by d: CGFloat) -> CGPoint {
+        let dx = q.x - p.x, dy = q.y - p.y
+        let length = hypot(dx, dy)
+        guard length > d else { return p }
+        return CGPoint(x: p.x + dx / length * d, y: p.y + dy / length * d)
+    }
+
+    /// Bows the line sideways so a pass between rows reads as a curve.
+    static func control(from a: CGPoint, to b: CGPoint) -> CGPoint {
+        let mid = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+        let dx = b.x - a.x, dy = b.y - a.y
+        let length = max(hypot(dx, dy), 1)
+        let bow = min(60, length * 0.35)
+        return CGPoint(x: mid.x + dy / length * bow, y: mid.y - dx / length * bow)
+    }
+
+    static func arrowHead(at tip: CGPoint, from control: CGPoint) -> Path {
+        let dx = tip.x - control.x, dy = tip.y - control.y
+        let length = max(hypot(dx, dy), 0.001)
+        let ux = dx / length, uy = dy / length
+        let l: CGFloat = 12, w: CGFloat = 6.5
+        var path = Path()
+        path.move(to: tip)
+        path.addLine(to: CGPoint(x: tip.x - ux * l - uy * w, y: tip.y - uy * l + ux * w))
+        path.addLine(to: CGPoint(x: tip.x - ux * l + uy * w, y: tip.y - uy * l - ux * w))
+        path.closeSubpath()
+        return path
     }
 }

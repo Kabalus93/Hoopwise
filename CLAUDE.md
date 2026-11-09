@@ -607,8 +607,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   are fixed colour-coded StatPressButtons with icons (tap add, hold removes
   one); REB is the big one because it is the most frequent.
   Points are corrected with Undo (`GameStatAction` log, view-local) — a hold
-  on the row would collide with starting a drag. iPad side-by-side and
-  Battle Royal are unchanged. Every stat button goes through
+  on the row would collide with starting a drag. Battle Royal is unchanged.
+  REFINED + ON THE iPAD (10 November 2026, Luther: "don't let it look low
+  quality … the assist line looks grotesque"): the iPad / Mac (regular
+  width, two teams) now use THIS entry, both teams' LiveTeamPanels side by
+  side under one value strip (`liveEntryWide`; scores not a switcher there)
+  — the old two-column screen (per-player +1/+2/+3, near-invisible on a dark
+  team) is no longer reached. The assist line is a fine ACCENT-coloured
+  curve (soft halo, 2.5 pt) from the scorer's photo, snapping to the
+  teammate's photo with an arrowhead and an "Assist · <name>" pill on that
+  row's top edge; the target row gets an accent ring and a slight lift, the
+  source a tint (it was a 4 pt dashed line in the team colour — black for
+  the black team — and a 3 pt border). StatPressButton sizes its symbol from
+  its own height inside an inset: over the word when tall, BESIDE it when
+  short (STL / BLK on the phone), the word alone when tiny. Rows cap at
+  150 pt. DEBUG HOOPWISE_LIVE_ASSIST_DEMO=1 freezes a pass for screenshots;
+  HOOPWISE_SHOT=liveGame is now a full-screen cover, as in the app. Every stat button goes through
   `StatPressButton` + `StatPressGate`: the old Button + simultaneous long
   press removed on hold and RE-ADDED on release. Tests: StatPressGateTests,
   LiveGameEntryTests, LiveGameStatUITests, LiveGameAssistUITests

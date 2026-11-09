@@ -48,21 +48,47 @@ struct StatPressButton: View {
     @State private var addTick = 0
     @State private var removeTick = 0
 
+    private func label(_ font: Font) -> some View {
+        Text(label)
+            .font(font)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+
     var body: some View {
-        VStack(spacing: 2) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: fillsHeight ? 20 : 14, weight: .semibold))
+        // Icon and label keep clear of the edges at any size (Luther,
+        // November 2026: STL and BLK's hands touched their borders): both
+        // are sized from the button's own height, inside an inset.
+        GeometryReader { proxy in
+            let inner = proxy.size.height - 10
+            SwiftUI.Group {
+                if let icon, inner >= 40 {
+                    // Tall: the symbol over the word.
+                    VStack(spacing: max(2, inner * 0.06)) {
+                        Image(systemName: icon)
+                            .font(.system(size: min(fillsHeight ? 20 : 14, inner * 0.34), weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                        label(font)
+                    }
+                } else if let icon, inner >= 18 {
+                    // Short: the symbol beside the word.
+                    HStack(spacing: 4) {
+                        Image(systemName: icon)
+                            .font(.system(size: min(14, inner * 0.55), weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                        label(font)
+                    }
+                } else {
+                    label(font)
+                }
             }
-            Text(label)
-                .font(font)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: fillsHeight ? .infinity : nil)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: fillsHeight ? .infinity : 34)
             .foregroundStyle(color)
-            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .onTapGesture {
                 guard gate.tap(at: Date()) else { return }
                 addTick += 1

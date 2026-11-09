@@ -4576,10 +4576,12 @@ struct LiveGameScoringView: View {
                 if isBattleRoyal {
                     battleRoyalCompactHeader
                     battleRoyalPlayersList
-                } else if isIPad {
-                    // iPad: Show both teams side by side
-                    compactGameHeader
-                    sideBySideTeamsView
+                } else if isIPad && activeTeamsForScoring.count == 2 {
+                    // iPad / Mac: the same entry as the phone, both teams
+                    // side by side (November 2026 — the old two-column
+                    // screen with per-player +1/+2/+3 buttons is retired).
+                    liveScoreboard
+                    liveEntryWide
                 } else {
                     // iPhone: one team at a time, all its players on screen
                     // (October 2026 field redesign — see LiveTeamPanel).
@@ -4960,7 +4962,8 @@ struct LiveGameScoringView: View {
     }
 
     private func teamScoreSwitch(team: GameTeam, index: Int) -> some View {
-        let selected = selectedTeamIndex == index
+        // Side by side (iPad / Mac) both teams are on screen: no selection.
+        let selected = (isIPad && activeTeamsForScoring.count == 2) || selectedTeamIndex == index
         let color = team.colorHex == "#F5F5F5" ? Color.gray : Color(hex: team.colorHex)
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { selectedTeamIndex = index }
@@ -5012,6 +5015,27 @@ struct LiveGameScoringView: View {
             .padding(.bottom, 6)
             .clipped()
         }
+    }
+
+    /// Wide windows: the value strip, both teams' panels side by side (no
+    /// switching — the scores above only show the score), the last action.
+    private var liveEntryWide: some View {
+        VStack(spacing: 12) {
+            if game.status != .completed {
+                basketValueStrip
+            }
+            HStack(alignment: .top, spacing: 16) {
+                ForEach(activeTeamsForScoring) { team in
+                    LiveTeamPanel(game: $game, team: team, students: students,
+                                  pointValue: basketValue, onAction: log)
+                        .allowsHitTesting(game.status != .completed)
+                }
+            }
+            lastActionBar
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
     }
 
     /// +1 / +2 / +3. The game's standard value (set on the setup page) is
