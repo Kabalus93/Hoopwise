@@ -613,10 +613,10 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   width, two teams) now use THIS entry, both teams' LiveTeamPanels side by
   side under one value strip (`liveEntryWide`; scores not a switcher there)
   — the old two-column screen (per-player +1/+2/+3, near-invisible on a dark
-  team) is no longer reached. The assist line is a fine ACCENT-coloured
-  curve (soft halo, 2.5 pt) from the scorer's photo, snapping to the
-  teammate's photo with an arrowhead and an "Assist · <name>" pill on that
-  row's top edge; the target row gets an accent ring and a slight lift, the
+  team) is no longer reached. The assist line is ONE RED LINE (3 pt) WITH AN
+  ARROWHEAD from where the finger went down to where it is now — no snapping
+  to photos (Luther: "start where I touch and end where I drag it to"; a
+  curve + halo + dots + name pill was "over complicated"); the target row gets an accent ring and a slight lift, the
   source a tint (it was a 4 pt dashed line in the team colour — black for
   the black team — and a 3 pt border). StatPressButton sizes its symbol from
   its own height inside an inset: over the word when tall, BESIDE it when

@@ -250,65 +250,24 @@ struct LiveTeamPanel: View {
                                 kind: .points(pointValue), assistId: assist))
     }
 
-    /// The pass being drawn: a fine curved line in the accent colour from
-    /// the scorer to the finger (or, over a teammate, to that teammate's
-    /// avatar, with an arrowhead and their name) — the team colour is for
-    /// rows and scores, and a black team made a thick black dashed line.
+    /// The pass being drawn: one red line with an arrowhead, from where
+    /// the finger went down to where it is now (Luther, November 2026 — a
+    /// line that jumped to photos did not follow the hand).
     @ViewBuilder
     private var assistLine: some View {
         if let from = dragFrom, let to = dragTo {
-            let target = rowFrames.first { $0.value.contains(to) && $0.key != from.id }
-            let start = anchor(of: from.id) ?? from.start
-            let landing = target.flatMap { anchor(of: $0.key) } ?? to
-            let control = Self.control(from: start, to: landing)
-            // Over a teammate the arrow stops at the edge of their photo.
-            let end = target.map { Self.moved(landing, toward: control, by: avatarRadius($0.value) + 3) } ?? landing
-            let accent = Color.accentColor
             ZStack {
                 Path { path in
-                    path.move(to: start)
-                    path.addQuadCurve(to: end, control: control)
+                    path.move(to: from.start)
+                    // The line stops where the arrowhead's base begins.
+                    path.addLine(to: Self.moved(to, toward: from.start, by: 9))
                 }
-                .stroke(accent.opacity(0.25), style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                Path { path in
-                    path.move(to: start)
-                    path.addQuadCurve(to: end, control: control)
-                }
-                .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                if target != nil {
-                    Self.arrowHead(at: end, from: control)
-                        .fill(accent)
-                } else {
-                    Circle()
-                        .strokeBorder(accent, lineWidth: 2)
-                        .background(Circle().fill(.background))
-                        .frame(width: 14, height: 14)
-                        .position(end)
-                }
-                Circle().fill(accent).frame(width: 8, height: 8).position(start)
-                if let target, let passer = students.first(where: { $0.id == target.key }) {
-                    Text(LocalizationManager.shared.currentLanguage == .chinese
-                         ? "助攻 · \(passer.primaryDisplayName)" : "Assist · \(passer.primaryDisplayName)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(accent, in: Capsule())
-                        // On the target row's top edge, clear of its name.
-                        .position(x: target.value.midX, y: target.value.minY)
-                }
+                .stroke(Color.red, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                Self.arrowHead(at: to, from: from.start)
+                    .fill(Color.red)
             }
             .allowsHitTesting(false)
-            .animation(.easeOut(duration: 0.12), value: target?.key)
         }
-    }
-
-    private func avatarRadius(_ frame: CGRect) -> CGFloat { min(56, frame.height - 16) / 2 }
-
-    /// The avatar's centre in a row: where a pass starts and lands.
-    private func anchor(of id: UUID) -> CGPoint? {
-        guard let frame = rowFrames[id] else { return nil }
-        return CGPoint(x: frame.minX + 10 + avatarRadius(frame), y: frame.midY)
     }
 
     static func moved(_ p: CGPoint, toward q: CGPoint, by d: CGFloat) -> CGPoint {
@@ -316,15 +275,6 @@ struct LiveTeamPanel: View {
         let length = hypot(dx, dy)
         guard length > d else { return p }
         return CGPoint(x: p.x + dx / length * d, y: p.y + dy / length * d)
-    }
-
-    /// Bows the line sideways so a pass between rows reads as a curve.
-    static func control(from a: CGPoint, to b: CGPoint) -> CGPoint {
-        let mid = CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
-        let dx = b.x - a.x, dy = b.y - a.y
-        let length = max(hypot(dx, dy), 1)
-        let bow = min(60, length * 0.35)
-        return CGPoint(x: mid.x + dy / length * bow, y: mid.y - dx / length * bow)
     }
 
     static func arrowHead(at tip: CGPoint, from control: CGPoint) -> Path {
