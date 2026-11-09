@@ -929,6 +929,15 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   has no Delete (only quick-note drills do) — UI tests clean up through DEBUG
   HOOPWISE_DELETE_DRILLS_NAMED=<name> (demo store only). Pinned by
   DrillVisualUITests.testNewDrillCanBeDrawnWithStepsOrganisedOnThePhone.
+- SEVERAL DRAWINGS ON ONE DRILL (9 November 2026, Luther: two drawings sat
+  one under the other). DrillDrawingsView (DrillDrawingMedia.swift) lays a
+  drill's drawings out SIDE BY SIDE (two columns) when the drawings area is
+  ≥ 900 pt wide (a Mac window, iPad landscape), else ONE AT A TIME under a
+  TOGGLE of their names (segmented ≤ 4, a menu beyond), the card's own title
+  hidden there. A drawing's NAME is its media caption ("Corner shot",
+  "Option: 1v2" — options/wrinkles of the drill), else "Drawing N"; ⋯ →
+  Rename sets it (updateDrillMedia; captions sync). HOOPWISE_SHOT=
+  drillDrawings (+ HOOPWISE_DRAWINGS_WIDE=1 lays it out 1000 pt wide).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

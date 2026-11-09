@@ -116,16 +116,24 @@ struct DrillDrawingCard: View {
     var title: String
     var onEdit: () -> Void
     var onDelete: () -> Void
+    /// Names the drawing (its caption) — "Corner shot", "Option: 1v2".
+    var onRename: ((String) -> Void)?
+    /// Off under the toggle, which already names the drawing.
+    var showsTitle = true
     @State private var confirmingDelete = false
+    @State private var renaming = false
+    @State private var newName = ""
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                if showsTitle {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 if drawing.steps.count > 1 {
                     Text(isChinese ? "\(drawing.steps.count) 步" : "\(drawing.steps.count) steps")
                         .font(.caption.weight(.semibold))
@@ -138,6 +146,14 @@ struct DrillDrawingCard: View {
                 }
                 .accessibilityIdentifier("drill.drawing.edit")
                 Menu {
+                    if onRename != nil {
+                        Button {
+                            newName = title
+                            renaming = true
+                        } label: {
+                            Label(isChinese ? "重命名" : "Rename", systemImage: "character.cursor.ibeam")
+                        }
+                    }
                     Button(role: .destructive) { confirmingDelete = true } label: {
                         Label(isChinese ? "删除图示" : "Delete Drawing", systemImage: "trash")
                     }
@@ -154,6 +170,94 @@ struct DrillDrawingCard: View {
         .confirmationDialog(isChinese ? "删除这个图示？" : "Delete this drawing?",
                             isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button(isChinese ? "删除" : "Delete", role: .destructive, action: onDelete)
+        }
+        .alert(isChinese ? "图示名称" : "Name this drawing", isPresented: $renaming) {
+            TextField(isChinese ? "例如：底角投篮" : "e.g. Corner shot", text: $newName)
+            Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
+            Button(isChinese ? "保存" : "Save") { onRename?(newName.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        }
+    }
+}
+
+/// A drill's drawings on its page (Luther, November 2026: two drawings were
+/// stacked one under the other). Wide windows put them SIDE BY SIDE; narrower
+/// ones show one at a time with a TOGGLE of their names on top — the way a
+/// drill's options or wrinkles are read. A drawing's name is its caption,
+/// else "Drawing 2".
+struct DrillDrawingsView: View {
+    let drawings: [(media: DrillMedia, drawing: DrillDrawing)]
+    var onEdit: (DrillMedia) -> Void
+    var onDelete: (DrillMedia) -> Void
+    var onRename: (DrillMedia, String) -> Void
+
+    @State private var selected: UUID?
+    @State private var width: CGFloat = 0
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+    /// Two courts fit beside each other from about this width.
+    static let sideBySideWidth: CGFloat = 900
+
+    static func name(_ media: DrillMedia, index: Int, of count: Int, chinese: Bool) -> String {
+        if let caption = media.caption?.trimmingCharacters(in: .whitespacesAndNewlines), !caption.isEmpty { return caption }
+        if count == 1 { return chinese ? "图示" : "Drawing" }
+        return chinese ? "图示 \(index + 1)" : "Drawing \(index + 1)"
+    }
+
+    private func name(_ i: Int) -> String {
+        Self.name(drawings[i].media, index: i, of: drawings.count, chinese: isChinese)
+    }
+
+    private func card(_ i: Int, showsTitle: Bool = true) -> some View {
+        let pair = drawings[i]
+        return DrillDrawingCard(drawing: pair.drawing, title: name(i),
+                                onEdit: { onEdit(pair.media) },
+                                onDelete: { onDelete(pair.media) },
+                                onRename: { onRename(pair.media, $0) },
+                                showsTitle: showsTitle)
+            .id(pair.media.id)
+    }
+
+    var body: some View {
+        SwiftUI.Group {
+            if drawings.count < 2 {
+                ForEach(drawings.indices, id: \.self) { card($0) }
+            } else if width >= Self.sideBySideWidth {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 20, alignment: .top),
+                                    GridItem(.flexible(), spacing: 20, alignment: .top)],
+                          alignment: .leading, spacing: 20) {
+                    ForEach(drawings.indices, id: \.self) { card($0) }
+                }
+                .accessibilityIdentifier("drill.drawings.sideBySide")
+            } else {
+                let current = drawings.firstIndex { $0.media.id == selected } ?? 0
+                VStack(alignment: .leading, spacing: 12) {
+                    switcher(current: current)
+                    card(current, showsTitle: false)
+                }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+
+    @ViewBuilder
+    private func switcher(current: Int) -> some View {
+        let binding = Binding<UUID>(get: { drawings[current].media.id }, set: { selected = $0 })
+        if drawings.count <= 4 {
+            Picker(isChinese ? "图示" : "Drawing", selection: binding) {
+                ForEach(drawings.indices, id: \.self) { i in
+                    Text(name(i)).tag(drawings[i].media.id)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("drill.drawings.switch")
+        } else {
+            Picker(isChinese ? "图示" : "Drawing", selection: binding) {
+                ForEach(drawings.indices, id: \.self) { i in
+                    Text(name(i)).tag(drawings[i].media.id)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("drill.drawings.switch")
         }
     }
 }

@@ -1148,23 +1148,23 @@ struct DrillDetailView: View {
                 }
                 .padding(.horizontal, AppTheme.spacing)
 
-                ForEach(Array(drawn.enumerated()), id: \.element.0.id) { i, pair in
-                    DrillDrawingCard(
-                        drawing: pair.1,
-                        title: drawn.count > 1
-                            ? (isChinese ? "图示 \(i + 1)" : "Drawing \(i + 1)")
-                            : (isChinese ? "图示" : "Drawing"),
-                        onEdit: {
-                            HapticFeedback.impact(.light)
-                            edit(diagram: pair.0)
-                        },
-                        onDelete: {
-                            HapticFeedback.impact(.medium)
-                            dataManager.deleteDrillMedia(pair.0)
-                        }
-                    )
-                    .padding(.horizontal, AppTheme.spacing)
-                }
+                DrillDrawingsView(
+                    drawings: drawn.map { (media: $0.0, drawing: $0.1) },
+                    onEdit: { item in
+                        HapticFeedback.impact(.light)
+                        edit(diagram: item)
+                    },
+                    onDelete: { item in
+                        HapticFeedback.impact(.medium)
+                        dataManager.deleteDrillMedia(item)
+                    },
+                    onRename: { item, name in
+                        var renamed = item
+                        renamed.caption = name.isEmpty ? nil : name
+                        dataManager.updateDrillMedia(renamed)
+                    }
+                )
+                .padding(.horizontal, AppTheme.spacing)
 
                 if !others.isEmpty {
                     DrillMediaCarousel(

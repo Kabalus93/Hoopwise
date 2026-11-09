@@ -363,6 +363,22 @@ enum SheetGalleryDebug {
                 missing("drillPicker: no session in the store")
             }
 
+        case "drillDrawings":
+            // Two drawings on a drill page: side by side when wide, a toggle
+            // of their names when not (scratch, unsaved).
+            ScrollView {
+                DrillDrawingsView(drawings: [
+                    (media: DrillMedia(drillId: UUID(), kind: .courtDiagram, caption: "Corner shot"),
+                     drawing: DrillDrawing.new()),
+                    (media: DrillMedia(drillId: UUID(), kind: .courtDiagram, caption: "Option: 1v2"),
+                     drawing: { var d = DrillDrawing.new(court: .half); d.steps[0].diagram.cones = [JournalCourtPoint(4, 8)]; return d }())
+                ], onEdit: { _ in }, onDelete: { _ in }, onRename: { _, _ in })
+                .padding(16)
+                // HOOPWISE_DRAWINGS_WIDE=1: laid out as in a wide Mac window.
+                .frame(width: ProcessInfo.processInfo.environment["HOOPWISE_DRAWINGS_WIDE"] == "1" ? 1000 : nil)
+                .scaleEffect(ProcessInfo.processInfo.environment["HOOPWISE_DRAWINGS_WIDE"] == "1" ? 0.6 : 1)
+            }
+
         case "drillsLibrary":
             // The activity-library drills page, as the Hub pushes it.
             NavigationStack { DrillsLibraryView() }
