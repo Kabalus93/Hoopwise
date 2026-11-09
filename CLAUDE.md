@@ -958,6 +958,33 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   "Option: 1v2" — options/wrinkles of the drill), else "Drawing N"; ⋯ →
   Rename sets it (updateDrillMedia; captions sync). HOOPWISE_SHOT=
   drillDrawings (+ HOOPWISE_DRAWINGS_WIDE=1 lays it out 1000 pt wide).
+- ORGANIZATION PAGE REDESIGNED (9 November 2026, Luther: "the weakest page
+  of the app … it feels like it's not from the app", all platforms).
+  OrganizationView was two cards of numbers, a segmented control (Coaches /
+  Locations / Schools / Categories) and a card per row. Now: title
+  "Organization" (it said "Coaching Staff"), a strip of four tiles (coaches,
+  venues, schools, age categories — a tap scrolls to the section), then ONE
+  inset-grouped List: Coaches (you first, head coaches next; avatar, Chinese
+  name first in Chinese, role · programs), Venues, Schools, Age categories,
+  each with its Add row, then Share & import (two rows; what leaves the
+  device in the subtitle, private athletes in the footer). One `.searchable`
+  filters every section. Wide windows read as a centred ≤ 860 pt column
+  (contentMargins; ≥ 20 pt on the phone). Rows are Views/Hub/
+  OrganizationRows.swift; the editors/profiles are unchanged. The old
+  CoachesListSection / LocationsListSection / SchoolsListSection /
+  CategoriesListSection and their row cards are deleted. HOOPWISE_SHOT=
+  organization. Pinned by OrganizationUITests.
+- TODAY'S ATHLETES AS THE WIDGET'S CLUSTER (10 November 2026, Luther's
+  request, all platforms): the Home card's right side was the hero's photo
+  alone; it is now `TodaysRosterCluster` (Views/Dashboard/) — the Next Up
+  widget's RosterClusterView brought into the app: the same 8 slots, three
+  sizes and id-seeded jitter (never reshuffles), scaled ×1.3 compact / ×1.6
+  regular. Hero = the big accent-ringed bubble, steady attenders
+  (AttentionRules.steadyPercent over ≥ attendanceMinSessions) the small
+  ones, everyone else between; each bubble opens that athlete, "+N" the
+  list. The left side (name — now shrinks before truncating — reason chip,
+  grade, focus) still opens the hero. The "See all N players" bar lost its
+  duplicate mini photos. Pinned by TodaysAthletesUITests.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.
@@ -1521,8 +1548,10 @@ found two bugs, and both were in code that renders documents sent to clients.
      not flagged.
   2. Bundle running out — private bundle with ≤ renewalRemaining (1) left
      and a session inside 7 days; once per contract.
-  3. Re-engage — more than two consecutive marked misses (3+, excused
-     counts); edge-triggered, 14-day cooldown, shown 48h.
+  3. Re-engage — RETIRED 9 November 2026 (Luther: "re-engage shouldn't be
+     part of need your attention alerts" — it listed twenty names at once).
+     The Kind case, AttentionRules constants and cooldown state stay so
+     adapters and stored state decode; consecutiveMisses still exists.
   4. Note follow-up — only ON its due date (24h), never ahead.
   5. Reminders — only once due, shown 48h.
   6. Next cycle — added October 2026 at Luther's request (see "Cycle

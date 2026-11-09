@@ -379,6 +379,11 @@ enum SheetGalleryDebug {
                 .scaleEffect(ProcessInfo.processInfo.environment["HOOPWISE_DRAWINGS_WIDE"] == "1" ? 0.6 : 1)
             }
 
+        case "organization":
+            // Hub → Organization: coaches, venues, schools, age categories,
+            // share & import.
+            NavigationStack { OrganizationView() }
+
         case "drillsLibrary":
             // The activity-library drills page, as the Hub pushes it.
             NavigationStack { DrillsLibraryView() }

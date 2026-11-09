@@ -344,33 +344,11 @@ enum AttentionEngine {
             }
         }
 
-        // 3. Re-engage — missed MORE THAN TWO marked sessions in a row
-        // (excused counts: a run of notified absences still means the
-        // conversation is due). Edge-triggered, once per cooldown.
-        for student in dataManager.students {
-            let misses = AttendanceMath.consecutiveMisses(
-                for: student.id, in: dataManager.sessionEvents, asOf: now)
-            guard misses >= AttentionRules.reengageConsecutiveMisses else { continue }
-            let cooldown = TimeInterval(AttentionRules.reengageCooldownDays * 24 * 3600)
-            let lastFired = state.reengageLastFired[student.id]
-            let firedAt: Date
-            if let lastFired, now.timeIntervalSince(lastFired) < cooldown {
-                firedAt = lastFired
-            } else {
-                firedAt = now
-                state.reengageLastFired[student.id] = now
-            }
-            let deadline = firedAt.addingTimeInterval(48 * 3600)
-            guard deadline > now else { continue }   // fired, shown, aged out
-            items.append(Item(
-                key: "reengage:\(student.id)@\(dayStamp(firedAt))",
-                kind: .reengage, category: .reEngage,
-                title: isChinese ? "回访 · \(student.name)" : "Re-engage · \(student.name)",
-                subtitle: isChinese ? "连续缺席 \(misses) 次" : "Missed \(misses) in a row",
-                urgency: 2,
-                deadline: deadline,
-                studentId: student.id))
-        }
+        // 3. Re-engage — RETIRED (9 November 2026, Luther: "re-engage
+        // shouldn't be part of need your attention alerts"). Three misses in
+        // a row filled the card with twenty names at once. The Kind case and
+        // the cooldown state stay so adapters and stored state still decode;
+        // AttendanceMath.consecutiveMisses still feeds the athlete pages.
 
         // 4. Note follow-up — a date the coach set personally. Surfaces on
         // the day it falls due, not before.

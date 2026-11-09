@@ -165,8 +165,9 @@ enum AttentionDebugReport {
             .filter { $0.kind == .reengage && $0.studentId == student.id }
         let second = AttentionEngine.items(dataManager: dm, now: now)
             .filter { $0.kind == .reengage && $0.studentId == student.id }
-        check("fires exactly once", first.count == 1)
-        check("re-run still exactly one (edge, not level)", second.count == 1 && second.first?.key == first.first?.key)
+        // Re-engage is retired from attention (November 2026): a run of
+        // misses must NOT put the athlete on the card.
+        check("no re-engage item (rule retired)", first.isEmpty && second.isEmpty)
 
         // -- Cleanup: scratch records out, edge state scrubbed of scratch.
         if let closed { dm.deleteSessionEvent(closed) }

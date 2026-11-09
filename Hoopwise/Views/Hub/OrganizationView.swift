@@ -44,7 +44,6 @@ class MapSnapshotCache {
 // MARK: - Organization View
 struct OrganizationView: View {
     @EnvironmentObject var dataManager: DataManager
-    @State private var selectedTab: OrgTab = .coaches
 
     // Phase 2 — bundle export state
     @State private var pendingShare: ExportedBundleHandle?
@@ -66,71 +65,102 @@ struct OrganizationView: View {
         let url: URL
     }
     
-    enum OrgTab: String, CaseIterable {
-        case coaches = "Coaches"
-        case locations = "Locations"
-        case schools = "Schools"
-        case categories = "Categories"
+    // MARK: - The page
+    //
+    // Redesigned November 2026 (Luther: "the weakest page of the app … it
+    // feels like it's not from the app"). It was two cards of numbers, a
+    // segmented control and a card list per tab. Now it reads like the rest
+    // of the app: a large title, a strip of what the organization holds (tap
+    // to jump), then native grouped sections — Coaches, Venues, Schools, Age
+    // categories, Share & import — on one page with one search. Each row
+    // opens the same editor or profile as before.
 
-        var icon: String {
-            switch self {
-            case .coaches: return "person.2.fill"
-            case .locations: return "mappin.circle.fill"
-            case .schools: return "building.columns.fill"
-            case .categories: return "rectangle.stack.fill"
-            }
-        }
+    @State private var searchText = ""
+    @State private var showingAddCoach = false
+    @State private var selectedCoach: StaffCoach?
+    @State private var showingAddLocation = false
+    @State private var selectedLocation: Location?
+    @State private var showingAddSchool = false
+    @State private var editingSchool: School?
+    @State private var showingAddCategory = false
+    @State private var selectedCategory: CustomAgeCategory?
+    @State private var pageWidth: CGFloat = 0
 
-        var localizedName: String {
-            let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-            switch self {
-            case .coaches: return isChinese ? "教练" : "Coaches"
-            case .locations: return isChinese ? "地点" : "Locations"
-            case .schools: return isChinese ? "学校" : "Schools"
-            case .categories: return isChinese ? "类别" : "Categories"
-            }
-        }
+    private var query: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func matches(_ fields: String?...) -> Bool {
+        query.isEmpty || fields.contains { ($0 ?? "").localizedCaseInsensitiveContains(query) }
     }
-    
+
+    private var coaches: [StaffCoach] {
+        dataManager.staffCoaches
+            .filter { matches($0.name, $0.chineseName, $0.role.rawValue) }
+            .sorted { a, b in
+                // You first, then head coaches, then by name.
+                let me = dataManager.loggedInCoachId
+                if (a.id == me) != (b.id == me) { return a.id == me }
+                if (a.role == .head) != (b.role == .head) { return a.role == .head }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+    }
+
+    private var venues: [Location] {
+        dataManager.locations
+            .filter { matches($0.name, $0.address, $0.city) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private var schools: [School] {
+        dataManager.schools
+            .filter { matches($0.name, $0.chineseName, $0.contactName) }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    private var categories: [CustomAgeCategory] {
+        dataManager.ageCategories
+            .filter { matches($0.name, $0.shortName) }
+            .sorted { $0.minAge < $1.minAge }
+    }
+
+    private enum Anchor: Hashable { case coaches, venues, schools, categories }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Organization Hero Card
-                organizationHeroCard
-                    .padding(.horizontal, 16)
-
-                // Share Organization Data — Phase 2 of export/import
-                shareOrganizationCard
-                    .padding(.horizontal, 16)
-
-                Picker("Section", selection: $selectedTab) {
-                    ForEach(OrgTab.allCases, id: \.self) { tab in
-                        Label(tab.localizedName, systemImage: tab.icon).tag(tab)
+        ScrollViewReader { proxy in
+            List {
+                if query.isEmpty {
+                    Section {
+                        summaryStrip(proxy)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowBackground(Color.clear)
                     }
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .sensoryFeedback(.selection, trigger: selectedTab)
-                
-                // Content based on selected tab
-                switch selectedTab {
-                case .coaches:
-                    CoachesListSection()
-                case .locations:
-                    LocationsListSection()
-                case .schools:
-                    SchoolsListSection()
-                case .categories:
-                    CategoriesListSection()
+                coachesSection.id(Anchor.coaches)
+                venuesSection.id(Anchor.venues)
+                schoolsSection.id(Anchor.schools)
+                categoriesSection.id(Anchor.categories)
+                if query.isEmpty { shareSection }
+                if !query.isEmpty && coaches.isEmpty && venues.isEmpty && schools.isEmpty && categories.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                        .listRowBackground(Color.clear)
                 }
-                
-                Spacer(minLength: 100)
             }
-            .padding(.top, 8)
+            .listStyle(.insetGrouped)
+            .listSectionSpacing(.compact)
+            // A readable column on a wide window, like a settings page.
+            .contentMargins(.horizontal, max(20, (pageWidth - 860) / 2), for: .scrollContent)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
         }
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle(isChinese ? "教练人员" : "Coaching Staff")
+        .navigationTitle(isChinese ? "组织" : "Organization")
         .navigationBarTitleDisplayModeCompat(.large)
+        .searchable(text: $searchText, prompt: isChinese ? "搜索教练、场地、学校" : "Search coaches, venues, schools")
+        .sheet(isPresented: $showingAddCoach) { AddEditCoachView(coach: nil) }
+        .sheet(item: $selectedCoach) { CoachProfileDetailView(coach: $0) }
+        .sheet(isPresented: $showingAddLocation) { AddEditLocationView(location: nil) }
+        .sheet(item: $selectedLocation) { LocationDetailView(location: $0) }
+        .sheet(isPresented: $showingAddSchool) { AddEditSchoolView(school: nil) }
+        .sheet(item: $editingSchool) { AddEditSchoolView(school: $0) }
+        .sheet(isPresented: $showingAddCategory) { AddEditCategoryView(category: nil) }
+        .sheet(item: $selectedCategory) { AddEditCategoryView(category: $0) }
         .sheet(item: $pendingShare) { handle in
             #if os(iOS)
             ActivityShareSheet(activityItems: [handle.url]) {
@@ -195,99 +225,182 @@ struct OrganizationView: View {
         }
     }
 
-    // MARK: - Share Organization Data Card
+    // MARK: Summary
 
-    /// Modern Apple-style "share data" card. Shows what's about to leave the
-    /// device (counts + excluded students), and a single big button that
-    /// builds the bundle on demand and presents the iOS share sheet.
-    private var shareOrganizationCard: some View {
-        let stats = HoopwiseBundleExporter(dataManager: dataManager).previewStats()
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "square.and.arrow.up.fill")
-                        .font(.headline)
-                        .foregroundStyle(Color.blue)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isChinese ? "共享组织数据" : "Share Organization Data")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(isChinese
-                         ? "导出学员、训练动作、地点、考勤记录"
-                         : "Export students, drills, locations, attendance")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+    /// What the organization holds, four tiles; a tap scrolls to the section.
+    private func summaryStrip(_ proxy: ScrollViewProxy) -> some View {
+        HStack(spacing: 10) {
+            summaryTile(dataManager.staffCoaches.count, isChinese ? "教练" : "Coaches", "person.2.fill", .accentColor) {
+                withAnimation { proxy.scrollTo(Anchor.coaches, anchor: .top) }
             }
-
-            // Counts row
-            HStack(spacing: 16) {
-                shareStat(value: "\(stats.studentCount)", icon: "person.fill", label: isChinese ? "学员" : "students")
-                shareStat(value: "\(stats.drillCount)", icon: "figure.basketball", label: isChinese ? "训练" : "drills")
-                shareStat(value: "\(stats.coachCount)", icon: "person.2.fill", label: isChinese ? "教练" : "coaches")
-                shareStat(value: "\(stats.locationCount)", icon: "mappin", label: isChinese ? "地点" : "locations")
-                Spacer()
+            summaryTile(dataManager.locations.count, isChinese ? "场地" : "Venues", "mappin.and.ellipse", .orange) {
+                withAnimation { proxy.scrollTo(Anchor.venues, anchor: .top) }
             }
-
-            if stats.excludedStudentCount > 0 {
-                HStack(spacing: 6) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.caption)
-                        .foregroundStyle(.purple)
-                    Text(excludedSubtitle(stats.excludedStudentCount))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            summaryTile(dataManager.schools.count, isChinese ? "学校" : "Schools", "building.columns.fill", SessionFormat.school.tint) {
+                withAnimation { proxy.scrollTo(Anchor.schools, anchor: .top) }
             }
-
-            HStack(spacing: 10) {
-                Button(action: startExport) {
-                    HStack(spacing: 8) {
-                        if isExporting {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                        Text(isChinese ? "共享…" : "Share…")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.accentColor, in: .rect(cornerRadius: 12))
-                    .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-                .disabled(isExporting || stats.studentCount == 0)
-                .opacity((isExporting || stats.studentCount == 0) ? 0.6 : 1.0)
-
-                Button(action: { showingImportPicker = true }) {
-                    HStack(spacing: 6) {
-                        if isAnalyzingImport {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "square.and.arrow.down")
-                        }
-                        Text(isChinese ? "导入…" : "Import…")
-                            .fontWeight(.semibold)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(Color.accentColor.opacity(0.12), in: .rect(cornerRadius: 12))
-                    .foregroundStyle(Color.accentColor)
-                }
-                .buttonStyle(.plain)
-                .disabled(isAnalyzingImport)
+            summaryTile(dataManager.ageCategories.count, isChinese ? "年龄组" : "Ages", "person.3.sequence.fill", .green) {
+                withAnimation { proxy.scrollTo(Anchor.categories, anchor: .top) }
             }
         }
-        .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+    }
+
+    private func summaryTile(_ value: Int, _ label: String, _ icon: String, _ tint: Color,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(tint)
+                Text("\(value)")
+                    .font(.title2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(.primary)
+                    .contentTransition(.numericText())
+                Text(label)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Sections
+
+    private func header(_ title: String, _ count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+            Text("\(count)").foregroundStyle(.tertiary)
+        }
+    }
+
+    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "plus.circle.fill")
+                .font(.body.weight(.medium))
+        }
+    }
+
+    @ViewBuilder
+    private var coachesSection: some View {
+        if query.isEmpty || !coaches.isEmpty {
+            Section {
+                ForEach(coaches) { coach in
+                    Button { selectedCoach = coach } label: { OrgCoachRow(coach: coach) }
+                        .buttonStyle(.plain)
+                }
+                if query.isEmpty { addRow(isChinese ? "添加教练" : "Add Coach") { showingAddCoach = true } }
+            } header: {
+                header(isChinese ? "教练" : "Coaches", coaches.count)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var venuesSection: some View {
+        if query.isEmpty || !venues.isEmpty {
+            Section {
+                ForEach(venues) { venue in
+                    Button { selectedLocation = venue } label: { OrgVenueRow(location: venue) }
+                        .buttonStyle(.plain)
+                }
+                if query.isEmpty { addRow(isChinese ? "添加场地" : "Add Venue") { showingAddLocation = true } }
+            } header: {
+                header(isChinese ? "场地" : "Venues", venues.count)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var schoolsSection: some View {
+        if query.isEmpty || !schools.isEmpty {
+            Section {
+                ForEach(schools) { school in
+                    Button { editingSchool = school } label: { OrgSchoolRow(school: school) }
+                        .buttonStyle(.plain)
+                }
+                if query.isEmpty { addRow(isChinese ? "添加学校" : "Add School") { showingAddSchool = true } }
+            } header: {
+                header(isChinese ? "学校" : "Schools", schools.count)
+            } footer: {
+                if query.isEmpty && schools.isEmpty {
+                    Text(isChinese ? "合作学校用于校园合作项目。" : "Partner schools, for school-collaboration programs.")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var categoriesSection: some View {
+        if query.isEmpty || !categories.isEmpty {
+            Section {
+                ForEach(categories) { category in
+                    Button { selectedCategory = category } label: { OrgCategoryRow(category: category) }
+                        .buttonStyle(.plain)
+                }
+                if query.isEmpty { addRow(isChinese ? "添加年龄组" : "Add Age Category") { showingAddCategory = true } }
+            } header: {
+                header(isChinese ? "年龄组" : "Age categories", categories.count)
+            }
+        }
+    }
+
+    /// Sharing the organization's data with another coach, and taking
+    /// theirs in — what leaves the device is said in the row and footer.
+    private var shareSection: some View {
+        let stats = HoopwiseBundleExporter(dataManager: dataManager).previewStats()
+        let canShare = !isExporting && stats.studentCount > 0
+        return Section {
+            Button(action: startExport) {
+                HStack(spacing: 12) {
+                    OrgIconTile(icon: "square.and.arrow.up", tint: .accentColor)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isChinese ? "共享组织数据…" : "Share organization data…")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Text(isChinese
+                             ? "\(stats.studentCount) 名学员 · \(stats.drillCount) 个训练 · \(stats.coachCount) 名教练 · \(stats.locationCount) 个场地"
+                             : "\(stats.studentCount) athletes · \(stats.drillCount) drills · \(stats.coachCount) coaches · \(stats.locationCount) venues")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if isExporting { ProgressView() }
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canShare)
+            .opacity(canShare || isExporting ? 1 : 0.5)
+
+            Button { showingImportPicker = true } label: {
+                HStack(spacing: 12) {
+                    OrgIconTile(icon: "square.and.arrow.down", tint: .teal)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(isChinese ? "从文件导入…" : "Import from a file…")
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Text(isChinese ? "导入前会先显示将要合并的内容" : "Shows what would change before anything is merged")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if isAnalyzingImport { ProgressView() }
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(isAnalyzingImport)
+        } header: {
+            Text(isChinese ? "共享与导入" : "Share & import")
+        } footer: {
+            if stats.excludedStudentCount > 0 {
+                Label(excludedSubtitle(stats.excludedStudentCount), systemImage: "lock.shield.fill")
+            }
+        }
     }
 
     // MARK: - Import flow
@@ -340,23 +453,6 @@ struct OrganizationView: View {
         return "Imported from \(s.sourceCoachName): \(s.newStudents) new students, \(s.updatedStudents) updated; \(s.newDrills) new drills, \(s.updatedDrills) updated."
     }
 
-    private func shareStat(value: String, icon: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Text(value)
-                    .font(.subheadline.bold().monospacedDigit())
-                    .foregroundStyle(.primary)
-                    .contentTransition(.numericText())
-            }
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private func excludedSubtitle(_ count: Int) -> String {
         if isChinese {
             return "\(count) 位私密学员将不会被分享"
@@ -385,58 +481,6 @@ struct OrganizationView: View {
         }
     }
 
-    // MARK: - Organization Hero Card (Compact)
-    private var organizationHeroCard: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.15))
-                    .frame(width: 44, height: 44)
-                Image(systemName: "person.2.fill")
-                    .font(.headline)
-                    .foregroundStyle(Color.accentColor)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(isChinese ? "教练人员" : "Coaching Staff")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(isChinese ? "本地名册" : "Local roster")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            HStack(spacing: 12) {
-                compactStat(value: "\(dataManager.staffCoaches.count)", icon: "person.2.fill")
-                compactStat(value: "\(dataManager.locations.count)", icon: "mappin")
-                compactStat(value: "\(dataManager.programs.count)", icon: "folder.fill")
-            }
-        }
-        .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
-    }
-
-    private func compactStat(value: String, icon: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.subheadline.bold().monospacedDigit())
-                .foregroundStyle(.primary)
-                .contentTransition(.numericText())
-            Image(systemName: icon)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-    }
-    
-    private var orgCardBackground: some View {
-        #if os(macOS)
-        Color(NSColor.controlBackgroundColor)
-        #else
-        Color(UIColor.secondarySystemBackground)
-        #endif
-    }
 }
 
 // MARK: - Bundle Import Preview Sheet
@@ -649,226 +693,6 @@ struct ActivityShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 #endif
-
-// MARK: - Coaches List Section
-struct CoachesListSection: View {
-    @EnvironmentObject var dataManager: DataManager
-    @State private var showingAddCoach = false
-    @State private var selectedCoach: StaffCoach?
-    @State private var searchText = ""
-
-    private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-    
-    var filteredCoaches: [StaffCoach] {
-        if searchText.isEmpty {
-            return dataManager.staffCoaches
-        }
-        return dataManager.staffCoaches.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            PanelSearchBar(text: $searchText, placeholder: isChinese ? "搜索教练..." : "Search coaches...")
-                .padding(.horizontal, 16)
-
-            Button {
-                showingAddCoach = true
-            } label: {
-                Label(isChinese ? "添加教练" : "Add Coach", systemImage: "plus.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.roundedRectangle(radius: 10))
-            .controlSize(.regular)
-            .tint(Color.accentColor)
-            .padding(.horizontal, 16)
-            .sensoryFeedback(.selection, trigger: showingAddCoach)
-
-            if filteredCoaches.isEmpty {
-                PanelEmptyState(
-                    icon: "person.2",
-                    title: searchText.isEmpty ? (isChinese ? "暂无教练" : "No Coaches Yet") : (isChinese ? "无结果" : "No Results"),
-                    subtitle: searchText.isEmpty ? (isChinese ? "添加教练到您的组织" : "Add coaches to your organization") : (isChinese ? "试试其他搜索" : "Try a different search")
-                )
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(filteredCoaches) { coach in
-                        CoachCardRow(coach: coach)
-                            .onTapGesture { selectedCoach = coach }
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-        }
-        .padding(.vertical, 12)
-        .sheet(isPresented: $showingAddCoach) {
-            AddEditCoachView(coach: nil)
-        }
-        .sheet(item: $selectedCoach) { coach in
-            CoachProfileDetailView(coach: coach)
-        }
-    }
-}
-
-// MARK: - Coach Card Row (Enhanced)
-struct CoachCardRow: View {
-    let coach: StaffCoach
-    @EnvironmentObject var dataManager: DataManager
-    @State private var profileImage: Image?
-
-    private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-    
-    private var isProfileCoach: Bool {
-        coach.id == dataManager.loggedInCoachId
-    }
-    
-    private var coachPrograms: [Program] {
-        dataManager.programs.filter { $0.coachId == coach.id }
-    }
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                // Avatar
-                ZStack(alignment: .bottomTrailing) {
-                    if let profileImage = profileImage {
-                        profileImage
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 48, height: 48)
-                            .clipShape(Circle())
-                    } else {
-                        PanelAvatar(initials: coach.initials, color: Color.avatarColor(coach.avatarColor), size: 48)
-                    }
-                    
-                    if isProfileCoach {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 14, height: 14)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 7, weight: .bold))
-                                    .foregroundStyle(.white)
-                            )
-                    }
-                }
-                .onAppear {
-                    loadProfileImage()
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        if let chineseName = coach.chineseName, !chineseName.isEmpty {
-                            Text(chineseName)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text("(\(coach.name))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text(coach.name)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                        }
-
-                        if isProfileCoach {
-                            Text(isChinese ? "您" : "You")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor, in: .rect(cornerRadius: 4))
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Label {
-                            Text(coach.role.rawValue)
-                                .font(.caption.weight(.medium))
-                        } icon: {
-                            Image(systemName: coach.role.icon).font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-
-                        Text("·").foregroundStyle(.tertiary)
-
-                        Label {
-                            Text(coach.accessLevel.rawValue)
-                                .font(.caption2)
-                        } icon: {
-                            Image(systemName: coach.accessLevel.icon).font(.caption2)
-                        }
-                        .foregroundStyle(.tertiary)
-                    }
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    if !coachPrograms.isEmpty {
-                        HStack(spacing: 4) {
-                            ForEach(coachPrograms.prefix(2)) { program in
-                                Circle()
-                                    .fill(Color.accentColor)
-                                    .frame(width: 8, height: 8)
-                            }
-                            if coachPrograms.count > 2 {
-                                Text("+\(coachPrograms.count - 2)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                    }
-
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(14)
-        }
-        .glassEffect(isProfileCoach ? .regular.tint(Color.accentColor.opacity(0.08)) : .regular, in: .rect(cornerRadius: 12))
-    }
-    
-    private func loadProfileImage() {
-        #if os(iOS)
-        // First try to load from coach's profileImageData directly
-        if let imageData = coach.profileImageData, let uiImage = UIImage(data: imageData) {
-            profileImage = Image(uiImage: uiImage)
-            return
-        }
-        
-        // For logged-in coach, also check main coach profile
-        if isProfileCoach {
-            if let imageData = dataManager.coach.profileImageData, let uiImage = UIImage(data: imageData) {
-                profileImage = Image(uiImage: uiImage)
-                return
-            }
-            
-            // Try file URL fallback
-            if let imagePath = dataManager.coach.profileImageUrl, !imagePath.isEmpty {
-                let fileURL: URL
-                if imagePath.hasPrefix("file://") {
-                    guard let url = URL(string: imagePath) else { return }
-                    fileURL = url
-                } else if imagePath.hasPrefix("http") {
-                    return // Cloud URL handled separately
-                } else {
-                    fileURL = URL(fileURLWithPath: imagePath)
-                }
-                guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
-                guard let data = try? Data(contentsOf: fileURL) else { return }
-                if let uiImage = UIImage(data: data) {
-                    profileImage = Image(uiImage: uiImage)
-                }
-            }
-        }
-        #endif
-    }
-    
-}
 
 // MARK: - Coach Profile Detail View
 struct CoachProfileDetailView: View {
@@ -1119,375 +943,6 @@ struct CoachProfileDetailView: View {
     
 }
 
-
-// MARK: - Locations List Section
-struct LocationsListSection: View {
-    @EnvironmentObject var dataManager: DataManager
-    @State private var showingAddLocation = false
-    @State private var selectedLocation: Location?
-    @State private var searchText = ""
-    
-    var filteredLocations: [Location] {
-        if searchText.isEmpty {
-            return dataManager.locations
-        }
-        return dataManager.locations.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                // Search Bar
-                PanelSearchBar(text: $searchText, placeholder: LocalizationManager.shared.currentLanguage == .chinese ? "搜索地点..." : "Search locations...")
-                    .padding(.horizontal, 16)
-                
-                Button {
-                    showingAddLocation = true
-                } label: {
-                    Label(LocalizationManager.shared.currentLanguage == .chinese ? "添加地点" : "Add Location", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 10))
-                .controlSize(.regular)
-                .tint(Color.accentColor)
-                .padding(.horizontal, 16)
-                .sensoryFeedback(.selection, trigger: showingAddLocation)
-                
-                if filteredLocations.isEmpty {
-                    PanelEmptyState(
-                        icon: "mappin.circle",
-                        title: searchText.isEmpty ? (LocalizationManager.shared.currentLanguage == .chinese ? "暂无地点" : "No Locations Yet") : (LocalizationManager.shared.currentLanguage == .chinese ? "无结果" : "No Results"),
-                        subtitle: searchText.isEmpty ? (LocalizationManager.shared.currentLanguage == .chinese ? "添加训练场地和球场" : "Add training venues and courts") : (LocalizationManager.shared.currentLanguage == .chinese ? "试试其他搜索" : "Try a different search")
-                    )
-                } else {
-                    VStack(spacing: 12) {
-                        ForEach(filteredLocations) { location in
-                            LocationRow(location: location)
-                                .onTapGesture { selectedLocation = location }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-                
-                Spacer(minLength: 100)
-            }
-            .padding(.vertical, 12)
-        }
-        .sheet(isPresented: $showingAddLocation) {
-            AddEditLocationView(location: nil)
-        }
-        .sheet(item: $selectedLocation) { location in
-            LocationDetailView(location: location)
-        }
-    }
-}
-
-// MARK: - Location Row (Hero Card with Map Snapshot)
-struct LocationRow: View {
-    let location: Location
-    @State private var mapSnapshot: OrgPlatformImage?
-    @State private var isLoadingMap = true
-    
-    private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-    
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Map snapshot background
-            mapBackground
-            
-            // Gradient overlay
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.1),
-                    Color.black.opacity(0.7)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Label {
-                            Text(location.courtType.rawValue)
-                                .font(.system(size: 9, weight: .semibold))
-                        } icon: {
-                            Image(systemName: location.courtType.icon)
-                                .font(.system(size: 9))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(location.courtType.color.opacity(0.9), in: .rect(cornerRadius: 6))
-
-                        if !location.isActive {
-                            Text(isChinese ? "未激活" : "Inactive")
-                                .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .glassEffect(.regular, in: .rect(cornerRadius: 6))
-                        }
-                    }
-
-                    Text(location.name)
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    if let address = location.fullAddress {
-                        Label {
-                            Text(address)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        } icon: {
-                            Image(systemName: "mappin").font(.caption2)
-                        }
-                        .foregroundStyle(.white.opacity(0.8))
-                    }
-                }
-
-                Spacer()
-
-                VStack(spacing: 2) {
-                    Text("\(location.courtCount)")
-                        .font(.title2.bold().monospacedDigit())
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-                    Text(isChinese ? "球场" : (location.courtCount == 1 ? "Court" : "Courts"))
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .glassEffect(.regular, in: .rect(cornerRadius: 10))
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            .padding(14)
-        }
-        .frame(height: 120)
-        .clipShape(.rect(cornerRadius: 16))
-        .onAppear {
-            loadMapSnapshot()
-        }
-    }
-    
-    @ViewBuilder
-    private var mapBackground: some View {
-        if let snapshot = mapSnapshot {
-            #if os(iOS)
-            Image(uiImage: snapshot)
-                .resizable()
-                .scaledToFill()
-                .frame(height: 120)
-                .clipped()
-            #endif
-        } else {
-            // Placeholder while loading
-            ZStack {
-                location.courtType.color.opacity(0.3)
-                
-                if isLoadingMap {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(0.8)
-                } else {
-                    // No map available - show icon
-                    Image(systemName: "map")
-                        .font(.system(size: 30))
-                        .foregroundColor(.white.opacity(0.3))
-                }
-            }
-        }
-    }
-    
-    private func loadMapSnapshot() {
-        // Check cache first
-        if let cachedSnapshot = MapSnapshotCache.shared.getSnapshot(for: location.id) {
-            mapSnapshot = cachedSnapshot
-            isLoadingMap = false
-            return
-        }
-        
-        guard let address = location.fullAddress, !address.isEmpty else {
-            isLoadingMap = false
-            return
-        }
-        
-        // Geocode the address
-        let geocoder = CLGeocoder()
-        geocoder.geocodeAddressString(address) { placemarks, error in
-            guard let placemark = placemarks?.first,
-                  let coordinate = placemark.location?.coordinate else {
-                DispatchQueue.main.async {
-                    isLoadingMap = false
-                }
-                return
-            }
-            
-            // Generate map snapshot
-            generateSnapshot(for: coordinate)
-        }
-    }
-    
-    private func generateSnapshot(for coordinate: CLLocationCoordinate2D) {
-        #if os(iOS)
-        let options = MKMapSnapshotter.Options()
-        options.region = MKCoordinateRegion(
-            center: coordinate,
-            latitudinalMeters: 500,
-            longitudinalMeters: 500
-        )
-        options.size = CGSize(width: 400, height: 200)
-        options.mapType = .standard
-        options.showsBuildings = true
-        
-        let snapshotter = MKMapSnapshotter(options: options)
-        snapshotter.start { [self] snapshot, error in
-            DispatchQueue.main.async {
-                isLoadingMap = false
-                if let snapshot = snapshot {
-                    // Draw a pin on the snapshot
-                    let image = drawPinOnSnapshot(snapshot: snapshot, coordinate: coordinate)
-                    self.mapSnapshot = image
-                    // Cache the snapshot for future use
-                    MapSnapshotCache.shared.setSnapshot(image, for: location.id)
-                }
-            }
-        }
-        #else
-        isLoadingMap = false
-        #endif
-    }
-    
-    #if os(iOS)
-    private func drawPinOnSnapshot(snapshot: MKMapSnapshotter.Snapshot, coordinate: CLLocationCoordinate2D) -> UIImage {
-        let image = snapshot.image
-        
-        UIGraphicsBeginImageContextWithOptions(image.size, true, image.scale)
-        image.draw(at: .zero)
-        
-        // Draw pin at coordinate
-        let point = snapshot.point(for: coordinate)
-        let pinSize: CGFloat = 20
-        let pinRect = CGRect(
-            x: point.x - pinSize/2,
-            y: point.y - pinSize,
-            width: pinSize,
-            height: pinSize
-        )
-        
-        // Draw pin circle
-        let context = UIGraphicsGetCurrentContext()
-        context?.setFillColor(UIColor(location.courtType.color).cgColor)
-        context?.fillEllipse(in: pinRect)
-        
-        // Draw pin border
-        context?.setStrokeColor(UIColor.white.cgColor)
-        context?.setLineWidth(2)
-        context?.strokeEllipse(in: pinRect)
-        
-        let finalImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
-        UIGraphicsEndImageContext()
-        
-        return finalImage
-    }
-    #endif
-}
-
-// MARK: - Categories List Section
-struct CategoriesListSection: View {
-    @EnvironmentObject var dataManager: DataManager
-    @State private var showingAddCategory = false
-    @State private var selectedCategory: CustomAgeCategory?
-    
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                Button {
-                    showingAddCategory = true
-                } label: {
-                    Label(LocalizationManager.shared.currentLanguage == .chinese ? "添加类别" : "Add Category", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 10))
-                .controlSize(.regular)
-                .tint(Color.accentColor)
-                .padding(.horizontal, 16)
-                .sensoryFeedback(.selection, trigger: showingAddCategory)
-                
-                // Categories List
-                VStack(spacing: 2) {
-                    ForEach(dataManager.ageCategories.sorted { $0.minAge < $1.minAge }) { category in
-                        CategoryRow(category: category)
-                            .onTapGesture { selectedCategory = category }
-                    }
-                }
-                .padding(.horizontal, 16)
-                
-                Spacer(minLength: 100)
-            }
-            .padding(.vertical, 12)
-        }
-        .sheet(isPresented: $showingAddCategory) {
-            AddEditCategoryView(category: nil)
-        }
-        .sheet(item: $selectedCategory) { category in
-            AddEditCategoryView(category: category)
-        }
-    }
-}
-
-// MARK: - Category Row
-struct CategoryRow: View {
-    let category: CustomAgeCategory
-    private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-
-    var body: some View {
-        HStack(spacing: 12) {
-            AgeBadge(shortName: category.shortName, tint: category.color, size: .medium, filled: true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(category.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    if !category.isActive {
-                        PanelBadge(text: isChinese ? "未激活" : "Inactive", color: .secondary)
-                    }
-                }
-                Text(category.ageRange)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(category.ballSize.displayName)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Text(category.rimHeight.displayName)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
-    }
-}
 
 // MARK: - Add/Edit Coach View
 struct AddEditCoachView: View {

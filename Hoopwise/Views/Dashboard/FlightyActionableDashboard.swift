@@ -961,6 +961,7 @@ struct FlightyActionableDashboard: View {
         let player = hero.flatMap { s in dataManager.players.first { $0.studentId == s.id } }
 
         return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
             Button {
                 if let hero = hero { selectedStudent = hero }
             } label: {
@@ -982,6 +983,7 @@ struct FlightyActionableDashboard: View {
                                     .font(.title2.bold())
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
                                 FormatBadge(format: dataManager.studentFormat(hero), size: .compact)
                             }
 
@@ -1027,37 +1029,39 @@ struct FlightyActionableDashboard: View {
                         }
                     }
 
-                    Spacer()
-
-                    if let hero = hero {
-                        heroPlayerAvatar(hero)
-                    }
+                    Spacer(minLength: 0)
                 }
-                .padding(20)
+                .padding(.leading, 20)
+                .padding(.vertical, 20)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .sensoryFeedback(.selection, trigger: selectedStudent?.id)
 
+            // Today's athletes as the widget shows a roster: photo bubbles,
+            // the hero biggest and ringed (Luther, November 2026 — it was
+            // the hero's photo alone).
+            if !todaysPlayers.isEmpty {
+                TodaysRosterCluster(
+                    members: TodaysRosterCluster.members(hero: hero, students: todaysPlayers,
+                                                         sessions: dataManager.sessionEvents),
+                    total: todaysPlayers.count,
+                    scale: horizontalSizeClass == .regular ? 1.6 : 1.3,
+                    onSelect: { selectedStudent = $0 },
+                    onMore: { showingAllPlayers = true })
+                    .padding(.trailing, 16)
+                    .padding(.vertical, 12)
+            }
+            }
+
             Button {
                 showingAllPlayers = true
             } label: {
                 HStack {
-                    HStack(spacing: -8) {
-                        ForEach(todaysPlayers.prefix(3)) { student in
-                            miniAvatar(student)
-                        }
-                        if todaysPlayers.count > 3 {
-                            ZStack {
-                                Circle().fill(.quaternary).frame(width: 28, height: 28)
-                                Text("+\(todaysPlayers.count - 3)")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-
+                    // The photos are in the cluster above; the bar only opens the list.
+                    Image(systemName: "person.3.fill")
+                        .font(.subheadline)
                     Text(isChinese ? "查看全部 \(todaysPlayers.count) 名学员" : "See all \(todaysPlayers.count) players")
                         .font(.subheadline.weight(.semibold))
 
@@ -1098,11 +1102,6 @@ struct FlightyActionableDashboard: View {
     }
 
     // Hero player avatar with profile picture — fully cached, never network.
-    private func heroPlayerAvatar(_ student: Student) -> some View {
-        StudentAvatarView(student: student, size: 72)
-            .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 3))
-    }
-    
     // Initials avatar fallback
     private func initialsAvatar(_ student: Student, size: CGFloat) -> some View {
         ZStack {
