@@ -81,6 +81,14 @@ struct JournalPlayStepEditor: View {
     @State private var selection: Selection?
     /// The rail tool under the pointer: its name shows beside it.
     @State private var hoveredTool: Tool?
+    /// The workspace's size: taller than wide (an iPad mini held upright, a
+    /// narrow Mac window) puts the inspector UNDER the court, so the court
+    /// keeps the whole width (Luther, November 2026).
+    @State private var workspaceSize: CGSize = .zero
+    /// The layout in force. It does not change while a text field is being
+    /// typed in: the on-screen keyboard makes an upright window wider than
+    /// tall, and switching then would take the field (and focus) away.
+    @State private var inspectorBelow = false
     @FocusState private var focus: Field?
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -417,71 +425,111 @@ struct JournalPlayStepEditor: View {
         }
     }
 
-    /// The workspace's list of steps: small drawings, click to edit.
+    /// One step in the Steps list: its small drawing and caption.
+    private func stepTile(_ i: Int, _ other: Page, vertical: Bool) -> some View {
+        Button { show(other.id) } label: {
+            SwiftUI.Group {
+                if vertical {
+                    VStack(alignment: .leading, spacing: 3) {
+                        JournalPlayThumbnail(diagram: shownDiagram(other), court: court, width: 92, height: 66)
+                        stepLabel(i, other)
+                    }
+                    .frame(width: 92, alignment: .leading)
+                } else {
+                    HStack(spacing: JSpacing.s) {
+                        JournalPlayThumbnail(diagram: shownDiagram(other), court: court, width: 56, height: 44)
+                        stepLabel(i, other)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            .padding(4)
+            .background(other.id == current ? JPalette.fill : .clear, in: .rect(cornerRadius: 8))
+            .overlay {
+                if other.id == current { RoundedRectangle(cornerRadius: 8).strokeBorder(JPalette.ink, lineWidth: 1) }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("plays.editor.step.\(i + 1)")
+    }
+
+    private func stepLabel(_ i: Int, _ other: Page) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            JText("Step \(i + 1)")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(verbatim: caption(of: other))
+                .font(.subheadline)
+                .lineLimit(1)
+        }
+    }
+
+    /// ‹ › move, delete — icons — then Add a step, its words on one line.
+    private var stepControls: some View {
+        HStack(spacing: JSpacing.xs) {
+            Button { go(by: -1) } label: {
+                Label { JText("Previous step") } icon: { Image(systemName: "chevron.left") }
+            }
+            .disabled(number <= 1)
+            .keyboardShortcut(keysActive ? KeyboardShortcut("[", modifiers: .command) : nil)
+            .help(jp("Previous step") + " (⌘[)")
+            Button { go(by: 1) } label: {
+                Label { JText("Next step") } icon: { Image(systemName: "chevron.right") }
+            }
+            .disabled(number >= pages.count)
+            .keyboardShortcut(keysActive ? KeyboardShortcut("]", modifiers: .command) : nil)
+            .help(jp("Next step") + " (⌘])")
+            Menu {
+                Button { moveStep(by: -1) } label: {
+                    Label { JText("Move step earlier") } icon: { Image(systemName: "arrow.up") }
+                }
+                .disabled(number <= 1)
+                Button { moveStep(by: 1) } label: {
+                    Label { JText("Move step later") } icon: { Image(systemName: "arrow.down") }
+                }
+                .disabled(number >= pages.count)
+            } label: {
+                Label { JText("Move step") } icon: { Image(systemName: "arrow.up.arrow.down") }
+            }
+            .disabled(pages.count <= 1)
+            .help(jp("Move step"))
+            Button(role: .destructive) { confirmingDeleteStep = true } label: {
+                Label { JText("Delete step") } icon: { Image(systemName: "trash") }
+            }
+            .disabled(pages.count <= 1)
+            .help(jp("Delete step"))
+            .accessibilityIdentifier("plays.editor.deleteStep")
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    private var addStepButton: some View {
+        Button(action: addStep) {
+            Label { JText("Add a step") } icon: { Image(systemName: "plus") }
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .accessibilityIdentifier("plays.editor.addStep")
+    }
+
+    /// The side inspector's Steps: the list, the controls, then Add a step
+    /// across the column (it wrapped letter by letter beside four buttons).
     private var stepsSection: some View {
         inspectorSection("Steps") {
             ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
-                Button { show(other.id) } label: {
-                    HStack(spacing: JSpacing.s) {
-                        JournalPlayThumbnail(diagram: shownDiagram(other), court: court, width: 56, height: 44)
-                        VStack(alignment: .leading, spacing: 1) {
-                            JText("Step \(i + 1)")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text(verbatim: caption(of: other))
-                                .font(.subheadline)
-                                .lineLimit(1)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(4)
-                    .background(other.id == current ? JPalette.fill : .clear, in: .rect(cornerRadius: 8))
-                    .overlay {
-                        if other.id == current { RoundedRectangle(cornerRadius: 8).strokeBorder(JPalette.ink, lineWidth: 1) }
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("plays.editor.step.\(i + 1)")
+                stepTile(i, other, vertical: false)
             }
             HStack {
-                Button { go(by: -1) } label: { Image(systemName: "chevron.left") }
-                    .disabled(number <= 1)
-                    .keyboardShortcut(keysActive ? KeyboardShortcut("[", modifiers: .command) : nil)
-                    .help(jp("Previous step") + " (⌘[)")
-                Button { go(by: 1) } label: { Image(systemName: "chevron.right") }
-                    .disabled(number >= pages.count)
-                    .keyboardShortcut(keysActive ? KeyboardShortcut("]", modifiers: .command) : nil)
-                    .help(jp("Next step") + " (⌘])")
-                Spacer()
-                Menu {
-                    Button { moveStep(by: -1) } label: {
-                        Label { JText("Move step earlier") } icon: { Image(systemName: "arrow.up") }
-                    }
-                    .disabled(number <= 1)
-                    Button { moveStep(by: 1) } label: {
-                        Label { JText("Move step later") } icon: { Image(systemName: "arrow.down") }
-                    }
-                    .disabled(number >= pages.count)
-                } label: {
-                    Label { JText("Move step") } icon: { Image(systemName: "arrow.up.arrow.down") }
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(pages.count <= 1)
-                .help(jp("Move step"))
-                Button(role: .destructive) { confirmingDeleteStep = true } label: {
-                    Label { JText("Delete step") } icon: { Image(systemName: "trash") }
-                        .labelStyle(.iconOnly)
-                }
-                .disabled(pages.count <= 1)
-                .help(jp("Delete step"))
-                .accessibilityIdentifier("plays.editor.deleteStep")
-                Button(action: addStep) {
-                    Label { JText("Add a step") } icon: { Image(systemName: "plus") }
-                }
-                .accessibilityIdentifier("plays.editor.addStep")
+                stepControls
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.bordered)
+            addStepButton
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -583,14 +631,67 @@ struct JournalPlayStepEditor: View {
         HStack(spacing: 0) {
             toolRail
             Divider()
-            canvas
-                .padding(JSpacing.m)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider()
-            inspector
-                .frame(width: 300)
+            if inspectorBelow {
+                VStack(spacing: 0) {
+                    canvas
+                        .padding(JSpacing.m)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider()
+                    bottomInspector
+                        .frame(height: min(300, workspaceSize.height * 0.36))
+                }
+            } else {
+                canvas
+                    .padding(JSpacing.m)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Divider()
+                inspector
+                    .frame(width: 290)
+            }
+        }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            workspaceSize = size
+            if focus == nil { inspectorBelow = size.width < size.height }
+        }
+        .onChange(of: focus) { _, field in
+            if field == nil { inspectorBelow = workspaceSize.width < workspaceSize.height }
         }
         .background { shortcutKeys }
+    }
+
+    /// The inspector laid out under the court: Steps as a row of small
+    /// drawings with their controls, then this step's words beside the tool
+    /// and the selection.
+    private var bottomInspector: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JSpacing.s) {
+                HStack(spacing: JSpacing.s) {
+                    JEyebrowLabel(title: "Steps")
+                    Spacer(minLength: 0)
+                    stepControls
+                    addStepButton
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: JSpacing.xs) {
+                        ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
+                            stepTile(i, other, vertical: true)
+                        }
+                    }
+                }
+                HStack(alignment: .top, spacing: JSpacing.m) {
+                    inspectorSection("This step") { stepFields(notesLines: 2...4) }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    VStack(alignment: .leading, spacing: JSpacing.m) {
+                        toolSection
+                        if let selection { selectionSection(selection) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+            .padding(JSpacing.m)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .background(JPalette.card)
     }
 
     /// One column of tools, grouped like a graphics app's: select, the four
@@ -667,28 +768,8 @@ struct JournalPlayStepEditor: View {
         ScrollView {
             VStack(alignment: .leading, spacing: JSpacing.l) {
                 stepsSection
-                inspectorSection("This step") {
-                    TextField(text: $caption) { JText("Caption, like “Set” or “The read”") }
-                        .font(.headline)
-                        .focused($focus, equals: .caption)
-                        .textFieldStyle(.roundedBorder)
-                    TextField(text: $text, axis: .vertical) { JText("What happens, and what to read") }
-                        .lineLimit(3...10)
-                        .focused($focus, equals: .notes)
-                        .textFieldStyle(.roundedBorder)
-                }
-                inspectorSection(tool.label) {
-                    JText(tool == .move
-                          ? (isDrill ? "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line."
-                             : "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line.")
-                          : tool.hint(drill: isDrill))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if tool.shapesLine {
-                        shapePicker($lineShapeRaw)
-                    }
-                }
+                inspectorSection("This step") { stepFields(notesLines: 3...10) }
+                toolSection
                 if let selection {
                     selectionSection(selection)
                 }
@@ -697,6 +778,33 @@ struct JournalPlayStepEditor: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(JPalette.card)
+    }
+
+    @ViewBuilder
+    private func stepFields(notesLines: ClosedRange<Int>) -> some View {
+        TextField(text: $caption) { JText("Caption, like “Set” or “The read”") }
+            .font(.headline)
+            .focused($focus, equals: .caption)
+            .textFieldStyle(.roundedBorder)
+        TextField(text: $text, axis: .vertical) { JText("What happens, and what to read") }
+            .lineLimit(notesLines)
+            .focused($focus, equals: .notes)
+            .textFieldStyle(.roundedBorder)
+    }
+
+    private var toolSection: some View {
+        inspectorSection(tool.label) {
+            JText(tool == .move
+                  ? (isDrill ? "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line."
+                     : "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line.")
+                  : tool.hint(drill: isDrill))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if tool.shapesLine {
+                shapePicker($lineShapeRaw)
+            }
+        }
     }
 
     private func inspectorSection<Content: View>(_ title: JPString, @ViewBuilder content: () -> Content) -> some View {

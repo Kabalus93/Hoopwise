@@ -929,6 +929,18 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   has no Delete (only quick-note drills do) — UI tests clean up through DEBUG
   HOOPWISE_DELETE_DRILLS_NAMED=<name> (demo store only). Pinned by
   DrillVisualUITests.testNewDrillCanBeDrawnWithStepsOrganisedOnThePhone.
+- EDITOR INSPECTOR FOLLOWS THE WINDOW (9 November 2026, Luther: on the iPad
+  mini and the Mac "Add a step" wrapped letter by letter, and the right
+  column ate the court). The workspace measures itself: TALLER THAN WIDE
+  (iPad mini upright, a narrow Mac window) puts the inspector UNDER the court
+  (`bottomInspector`, ≤ 300 pt / 36 %): Steps as a row of small drawings with
+  ‹ › ⇅ 🗑 + "Add a step" on one line, then This step | the tool and the
+  selection side by side; wider keeps the 290 pt column. The layout does not
+  switch while a text field is focused (`inspectorBelow`) — the on-screen
+  keyboard makes an upright window wider than tall and the switch took the
+  caption field and its focus away. Step controls are icon buttons, Add a
+  step its own prominent button. Pinned by
+  PlayEditorWorkspaceUITests.testInspectorFollowsTheWindowShape (iPad mini).
 - SEVERAL DRAWINGS ON ONE DRILL (9 November 2026, Luther: two drawings sat
   one under the other). DrillDrawingsView (DrillDrawingMedia.swift) lays a
   drill's drawings out SIDE BY SIDE (two columns) when the drawings area is

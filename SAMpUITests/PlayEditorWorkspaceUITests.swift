@@ -159,6 +159,37 @@ final class PlayEditorWorkspaceUITests: XCTestCase {
         attachScreenshot(app, "play page, wide window")
     }
 
+    /// Upright (taller than wide) the inspector goes under the court and
+    /// the court takes the whole width; on its side the inspector is a
+    /// column again. Add a step fits on one line in both.
+    func testInspectorFollowsTheWindowShape() throws {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        app.launchEnvironment["HOOPWISE_SHOT"] = "plays"
+        app.launchEnvironment["HOOPWISE_PLAYS_OPEN"] = "editor"
+        app.launchArguments += ["-app_language", "en", "-hasOnboarded", "YES"]
+        app.launch()
+        guard app.buttons["plays.editor.tool.move"].firstMatch.waitForExistence(timeout: 20) else {
+            throw XCTSkip("No workspace: this destination is compact width")
+        }
+        let add = app.buttons["plays.editor.addStep"].firstMatch
+        let court = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Drawing of step'")).firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(add.frame.minY, court.frame.maxY, "upright: the inspector is under the court")
+        XCTAssertLessThan(add.frame.height, 60, "Add a step is on one line")
+        attachScreenshot(app, "editor upright")
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        sleep(1)
+        XCTAssertGreaterThan(add.frame.minX, court.frame.maxX, "on its side: the inspector is a column")
+        XCTAssertLessThan(add.frame.height, 60, "Add a step is on one line")
+        attachScreenshot(app, "editor on its side")
+    }
+
     private func waitForLabel(_ element: XCUIElement, containing text: String) -> Bool {
         let predicate = NSPredicate(format: "label CONTAINS %@", text)
         return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: 3) == .completed
