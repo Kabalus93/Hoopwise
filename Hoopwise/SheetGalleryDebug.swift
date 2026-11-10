@@ -434,6 +434,23 @@ enum SheetGalleryDebug {
                 }
             }
 
+        case "homeCards":
+            // Home with the demo team pinned and its play marked as being
+            // worked on (demo store only).
+            if ScreenshotStore.isActive, TeamPracticeDemo.seed(dm) != nil,
+               let team = dm.teams.first(where: { $0.name == TeamPracticeDemo.teamName }) {
+                let _ = {
+                    if !HomePins.isPinned(team.id) { HomePins.toggle(team.id) }
+                    let plays = (try? dm.modelContext.fetch(FetchDescriptor<JournalPlay>())) ?? []
+                    if let key = team.playbook.focus.first, let play = plays.first(where: { $0.planRef.key == key }) {
+                        PlayActivity.edited(play)
+                    }
+                }()
+                FlightyActionableDashboard()
+            } else {
+                missing("homeCards: needs HOOPWISE_SCREENSHOT_STORE=1")
+            }
+
         case "teamPractice":
             // A team practice today on the DEMO store: a seeded team (roster,
             // identity, objectives, a broken-down play) and its session page,

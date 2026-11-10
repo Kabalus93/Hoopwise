@@ -165,6 +165,7 @@ struct TeamDetailView: View {
     @State private var addingPlayers = false
     @State private var editing = false
     @State private var editingFocus = false
+    @State private var pinTick = 0
     @State private var confirmingDelete = false
     @State private var openStudent: Student?
     @State private var openCoach: StaffCoach?
@@ -207,6 +208,14 @@ struct TeamDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    Button { HomePins.toggle(teamId); pinTick += 1 } label: {
+                        if pinTick >= 0 && HomePins.isPinned(teamId) {
+                            Label(isChinese ? "从首页取消固定" : "Unpin from Home", systemImage: "pin.slash")
+                        } else {
+                            Label(isChinese ? "固定到首页" : "Pin to Home", systemImage: "pin")
+                        }
+                    }
+                    .accessibilityIdentifier("team.pin")
                     Button { editing = true } label: { Label(isChinese ? "编辑球队" : "Edit Team", systemImage: "pencil") }
                     Button(role: .destructive) { confirmingDelete = true } label: {
                         Label(isChinese ? "删除球队" : "Delete Team", systemImage: "trash")

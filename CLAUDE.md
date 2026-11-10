@@ -1121,6 +1121,29 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Tests: TeamPlaybookTests (workout, demands, round trip, never billed,
   focus → plan),
   TeamsUITests (section → breakdown → role → workout on the team page).
+- HOME: TEAM + PLAY CARDS (11 November 2026, Luther: "a Teams card — the
+  team pinned on the home screen, bubbles of players and a couple of useful
+  team stats … a card for a play I am working on or just finished; each card
+  its own design, same language"). Views/Dashboard/HomeTeamPlayCards.swift.
+  TEAM (right column on iPad, after Today's athletes): one per PINNED team —
+  team page ⋯ → Pin to Home / Unpin (`HomePins`, device-local UserDefaults
+  `home.pinnedTeams`). Glass card with a team-colour wash: badge, name,
+  players, the roster cluster (≤ 34 % of the card), three tiles — next
+  practice, attendance % over the last ≤ 4 practices with a roll call
+  (green ≥ 80 / orange ≥ 60 / red), focus — and one nudge line (no focus
+  plays yet, or who has no role in them). Tap → the team. PLAY (left
+  column, after the briefing): `PlayActivity` (Models/JournalPlays/
+  PlayActivity.swift, device-local — JournalPlay has no edit date and adding
+  one is a schema change) remembers the last play EDITED (step editor Done)
+  and OPENED (play page); Home shows one edited in 7 days ("WORKING ON"),
+  else opened in 3 ("LAST STUDIED"). The court across the top, then name,
+  category, steps · wrinkles · variations, "In N upcoming plans · <team>
+  runs it". Tap → the play. TRAP: an @AppStorage on Home redrew it FOREVER
+  (Home writes UserDefaults while it draws — attention state) and so did a
+  @Query (Home's work saves the store): both are notifications
+  (.hoopwiseHomePins / .hoopwisePlayActivity) and an on-demand fetch.
+  HOOPWISE_SHOT=homeCards (pins the demo team, marks its play edited).
+  Tests: HomeTeamPlayUITests.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

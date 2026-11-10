@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import Combine
 
 // MARK: - Flighty Actionable Dashboard
@@ -19,6 +20,11 @@ struct FlightyActionableDashboard: View {
     @State private var todaysCardWidth: CGFloat = 360
     @State private var selectedLiveGame: Game?
     @State private var showingLiveScoring = false
+    /// Home's TEAM cards (pinned teams) and PLAY card (November 2026).
+    @State private var pinTick = 0
+    @State private var openTeamId: UUID?
+    @State private var openPlay: JournalPlay?
+    @State private var playActivityTick = 0
     
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     
@@ -227,6 +233,35 @@ struct FlightyActionableDashboard: View {
         if !liveGames.isEmpty {
             liveGameAlert
         }
+
+        recentPlayCard
+    }
+
+    /// Pinned teams, in pin order (a pin whose team is gone shows nothing).
+    private var pinnedTeamList: [Team] {
+        let _ = pinTick
+        return HomePins.teamIds.compactMap { id in dataManager.teams.first { $0.id == id } }
+    }
+
+    @ViewBuilder
+    private var teamCards: some View {
+        ForEach(pinnedTeamList) { team in
+            HomeTeamCard(summary: HomeTeamSummary(team: team, dataManager: dataManager),
+                         onOpen: { openTeamId = team.id },
+                         onSelectStudent: { selectedStudent = $0 })
+        }
+    }
+
+    @ViewBuilder
+    private var recentPlayCard: some View {
+        let _ = playActivityTick
+        // Fetched only when there is a recent play — a @Query here redrew
+        // Home on every store save, and Home's own work saves (a loop).
+        if let current = PlayActivity.current(),
+           let play = ((try? dataManager.modelContext.fetch(FetchDescriptor<JournalPlay>())) ?? [])
+            .first(where: { $0.planRef.key == current.mark.key }) {
+            HomePlayCard(play: play, mark: current.mark, edited: current.edited, onOpen: { openPlay = play })
+        }
     }
 
     @ViewBuilder
@@ -238,6 +273,8 @@ struct FlightyActionableDashboard: View {
         if !todaysPlayers.isEmpty {
             todaysPlayersCard
         }
+
+        teamCards
     }
 
     var body: some View {
@@ -293,6 +330,18 @@ struct FlightyActionableDashboard: View {
             }
             .navigationDestination(item: $selectedProgram) { program in
                 FlightyProgramDetailView(program: program)
+            }
+            .navigationDestination(item: $openTeamId) { id in
+                TeamDetailView(teamId: id)
+            }
+            .navigationDestination(item: $openPlay) { play in
+                JournalPlayScreen(play: play)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .hoopwisePlayActivity)) { _ in
+                playActivityTick += 1
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .hoopwiseHomePins)) { _ in
+                pinTick += 1
             }
             .sheet(item: $selectedStudent) { student in
                 StudentQuickPeepView(student: student, sessionId: nil)

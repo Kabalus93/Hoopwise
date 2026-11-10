@@ -120,6 +120,7 @@ struct JournalPlayScreen: View {
             JText("Its steps go with it. You can undo for a few seconds.")
         }
         .journalUndoToast()
+        .onAppear { PlayActivity.opened(play) }
         #if DEBUG
         .onAppear {
             switch JournalPlaysLaunch.current.open {

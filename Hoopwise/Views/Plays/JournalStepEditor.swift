@@ -1281,6 +1281,7 @@ struct JournalPlayStepEditor: View {
             model.diagram = content.diagram
         }
         try? context.save()
+        if let play = part?.play { PlayActivity.edited(play) }
         dismiss()
     }
 
