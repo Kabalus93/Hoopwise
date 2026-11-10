@@ -423,6 +423,18 @@ enum SheetGalleryDebug {
             // Hub → Teams.
             NavigationStack { TeamsScreen() }
 
+        case "teamPractice":
+            // A team practice today on the DEMO store: a seeded team (roster,
+            // identity, objectives, a broken-down play) and its session page,
+            // which opens on Plan.
+            if ScreenshotStore.isActive, let session = TeamPracticeDemo.seed(dm) {
+                NavigationStack {
+                    FlightySessionPageView(session: session, accessMode: .execution)
+                }
+            } else {
+                missing("teamPractice: needs HOOPWISE_SCREENSHOT_STORE=1 and demo athletes")
+            }
+
         case "organization":
             // Hub → Organization: coaches, venues, schools, age categories,
             // share & import.
@@ -599,6 +611,65 @@ extension SheetGalleryDebug {
             sessions.append(s)
         }
         return sessions
+    }
+}
+
+/// Seeds the demo store with a team and a team practice today (idempotent:
+/// both are found by name / team on later runs).
+@MainActor
+enum TeamPracticeDemo {
+    static let teamName = "Hoopwise Hawks"
+
+    static func seed(_ dm: DataManager) -> SessionEvent? {
+        let athletes = Array(dm.students.prefix(6))
+        guard !athletes.isEmpty else { return nil }
+        let team: Team
+        if let existing = dm.teams.first(where: { $0.name == teamName }) {
+            team = existing
+        } else {
+            var made = Team(name: teamName, shortName: "HWK", colorHex: "#5856D6",
+                            coachId: dm.staffCoaches.first?.id, coachName: dm.staffCoaches.first?.name,
+                            homeVenue: dm.locations.first?.name, createdByCoachId: dm.loggedInCoachId)
+            made.playerIds = athletes.map(\.id) + (dm.staffCoaches.first.map { [$0.id] } ?? [])
+            var book = made.playbook
+            book.identity = "Pace and space — share the ball, switch 1–4."
+            book.objectives = ["Spacing on every possession", "Two passes before a shot", "Talk on defense"]
+            let plays = (try? dm.modelContext.fetch(FetchDescriptor<JournalPlay>())) ?? []
+            if let play = plays.first(where: { $0.starterKey != nil }) ?? plays.first {
+                let ref = play.planRef
+                book[.baseOffense].plays = [ref]
+                let numbers = play.conceptPart?.sortedSteps.first?.diagram.offense.map(\.number).sorted() ?? [1, 2, 3, 4, 5]
+                func drills(_ skill: String) -> [UUID] {
+                    Array(dm.drills.filter { $0.tags.contains("type:\(skill)") }.prefix(2).map(\.id))
+                }
+                let skillsByRole = [["passing", "dribbling"], ["shooting"], ["shooting", "oneOnOne"], ["post", "rebounding"], ["post", "defence"]]
+                book.breakdowns[ref.key] = PlayBreakdown(playName: play.name, roles: numbers.enumerated().map { i, n in
+                    let skills = skillsByRole[i % skillsByRole.count]
+                    return PlayBreakdown.Role(number: n,
+                                              standard: ["Read the first pass", "Fill the corner, catch ready", "Cut hard off the screen", "Seal and call for it", "Rebound, outlet fast"][i % 5],
+                                              skills: skills,
+                                              drillIds: skills.flatMap(drills),
+                                              playerIds: athletes.indices.contains(i) ? [athletes[i].id] : [])
+                })
+            }
+            made.playbook = book
+            dm.addTeam(made)
+            team = made
+        }
+        let today = Calendar.current.startOfDay(for: Date())
+        if let session = dm.sessionEvents.first(where: {
+            $0.curriculum.teamId == team.id && Calendar.current.isDate($0.startTime, inSameDayAs: today)
+        }) { return session }
+        let start = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
+        var curriculum = SessionCurriculum()
+        curriculum.teamId = team.id
+        curriculum.coachIds = team.playerIds.filter { id in dm.staffCoaches.contains { $0.id == id } }
+        dm.createSession(SessionCreation.Intent(
+            group: .unassigned, sessionType: .teamPractice, start: start, durationMinutes: 90,
+            title: "\(team.name) Practice", location: team.homeVenue,
+            roster: team.playerIds.filter { id in dm.students.contains { $0.id == id } },
+            curriculum: curriculum, createdByCoachId: dm.loggedInCoachId))
+        return dm.sessionEvents.first { $0.curriculum.teamId == team.id && Calendar.current.isDate($0.startTime, inSameDayAs: today) }
     }
 }
 #endif

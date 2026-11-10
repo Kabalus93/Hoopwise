@@ -22,7 +22,8 @@ struct TeamBadge: View {
             Text(team.shortName.isEmpty ? String(team.name.prefix(2)).uppercased() : team.shortName)
                 .font(.system(size: size * 0.32, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
-                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
                 .padding(4)
         }
         .frame(width: size, height: size)
