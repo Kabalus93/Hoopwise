@@ -423,6 +423,17 @@ enum SheetGalleryDebug {
             // Hub → Teams.
             NavigationStack { TeamsScreen() }
 
+        case "lexicon":
+            // Hub → Lexicon; HOOPWISE_LEXICON_TERM=<term> opens that entry.
+            NavigationStack {
+                if let term = ProcessInfo.processInfo.environment["HOOPWISE_LEXICON_TERM"],
+                   let item = Lexicon.shared.search(term).first {
+                    LexiconEntryView(item: item)
+                } else {
+                    LexiconScreen()
+                }
+            }
+
         case "teamPractice":
             // A team practice today on the DEMO store: a seeded team (roster,
             // identity, objectives, a broken-down play) and its session page,

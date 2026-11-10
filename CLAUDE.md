@@ -1104,6 +1104,25 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   TeamWorkoutProfileSection under it; coach profile → a Teams section.
   Tests: TeamPlaybookTests (workout, demands, round trip, never billed),
   TeamsUITests (section → breakdown → role → workout on the team page).
+- HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
+  basketball terms — names of plays and their definitions, actions, rules,
+  defenses", from his researched Claude Docs "Basketball Lexicon",
+  claude.ai/artifact/6RDG4J5RsYhqReZzi6mVem). Resources/Lexicon.json is
+  GENERATED from that doc's markdown export (16 sections → groups → 601
+  entries: term, also called, definition, source numbers; group kinds terms /
+  compare — FIBA·NBA·NCAA values per rule / history / disputed; 77 sources)
+  — regenerate, don't hand-edit. Models/Lexicon.swift: load, `search` (every
+  word in term / other names / definition; name matches first), `related`
+  (terms a definition names, whole words, longest first), `dispute` (the
+  disputed-terms entry for a term; "a / b", "a vs b", "… origin" split).
+  Views/Hub/LexiconViews.swift: LexiconScreen (section tiles + search all),
+  LexiconSectionView (grouped list, notes, search within), LexiconEntryView
+  (definition, By rulebook values, "means more than one thing", Terms it
+  mentions, Sources as links), LexiconCompareView (the rule grid),
+  LexiconSourcesView. Read-only, not stored or synced. Content is ENGLISH as
+  researched; chrome is bilingual. Hub card under Teams. HOOPWISE_SHOT=
+  lexicon (+ HOOPWISE_LEXICON_TERM=<term> opens an entry). Tests:
+  LexiconTests, LexiconUITests.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

@@ -211,6 +211,19 @@ struct FlightyHubView: View {
             .accessibilityIdentifier("hub.teams")
             .buttonStyle(.plain)
 
+            // The basketball lexicon: terms, actions, defenses, rules
+            // (November 2026, from Luther's researched doc).
+            NavigationLink(destination: LexiconScreen()) {
+                hubNavCardWide(
+                    icon: "character.book.closed.fill",
+                    title: isChinese ? "术语词典" : "Lexicon",
+                    subtitle: isChinese ? "\(Lexicon.shared.entryCount) 个篮球术语" : "\(Lexicon.shared.entryCount) basketball terms"
+                )
+            }
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .accessibilityIdentifier("hub.lexicon")
+            .buttonStyle(.plain)
+
             HStack(spacing: 10) {
                 NavigationLink(destination: DrillsLibraryView()) {
                     hubNavCard(
