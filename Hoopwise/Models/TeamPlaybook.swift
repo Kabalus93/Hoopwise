@@ -83,10 +83,15 @@ struct TeamPlaybook: Codable, Equatable {
     /// Plays broken down into numbered roles, keyed by the play's
     /// `SessionPlayRef.key`.
     var breakdowns: [String: PlayBreakdown] = [:]
+    /// The plays practice works on NOW (their `SessionPlayRef.key`s) — what a
+    /// team practice's plan is built from (Luther, November 2026: "a
+    /// relationship between the team's composition and settings in the hub
+    /// and the plan appearing in session").
+    var focus: [String] = []
 
     init() {}
 
-    private enum CodingKeys: String, CodingKey { case sections, identity, objectives, breakdowns }
+    private enum CodingKeys: String, CodingKey { case sections, identity, objectives, breakdowns, focus }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -94,6 +99,7 @@ struct TeamPlaybook: Codable, Equatable {
         identity = try c.decodeIfPresent(String.self, forKey: .identity) ?? ""
         objectives = try c.decodeIfPresent([String].self, forKey: .objectives) ?? []
         breakdowns = try c.decodeIfPresent([String: PlayBreakdown].self, forKey: .breakdowns) ?? [:]
+        focus = try c.decodeIfPresent([String].self, forKey: .focus) ?? []
     }
 
     subscript(kind: Kind) -> Section {
@@ -197,5 +203,95 @@ extension TeamPlaybook {
             for ref in self[kind].plays where breakdowns[ref.key] != nil && !keys.contains(ref.key) { keys.append(ref.key) }
         }
         return keys + breakdowns.keys.filter { !keys.contains($0) }.sorted()
+    }
+}
+
+// MARK: - Focus → the team practice plan
+
+extension TeamPlaybook {
+    /// Every play in the playbook, in section order, once.
+    var allPlays: [(kind: Kind, ref: SessionPlayRef)] {
+        var seen = Set<String>()
+        var out: [(Kind, SessionPlayRef)] = []
+        for kind in Kind.allCases {
+            for ref in self[kind].plays where seen.insert(ref.key).inserted { out.append((kind, ref)) }
+        }
+        return out
+    }
+
+    /// The focus plays still in the playbook, in playbook order.
+    var focusPlays: [SessionPlayRef] {
+        let keys = Set(focus)
+        return allPlays.map(\.ref).filter { keys.contains($0.key) }
+    }
+
+    /// One person's part in the given plays: each role they play, with the
+    /// play's name.
+    struct Part: Equatable {
+        let playName: String
+        let role: PlayBreakdown.Role
+    }
+
+    func parts(of playerId: UUID, in plays: [SessionPlayRef]) -> [Part] {
+        plays.flatMap { ref -> [Part] in
+            guard let breakdown = breakdowns[ref.key] else { return [] }
+            return breakdown.roles.filter { $0.playerIds.contains(playerId) }
+                .map { Part(playName: ref.name.isEmpty ? breakdown.playName : ref.name, role: $0) }
+        }
+    }
+
+    /// Skills the plays' roles need, most needed first.
+    func skills(in plays: [SessionPlayRef]) -> [String] {
+        var count: [String: Int] = [:]
+        var order: [String] = []
+        for ref in plays {
+            for role in breakdowns[ref.key]?.roles ?? [] {
+                for skill in role.skills {
+                    if count[skill] == nil { order.append(skill) }
+                    count[skill, default: 0] += 1
+                }
+            }
+        }
+        return order.enumerated()
+            .sorted { (count[$0.element]!, -$0.offset) > (count[$1.element]!, -$1.offset) }
+            .map(\.element)
+    }
+
+    /// The practice built from the plays: their role drills as Skills (play
+    /// order, each once), a warm-up of up to two routine library drills for
+    /// the skills they need (oldest age first — a team is not a U8 class),
+    /// the plays themselves, and minutes split over the session.
+    func practicePlan(plays: [SessionPlayRef], drills: [DrillItem], durationMinutes: Int,
+                      keeping current: SessionCurriculum) -> SessionCurriculum {
+        var plan = current
+        var skillIds: [UUID] = []
+        for ref in plays {
+            for role in breakdowns[ref.key]?.roles ?? [] {
+                for id in role.drillIds where !skillIds.contains(id) { skillIds.append(id) }
+            }
+        }
+        let wanted = skills(in: plays)
+        let ages = ActivityAge.allCases
+        let routine = drills.filter { $0.tags.contains("block:routine") }
+            .sorted { a, b in
+                let ra = a.libraryActivity.map { ages.firstIndex(of: $0.age) ?? 0 } ?? -1
+                let rb = b.libraryActivity.map { ages.firstIndex(of: $0.age) ?? 0 } ?? -1
+                return ra != rb ? ra > rb : a.name < b.name
+            }
+        var warmup: [UUID] = []
+        for skill in wanted + ["warmup"] where warmup.count < 2 {
+            if let drill = routine.first(where: { $0.tags.contains("type:\(skill)") && !warmup.contains($0.id) && !skillIds.contains($0.id) }) {
+                warmup.append(drill.id)
+            }
+        }
+        plan.warmupDrillIds = warmup
+        plan.skillDrillIds = skillIds
+        var refs = plan.plays
+        for ref in plays where !refs.contains(where: { $0.key == ref.key }) { refs.append(ref) }
+        plan.plays = refs
+        let total = max(durationMinutes, 30)
+        plan.warmupMinutes = min(15, total / 4)
+        plan.skillsMinutes = (total - plan.warmupMinutes) / 2
+        return plan
     }
 }

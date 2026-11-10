@@ -635,7 +635,11 @@ enum TeamPracticeDemo {
         let athletes = Array(dm.students.prefix(6))
         guard !athletes.isEmpty else { return nil }
         let team: Team
-        if let existing = dm.teams.first(where: { $0.name == teamName }) {
+        if var existing = dm.teams.first(where: { $0.name == teamName }) {
+            if existing.playbook.focus.isEmpty, !existing.playbook.allPlays.isEmpty {
+                existing.playbook.focus = existing.playbook.allPlays.map(\.ref.key)
+                dm.updateTeam(existing)
+            }
             team = existing
         } else {
             var made = Team(name: teamName, shortName: "HWK", colorHex: "#5856D6",
@@ -643,12 +647,11 @@ enum TeamPracticeDemo {
                             homeVenue: dm.locations.first?.name, createdByCoachId: dm.loggedInCoachId)
             made.playerIds = athletes.map(\.id) + (dm.staffCoaches.first.map { [$0.id] } ?? [])
             var book = made.playbook
-            book.identity = "Pace and space — share the ball, switch 1–4."
-            book.objectives = ["Spacing on every possession", "Two passes before a shot", "Talk on defense"]
             let plays = (try? dm.modelContext.fetch(FetchDescriptor<JournalPlay>())) ?? []
             if let play = plays.first(where: { $0.starterKey != nil }) ?? plays.first {
                 let ref = play.planRef
                 book[.baseOffense].plays = [ref]
+                book.focus = [ref.key]
                 let numbers = play.conceptPart?.sortedSteps.first?.diagram.offense.map(\.number).sorted() ?? [1, 2, 3, 4, 5]
                 func drills(_ skill: String) -> [UUID] {
                     Array(dm.drills.filter { $0.tags.contains("type:\(skill)") }.prefix(2).map(\.id))

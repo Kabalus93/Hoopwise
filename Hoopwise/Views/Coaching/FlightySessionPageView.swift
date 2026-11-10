@@ -801,10 +801,16 @@ struct FlightySessionPageView: View {
         return ScrollView(showsIndicators: false) {
             VStack(spacing: 12) {
                 if let teamId = session.curriculum.teamId {
-                    SessionTeamFocusCard(teamId: teamId, rosterIds: AttendanceMath.expectedIds(of: session, programs: dataManager.programs) + session.curriculum.coachIds)
-                }
-
-                if accessMode.canEdit {
+                    // A team practice plans from its TEAM (focus plays, their
+                    // roles' drills), not from age · level · phase.
+                    SessionTeamPlanCard(
+                        teamId: teamId,
+                        rosterIds: AttendanceMath.expectedIds(of: session, programs: dataManager.programs) + session.curriculum.coachIds,
+                        durationMinutes: session.durationMinutes,
+                        canEdit: accessMode.canEdit,
+                        curriculum: $session.curriculum,
+                        onChange: saveSession)
+                } else if accessMode.canEdit {
                     generatePlanButton
                 }
 

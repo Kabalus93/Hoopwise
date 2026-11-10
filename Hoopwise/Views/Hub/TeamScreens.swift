@@ -281,29 +281,62 @@ struct TeamDetailView: View {
         if let coach = dataManager.staffCoaches.first(where: { $0.id == player.id }) { openCoach = coach } else { openStudent = player }
     }
 
+    /// FOCUS NOW: the plays practice works on. A team practice builds its
+    /// plan from them (their role drills, the skills they need, the plays)
+    /// and shows who plays which role.
     private func focusBlock(_ team: Team) -> some View {
         let book = team.playbook
-        return TeamBlock(title: isChinese ? "我们是谁 · 当前重点" : "Who we are · Focus now", icon: "scope") {
+        let plays = book.focusPlays
+        return TeamBlock(title: isChinese ? "当前重点" : "Focus now", icon: "scope") {
             VStack(alignment: .leading, spacing: 10) {
-                Text(book.identity.isEmpty ? (isChinese ? "用一两句话写下球队的风格。" : "Write the team's identity in a line or two.") : book.identity)
-                    .font(book.identity.isEmpty ? .subheadline : .title3.weight(.semibold))
-                    .foregroundStyle(book.identity.isEmpty ? .secondary : .primary)
-                if book.objectives.isEmpty {
-                    Text(isChinese ? "还没有目标。目标会显示在每节球队训练的计划顶部。"
-                                   : "No objectives yet. They show at the top of every team practice's plan.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                if plays.isEmpty {
+                    Text(book.playCount == 0
+                         ? (isChinese ? "先在战术本里添加战术，再选出当前要练的。" : "Add plays to the playbook, then pick the ones practice works on now.")
+                         : (isChinese ? "选出当前要练的战术。球队训练会用它们的号位练习、所需技术和战术来生成计划。"
+                                      : "Pick the plays practice works on now. Team practices build their plan from them — the roles' drills, the skills they need, the plays."))
+                        .font(.subheadline).foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(book.objectives.enumerated()), id: \.offset) { _, objective in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Image(systemName: "target").font(.caption).foregroundStyle(Color.accentColor)
-                            Text(objective).font(.body)
+                    VStack(spacing: 0) {
+                        ForEach(plays, id: \.key) { ref in
+                            let found = library.first { $0.isNamed(by: ref) }
+                            let roles = book.breakdowns[ref.key]?.roles ?? []
+                            let drills = Set(roles.flatMap(\.drillIds)).count
+                            NavigationLink(destination: PlayBreakdownView(teamId: teamId, ref: ref)) {
+                                HStack(spacing: 12) {
+                                    if let found {
+                                        JournalPlayThumbnail(diagram: found.conceptPart?.sortedSteps.first?.diagram,
+                                                             court: found.court, width: 56, height: 40)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(verbatim: found?.name ?? ref.name).font(.body.weight(.medium)).lineLimit(1)
+                                        Text(roles.isEmpty
+                                             ? (isChinese ? "还没拆解" : "Not broken down yet")
+                                             : (isChinese ? "\(roles.count) 个号位 · \(drills) 个练习" : "\(roles.count) roles · \(drills) drills"))
+                                            .font(.caption).foregroundStyle(roles.isEmpty ? .orange : .secondary)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                                }
+                                .padding(.vertical, 6)
+                                .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("team.focus.play")
                         }
                     }
+                    let skills = book.skills(in: plays).compactMap { ActivityType(rawValue: $0)?.title }
+                    if !skills.isEmpty {
+                        Text((isChinese ? "需要的技术：" : "Skills it needs: ") + skills.joined(separator: " · "))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
-                Button { editingFocus = true } label: {
-                    Text(isChinese ? "编辑" : "Edit").font(.subheadline.weight(.semibold))
+                if book.playCount > 0 {
+                    Button { editingFocus = true } label: {
+                        Text(plays.isEmpty ? (isChinese ? "选择战术" : "Choose plays") : (isChinese ? "更改" : "Change"))
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityIdentifier("team.focus.edit")
                 }
-                .accessibilityIdentifier("team.focus.edit")
             }
         }
     }
@@ -524,59 +557,59 @@ enum TeamStore {
     }
 }
 
-// MARK: - Who we are / focus
+// MARK: - Focus
 
+/// Pick the plays practice works on now, from the team's playbook.
 struct TeamFocusSheet: View {
     let team: Team
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.dismiss) private var dismiss
-    @State private var identity: String
-    @State private var objectives: [String]
-    @State private var newObjective = ""
+    @State private var chosen: Set<String>
 
     init(team: Team) {
         self.team = team
-        _identity = State(initialValue: team.playbook.identity)
-        _objectives = State(initialValue: team.playbook.objectives)
+        _chosen = State(initialValue: Set(team.playbook.focus))
     }
 
     var body: some View {
+        let book = team.playbook
         NavigationStack {
-            Form {
-                Section {
-                    TextField(isChinese ? "例如：快节奏、拉开空间、1–4 号位换防" : "e.g. Pace and space, switch 1–4",
-                              text: $identity, axis: .vertical)
-                        .lineLimit(2...5)
-                } header: {
-                    Text(isChinese ? "我们是谁" : "Who we are")
-                }
-                Section {
-                    ForEach(objectives, id: \.self) { Text($0) }
-                        .onDelete { objectives.remove(atOffsets: $0) }
-                        .onMove { objectives.move(fromOffsets: $0, toOffset: $1) }
-                    HStack {
-                        TextField(isChinese ? "添加目标，如：三角进攻的空间" : "Add an objective, e.g. Spacing in the triangle", text: $newObjective)
-                            .onSubmit(add)
-                            .accessibilityIdentifier("team.focus.newObjective")
-                        Button(action: add) { Image(systemName: "plus.circle.fill") }
-                            .disabled(newObjective.trimmingCharacters(in: .whitespaces).isEmpty)
+            List {
+                ForEach(TeamPlaybook.Kind.allCases.filter { !book[$0].plays.isEmpty }) { kind in
+                    Section(kind.title) {
+                        ForEach(book[kind].plays, id: \.key) { ref in
+                            let on = chosen.contains(ref.key)
+                            let roles = book.breakdowns[ref.key]?.roles.count ?? 0
+                            Button {
+                                if on { chosen.remove(ref.key) } else { chosen.insert(ref.key) }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(verbatim: ref.name).foregroundStyle(.primary)
+                                        Text(roles == 0 ? (isChinese ? "还没拆解" : "Not broken down yet")
+                                                        : (isChinese ? "\(roles) 个号位" : "\(roles) roles"))
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(on ? Color.accentColor : .secondary)
+                                }
+                                .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("team.focus.option")
+                        }
                     }
-                } header: {
-                    Text(isChinese ? "当前重点" : "Focus now")
-                } footer: {
-                    Text(isChinese ? "会显示在每节球队训练的计划顶部。" : "Shown at the top of every team practice's plan.")
                 }
             }
-            .navigationTitle(isChinese ? "我们是谁 · 当前重点" : "Who we are · Focus")
+            .navigationTitle(isChinese ? "当前重点" : "Focus now")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(isChinese ? "取消" : "Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isChinese ? "保存" : "Save") {
-                        add()
-                        TeamStore.update(team.id, in: dataManager) {
-                            $0.playbook.identity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
-                            $0.playbook.objectives = objectives
+                        TeamStore.update(team.id, in: dataManager) { team in
+                            team.playbook.focus = team.playbook.allPlays.map(\.ref.key).filter(chosen.contains)
                         }
                         dismiss()
                     }
@@ -584,13 +617,6 @@ struct TeamFocusSheet: View {
                 }
             }
         }
-    }
-
-    private func add() {
-        let clean = newObjective.trimmingCharacters(in: .whitespaces)
-        guard !clean.isEmpty else { return }
-        objectives.append(clean)
-        newObjective = ""
     }
 }
 
@@ -1145,76 +1171,168 @@ struct TeamWorkoutView: View {
 
 // MARK: - The team on a team practice's plan
 
-/// The top of a team practice's Plan: the team, who it is, its objectives,
-/// and what the players here are working on (their workouts).
-struct SessionTeamFocusCard: View {
+/// The top of a team practice's Plan — where the team page and the session
+/// meet: the plays the team is working on (its FOCUS), one button that
+/// builds the plan from them (their roles' drills as Skills, a warm-up for the
+/// skills they need, the plays), and WHO DOES WHAT — each person here, the
+/// role they play in those plays and its standard.
+struct SessionTeamPlanCard: View {
     let teamId: UUID
     let rosterIds: [UUID]
+    let durationMinutes: Int
+    let canEdit: Bool
+    @Binding var curriculum: SessionCurriculum
+    let onChange: () -> Void
     @EnvironmentObject var dataManager: DataManager
     @State private var openTeam = false
+    @State private var confirmingRebuild = false
 
     var body: some View {
         if let team = dataManager.teams.first(where: { $0.id == teamId }) {
-            let book = team.playbook
-            let colour = Color(hex: team.colorHex)
-            let workoutDrills = Set(rosterIds.flatMap { book.workout(for: $0).map(\.drillId) })
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    TeamBadge(team: team, size: 40)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(team.name).font(.headline)
-                        Text(isChinese ? "球队训练 · 不计费" : "Team practice · never billed")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button { openTeam = true } label: {
-                        Text(isChinese ? "球队" : "Team").font(.subheadline.weight(.semibold))
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(colour)
-                    .accessibilityIdentifier("session.openTeam")
+            card(team)
+        }
+    }
+
+    private func card(_ team: Team) -> some View {
+        let book = team.playbook
+        let plays = book.focusPlays
+        let colour = Color(hex: team.colorHex)
+        let people = rosterIds.compactMap(person)
+        let withParts = people.filter { !book.parts(of: $0.id, in: plays).isEmpty }
+        let without = people.filter { book.parts(of: $0.id, in: plays).isEmpty }
+        let planIsEmpty = curriculum.warmupDrillIds.isEmpty && curriculum.skillDrillIds.isEmpty
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                TeamBadge(team: team, size: 40)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(team.name).font(.headline)
+                    Text(isChinese ? "球队训练 · 不计费" : "Team practice · never billed")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                if !book.identity.isEmpty {
-                    Text(book.identity).font(.body.weight(.semibold))
+                Spacer()
+                Button { openTeam = true } label: {
+                    Text(isChinese ? "球队" : "Team").font(.subheadline.weight(.semibold))
                 }
-                if !book.objectives.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(isChinese ? "当前重点" : "FOCUS NOW").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                        ForEach(Array(book.objectives.enumerated()), id: \.offset) { _, objective in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Image(systemName: "target").font(.caption).foregroundStyle(colour)
-                                Text(objective).font(.subheadline)
-                            }
+                .buttonStyle(.bordered)
+                .tint(colour)
+                .accessibilityIdentifier("session.openTeam")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(isChinese ? "正在练" : "WORKING ON").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                if plays.isEmpty {
+                    Text(isChinese ? "球队还没有当前重点。在球队页面选出要练的战术，计划就能从中生成。"
+                                   : "The team has no focus yet. Pick the plays practice works on in the team page and the plan builds from them.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                } else {
+                    FlowLayout(spacing: 8) {
+                        ForEach(plays, id: \.key) { ref in
+                            Text(verbatim: ref.name)
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(colour.opacity(0.16), in: .capsule)
+                                .fixedSize()
                         }
                     }
-                }
-                if !workoutDrills.isEmpty {
-                    Text(isChinese ? "在场队员的个人训练共 \(workoutDrills.count) 个练习，可在“技能”中添加。"
-                                   : "Players here have \(workoutDrills.count) workout drills between them — add them under Skills.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                if book.identity.isEmpty && book.objectives.isEmpty {
-                    Text(isChinese ? "在球队页面写下“我们是谁”和当前重点，它们会显示在这里。"
-                                   : "Write who the team is and its focus on the team page; they show here.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    let skills = book.skills(in: plays).compactMap { ActivityType(rawValue: $0)?.title }
+                    if !skills.isEmpty {
+                        Text((isChinese ? "需要的技术：" : "Skills: ") + skills.joined(separator: " · "))
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(colour.opacity(0.08), in: .rect(cornerRadius: 18))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(colour.opacity(0.25), lineWidth: 1))
-            .accessibilityIdentifier("session.teamFocus")
-            .sheet(isPresented: $openTeam) {
-                NavigationStack {
-                    TeamDetailView(teamId: teamId)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(isChinese ? "完成" : "Done") { openTeam = false }
+
+            if canEdit && !plays.isEmpty {
+                Button {
+                    if planIsEmpty { build(book, plays) } else { confirmingRebuild = true }
+                } label: {
+                    Label(planIsEmpty ? (isChinese ? "用球队重点生成计划" : "Build the plan from the team")
+                                      : (isChinese ? "按球队重点重新生成" : "Rebuild from the team"),
+                          systemImage: "wand.and.stars")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(colour)
+                .accessibilityIdentifier("session.buildFromTeam")
+            }
+
+            if !withParts.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(isChinese ? "谁打什么" : "WHO DOES WHAT").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                    ForEach(withParts) { player in
+                        HStack(alignment: .top, spacing: 10) {
+                            StudentAvatarView(student: player, size: 32)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(player.primaryDisplayName).font(.subheadline.weight(.semibold))
+                                ForEach(Array(book.parts(of: player.id, in: plays).enumerated()), id: \.offset) { _, part in
+                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                        Text("\(part.role.number)")
+                                            .font(.caption2.weight(.heavy).monospacedDigit())
+                                            .foregroundStyle(.white)
+                                            .frame(width: 18, height: 18)
+                                            .background(colour, in: Circle())
+                                        Text(partLine(part, single: plays.count == 1))
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
                             }
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("session.teamPart")
+                    }
+                    if !without.isEmpty {
+                        Text((isChinese ? "这些战术里没有号位：" : "No role in these plays: ") + without.map(\.primaryDisplayName).joined(separator: ", "))
+                            .font(.caption).foregroundStyle(.tertiary)
+                    }
                 }
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colour.opacity(0.08), in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(colour.opacity(0.25), lineWidth: 1))
+        .accessibilityIdentifier("session.teamPlan")
+        .alert(isChinese ? "重新生成计划？" : "Rebuild the plan?", isPresented: $confirmingRebuild) {
+            Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
+            Button(isChinese ? "重新生成" : "Rebuild") { build(book, plays) }
+        } message: {
+            Text(isChinese ? "热身和技能会换成球队重点的练习；已添加的战术保留。"
+                           : "Warm-up and Skills are replaced with the focus plays' drills; plays already in the plan stay.")
+        }
+        .sheet(isPresented: $openTeam) {
+            NavigationStack {
+                TeamDetailView(teamId: teamId)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(isChinese ? "完成" : "Done") { openTeam = false }
+                        }
+                    }
+            }
+        }
+    }
+
+    /// With one focus play its name would repeat on every row: the role's
+    /// standard alone then.
+    private func partLine(_ part: TeamPlaybook.Part, single: Bool) -> String {
+        let standard = part.role.standard
+        if single { return standard.isEmpty ? (isChinese ? "\(part.role.number) 号位" : "Role \(part.role.number)") : standard }
+        return standard.isEmpty ? part.playName : "\(part.playName) — \(standard)"
+    }
+
+    private func person(_ id: UUID) -> Student? {
+        dataManager.students.first { $0.id == id }
+            ?? dataManager.staffCoaches.first { $0.id == id }?.asGuestPlayer(dataManager: dataManager)
+    }
+
+    private func build(_ book: TeamPlaybook, _ plays: [SessionPlayRef]) {
+        curriculum = book.practicePlan(plays: plays, drills: dataManager.drills,
+                                       durationMinutes: durationMinutes, keeping: curriculum)
+        onChange()
+        HapticFeedback.notification(.success)
     }
 }
 

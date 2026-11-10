@@ -64,8 +64,7 @@ final class TeamPlaybookTests: XCTestCase {
         var team = Team(name: "Standards", shortName: "STD")
         dm.addTeam(team)
         var book = team.playbook
-        book.identity = "Pace and space"
-        book.objectives = ["Spacing in the triangle", "Talk on defense"]
+        book.focus = ["created:9"]
         book.breakdowns["created:9"] = PlayBreakdown(playName: "Triangle", roles: [.init(number: 3, standard: "Seal")])
         team.playbook = book
         dm.updateTeam(team)
@@ -99,5 +98,38 @@ final class TeamPlaybookTests: XCTestCase {
         }
         XCTAssertEqual(teamPractices(of: kid.id, in: dm).map(\.id), [session.id], "the record keeps it")
         dm.deleteSessionEvent(session)
+    }
+
+    // MARK: Focus → plan
+
+    func testTheFocusPlaysBuildThePracticeAndSayWhoDoesWhat() {
+        let maya = UUID(), leo = UUID()
+        let shootDrill = UUID(), postDrill = UUID(), otherDrill = UUID()
+        var book = TeamPlaybook()
+        let smash = SessionPlayRef(key: "created:1", name: "Smash")
+        let horns = SessionPlayRef(key: "created:2", name: "Horns")
+        book[.vsZone].plays = [smash]
+        book[.baseOffense].plays = [horns]
+        book.breakdowns[smash.key] = PlayBreakdown(playName: "Smash", roles: [
+            .init(number: 3, standard: "Corner, catch ready", skills: ["shooting"], drillIds: [shootDrill], playerIds: [maya]),
+            .init(number: 5, skills: ["post", "shooting"], drillIds: [postDrill, shootDrill], playerIds: [leo]),
+        ])
+        book.breakdowns[horns.key] = PlayBreakdown(playName: "Horns", roles: [
+            .init(number: 1, skills: ["passing"], drillIds: [otherDrill], playerIds: [maya]),
+        ])
+        book.focus = [smash.key, "created:gone"]
+
+        XCTAssertEqual(book.focusPlays.map(\.key), [smash.key], "a focus play no longer in the playbook drops out")
+        XCTAssertEqual(book.skills(in: book.focusPlays), ["shooting", "post"])
+        XCTAssertEqual(book.parts(of: maya, in: book.focusPlays).map(\.role.number), [3], "only the focus plays' roles")
+        XCTAssertTrue(book.parts(of: UUID(), in: book.focusPlays).isEmpty)
+
+        var current = SessionCurriculum()
+        current.plays = [horns]
+        let plan = book.practicePlan(plays: book.focusPlays, drills: [], durationMinutes: 90, keeping: current)
+        XCTAssertEqual(plan.skillDrillIds, [shootDrill, postDrill], "role drills once each, play order")
+        XCTAssertEqual(plan.plays.map(\.key), [horns.key, smash.key], "plays already in the plan stay")
+        XCTAssertEqual(plan.warmupMinutes, 15)
+        XCTAssertEqual(plan.skillsMinutes, 37)
     }
 }

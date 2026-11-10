@@ -1077,9 +1077,8 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   contemplated"; then: "never billed but a record of their attendance …
   numbered roles, show on profile, one team set"). The team page
   (Views/Hub/TeamScreens.swift; TeamsViews.swift keeps TeamBadge +
-  TeamEditorSheet) is BLOCKS: a colour hero with the roster cluster, Who we
-  are · Focus now (TeamPlaybook.identity + objectives — ONE set per team,
-  TeamFocusSheet), Playbook tiles (filled sections + "Add a section"),
+  TeamEditorSheet) is BLOCKS: a colour hero with the roster cluster, FOCUS NOW
+  (see below), Playbook tiles (filled sections + "Add a section"),
   Standards, Roster, Practices; two columns in regular width. ROSTER IS ONE
   BLOCK (11 Nov 2026, Luther: Workouts and Roster were redundant): each row
   = photo, name, Coach tag, the roles they play, drill count; the row opens
@@ -1105,7 +1104,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   "Team" opens the team). The attendance RECORD (`teamPractices(of:)`):
   athlete profile → TeamPracticeRecordRow inside the Contracts card +
   TeamWorkoutProfileSection under it; coach profile → a Teams section.
-  Tests: TeamPlaybookTests (workout, demands, round trip, never billed),
+  FOCUS → PLAN (11 Nov 2026, Luther: the identity/objectives block was
+  "useless"; "a relationship between the team's composition and settings in
+  the hub and the plan appearing in session"). `TeamPlaybook.focus` = the
+  play keys practice works on now (in playbookData; identity/objectives stay
+  in the JSON, no longer shown). Team page FOCUS NOW block: the focus plays
+  (roles · drills, or "Not broken down yet"; tap → breakdown) + the skills
+  they need; TeamFocusSheet picks them from the playbook. A team practice's
+  Plan top is SessionTeamPlanCard (replaces the age · level · phase Generate
+  Plan there): WORKING ON (focus plays, skills), "Build the plan from the
+  team" (`practicePlan`: Skills = the focus plays' role drills once each in
+  play order; Warm-up = ≤ 2 routine library drills of the needed skills,
+  oldest age first; the plays added, existing ones kept; minutes 15 + half
+  the rest; Rebuild asks first) and WHO DOES WHAT (each expected person's
+  roles in the focus plays with the standard; "No role in these plays").
+  Tests: TeamPlaybookTests (workout, demands, round trip, never billed,
+  focus → plan),
   TeamsUITests (section → breakdown → role → workout on the team page).
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
