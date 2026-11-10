@@ -188,13 +188,12 @@ struct TeamDetailView: View {
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(spacing: 16) { focusBlock(team); playbookBlock(team); standardsBlock(team) }
-                        VStack(spacing: 16) { workoutsBlock(team, roster: roster); rosterBlock(team, roster: roster); practicesBlock(team) }
+                        VStack(spacing: 16) { rosterBlock(team, roster: roster); practicesBlock(team) }
                     }
                 } else {
                     focusBlock(team)
                     playbookBlock(team)
                     standardsBlock(team)
-                    workoutsBlock(team, roster: roster)
                     rosterBlock(team, roster: roster)
                     practicesBlock(team)
                 }
@@ -405,66 +404,52 @@ struct TeamDetailView: View {
         }
     }
 
-    private func workoutsBlock(_ team: Team, roster: TeamRoster) -> some View {
+    /// The team's people in ONE block (Luther: Workouts and Roster were
+    /// redundant): who they are, the roles they play, their workout. A row
+    /// opens the player's workout; ⋯ opens the profile or removes them.
+    private func rosterBlock(_ team: Team, roster: TeamRoster) -> some View {
         let book = team.playbook
         let people = roster.everyone(dataManager)
-        return TeamBlock(title: isChinese ? "个人训练" : "Workouts", icon: "figure.basketball", tint: .green) {
-            if people.isEmpty {
-                Text(isChinese ? "先添加队员。" : "Add players first.").font(.subheadline).foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(people) { player in
-                        let drills = book.workout(for: player.id).count
+        return TeamBlock(title: isChinese ? "队员 · \(roster.count)" : "Roster · \(roster.count)", icon: "person.3.fill") {
+            VStack(spacing: 0) {
+                ForEach(people) { player in
+                    let isCoach = roster.coaches.contains { $0.id == player.id }
+                    let drills = book.workout(for: player.id).count
+                    let roles = book.roles(of: player.id)
+                    HStack(spacing: 8) {
                         NavigationLink(destination: TeamWorkoutView(teamId: teamId, playerId: player.id)) {
                             HStack(spacing: 12) {
-                                StudentAvatarView(student: player, size: 36)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(player.primaryDisplayName).font(.body.weight(.medium)).lineLimit(1)
-                                    let roles = book.roles(of: player.id)
+                                StudentAvatarView(student: player, size: 40)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(player.primaryDisplayName).font(.body.weight(.medium)).lineLimit(1)
+                                        if isCoach {
+                                            Text(isChinese ? "教练" : "Coach")
+                                                .font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                                .background(Color.indigo, in: .capsule)
+                                        }
+                                    }
                                     Text(roles.isEmpty ? (isChinese ? "还没有分配号位" : "No role yet") : roles.joined(separator: ", "))
                                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                                 Spacer(minLength: 6)
-                                Text(isChinese ? "\(drills) 个练习" : "\(drills) drills")
-                                    .font(.caption.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(drills > 0 ? Color.green : .secondary)
+                                if drills > 0 {
+                                    Text(isChinese ? "\(drills) 个练习" : (drills == 1 ? "1 drill" : "\(drills) drills"))
+                                        .font(.caption.weight(.semibold).monospacedDigit())
+                                        .foregroundStyle(.green)
+                                }
                                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 8)
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("team.workout")
-                        if player.id != people.last?.id { Divider().padding(.leading, 48) }
-                    }
-                }
-            }
-        }
-    }
-
-    private func rosterBlock(_ team: Team, roster: TeamRoster) -> some View {
-        TeamBlock(title: isChinese ? "队员 · \(roster.count)" : "Roster · \(roster.count)", icon: "person.3.fill") {
-            VStack(spacing: 0) {
-                ForEach(roster.everyone(dataManager)) { player in
-                    let isCoach = roster.coaches.contains { $0.id == player.id }
-                    HStack(spacing: 12) {
-                        Button { open(player) } label: {
-                            HStack(spacing: 12) {
-                                StudentAvatarView(student: player, size: 36)
-                                Text(player.primaryDisplayName).font(.body).lineLimit(1)
-                                if isCoach {
-                                    Text(isChinese ? "教练" : "Coach")
-                                        .font(.caption2.weight(.bold)).foregroundStyle(.white)
-                                        .padding(.horizontal, 7).padding(.vertical, 3)
-                                        .background(Color.indigo, in: .capsule)
-                                }
-                                Spacer(minLength: 0)
-                            }
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
                         .accessibilityIdentifier(isCoach ? "team.coach" : "team.athlete")
                         Menu {
+                            Button { open(player) } label: {
+                                Label(isChinese ? "查看资料" : "View profile", systemImage: "person.crop.circle")
+                            }
                             Button(role: .destructive) {
                                 TeamStore.update(teamId, in: dataManager) { team in
                                     team.playerIds.removeAll { $0 == player.id }
@@ -473,8 +458,9 @@ struct TeamDetailView: View {
                         } label: {
                             Image(systemName: "ellipsis").foregroundStyle(.secondary).frame(width: 30, height: 30)
                         }
+                        .accessibilityIdentifier("team.member.menu")
                     }
-                    .padding(.vertical, 6)
+                    if player.id != people.last?.id { Divider().padding(.leading, 52) }
                 }
                 Button { addingPlayers = true } label: {
                     Label(isChinese ? "添加队员" : "Add Players", systemImage: "plus.circle.fill")

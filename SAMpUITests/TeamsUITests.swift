@@ -86,7 +86,7 @@ final class TeamsUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertTrue(app.buttons["team.standards"].waitForExistence(timeout: 5), "the system's demands add up")
-        let workout = app.buttons.matching(identifier: "team.workout").matching(NSPredicate(format: "label CONTAINS '1 drills'")).firstMatch
+        let workout = app.buttons.matching(identifier: "team.athlete").matching(NSPredicate(format: "label CONTAINS 'Maya' AND label CONTAINS '1 drill'")).firstMatch
         XCTAssertTrue(workout.exists, "Maya's workout has the drill")
         attach(app, "team page with standards")
 

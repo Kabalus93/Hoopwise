@@ -1080,7 +1080,10 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   TeamEditorSheet) is BLOCKS: a colour hero with the roster cluster, Who we
   are · Focus now (TeamPlaybook.identity + objectives — ONE set per team,
   TeamFocusSheet), Playbook tiles (filled sections + "Add a section"),
-  Standards, Workouts, Roster, Practices; two columns in regular width. A
+  Standards, Roster, Practices; two columns in regular width. ROSTER IS ONE
+  BLOCK (11 Nov 2026, Luther: Workouts and Roster were redundant): each row
+  = photo, name, Coach tag, the roles they play, drill count; the row opens
+  the player's workout, ⋯ = View profile / Remove from team. A
   section's play opens PlayBreakdownView: the play's step player, then
   NUMBERED ROLES ("Break it down" takes the numbers of the play's step-1
   offense, else 1–5). A role (RoleEditorSheet) = a standard line, skills
