@@ -419,6 +419,10 @@ enum SheetGalleryDebug {
                 missing("coachProfile: no coach")
             }
 
+        case "teams":
+            // Hub → Teams.
+            NavigationStack { TeamsScreen() }
+
         case "organization":
             // Hub → Organization: coaches, venues, schools, age categories,
             // share & import.

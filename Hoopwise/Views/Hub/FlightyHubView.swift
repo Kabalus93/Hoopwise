@@ -199,6 +199,18 @@ struct FlightyHubView: View {
             .accessibilityIdentifier("hub.plays")
             .buttonStyle(.plain)
 
+            // Teams I coach: roster and playbook (November 2026).
+            NavigationLink(destination: TeamsScreen()) {
+                hubNavCardWide(
+                    icon: "person.3.sequence.fill",
+                    title: isChinese ? "球队" : "Teams",
+                    subtitle: isChinese ? "\(dataManager.teams.count) 支球队" : "\(dataManager.teams.count) \(dataManager.teams.count == 1 ? "team" : "teams")"
+                )
+            }
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .accessibilityIdentifier("hub.teams")
+            .buttonStyle(.plain)
+
             HStack(spacing: 10) {
                 NavigationLink(destination: DrillsLibraryView()) {
                     hubNavCard(

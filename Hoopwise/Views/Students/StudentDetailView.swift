@@ -54,6 +54,10 @@ struct StudentDetailView: View {
                 VStack(spacing: 12) {
                     // Contract & Risk Analysis section (comprehensive)
                     contractAndRiskSection
+
+                    // Team workout (Hub → Teams): drills from the roles
+                    // this athlete plays in a team's play breakdowns.
+                    TeamWorkoutProfileSection(memberId: student.id)
                     
                     // Training Stats — the profile's one stats section.
                     // Measurements and league stats were removed (October
@@ -314,6 +318,10 @@ struct StudentDetailView: View {
                     }
                 }
             }
+
+            // Team practices are never billed; their attendance record
+            // lives here beside the contracts.
+            TeamPracticeRecordRow(memberId: student.id)
 
             if !allContracts.isEmpty {
                 NavigationLink(destination: AttendedSessionsListView(studentId: student.id)) {

@@ -1364,6 +1364,7 @@ struct AllAttentionItemsSheet: View {
         case .gamePrep:   return AppTheme.avatarPurple
         case .recovery:   return AppTheme.avatarGreen
         case .assessment: return AppTheme.amber
+        case .teamPractice: return .indigo
         }
     }
 

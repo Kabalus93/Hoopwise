@@ -15,8 +15,8 @@ final class SessionCoachesTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(SessionCurriculum.self, from: Data(old.utf8)).coachIds, [])
     }
 
-    func testOnlyScrimmageAndGamePrepTakeCoaches() {
-        XCTAssertEqual(SessionType.allCases.filter(\.takesCoachesAsPlayers), [.scrimmage, .gamePrep])
+    func testOnlyScrimmageGamePrepAndTeamPracticeTakeCoaches() {
+        XCTAssertEqual(SessionType.allCases.filter(\.takesCoachesAsPlayers), [.scrimmage, .gamePrep, .teamPractice])
     }
 
     func testACoachsLinesStayOutOfTheReport() {

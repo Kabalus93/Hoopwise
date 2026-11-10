@@ -20,6 +20,15 @@ struct FlightySessionPageView: View {
     var embeddedInSplit: Bool = false
     
     @State private var selectedTab = 1  // Default to Attendance tab
+
+    /// A team practice lands on Plan (the team's focus is there); every
+    /// other session on Attendance.
+    init(session: SessionEvent, accessMode: SessionAccessMode, embeddedInSplit: Bool = false) {
+        _session = State(initialValue: session)
+        self.accessMode = accessMode
+        self.embeddedInSplit = embeddedInSplit
+        _selectedTab = State(initialValue: session.sessionType == .teamPractice ? 0 : 1)
+    }
     /// Measured roster row heights; sizes the non-scrolling attendance List.
     @State private var rosterRowHeights: [UUID: CGFloat] = [:]
     @Environment(\.displayScale) private var displayScale
@@ -791,6 +800,10 @@ struct FlightySessionPageView: View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return ScrollView(showsIndicators: false) {
             VStack(spacing: 12) {
+                if let teamId = session.curriculum.teamId {
+                    SessionTeamFocusCard(teamId: teamId, rosterIds: AttendanceMath.expectedIds(of: session, programs: dataManager.programs) + session.curriculum.coachIds)
+                }
+
                 if accessMode.canEdit {
                     generatePlanButton
                 }

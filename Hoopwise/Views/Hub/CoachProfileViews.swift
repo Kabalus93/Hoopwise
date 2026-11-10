@@ -117,6 +117,7 @@ struct CoachProfileDetailView: View {
 
                 onTheFloor
                 recentGames
+                teamsSection
                 coaching
                 contact
 
@@ -244,6 +245,36 @@ struct CoachProfileDetailView: View {
         }
     }
 
+    /// Team practices (never billed — this is their attendance record) and
+    /// the coach's workout from the teams they play a role in.
+    @ViewBuilder
+    private var teamsSection: some View {
+        let practices = teamPractices(of: current.id, in: dataManager)
+        let teams = dataManager.teams.filter { !$0.playbook.workout(for: current.id).isEmpty }
+        if !practices.isEmpty || !teams.isEmpty {
+            Section(isChinese ? "球队" : "Teams") {
+                if !practices.isEmpty {
+                    let attended = practices.filter { $0.actualAttendeeIds.contains(current.id) }.count
+                    NavigationLink(destination: TeamPracticeRecordView(memberId: current.id)) {
+                        LabeledContent(isChinese ? "球队训练" : "Team practices") {
+                            Text(isChinese ? "到场 \(attended) / \(practices.count)" : "\(attended) of \(practices.count)")
+                                .monospacedDigit()
+                        }
+                    }
+                    .accessibilityIdentifier("profile.teamPractices")
+                }
+                ForEach(teams) { team in
+                    NavigationLink(destination: TeamWorkoutView(teamId: team.id, playerId: current.id)) {
+                        LabeledContent(isChinese ? "\(team.name) 个人训练" : "\(team.name) workout") {
+                            Text(isChinese ? "\(team.playbook.workout(for: current.id).count) 个练习"
+                                           : "\(team.playbook.workout(for: current.id).count) drills")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var recentGames: some View {
         let recent = Array(report.recent.prefix(5))
@@ -333,6 +364,7 @@ extension SessionType {
         case .gamePrep: return "赛前准备"
         case .recovery: return "恢复"
         case .assessment: return "测评"
+        case .teamPractice: return "球队训练"
         }
     }
 }

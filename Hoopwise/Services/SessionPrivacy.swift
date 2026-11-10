@@ -21,6 +21,8 @@ enum SessionPrivacy {
     static func isPrivate(_ session: SessionEvent,
                           programs: [Program],
                           contracts: [Contract]) -> Bool {
+        // A team practice is a team's, never a private lesson.
+        if session.sessionType == .teamPractice { return false }
         if let programId = session.programId {
             // A named program answers the question outright. A DANGLING
             // programId is not private: it names a group program that no

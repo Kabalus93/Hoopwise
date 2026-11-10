@@ -28,6 +28,8 @@ struct AddSessionOnboardingView: View {
     @State private var recurringWeeks: Int = 12
     // Step 6
     @State private var programId: UUID?
+    /// A team practice's team (Hub → Teams).
+    @State private var teamId: UUID?
 
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
 
@@ -85,7 +87,7 @@ struct AddSessionOnboardingView: View {
                     case .length:    lengthStep
                     case .location:  locationStep
                     case .recurring: recurringStep
-                    case .program:   programStep
+                    case .program:   if sessionType == .teamPractice { teamStep } else { programStep }
                     case .review:    reviewStep
                     }
                 }
@@ -180,6 +182,7 @@ struct AddSessionOnboardingView: View {
         case .type:      return sessionType != nil
         case .location:  return locationId != nil
         case .recurring: return !isRecurring || !recurringDays.isEmpty
+        case .program:   return sessionType != .teamPractice || teamId != nil
         default:         return true
         }
     }
@@ -234,6 +237,7 @@ struct AddSessionOnboardingView: View {
             case .gamePrep:   return isChinese ? "比赛前准备课" : "Pre-game preparation"
             case .recovery:   return isChinese ? "放松恢复课" : "Recovery session"
             case .assessment: return isChinese ? "评估测试课" : "Skills assessment / testing"
+            case .teamPractice: return isChinese ? "你执教的球队的训练（不计费）" : "A practice of a team you coach — never billed"
             }
         }()
         return Button {
@@ -521,6 +525,53 @@ struct AddSessionOnboardingView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Step 6 for a team practice: the team
+
+    private var team: Team? { teamId.flatMap { id in dataManager.teams.first { $0.id == id } } }
+
+    private var teamStep: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(isChinese ? "哪支球队？" : "Which team?")
+                        .font(.largeTitle.weight(.bold))
+                    Text(isChinese ? "队员会成为这节训练的名单，球队的重点会显示在计划里。不计费。"
+                                   : "Its players become the roster and its focus shows in the plan. Never billed.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 16)
+                VStack(spacing: 10) {
+                    if dataManager.teams.isEmpty {
+                        Text(isChinese ? "还没有球队。先在 Hub → 球队 中新建一支。" : "No teams yet. Create one in Hub → Teams first.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    ForEach(dataManager.teams.sorted { $0.name < $1.name }) { team in
+                        let on = teamId == team.id
+                        Button { teamId = team.id } label: {
+                            HStack(spacing: 12) {
+                                TeamBadge(team: team, size: 36)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(team.name).font(.body.weight(.medium))
+                                    Text(isChinese ? "\(team.playerIds.count) 名队员" : "\(team.playerIds.count) players")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if on { Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Color.accentColor) }
+                            }
+                            .padding(.vertical, 12).padding(.horizontal, 16)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemGroupedBackground)))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(on ? Color.accentColor : .clear, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("addSession.team")
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
     // MARK: - Step 7: Review
 
     private var reviewStep: some View {
@@ -546,8 +597,8 @@ struct AddSessionOnboardingView: View {
                     summaryRow(label: isChinese ? "重复" : "Recurring",
                                value: recurringSummary,
                                icon: "arrow.triangle.2.circlepath") { step = .recurring }
-                    summaryRow(label: isChinese ? "训练计划" : "Program",
-                               value: programName ?? (isChinese ? "无" : "None"),
+                    summaryRow(label: sessionType == .teamPractice ? (isChinese ? "球队" : "Team") : (isChinese ? "训练计划" : "Program"),
+                               value: sessionType == .teamPractice ? (team?.name ?? "—") : (programName ?? (isChinese ? "无" : "None")),
                                icon: "rectangle.stack",
                                isLast: true) { step = .program }
                 }
@@ -664,6 +715,10 @@ struct AddSessionOnboardingView: View {
 
     private func createSessions() {
         guard let type = sessionType else { return }
+        if type == .teamPractice {
+            createTeamPractices()
+            return
+        }
         let cal = Calendar.current
         let timeComps = cal.dateComponents([.hour, .minute], from: sessionStartTime)
         let dates = isRecurring ? generatedDates() : [cal.startOfDay(for: sessionDate)]
@@ -697,6 +752,39 @@ struct AddSessionOnboardingView: View {
                 durationMinutes: sessionDurationMinutes,
                 title: title,
                 location: location?.name,
+                seriesId: seriesId,
+                createdByCoachId: dataManager.loggedInCoachId))
+        }
+        dismiss()
+    }
+
+    /// A team practice belongs to no program (never billed, no enrolment):
+    /// its roster is the team's athletes, its coaches the team's coaches, and
+    /// the curriculum names the team so the plan shows the team's focus.
+    private func createTeamPractices() {
+        guard let team else { return }
+        let cal = Calendar.current
+        let timeComps = cal.dateComponents([.hour, .minute], from: sessionStartTime)
+        let dates = isRecurring ? generatedDates() : [cal.startOfDay(for: sessionDate)]
+        let location = dataManager.locations.first(where: { $0.id == locationId })?.name ?? team.homeVenue
+        let athletes = team.playerIds.filter { id in dataManager.students.contains { $0.id == id } }
+        let coaches = team.playerIds.filter { id in dataManager.staffCoaches.contains { $0.id == id } }
+        let seriesId: UUID? = dates.count > 1 ? UUID() : nil
+        for day in dates {
+            let start = cal.date(bySettingHour: timeComps.hour ?? 18, minute: timeComps.minute ?? 0,
+                                 second: 0, of: day) ?? day
+            var curriculum = SessionCurriculum()
+            curriculum.teamId = team.id
+            curriculum.coachIds = coaches
+            dataManager.createSession(SessionCreation.Intent(
+                group: .unassigned,
+                sessionType: .teamPractice,
+                start: start,
+                durationMinutes: sessionDurationMinutes,
+                title: isChinese ? "\(team.name) 训练" : "\(team.name) Practice",
+                location: location,
+                roster: athletes,
+                curriculum: curriculum,
                 seriesId: seriesId,
                 createdByCoachId: dataManager.loggedInCoachId))
         }

@@ -15,6 +15,10 @@ final class SDTeam {
     var coachName: String?
     var homeVenue: String?
     var createdByCoachId: UUID? // For access control
+    /// The team's playbook (TeamPlaybook JSON) — Hub → Teams, November 2026.
+    /// SCHEMA CHANGE approved by Luther (10 Nov 2026): optional, additive;
+    /// rides the pending Development → Production deploy (rule 7d/7e).
+    var playbookData: Data?
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     
@@ -32,8 +36,10 @@ final class SDTeam {
         homeVenue: String? = nil,
         createdByCoachId: UUID? = nil,
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        playbookData: Data? = nil
     ) {
+        self.playbookData = playbookData
         self.id = id
         self.name = name
         self.shortName = shortName
@@ -66,7 +72,8 @@ final class SDTeam {
             homeVenue: team.homeVenue,
             createdByCoachId: team.createdByCoachId,
             createdAt: team.createdAt,
-            updatedAt: team.updatedAt
+            updatedAt: team.updatedAt,
+            playbookData: team.playbookData
         )
     }
     
@@ -87,6 +94,7 @@ final class SDTeam {
             updatedAt: updatedAt
         )
         team.mascotTypeRaw = mascotTypeRaw
+        team.playbookData = playbookData
         return team
     }
 }

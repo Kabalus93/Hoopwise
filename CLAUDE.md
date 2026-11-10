@@ -1049,6 +1049,61 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   rendered icon-only as a tall pill in a FlowLayout — chips use an explicit
   HStack. HOOPWISE_SHOT=coachProfile / coachEdit. Tests:
   CoachPlayerProfileTests, CoachProfileUITests.
+- HUB → TEAMS (10 November 2026, Luther: "teams I coach … the athletes in
+  it and their profiles … the plays we practice and run — base offense,
+  BLOB, SLOB, transition, against zone, defense philosophy and schemes").
+  A team is the EXISTING SDTeam record (the retired League's: name, short
+  name, colour, coach, home venue, `playerIds`) — the roster holds athlete
+  AND organization-coach ids (TeamRoster resolves both). SCHEMA CHANGE,
+  APPROVED by Luther the same day: SDTeam gained `playbookData: Data?`
+  (optional, additive) — Team.playbook ⇄ TeamPlaybook JSON (Models/
+  TeamPlaybook.swift): sections base offense, transition, against zone,
+  BLOB, SLOB, press break, defense, other — each plays (SessionPlayRef, as
+  session plans) + notes; an emptied section is not stored. It RIDES THE
+  PENDING Dev→Production deploy (rule 7d/7e) — debug builds write it to
+  Development today. Views/Hub/TeamsViews.swift: TeamsScreen (list, + New
+  Team, empty state), TeamDetailView (badge header; Roster — tap an athlete
+  → StudentDetailView, a coach → CoachProfileDetailView, swipe to remove,
+  Add Players = AthletePickerSheet with coaches; one section per playbook
+  kind — plays with thumbnails open JournalPlayScreen, swipe/move, Add plays
+  = SessionPlayPicker, notes saved 0.7 s after typing and on leaving),
+  TeamEditorSheet (name, short name, colour swatches, home venue, head
+  coach). Delete Team goes through deleteTeam (also removes that team's old
+  League games). Hub card "Teams" between Plays and Coach | Organization.
+  HOOPWISE_SHOT=teams. Tests: TeamPlaybookTests, TeamsUITests.
+  STANDARDS + TEAM PRACTICE (10 November 2026, Luther: "break down the
+  standards … what skill each player needs per position or action … assign
+  skill workouts … the Team view should be blocks, meant to be
+  contemplated"; then: "never billed but a record of their attendance …
+  numbered roles, show on profile, one team set"). The team page
+  (Views/Hub/TeamScreens.swift; TeamsViews.swift keeps TeamBadge +
+  TeamEditorSheet) is BLOCKS: a colour hero with the roster cluster, Who we
+  are · Focus now (TeamPlaybook.identity + objectives — ONE set per team,
+  TeamFocusSheet), Playbook tiles (filled sections + "Add a section"),
+  Standards, Workouts, Roster, Practices; two columns in regular width. A
+  section's play opens PlayBreakdownView: the play's step player, then
+  NUMBERED ROLES ("Break it down" takes the numbers of the play's step-1
+  offense, else 1–5). A role (RoleEditorSheet) = a standard line, skills
+  (the library's ActivityTypes minus warm-up/games/rules), drills
+  (SkillDrillPicker: library drills tagged `type:<skill>` + personal),
+  and who plays it (team roster). All in TeamPlaybook.breakdowns (keyed by
+  SessionPlayRef.key) inside playbookData — no further schema change.
+  `workout(for:)` = a player's drills over every role they play (a drill
+  shared by two roles once, with both sources); `skillDemands` = skills by
+  how many roles need them. SessionType gained `.teamPractice` (enum case
+  in the stored raw string, no schema change): Add Session → Team Practice
+  → "Which team?" (replaces the program step) creates through
+  SessionCreation with group .unassigned (no program, no auto program),
+  roster = the team's athletes, curriculum.teamId + coachIds = the team's
+  coaches, title "<team> Practice", one series when recurring. NEVER
+  BILLED: redeemPrivateAttendance skips `.teamPractice` and SessionPrivacy
+  says not private. The session page OPENS ON PLAN for a team practice, with
+  SessionTeamFocusCard on top (identity, objectives, workout-drill count,
+  "Team" opens the team). The attendance RECORD (`teamPractices(of:)`):
+  athlete profile → TeamPracticeRecordRow inside the Contracts card +
+  TeamWorkoutProfileSection under it; coach profile → a Teams section.
+  Tests: TeamPlaybookTests (workout, demands, round trip, never billed),
+  TeamsUITests (section → breakdown → role → workout on the team page).
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.
@@ -1101,7 +1156,7 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   134 athletes. BROKEN 0, duplicate groups 0, phase-window violations 0,
   5 standalone sessions (the triage list in RESTRUCTURE.md).
 - A SCHEMA DEPLOY IS OWED before any released build: seriesId, signedDate,
-  jerseyGivenDate, ballGivenDate (rule 7d/7e). They are written and working in
+  jerseyGivenDate, ballGivenDate, SDTeam.playbookData (rule 7d/7e). They are written and working in
   Development; Production does not know them yet.
 - Roadmap: (0) DONE documents — PDF layer, attendance statement, training
   agreement, export on both platforms; (1) DONE contracts — payments ledger + travel fee, (2) DONE

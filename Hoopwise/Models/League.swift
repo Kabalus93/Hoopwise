@@ -17,6 +17,8 @@ struct Team: Identifiable, Codable, Hashable {
     var createdByCoachId: UUID? // Coach who created this team (for access control)
     var createdAt: Date
     var updatedAt: Date
+    /// The team's playbook, JSON (`playbook` reads and writes it).
+    var playbookData: Data? = nil
     
     init(
         id: UUID = UUID(),
