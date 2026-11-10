@@ -110,7 +110,8 @@ struct OrgCoachRow: View {
     private var subtitle: String {
         let programs = isChinese ? "\(programCount) 个项目"
             : (programCount == 1 ? "1 program" : "\(programCount) programs")
-        return "\(coach.role.localizedName) · \(programs)"
+        return ([coach.role.localizedName, coach.playerPosition?.short, programs] as [String?])
+            .compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -234,5 +235,23 @@ struct OrgCategoryRow: View {
             OrgChevron()
         }
         .contentShape(.rect)
+    }
+}
+
+// MARK: - A coach on the floor
+
+extension StaffCoach {
+    /// The coach as a player for a scrimmage or game prep session: a
+    /// display-only Student value (never saved) with the coach's id, names,
+    /// colour and photo, so rosters, game setup and the live game draw them
+    /// like anyone else. Their stats are kept out of athlete reports
+    /// (GameStatsReport `excluding`).
+    @MainActor
+    func asGuestPlayer(dataManager: DataManager) -> Student {
+        var player = Student(id: id, name: name, chineseName: chineseName, avatarColor: avatarColor)
+        let photo = profileImageData
+            ?? (id == dataManager.loggedInCoachId ? dataManager.coach.profileImageData : nil)
+        player.thumbnailImageData = photo
+        return player
     }
 }

@@ -1820,7 +1820,8 @@ struct FlightySessionPageView: View {
     /// Below the roster: add athlete, session photo, bottom breathing room.
     private var attendanceFooter: some View {
         VStack(spacing: 8) {
-            if parentProgram != nil && accessMode.canEdit {
+            // A scrimmage / game prep with no program can still take coaches.
+            if (parentProgram != nil || session.sessionType.takesCoachesAsPlayers) && accessMode.canEdit {
                 addAthleteButton
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -1842,6 +1843,7 @@ struct FlightySessionPageView: View {
                 markAllPresentBar
                 attendanceRoster
                     .background(Color(.secondarySystemGroupedBackground))
+                coachesOnRoster
 
                 attendanceFooter
             }
@@ -1894,7 +1896,9 @@ struct FlightySessionPageView: View {
                 ? Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
                     .union(session.actualAttendeeIds)
                 : Set(parentProgram?.enrolledStudentIds ?? [])
-            let available = dataManager.students.filter { !takenIds.contains($0.id) }
+            // Without a program there is no roster to join: coaches only.
+            let available = (parentProgram == nil && !isPrivateSession) ? []
+                : dataManager.students.filter { !takenIds.contains($0.id) }
             let banner = isPrivateSession
                 ? AthletePickerSheet.Banner(
                     title: isChinese ? "仅加入本节课" : "This Session Only",
@@ -1915,9 +1919,12 @@ struct FlightySessionPageView: View {
                 accentColor: programColor,
                 banner: banner,
                 confirmLabel: isChinese ? "添加" : "Add",
-                showSelectionCounter: false
-            ) { studentIds in
-                enrollStudentsFromAttendance(studentIds: studentIds)
+                showSelectionCounter: false,
+                coaches: coachesToOffer
+            ) { ids in
+                let coachIds = Set(dataManager.staffCoaches.map(\.id))
+                addCoachesToSession(ids.filter { coachIds.contains($0) })
+                enrollStudentsFromAttendance(studentIds: ids.filter { !coachIds.contains($0) })
             }
         }
         .sheet(isPresented: $showingSessionPhotoCapture, onDismiss: { rollCallReason = .manual }) {
@@ -2018,6 +2025,94 @@ struct FlightySessionPageView: View {
             session.attendeeIds = fresh.attendeeIds
         }
         HapticFeedback.notification(.success)
+    }
+
+    // MARK: Coaches on the floor (scrimmage / game prep)
+
+    /// Organization coaches on this session, as display-only players.
+    private var guestCoaches: [Student] {
+        session.curriculum.coachIds.compactMap { id in
+            dataManager.staffCoaches.first { $0.id == id }?.asGuestPlayer(dataManager: dataManager)
+        }
+    }
+
+    /// Coaches the Add Athlete sheet offers: only on a scrimmage or game
+    /// prep session, and only those not already on it.
+    private var coachesToOffer: [Student] {
+        guard session.sessionType.takesCoachesAsPlayers else { return [] }
+        let taken = Set(session.curriculum.coachIds)
+        return dataManager.staffCoaches
+            .filter { $0.isActive && !taken.contains($0.id) }
+            .map { $0.asGuestPlayer(dataManager: dataManager) }
+    }
+
+    private func addCoachesToSession(_ ids: [UUID]) {
+        let new = ids.filter { !session.curriculum.coachIds.contains($0) }
+        guard !new.isEmpty else { return }
+        session.curriculum.coachIds.append(contentsOf: new)
+        saveSession()
+    }
+
+    private func removeCoachFromSession(_ id: UUID) {
+        session.curriculum.coachIds.removeAll { $0 == id }
+        saveSession()
+    }
+
+    /// The coaches on this session, under the athletes: photo, name, a Coach
+    /// tag and a menu to take them off. No attendance mark — a coach is
+    /// never charged or counted.
+    @ViewBuilder
+    private var coachesOnRoster: some View {
+        let coaches = guestCoaches
+        if !coaches.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(coaches) { coach in
+                    HStack(spacing: 12) {
+                        StudentAvatarView(student: coach, size: 44)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(coach.primaryDisplayName)
+                                .font(.body.weight(.medium))
+                                .lineLimit(1)
+                            if let secondary = coach.secondaryNameLine {
+                                Text(secondary)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Text(isChinese ? "教练" : "Coach")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.indigo, in: .capsule)
+                        Spacer(minLength: 6)
+                        if accessMode.canEdit {
+                            Menu {
+                                Button(role: .destructive) { removeCoachFromSession(coach.id) } label: {
+                                    Label(isChinese ? "移出本节课" : "Remove from session", systemImage: "minus.circle")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 36, height: 36)
+                            }
+                            .accessibilityLabel(isChinese ? "更多" : "More")
+                            .accessibilityIdentifier("session.coachRow.more")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("session.coachRow")
+                    if coach.id != coaches.last?.id {
+                        Divider().padding(.leading, 72)
+                    }
+                }
+            }
+            .background(Color(.secondarySystemGroupedBackground))
+        }
     }
 
     private func enrollStudentsFromAttendance(studentIds: [UUID]) {
@@ -2593,7 +2688,8 @@ struct FlightySessionPageView: View {
             session: $session,
             enrolledStudents: enrolledStudents,
             programColor: programColor,
-            onSave: saveSession
+            onSave: saveSession,
+            guestPlayers: guestCoaches
         )
     }
     #endif
@@ -4030,6 +4126,12 @@ struct SessionGamesTabView: View {
     let enrolledStudents: [Student]
     let programColor: Color
     let onSave: () -> Void
+    /// Organization coaches playing in this scrimmage / game prep: on game
+    /// teams like anyone, left out of every stat and insight.
+    var guestPlayers: [Student] = []
+
+    /// Everyone who can be put on a team or scored.
+    private var players: [Student] { enrolledStudents + guestPlayers }
     
     @State private var showingCreateGame = false
     @State private var selectedGame: SessionGame?
@@ -4038,13 +4140,17 @@ struct SessionGamesTabView: View {
     /// Every played game of this session's program so far (just this
     /// session's when it has no program) — GameStatsReport.
     private var statsSessions: [SessionEvent] {
-        session.programId.map { pid in
+        let all = session.programId.map { pid in
             dataManager.sessionEvents.filter { $0.programId == pid && $0.id != session.id } + [session]
         } ?? [session]
+        // Coaches who played are not athletes: their lines leave the stats.
+        let coachIds = Set(dataManager.staffCoaches.map(\.id))
+        return all.map { GameStatsReport.withoutPlayers(coachIds, in: $0) }
     }
 
     private var gameStats: GameStatsReport.Report {
-        GameStatsReport.make(sessions: statsSessions, roster: enrolledStudents.map(\.id), current: session)
+        GameStatsReport.make(sessions: statsSessions, roster: enrolledStudents.map(\.id), current: session,
+                             excluding: Set(dataManager.staffCoaches.map(\.id)))
     }
 
     
@@ -4110,7 +4216,7 @@ struct SessionGamesTabView: View {
             Text(LocalizationManager.shared.currentLanguage == .chinese ? "确定要删除这场比赛吗？" : "Are you sure you want to delete this game?")
         }
         .fullScreenCover(isPresented: $showingCreateGame) {
-            CreateGameSheet(session: $session, enrolledStudents: enrolledStudents, programColor: programColor, onSave: onSave)
+            CreateGameSheet(session: $session, enrolledStudents: players, programColor: programColor, onSave: onSave)
         }
         .fullScreenCover(item: $selectedGame) { game in
             if let index = session.games.firstIndex(where: { $0.id == game.id }) {
@@ -4126,7 +4232,7 @@ struct SessionGamesTabView: View {
                             dataManager.updateSessionGame(inSessionId: session.id, game: updated)
                         }
                     ),
-                    students: enrolledStudents,
+                    students: players,
                     allGamesInSession: session.games,
                     // The Save button on the scoring screen used to do a
                     // whole-session overwrite. The binding above already
@@ -4141,7 +4247,7 @@ struct SessionGamesTabView: View {
             }
         }
         .fullScreenCover(item: $selectedRecapGame) { game in
-            GameRecapView(game: game, students: enrolledStudents, allGamesInSession: session.games)
+            GameRecapView(game: game, students: players, allGamesInSession: session.games)
         }
 
     }
@@ -4317,7 +4423,8 @@ struct SessionGamesTabView: View {
 
     private func createStarterGame(type: SessionGameType) {
         let availableStudents = enrolledStudents.filter { session.actualAttendeeIds.contains($0.id) }
-        let playerPool = availableStudents.isEmpty ? enrolledStudents : availableStudents
+        // Coaches on a scrimmage are always in the pool (they take no roll call).
+        let playerPool = (availableStudents.isEmpty ? enrolledStudents : availableStudents) + guestPlayers
 
         guard playerPool.count >= 2 else {
             showingCreateGame = true
@@ -4507,6 +4614,7 @@ private struct ScrollOffsetKey: PreferenceKey {
 
 struct LiveGameScoringView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding var game: SessionGame
     let students: [Student]
@@ -4964,7 +5072,7 @@ struct LiveGameScoringView: View {
     private func teamScoreSwitch(team: GameTeam, index: Int) -> some View {
         // Side by side (iPad / Mac) both teams are on screen: no selection.
         let selected = (isIPad && activeTeamsForScoring.count == 2) || selectedTeamIndex == index
-        let color = team.colorHex == "#F5F5F5" ? Color.gray : Color(hex: team.colorHex)
+        let color = team.displayColor(for: colorScheme)
         return Button {
             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { selectedTeamIndex = index }
         } label: {

@@ -621,7 +621,12 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   the black team — and a 3 pt border). StatPressButton sizes its symbol from
   its own height inside an inset: over the word when tall, BESIDE it when
   short (STL / BLK on the phone), the word alone when tiny. Rows cap at
-  150 pt. DEBUG HOOPWISE_LIVE_ASSIST_DEMO=1 freezes a pass for screenshots;
+  150 pt. TEAM COLOUR ON SCREEN is `GameTeam.displayColor(for:)`: a
+  near-black team is light grey in dark mode, a near-white team mid-grey in
+  light mode (the black team's rows, points and score vanished in dark
+  mode). The stat line is ONE line when it fits, else TWO even lines
+  (REB · AST / STL · BLK) — never truncated. HOOPWISE_LIVE_BLACK=1 makes the
+  gallery's home team black. DEBUG HOOPWISE_LIVE_ASSIST_DEMO=1 freezes a pass for screenshots;
   HOOPWISE_SHOT=liveGame is now a full-screen cover, as in the app. Every stat button goes through
   `StatPressButton` + `StatPressGate`: the old Button + simultaneous long
   press removed on hold and RE-ADDED on release. Tests: StatPressGateTests,
@@ -999,6 +1004,51 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   list. The left side (name — now shrinks before truncating — reason chip,
   grade, focus) still opens the hero. The "See all N players" bar lost its
   duplicate mini photos. Pinned by TodaysAthletesUITests.
+- COACHES ON A SCRIMMAGE / GAME PREP (10 November 2026, Luther: "add
+  coaches from organization to a scrimmage session or game prep … they'd
+  appear as coaches alongside other students"). `SessionType.
+  takesCoachesAsPlayers` (scrimmage, gamePrep). `SessionCurriculum.coachIds`
+  (inside the curriculum JSON — no schema change; older plans decode with
+  none). The session page's Add Athlete sheet lists active organization
+  coaches FIRST under "Coaches" with a Coach tag (AthletePickerSheet
+  `coaches:`) — only on those two types; a program-less scrimmage shows the
+  button for coaches alone. Added coaches are rows under the athlete roster
+  (photo, names, Coach tag, ⋯ Remove from session) with NO attendance mark:
+  never charged, never expected, never inferred absent. Games: they join
+  the team pool (`SessionGamesTabView.guestPlayers`, as display-only
+  `StaffCoach.asGuestPlayer` Student values — never saved) and are scored
+  like anyone, but every staff coach's lines are stripped from the Games
+  tab's report and insights (`GameStatsReport.withoutPlayers` /
+  `make(excluding:)`); athlete profiles read only their own lines anyway.
+  HOOPWISE_SHOT=scrimmageSession (+ HOOPWISE_SCRIMMAGE_RESET=1 puts the
+  demo session back). Tests: SessionCoachesTests, SessionCoachesUITests.
+- COACH PROFILE + FORM REDESIGNED (10 November 2026, Luther: "very messy …
+  make it look better and intentional … game stats, last attended practice,
+  position when playing 5v5, tendencies"). Views/Hub/CoachProfileViews.swift
+  replaces the old CoachProfileDetailView / AddEditCoachView (deleted from
+  OrganizationView.swift; ReassignProgramSheet stays there). PROFILE: header
+  (photo, names Chinese-first in Chinese, role / position / You / Inactive
+  tags), four tiles when they have games (Games, PTS · REB · AST per game),
+  On the floor (position, tendency chips, last played, W–L), Recent games
+  (5), Coaching (programs, age groups, specialties), Contact (tap to call /
+  mail), Notes. A coach's games = scrimmage / game prep sessions they played
+  in (`DataManager.sessionsPlayed(byCoach:)` → GameStatsReport.player).
+  FORM: a native Form editing a DRAFT of the stored coach (photo via
+  PhotosPicker, names, contact, role / access / active with the access
+  description as footer, On the floor: position segmented — PG SG SF PF C —
+  and tendency chips, Coaching: age-group chips + specialties, programs with
+  Reassign, notes, Delete). FIXED: the old form rebuilt the record and
+  ERASED the coach's photo on every save, and `updateStaffCoach` never wrote
+  accessLevel. PLAYER DATA (Models/CoachPlayerProfile.swift, no schema
+  change): `playerPosition` / `playerTendencies` are tagged entries
+  ("player.position:pg", "player.tendency:shooter") in the synced
+  `specializations`; `coachingSpecializations` is the list without them —
+  what every screen shows, and what the profile→staff sync writes (it used to
+  overwrite the whole list). Tendencies: shooter, high IQ, rebounder,
+  all-around, defender, playmaker, slasher. TRAP: a `Label` inside a Form row
+  rendered icon-only as a tall pill in a FlowLayout — chips use an explicit
+  HStack. HOOPWISE_SHOT=coachProfile / coachEdit. Tests:
+  CoachPlayerProfileTests, CoachProfileUITests.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

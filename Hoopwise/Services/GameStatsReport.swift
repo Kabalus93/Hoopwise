@@ -64,11 +64,25 @@ enum GameStatsReport {
     /// Sessions compared on each side of the trend direction.
     static let recentWindow = 3
 
+    /// The session with these people's stat lines removed from its games.
+    static func withoutPlayers(_ ids: Set<UUID>, in session: SessionEvent) -> SessionEvent {
+        var copy = session
+        for i in copy.games.indices {
+            copy.games[i].playerStats.removeAll { ids.contains($0.playerId) }
+        }
+        return copy
+    }
+
     static func played(_ game: SessionGame) -> Bool {
         game.status != .setup && !game.playerStats.isEmpty
     }
 
-    static func make(sessions: [SessionEvent], roster: [UUID], current: SessionEvent?) -> Report {
+    /// `excluding`: people whose stat lines are left out entirely — the
+    /// organization's coaches who played in a scrimmage are not athletes.
+    static func make(sessions: [SessionEvent], roster: [UUID], current: SessionEvent?,
+                     excluding: Set<UUID> = []) -> Report {
+        let sessions = excluding.isEmpty ? sessions : sessions.map { withoutPlayers(excluding, in: $0) }
+        let current = current.map { excluding.isEmpty ? $0 : withoutPlayers(excluding, in: $0) }
         let real = sessions
             .filter { !SessionLifecycle.didNotHappen($0) && $0.games.contains(where: played) }
             .sorted { $0.startTime < $1.startTime }

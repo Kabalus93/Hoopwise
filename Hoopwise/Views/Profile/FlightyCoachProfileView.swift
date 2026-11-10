@@ -1361,7 +1361,7 @@ struct FlightyEditCoachProfileView: View {
             updatedStaffCoach.name = coach.name
             updatedStaffCoach.email = coach.email
             updatedStaffCoach.phone = coach.phone
-            updatedStaffCoach.specializations = coach.specializations
+            updatedStaffCoach.coachingSpecializations = coach.specializations
             updatedStaffCoach.profileImageData = coach.profileImageData
             updatedStaffCoach.updatedAt = Date()
             dataManager.updateStaffCoach(updatedStaffCoach)
@@ -1371,7 +1371,7 @@ struct FlightyEditCoachProfileView: View {
             updatedStaffCoach.name = coach.name
             updatedStaffCoach.email = coach.email
             updatedStaffCoach.phone = coach.phone
-            updatedStaffCoach.specializations = coach.specializations
+            updatedStaffCoach.coachingSpecializations = coach.specializations
             updatedStaffCoach.profileImageData = coach.profileImageData
             updatedStaffCoach.updatedAt = Date()
             dataManager.updateStaffCoach(updatedStaffCoach)

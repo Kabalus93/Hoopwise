@@ -242,6 +242,31 @@ enum SheetGalleryDebug {
                 missing("sessionPage: no program session in the store")
             }
 
+        case "scrimmageSession":
+            // A program session shown as a scrimmage: Add Athlete also offers
+            // the organization's coaches.
+            if let program = dm.programs.first,
+               var session = dm.sessionEvents
+                .filter({ $0.programId == program.id })
+                .min(by: { $0.startTime < $1.startTime }) {
+                if ProcessInfo.processInfo.environment["HOOPWISE_SCRIMMAGE_RESET"] == "1" {
+                    // UI tests put the demo session back as it was.
+                    let _ = {
+                        session.sessionType = .training
+                        session.curriculum.coachIds = []
+                        dm.updateSessionEvent(session, keepLiveFields: true)
+                    }()
+                    missing("scrimmageSession: reset to training")
+                } else {
+                    let _ = { session.sessionType = .scrimmage }()
+                    NavigationStack {
+                        FlightySessionPageView(session: session, accessMode: .execution)
+                    }
+                }
+            } else {
+                missing("scrimmageSession: no program session in the store")
+            }
+
         case "privateSession":
             // A private client's session: Add Athlete adds to THIS session
             // only (never the program).
@@ -386,6 +411,14 @@ enum SheetGalleryDebug {
                 .scaleEffect(ProcessInfo.processInfo.environment["HOOPWISE_DRAWINGS_WIDE"] == "1" ? 0.6 : 1)
             }
 
+        case "coachProfile", "coachEdit":
+            // The first coach's profile (or the edit form), as Organization opens them.
+            if let coach = dm.staffCoaches.first {
+                if shot == "coachEdit" { AddEditCoachView(coach: coach) } else { CoachProfileDetailView(coach: coach) }
+            } else {
+                missing("coachProfile: no coach")
+            }
+
         case "organization":
             // Hub → Organization: coaches, venues, schools, age categories,
             // share & import.
@@ -522,7 +555,10 @@ private struct LiveGameGalleryHost: View {
     init(students: [Student]) {
         self.students = students
         let ids = students.map(\.id)
-        let home = GameTeam(name: "Blue", colorHex: "#007AFF", playerIds: Array(ids.prefix(5)))
+        // HOOPWISE_LIVE_BLACK=1: the home team plays in black (dark-mode check).
+        let black = ProcessInfo.processInfo.environment["HOOPWISE_LIVE_BLACK"] == "1"
+        let home = GameTeam(name: black ? "Black" : "Blue", colorHex: black ? "#1C1C1E" : "#007AFF",
+                            playerIds: Array(ids.prefix(5)))
         let away = GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: Array(ids.dropFirst(5).prefix(5)))
         _game = State(initialValue: SessionGame(sessionId: UUID(), teams: [home, away],
                                                 status: .inProgress, startedAt: Date()))

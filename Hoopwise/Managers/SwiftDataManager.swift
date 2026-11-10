@@ -4331,6 +4331,8 @@ class SwiftDataManager: ObservableObject {
                 sdCoach.email = coach.email
                 sdCoach.phone = coach.phone
                 sdCoach.role = coach.role
+                // Was missing: an access level change never saved.
+                sdCoach.accessLevel = coach.accessLevel
                 sdCoach.specializations = coach.specializations
                 sdCoach.ageGroups = coach.ageGroups
                 sdCoach.avatarColor = coach.avatarColor

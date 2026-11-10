@@ -58,10 +58,10 @@ struct CoachMentionProfileSheet: View {
             }
 
             // Specializations
-            if !coach.specializations.isEmpty {
+            if !coach.coachingSpecializations.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(coach.specializations, id: \.self) { spec in
+                        ForEach(coach.coachingSpecializations, id: \.self) { spec in
                             Text(spec)
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(Color(coach.avatarColor.color))

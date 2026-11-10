@@ -72,6 +72,10 @@ struct AthletePickerSheet: View {
     /// Show the "X athletes selected" counter row. Off for single-action
     /// "add" flows that already show the count in the toolbar button.
     let showSelectionCounter: Bool
+    /// Organization coaches offered too (scrimmage / game prep), listed
+    /// first under "Coaches" with a Coach tag. Their ids come back in the
+    /// same `onConfirm` list; the caller tells them apart.
+    let coaches: [Student]
 
     let onConfirm: ([UUID]) -> Void
 
@@ -95,8 +99,10 @@ struct AthletePickerSheet: View {
         banner: Banner? = nil,
         confirmLabel: String? = nil,
         showSelectionCounter: Bool = true,
+        coaches: [Student] = [],
         onConfirm: @escaping ([UUID]) -> Void
     ) {
+        self.coaches = coaches
         self.title = title
         self.students = students
         self.initialSelection = initialSelection
@@ -139,6 +145,14 @@ struct AthletePickerSheet: View {
         }
     }
 
+    private var visibleCoaches: [Student] {
+        let needle = searchText.trimmingCharacters(in: .whitespaces)
+        return coaches
+            .filter { needle.isEmpty || $0.name.localizedStandardContains(needle)
+                || ($0.chineseName ?? "").localizedStandardContains(needle) }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
     private var confirmButtonTitle: String {
         let count = selected.count
         if count <= 1 { return confirmLabel }
@@ -162,7 +176,7 @@ struct AthletePickerSheet: View {
                     selectionCounter
                 }
 
-                if visibleStudents.isEmpty {
+                if visibleStudents.isEmpty && visibleCoaches.isEmpty {
                     emptyState
                 } else {
                     listView
@@ -180,7 +194,7 @@ struct AthletePickerSheet: View {
                         // Preserve on-screen order — callers can rely on
                         // `[UUID]` matching the visible list, not insertion
                         // order from the Set.
-                        let ordered = visibleStudents.map(\.id).filter { selected.contains($0) }
+                        let ordered = (visibleCoaches + visibleStudents).map(\.id).filter { selected.contains($0) }
                         // Append any selected IDs that filtered/searched out
                         // of the visible list so they don't get dropped.
                         let extras = selected.subtracting(ordered)
@@ -308,6 +322,16 @@ struct AthletePickerSheet: View {
     private var listView: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
+                if !visibleCoaches.isEmpty {
+                    sectionHeader(isChinese ? "教练" : "Coaches")
+                    ForEach(visibleCoaches) { coach in
+                        row(coach, isCoach: true)
+                    }
+                    if !visibleStudents.isEmpty {
+                        sectionHeader(isChinese ? "学员" : "Athletes")
+                            .padding(.top, 8)
+                    }
+                }
                 ForEach(visibleStudents) { student in
                     row(student)
                 }
@@ -318,7 +342,16 @@ struct AthletePickerSheet: View {
         }
     }
 
-    private func row(_ student: Student) -> some View {
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+    }
+
+    private func row(_ student: Student, isCoach: Bool = false) -> some View {
         let isSelected = selected.contains(student.id)
         return Button {
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -356,6 +389,14 @@ struct AthletePickerSheet: View {
                         .foregroundColor(AppTheme.textPrimary)
 
                     HStack(spacing: 8) {
+                        if isCoach {
+                            Text(isChinese ? "教练" : "Coach")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.indigo, in: .capsule)
+                        }
                         if let chinese = student.secondaryNameLine {
                             Text(chinese)
                                 .font(.system(size: 12))

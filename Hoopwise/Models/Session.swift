@@ -50,6 +50,9 @@ enum SessionAccessMode {
 
 enum SessionType: String, Codable, CaseIterable {
     case training, scrimmage, gamePrep, recovery, assessment
+
+    /// Scrimmages and game prep can have organization coaches on the floor.
+    var takesCoachesAsPlayers: Bool { self == .scrimmage || self == .gamePrep }
     
     var displayName: String {
         switch self {
@@ -86,10 +89,15 @@ struct SessionCurriculum: Codable, Hashable {
     /// (November 2026, Luther). Inside the curriculum JSON, so no schema
     /// change; a plan saved before this has none.
     var plays: [SessionPlayRef]
+    /// Organization coaches taking part in a scrimmage or game prep session
+    /// (November 2026, Luther): on its roster with a Coach tag and pickable
+    /// for game teams, never charged, never in attendance or athlete stats.
+    /// Inside the curriculum JSON, so no schema change.
+    var coachIds: [UUID]
     
     init(warmupDrillIds: [UUID] = [], skillDrillIds: [UUID] = [], gameDrillIds: [UUID] = [],
          warmupMinutes: Int = 30, skillsMinutes: Int = 30, gameMinutes: Int = 30, notes: String? = nil,
-         plays: [SessionPlayRef] = []) {
+         plays: [SessionPlayRef] = [], coachIds: [UUID] = []) {
         self.warmupDrillIds = warmupDrillIds
         self.skillDrillIds = skillDrillIds
         self.gameDrillIds = gameDrillIds
@@ -98,10 +106,12 @@ struct SessionCurriculum: Codable, Hashable {
         self.gameMinutes = gameMinutes
         self.notes = notes
         self.plays = plays
+        self.coachIds = coachIds
     }
 
     private enum CodingKeys: String, CodingKey {
         case warmupDrillIds, skillDrillIds, gameDrillIds, warmupMinutes, skillsMinutes, gameMinutes, notes, plays
+        case coachIds
     }
 
     init(from decoder: Decoder) throws {
@@ -114,6 +124,7 @@ struct SessionCurriculum: Codable, Hashable {
         gameMinutes = try c.decode(Int.self, forKey: .gameMinutes)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         plays = try c.decodeIfPresent([SessionPlayRef].self, forKey: .plays) ?? []
+        coachIds = try c.decodeIfPresent([UUID].self, forKey: .coachIds) ?? []
     }
     
     var totalDrillCount: Int { warmupDrillIds.count + skillDrillIds.count + gameDrillIds.count }

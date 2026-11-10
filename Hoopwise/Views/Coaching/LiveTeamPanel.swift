@@ -78,11 +78,10 @@ struct LiveTeamPanel: View {
     @State private var dragFrom: (id: UUID, start: CGPoint)?
     @State private var dragTo: CGPoint?
     @State private var basketTick = 0
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let space = "liveTeamPanel"
-    private var teamColor: Color {
-        team.colorHex == "#F5F5F5" ? .gray : Color(hex: team.colorHex)
-    }
+    private var teamColor: Color { team.displayColor(for: colorScheme) }
     private var players: [Student] {
         team.playerIds.compactMap { id in students.first { $0.id == id } }
     }
@@ -196,12 +195,21 @@ struct LiveTeamPanel: View {
         let parts: [(String, Int)] = [
             (zh ? "板" : "REB", stats?.rebounds ?? 0), (zh ? "助" : "AST", stats?.assists ?? 0),
             (zh ? "断" : "STL", stats?.steals ?? 0), (zh ? "帽" : "BLK", stats?.blocks ?? 0)]
-        return Text(parts.map { "\($0.1) \($0.0)" }.joined(separator: " · "))
-            .font(.system(size: 11, weight: .medium))
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
+        let item = { (part: (String, Int)) in "\(part.1) \(part.0)" }
+        // One line when it fits, else two even lines (REB · AST / STL · BLK)
+        // — never cut off (Luther, November 2026: the iPad mini's narrower
+        // rows showed "0 REB · 1 AST · 0 ST…").
+        return ViewThatFits(in: .horizontal) {
+            Text(parts.map(item).joined(separator: " · "))
+                .fixedSize()
+            VStack(alignment: .leading, spacing: 1) {
+                Text(parts.prefix(2).map(item).joined(separator: " · ")).fixedSize()
+                Text(parts.suffix(2).map(item).joined(separator: " · ")).fixedSize()
+            }
+        }
+        .font(.system(size: 11, weight: .medium))
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
     }
 
     private func statButton(_ kind: GameStatAction.Kind, _ student: Student) -> some View {
@@ -288,5 +296,23 @@ struct LiveTeamPanel: View {
         path.addLine(to: CGPoint(x: tip.x - ux * l + uy * w, y: tip.y - uy * l - ux * w))
         path.closeSubpath()
         return path
+    }
+}
+
+// MARK: - Team colour on screen
+
+extension GameTeam {
+    /// The team's colour as the live screen draws it: a black team is light
+    /// grey in dark mode and a white team mid-grey in light mode (November
+    /// 2026 — the black team's rows, points and score vanished in dark mode).
+    func displayColor(for scheme: ColorScheme) -> Color {
+        let hex = colorHex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        var value: UInt64 = 0
+        guard hex.count == 6, Scanner(string: hex).scanHexInt64(&value) else { return Color(hex: colorHex) }
+        let r = Double((value >> 16) & 0xFF) / 255, g = Double((value >> 8) & 0xFF) / 255, b = Double(value & 0xFF) / 255
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        if scheme == .dark && luminance < 0.18 { return Color(white: 0.78) }
+        if scheme == .light && luminance > 0.85 { return Color(white: 0.45) }
+        return Color(hex: colorHex)
     }
 }
