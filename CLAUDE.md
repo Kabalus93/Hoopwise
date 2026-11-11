@@ -299,6 +299,17 @@ idiom). What differs on the Mac:
   hoopwise.mac / drillPicker. Verified live on the demo copy with the
   coach's key: his description → 20 Passes, 20 Passes Keeping Off, ….
   Tests: DrillTypedSearchTests.
+  THE PICKER IS THE LIBRARY (11 Nov 2026, Luther: "reflect the drills
+  library properly with the same search bar"): SmartDrillPickerSheet is now
+  `DrillsLibraryView(pick:)` — the same page (age chips, block segments, type
+  chips, Personal, search across the whole library, Claude on Return on the
+  Mac) with an add button beside each drill row (a green check once in the
+  section; a tap adds and closes, as before); rows still open the drill.
+  Title "Add to Warm-up / Skills"; the age starts at the program's library
+  age, Warm-up opens on Routine and Skills on Compete; the picker remembers
+  its own age (`planPicker.age`) apart from the page's (`library.age`); no +
+  New Drill there. The old Smart Suggestions / category chips / level dots
+  are deleted. HOOPWISE_SHOT=drillPicker (+ HOOPWISE_DRILLPICKER_SEARCH).
 - NEW DRILL: RETURN WRITES THE STEPS (11 Nov 2026, Luther: "after writing
   the description and pressing enter, have Claude interpret it and fill in
   the steps and key points … no visual cues besides a spin wheel next to

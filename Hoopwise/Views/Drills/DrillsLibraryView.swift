@@ -9,11 +9,29 @@ import OSLog
 /// and are read from the library directly — they are not drills and never
 /// reach session planning.
 struct DrillsLibraryView: View {
+    /// The SAME page as the session plan's Add Drill picker (Luther, November
+    /// 2026: the picker had its own old categories and search). Each drill row
+    /// gets an add button; the age starts at the session's.
+    struct Pick {
+        let title: String
+        let initialAge: ActivityAge?
+        let initialBlock: ActivityBlock
+        let isAdded: (UUID) -> Bool
+        let add: (DrillItem) -> Void
+    }
+
+    var pick: Pick? = nil
+
     @EnvironmentObject var dataManager: DataManager
     @State private var searchText = ""
     @State private var showingAddDrill = false
-    /// "U8" … or "mine".
-    @AppStorage("library.age") private var ageChoice = ActivityAge.u8.rawValue
+    /// "U8" … or "mine". The picker remembers its own age apart from the page.
+    @AppStorage private var ageChoice: String
+
+    init(pick: Pick? = nil) {
+        self.pick = pick
+        _ageChoice = AppStorage(wrappedValue: ActivityAge.u8.rawValue, pick == nil ? "library.age" : "planPicker.age")
+    }
     @AppStorage("library.includeEarlier") private var includeEarlier = false
     @State private var block: ActivityBlock = .routine
     @State private var type: ActivityType?
@@ -145,7 +163,7 @@ struct DrillsLibraryView: View {
         if !personal.isEmpty {
             Section {
                 ForEach(personal) { drill in
-                    NavigationLink(destination: DrillDetailView(drill: drill)) { DrillRow(drill: drill) }
+                    drillLink(drill) { DrillRow(drill: drill) }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(drill) }
                 }
             } header: {
@@ -157,7 +175,7 @@ struct DrillsLibraryView: View {
             if !rows.isEmpty {
                 Section {
                     ForEach(rows, id: \.activity.key) { pair in
-                        NavigationLink(destination: DrillDetailView(drill: pair.drill)) {
+                        drillLink(pair.drill) {
                             LibraryRow(activity: pair.activity, drill: pair.drill, showAge: false, showBlock: true)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(pair.drill) }
@@ -176,6 +194,31 @@ struct DrillsLibraryView: View {
             } header: {
                 Text("\(ActivityType.rules.title) · \(ruleMatches.count)")
             }
+        }
+    }
+
+    /// A drill row: opens the drill; in the plan picker, an add button
+    /// beside it (a check once it is in the section).
+    @ViewBuilder
+    private func drillLink<Label: View>(_ drill: DrillItem, @ViewBuilder label: () -> Label) -> some View {
+        if let pick {
+            let added = pick.isAdded(drill.id)
+            HStack(spacing: 10) {
+                NavigationLink(destination: DrillDetailView(drill: drill)) { label() }
+                Button {
+                    if !added { pick.add(drill) }
+                } label: {
+                    Image(systemName: added ? "checkmark.circle.fill" : "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(added ? Color.green : Color.accentColor)
+                }
+                .buttonStyle(.borderless)
+                .disabled(added)
+                .accessibilityLabel(added ? (isChinese ? "已添加" : "Added") : (isChinese ? "添加" : "Add"))
+                .accessibilityIdentifier("drillPicker.add")
+            }
+        } else {
+            NavigationLink(destination: DrillDetailView(drill: drill)) { label() }
         }
     }
 
@@ -229,7 +272,7 @@ struct DrillsLibraryView: View {
         // The filters sit right on top of the list (Luther, November 2026:
         // there was a section gap between ages, blocks and the list).
         .listSectionSpacing(.compact)
-        .navigationTitle(isChinese ? "训练库" : "Activity library")
+        .navigationTitle(pick?.title ?? (isChinese ? "训练库" : "Activity library"))
         .searchable(text: $searchText, prompt: isChinese ? "搜索全部训练" : "Search all drills")
         #if targetEnvironment(macCatalyst)
         // Typing filters as before; Return asks Claude about the whole library.
@@ -238,13 +281,18 @@ struct DrillsLibraryView: View {
             if text.trimmingCharacters(in: .whitespacesAndNewlines) != claudeQuery { clearClaude() }
         }
         #endif
+        .onAppear {
+            guard let pick else { return }
+            if let age = pick.initialAge { ageChoice = age.rawValue }
+            block = pick.initialBlock
+        }
         #if DEBUG
         // HOOPWISE_LIBRARY_SEARCH=<text>: open with that search typed.
         // HOOPWISE_DELETE_DRILLS_NAMED=<name>: UI tests clean up the drills
         // they created — demo store only.
         .onAppear {
             let env = ProcessInfo.processInfo.environment
-            if let text = env["HOOPWISE_LIBRARY_SEARCH"] { searchText = text }
+            if let text = env["HOOPWISE_LIBRARY_SEARCH"] ?? (pick != nil ? env["HOOPWISE_DRILLPICKER_SEARCH"] : nil) { searchText = text }
             if let name = env["HOOPWISE_DELETE_DRILLS_NAMED"], ScreenshotStore.isActive {
                 for drill in dataManager.drills where drill.name == name { dataManager.deleteDrill(drill) }
             }
@@ -262,9 +310,11 @@ struct DrillsLibraryView: View {
                         .accessibilityIdentifier("library.info")
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showingAddDrill = true } label: { Image(systemName: "plus") }
-                    .accessibilityLabel(DrillLocalization.L("Add Drill"))
+            if pick == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingAddDrill = true } label: { Image(systemName: "plus") }
+                        .accessibilityLabel(DrillLocalization.L("Add Drill"))
+                }
             }
         }
         .sheet(isPresented: $showingAddDrill) {
@@ -337,7 +387,7 @@ struct DrillsLibraryView: View {
                     }
                     ForEach(result.matches, id: \.drillId) { match in
                         if let drill = visibleDrills.first(where: { $0.id == match.drillId }) {
-                            NavigationLink(destination: DrillDetailView(drill: drill)) { suggestionRow(drill, why: match.why) }
+                            drillLink(drill) { suggestionRow(drill, why: match.why) }
                                 .accessibilityIdentifier("library.suggestion")
                         }
                     }
@@ -418,7 +468,7 @@ struct DrillsLibraryView: View {
         if !shownPairs.isEmpty && type != .rules {
             Section {
                 ForEach(shownPairs, id: \.activity.key) { pair in
-                    NavigationLink(destination: DrillDetailView(drill: pair.drill)) {
+                    drillLink(pair.drill) {
                         LibraryRow(activity: pair.activity, drill: pair.drill,
                                    showAge: includeEarlier)
                     }
@@ -511,7 +561,7 @@ struct DrillsLibraryView: View {
         } else {
             Section {
                 ForEach(mine) { drill in
-                    NavigationLink(destination: DrillDetailView(drill: drill)) { DrillRow(drill: drill) }
+                    drillLink(drill) { DrillRow(drill: drill) }
                         .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(drill) }
                 }
             } header: {
