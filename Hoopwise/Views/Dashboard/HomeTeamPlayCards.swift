@@ -18,9 +18,6 @@ struct HomeTeamSummary {
     let team: Team
     let members: [Student]
     let nextPractice: SessionEvent?
-    /// Present ÷ expected over the last (up to) four practices that happened
-    /// and had a roll call.
-    let attendance: (present: Int, expected: Int, practices: Int)
     let focus: [SessionPlayRef]
     let withoutRole: [Student]
 
@@ -32,17 +29,6 @@ struct HomeTeamSummary {
         nextPractice = practices
             .filter { $0.endTime > now }
             .min { $0.startTime < $1.startTime }
-        let recent = practices
-            .filter { $0.startTime < now && !$0.actualAttendeeIds.isEmpty }
-            .sorted { $0.startTime > $1.startTime }
-            .prefix(4)
-        var present = 0, expected = 0
-        for session in recent {
-            let roster = Set(session.attendeeIds + session.curriculum.coachIds)
-            present += session.actualAttendeeIds.count
-            expected += max(roster.count, session.actualAttendeeIds.count)
-        }
-        attendance = (present, expected, recent.count)
         let book = team.playbook
         focus = book.focusPlays
         let plays = focus
@@ -103,13 +89,13 @@ struct HomeTeamCard: View {
             .padding(.horizontal, 20)
             .padding(.top, 18)
 
-            HStack(alignment: .top, spacing: 10) {
+            // Laid out like Today's athletes' performance / focus area:
+            // value over caption, no boxes. Attendance left the card (Luther).
+            HStack(alignment: .lastTextBaseline, spacing: 20) {
                 stat(value: nextValue, caption: isChinese ? "下次训练" : "next practice", tint: colour)
-                stat(value: attendanceValue, caption: attendanceCaption, tint: attendanceTint)
                 stat(value: focusValue, caption: isChinese ? "当前重点" : "focus", tint: .primary)
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 20)
             .padding(.top, 14)
 
             if let line = nudge {
@@ -141,18 +127,13 @@ struct HomeTeamCard: View {
 
     private func stat(value: String, caption: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.subheadline.weight(.semibold).monospacedDigit()).foregroundStyle(tint)
-                .lineLimit(2).minimumScaleFactor(0.85).fixedSize(horizontal: false, vertical: true)
-            Text(caption).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(value).font(.subheadline.bold()).foregroundStyle(tint).lineLimit(1)
+            Text(caption).font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 12))
     }
 
     private var nextValue: String {
-        guard let session = summary.nextPractice else { return "—" }
+        guard let session = summary.nextPractice else { return isChinese ? "未安排" : "Not scheduled" }
         if session.startTime <= .now { return isChinese ? "进行中" : "Now" }
         let time = session.startTime.formatted(date: .omitted, time: .shortened)
         if Calendar.current.isDateInToday(session.startTime) { return (isChinese ? "今天 " : "Today ") + time }
@@ -160,27 +141,11 @@ struct HomeTeamCard: View {
         return session.startTime.formatted(.dateTime.weekday(.abbreviated)) + " " + time
     }
 
-    private var attendanceValue: String {
-        let a = summary.attendance
-        guard a.expected > 0 else { return "—" }
-        return "\(Int((Double(a.present) / Double(a.expected) * 100).rounded()))%"
-    }
 
-    private var attendanceCaption: String {
-        let n = summary.attendance.practices
-        if n == 0 { return isChinese ? "出勤" : "attendance" }
-        return isChinese ? "近 \(n) 次出勤" : (n == 1 ? "last practice" : "last \(n) practices")
-    }
 
-    private var attendanceTint: Color {
-        let a = summary.attendance
-        guard a.expected > 0 else { return .secondary }
-        let rate = Double(a.present) / Double(a.expected)
-        return rate >= 0.8 ? .green : rate >= 0.6 ? .orange : .red
-    }
 
     private var focusValue: String {
-        guard let first = summary.focus.first else { return "—" }
+        guard let first = summary.focus.first else { return isChinese ? "未设置" : "Not set" }
         return summary.focus.count > 1 ? "\(first.name) +\(summary.focus.count - 1)" : first.name
     }
 

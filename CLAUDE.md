@@ -1128,9 +1128,10 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   TEAM (right column on iPad, after Today's athletes): one per PINNED team —
   team page ⋯ → Pin to Home / Unpin (`HomePins`, device-local UserDefaults
   `home.pinnedTeams`). Glass card with a team-colour wash: badge, name,
-  players, the roster cluster (≤ 34 % of the card), three tiles — next
-  practice, attendance % over the last ≤ 4 practices with a roll call
-  (green ≥ 80 / orange ≥ 60 / red), focus — and one nudge line (no focus
+  players, the roster cluster (≤ 34 % of the card), next practice and focus
+  laid out like Today's athletes' performance / focus area (value over
+  caption, no boxes — Luther removed the tiles and attendance) — and one
+  nudge line (no focus
   plays yet, or who has no role in them). Tap → the team. PLAY (left
   column, after the briefing): `PlayActivity` (Models/JournalPlays/
   PlayActivity.swift, device-local — JournalPlay has no edit date and adding
@@ -1717,6 +1718,9 @@ found two bugs, and both were in code that renders documents sent to clients.
   smart-group threshold. Dismissal is per-edge (keys embed the edge).
   Items age out at their deadline; display cap AttentionRules.displayCap
   is a safety rail — if a rule alone produces >5 items, tune the rule.
+- The Home ATTENTION card has no category chips (11 Nov 2026, Luther:
+  the "Close out" box repeated the line above): the urgent row opens its
+  category, "See everything" covers several.
 - RARE BY CONSTRUCTION (October 2026, Luther: "every single thing appears
   in it"). The list carries ONLY five rules; the red card appears only when
   one fires:

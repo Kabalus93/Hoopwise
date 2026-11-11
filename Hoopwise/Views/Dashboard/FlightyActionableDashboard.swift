@@ -934,22 +934,11 @@ struct FlightyActionableDashboard: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Category chips — only show categories with items so the row
-            // never looks padded with empties.
+            // The category chips are gone (Luther, November 2026: the
+            // "Close out" box repeated the line above). The urgent row opens
+            // its category; "See everything" covers several categories.
             let activeCategories = AttentionCategory.allCases
                 .filter { inbox.count(in: $0) > 0 }
-            if !activeCategories.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(activeCategories) { category in
-                        attentionCategoryChip(
-                            category: category,
-                            count: inbox.count(in: category)
-                        )
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, activeCategories.count > 0 ? 8 : 0)
-            }
 
             // De-emphasized "see everything" link — only useful when there's
             // more than one category in play; for a single-category inbox
