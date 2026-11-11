@@ -423,6 +423,10 @@ enum SheetGalleryDebug {
             // Hub → Teams.
             NavigationStack { TeamsScreen() }
 
+        case "newDrill":
+            // New Drill; with HOOPWISE_NEWDRILL_DESCRIPTION it asks Claude.
+            AddDrillView()
+
         case "lexicon":
             // Hub → Lexicon; HOOPWISE_LEXICON_TERM=<term> opens that entry.
             NavigationStack {

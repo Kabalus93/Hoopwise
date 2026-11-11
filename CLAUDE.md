@@ -299,6 +299,21 @@ idiom). What differs on the Mac:
   hoopwise.mac / drillPicker. Verified live on the demo copy with the
   coach's key: his description → 20 Passes, 20 Passes Keeping Off, ….
   Tests: DrillTypedSearchTests.
+- NEW DRILL: RETURN WRITES THE STEPS (11 Nov 2026, Luther: "after writing
+  the description and pressing enter, have Claude interpret it and fill in
+  the steps and key points … no visual cues besides a spin wheel next to
+  Description"). AddDrillView: Return in the description (the text grew by
+  one trailing line break — `DrillWriter.pressedReturn`; the break is
+  dropped) sends name + description + players + minutes to Claude
+  (Services/DrillWriter.swift — same model, key and raw call as DrillFinder;
+  strict JSON {instructions, keyPoints}); a mini ProgressView beside
+  "Description" while it works. It fills a list only when blank or still
+  exactly its last answer (`mayReplace`) — never over the coach's typing.
+  No key / no network / error: nothing changes, quietly. The key exists only
+  where Profile → "Claude in the app" can set it — the Mac today. DEBUG
+  HOOPWISE_SHOT=newDrill + HOOPWISE_NEWDRILL_DESCRIPTION=<text> types it,
+  presses Return and logs hoopwise.mac / drillWriter (verified live on the
+  demo copy, ~6 s: five steps, three points). Tests: DrillWriterTests.
 - RIGHT-CLICK MENUS + COMMANDS (Luther, November 2026), Catalyst only —
   Views/Components/MacMenus.swift: `.sessionMacMenu(session)` on calendar rows
   (Open → .hoopwiseOpenSessionRequest; Mark Everyone Present, confirmed, via

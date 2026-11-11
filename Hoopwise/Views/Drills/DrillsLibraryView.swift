@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 
 /// The drills screen, built on the activity library (October 2026, Luther):
 /// pick an AGE, a session BLOCK and an activity TYPE. "Personal" (was
@@ -1970,6 +1971,10 @@ struct AddDrillView: View {
     /// 2026): saved as the drill's first visual on Create.
     @State private var drawing: DrillDrawing?
     @State private var drawingOpen = false
+    /// Return in the description asks Claude for the steps and key points
+    /// (DrillWriter); the spinner beside "Description" is the only sign.
+    @State private var writing = false
+    @State private var lastWritten: DrillWriterResult?
     
     var body: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
@@ -1994,9 +1999,24 @@ struct AddDrillView: View {
                     Stepper(isChinese ? "最少人数：\(minPlayers)" : "Min Players: \(minPlayers)", value: $minPlayers, in: 1...20)
                 }
                 
-                Section(isChinese ? "描述" : "Description") {
+                Section {
                     TextEditor(text: $description)
                         .frame(minHeight: 80)
+                        .accessibilityIdentifier("newDrill.description")
+                        .onChange(of: description) { old, new in
+                            if let text = DrillWriter.pressedReturn(old: old, new: new) {
+                                description = text
+                                writeFromDescription()
+                            }
+                        }
+                } header: {
+                    HStack(spacing: 6) {
+                        Text(isChinese ? "描述" : "Description")
+                        if writing {
+                            ProgressView().controlSize(.mini)
+                                .accessibilityIdentifier("newDrill.writing")
+                        }
+                    }
                 }
                 
                 Section(isChinese ? "说明" : "Instructions") {
@@ -2022,6 +2042,23 @@ struct AddDrillView: View {
             .fullScreenCover(isPresented: $drawingOpen) {
                 JournalPlayStepEditor(drawing: drawing ?? DrillDrawing.new()) { drawing = $0 }
             }
+            #if DEBUG
+            // HOOPWISE_NEWDRILL_DESCRIPTION=<text> types it and presses Return;
+            // the result is logged to hoopwise.mac / drillWriter.
+            .onAppear {
+                guard let text = ProcessInfo.processInfo.environment["HOOPWISE_NEWDRILL_DESCRIPTION"] else { return }
+                description = text
+                Logger(subsystem: "hoopwise.mac", category: "drillWriter")
+                    .notice("drillWriter key \(AnthropicKeyStore.key == nil ? "missing" : "present", privacy: .public)")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { description = text + "\n" }
+            }
+            .onChange(of: writing) { _, now in
+                guard !now, ProcessInfo.processInfo.environment["HOOPWISE_NEWDRILL_DESCRIPTION"] != nil else { return }
+                let log = Logger(subsystem: "hoopwise.mac", category: "drillWriter")
+                log.notice("drillWriter steps: \(instructions.joined(separator: " | "), privacy: .public)")
+                log.notice("drillWriter points: \(keyPoints.joined(separator: " | "), privacy: .public)")
+            }
+            #endif
             .navigationTitle(isChinese ? "新训练" : "New Drill")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -2070,6 +2107,28 @@ struct AddDrillView: View {
                 Text(isChinese ? "可选。用战术板的工具画出球员、跑位、传球和标志桶，可分多步。"
                                : "Optional. Draw players, runs, passes and cones with the plays editor, in as many steps as you need.")
             }
+        }
+    }
+
+    /// Claude reads the description and fills Instructions and Key Points —
+    /// only lists that are blank or still exactly its last answer. No key,
+    /// no connection or a refusal: nothing changes, quietly.
+    private func writeFromDescription() {
+        let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 8, !writing, let key = AnthropicKeyStore.key else { return }
+        writing = true
+        let name = name, players = minPlayers, minutes = durationMinutes
+        Task {
+            defer { writing = false }
+            guard let result = try? await DrillWriter.write(name: name, description: text, minPlayers: players,
+                                                            minutes: minutes, key: key) else { return }
+            if !result.instructions.isEmpty, DrillWriter.mayReplace(instructions, lastWritten: lastWritten?.instructions) {
+                instructions = result.instructions
+            }
+            if !result.keyPoints.isEmpty, DrillWriter.mayReplace(keyPoints, lastWritten: lastWritten?.keyPoints) {
+                keyPoints = result.keyPoints
+            }
+            lastWritten = result
         }
     }
 
