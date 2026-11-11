@@ -425,7 +425,14 @@ enum SheetGalleryDebug {
 
         case "newDrill":
             // New Drill; with HOOPWISE_NEWDRILL_DESCRIPTION it asks Claude.
-            AddDrillView()
+            // HOOPWISE_EDIT_DRILL=<name> opens that drill's Edit Drill (the
+            // same form).
+            if let name = ProcessInfo.processInfo.environment["HOOPWISE_EDIT_DRILL"],
+               let drill = dm.drills.first(where: { $0.name == name }) {
+                AddDrillView(editing: drill)
+            } else {
+                AddDrillView()
+            }
 
         case "lexicon":
             // Hub → Lexicon; HOOPWISE_LEXICON_TERM=<term> opens that entry.

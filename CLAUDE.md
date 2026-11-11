@@ -325,6 +325,14 @@ idiom). What differs on the Mac:
   HOOPWISE_SHOT=newDrill + HOOPWISE_NEWDRILL_DESCRIPTION=<text> types it,
   presses Return and logs hoopwise.mac / drillWriter (verified live on the
   demo copy, ~6 s: five steps, three points). Tests: DrillWriterTests.
+  EDIT DRILL IS THE SAME FORM (11 Nov 2026, Luther: "make it work when
+  editing … and make the edit drill UI match the create drill one"):
+  `AddDrillView(editing:)` — prefilled, title Edit Drill, Save writes onto a
+  COPY of the stored drill (updateDrill; never a rebuilt record), the Visual
+  section hidden (visuals live on the drill page); Return in the description
+  works there too and fills only blank lists. The old card-style
+  EditDrillView is deleted; AddEditDrillSheet → AddDrillView(editing:).
+  HOOPWISE_SHOT=newDrill + HOOPWISE_EDIT_DRILL=<name> opens it.
 - RIGHT-CLICK MENUS + COMMANDS (Luther, November 2026), Catalyst only —
   Views/Components/MacMenus.swift: `.sessionMacMenu(session)` on calendar rows
   (Open → .hoopwiseOpenSessionRequest; Mark Everyone Present, confirmed, via

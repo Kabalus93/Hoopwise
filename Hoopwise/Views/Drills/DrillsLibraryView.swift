@@ -2008,15 +2008,32 @@ struct DetailSectionHeader: View {
 struct AddDrillView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.dismiss) var dismiss
+
+    /// Editing an existing drill uses this SAME form (Luther, November 2026:
+    /// "make the edit drill UI match the create drill one"), prefilled; Save
+    /// writes onto a copy of the stored drill, never a rebuilt record.
+    let editing: DrillItem?
     
-    @State private var name = ""
-    @State private var category: DrillCategory = .skills
-    @State private var difficulty: DifficultyLevel = .beginner
-    @State private var durationMinutes = 10
-    @State private var description = ""
-    @State private var instructions: [String] = [""]
-    @State private var keyPoints: [String] = [""]
-    @State private var minPlayers = 1
+    @State private var name: String
+    @State private var category: DrillCategory
+    @State private var difficulty: DifficultyLevel
+    @State private var durationMinutes: Int
+    @State private var description: String
+    @State private var instructions: [String]
+    @State private var keyPoints: [String]
+    @State private var minPlayers: Int
+
+    init(editing: DrillItem? = nil) {
+        self.editing = editing
+        _name = State(initialValue: editing?.name ?? "")
+        _category = State(initialValue: editing?.category ?? .skills)
+        _difficulty = State(initialValue: editing?.difficulty ?? .beginner)
+        _durationMinutes = State(initialValue: editing?.durationMinutes ?? 10)
+        _description = State(initialValue: editing?.description ?? "")
+        _instructions = State(initialValue: (editing?.instructions).flatMap { $0.isEmpty ? nil : $0 } ?? [""])
+        _keyPoints = State(initialValue: (editing?.keyPoints).flatMap { $0.isEmpty ? nil : $0 } ?? [""])
+        _minPlayers = State(initialValue: editing?.minPlayers ?? 1)
+    }
     /// A court drawing made while creating the drill (Luther, November
     /// 2026): saved as the drill's first visual on Create.
     @State private var drawing: DrillDrawing?
@@ -2087,7 +2104,10 @@ struct AddDrillView: View {
                     }
                 }
 
-                visualSection(isChinese: isChinese)
+                // A drill's visuals are managed on its page once it exists.
+                if editing == nil {
+                    visualSection(isChinese: isChinese)
+                }
             }
             .fullScreenCover(isPresented: $drawingOpen) {
                 JournalPlayStepEditor(drawing: drawing ?? DrillDrawing.new()) { drawing = $0 }
@@ -2109,17 +2129,17 @@ struct AddDrillView: View {
                 log.notice("drillWriter points: \(keyPoints.joined(separator: " | "), privacy: .public)")
             }
             #endif
-            .navigationTitle(isChinese ? "新训练" : "New Drill")
+            .navigationTitle(editing == nil ? (isChinese ? "新训练" : "New Drill") : (isChinese ? "编辑训练" : "Edit Drill"))
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "创建" : "Create") {
-                        createDrill()
+                    Button(editing == nil ? (isChinese ? "创建" : "Create") : (isChinese ? "保存" : "Save")) {
+                        if editing == nil { createDrill() } else { saveEdits() }
                     }
-                    .disabled(name.isEmpty)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
@@ -2182,6 +2202,21 @@ struct AddDrillView: View {
         }
     }
 
+    private func saveEdits() {
+        guard var updated = editing else { return }
+        updated.name = name
+        updated.category = category
+        updated.difficulty = difficulty
+        updated.durationMinutes = durationMinutes
+        updated.description = description
+        updated.instructions = instructions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        updated.keyPoints = keyPoints.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        updated.minPlayers = minPlayers
+        updated.updatedAt = Date()
+        dataManager.updateDrill(updated)
+        dismiss()
+    }
+
     private func createDrill() {
         let id = UUID()
         var media: [DrillMedia] = []
@@ -2214,325 +2249,11 @@ struct AddEditDrillSheet: View {
     
     var body: some View {
         Group {
-            if let drill {
-                EditDrillView(drill: drill)
-            } else {
-                AddDrillView()
-            }
+            AddDrillView(editing: drill)
         }
     }
 }
 
-// MARK: - iOS Edit Drill View
-private struct EditDrillView: View {
-    @EnvironmentObject var dataManager: DataManager
-    @Environment(\.dismiss) var dismiss
-    
-    let drill: DrillItem
-    
-    @State private var name: String
-    @State private var category: DrillCategory
-    @State private var difficulty: DifficultyLevel
-    @State private var durationMinutes: Int
-    @State private var description: String
-    @State private var instructions: [String]
-    @State private var keyPoints: [String]
-    @State private var minPlayers: Int
-    @State private var newInstruction = ""
-    @State private var newKeyPoint = ""
-    
-    init(drill: DrillItem) {
-        self.drill = drill
-        _name = State(initialValue: drill.name)
-        _category = State(initialValue: drill.category)
-        _difficulty = State(initialValue: drill.difficulty)
-        _durationMinutes = State(initialValue: drill.durationMinutes)
-        _description = State(initialValue: drill.description)
-        _instructions = State(initialValue: drill.instructions.isEmpty ? [""] : drill.instructions)
-        _keyPoints = State(initialValue: drill.keyPoints.isEmpty ? [""] : drill.keyPoints)
-        _minPlayers = State(initialValue: drill.minPlayers)
-    }
-    
-    var body: some View {
-        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        return NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(isChinese ? "基础信息" : "Basic Info")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppTheme.textSecondary)
-
-                        TextField(isChinese ? "训练名称" : "Drill Name", text: $name)
-                            .padding(12)
-                            .background(AppTheme.surfaceColor)
-                            .cornerRadius(10)
-
-                        HStack(spacing: 10) {
-                            Picker(isChinese ? "类别" : "Category", selection: $category) {
-                                ForEach(DrillCategory.allCases, id: \.self) { cat in
-                                    Label(cat.displayName, systemImage: cat.icon).tag(cat)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .padding(10)
-                            .background(AppTheme.surfaceColor)
-                            .cornerRadius(10)
-
-                            Picker(isChinese ? "难度" : "Difficulty", selection: $difficulty) {
-                                ForEach(DifficultyLevel.allCases, id: \.self) { level in
-                                    Text(level.displayName).tag(level)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .padding(10)
-                            .background(AppTheme.surfaceColor)
-                            .cornerRadius(10)
-                        }
-
-                        valueAdjustRow(
-                            title: isChinese ? "时长" : "Duration",
-                            valueText: isChinese ? "\(durationMinutes) 分钟" : "\(durationMinutes) min",
-                            canDecrement: durationMinutes > 1,
-                            decrement: { durationMinutes -= 1 },
-                            canIncrement: durationMinutes < 60,
-                            increment: { durationMinutes += 1 }
-                        )
-
-                        valueAdjustRow(
-                            title: isChinese ? "最少人数" : "Min Players",
-                            valueText: "\(minPlayers)",
-                            canDecrement: minPlayers > 1,
-                            decrement: { minPlayers -= 1 },
-                            canIncrement: minPlayers < 20,
-                            increment: { minPlayers += 1 }
-                        )
-                    }
-                    .padding(14)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(14)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(isChinese ? "描述" : "Description")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppTheme.textSecondary)
-
-                        TextEditor(text: $description)
-                            .font(.system(size: 14))
-                            .frame(minHeight: 110)
-                            .scrollContentBackground(.hidden)
-                            .padding(8)
-                            .background(AppTheme.surfaceColor)
-                            .cornerRadius(10)
-                    }
-                    .padding(14)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(14)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(isChinese ? "说明" : "Instructions")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppTheme.textSecondary)
-
-                        ForEach(Array(instructions.enumerated()), id: \.offset) { index, _ in
-                            HStack(spacing: 8) {
-                                TextField(
-                                    isChinese ? "步骤 \(index + 1)" : "Step \(index + 1)",
-                                    text: Binding(
-                                        get: { instructions[index] },
-                                        set: { instructions[index] = $0 }
-                                    )
-                                )
-                                .padding(10)
-                                .background(AppTheme.surfaceColor)
-                                .cornerRadius(10)
-
-                                Button {
-                                    instructions.remove(at: index)
-                                } label: {
-                                    Image(systemName: "minus")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(AppTheme.textSecondary)
-                                        .frame(width: 30, height: 30)
-                                        .background(AppTheme.surfaceColor)
-                                        .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        HStack(spacing: 8) {
-                            TextField(isChinese ? "添加步骤" : "Add step", text: $newInstruction)
-                                .padding(10)
-                                .background(AppTheme.surfaceColor)
-                                .cornerRadius(10)
-
-                            Button {
-                                let clean = newInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard !clean.isEmpty else { return }
-                                instructions.append(clean)
-                                newInstruction = ""
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 11, weight: .bold))
-                                    Text(isChinese ? "添加" : "Add")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundColor(AppTheme.accentColor)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(AppTheme.surfaceColor)
-                                .cornerRadius(10)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(14)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(14)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(isChinese ? "要点" : "Key Points")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(AppTheme.textSecondary)
-
-                        ForEach(Array(keyPoints.enumerated()), id: \.offset) { index, _ in
-                            HStack(spacing: 8) {
-                                TextField(
-                                    isChinese ? "要点 \(index + 1)" : "Point \(index + 1)",
-                                    text: Binding(
-                                        get: { keyPoints[index] },
-                                        set: { keyPoints[index] = $0 }
-                                    )
-                                )
-                                .padding(10)
-                                .background(AppTheme.surfaceColor)
-                                .cornerRadius(10)
-
-                                Button {
-                                    keyPoints.remove(at: index)
-                                } label: {
-                                    Image(systemName: "minus")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(AppTheme.textSecondary)
-                                        .frame(width: 30, height: 30)
-                                        .background(AppTheme.surfaceColor)
-                                        .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        HStack(spacing: 8) {
-                            TextField(isChinese ? "添加要点" : "Add key point", text: $newKeyPoint)
-                                .padding(10)
-                                .background(AppTheme.surfaceColor)
-                                .cornerRadius(10)
-
-                            Button {
-                                let clean = newKeyPoint.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard !clean.isEmpty else { return }
-                                keyPoints.append(clean)
-                                newKeyPoint = ""
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 11, weight: .bold))
-                                    Text(isChinese ? "添加" : "Add")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundColor(AppTheme.accentColor)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(AppTheme.surfaceColor)
-                                .cornerRadius(10)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(14)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(14)
-
-                    Spacer(minLength: 60)
-                }
-                .padding(16)
-            }
-            .background(AppTheme.background.ignoresSafeArea())
-            .navigationTitle(isChinese ? "编辑训练" : "Edit Drill")
-            .navigationBarTitleDisplayModeCompat(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(isChinese ? "取消" : "Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "保存" : "Save") {
-                        saveDrill()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-    }
-    
-    private func saveDrill() {
-        var updated = drill
-        updated.name = name
-        updated.category = category
-        updated.difficulty = difficulty
-        updated.durationMinutes = durationMinutes
-        updated.description = description
-        updated.instructions = instructions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        updated.keyPoints = keyPoints.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        updated.minPlayers = minPlayers
-        updated.updatedAt = Date()
-        
-        dataManager.updateDrill(updated)
-        dismiss()
-    }
-
-    private func valueAdjustRow(
-        title: String,
-        valueText: String,
-        canDecrement: Bool,
-        decrement: @escaping () -> Void,
-        canIncrement: Bool,
-        increment: @escaping () -> Void
-    ) -> some View {
-        HStack {
-            Text("\(title): \(valueText)")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(AppTheme.textPrimary)
-
-            Spacer()
-
-            HStack(spacing: 0) {
-                Button(action: decrement) {
-                    Image(systemName: "minus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(canDecrement ? AppTheme.textPrimary : AppTheme.textTertiary)
-                        .frame(width: 34, height: 30)
-                }
-                .disabled(!canDecrement)
-
-                Rectangle()
-                    .fill(Color.gray.opacity(0.25))
-                    .frame(width: 1, height: 18)
-
-                Button(action: increment) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(canIncrement ? AppTheme.textPrimary : AppTheme.textTertiary)
-                        .frame(width: 34, height: 30)
-                }
-                .disabled(!canIncrement)
-            }
-            .background(AppTheme.surfaceColor)
-            .clipShape(Capsule())
-        }
-    }
-}
 #endif
 
 #Preview {
