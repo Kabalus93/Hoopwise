@@ -23,11 +23,11 @@ struct FlightySessionPageView: View {
 
     /// A team practice lands on Plan (the team's focus is there); every
     /// other session on Attendance.
-    init(session: SessionEvent, accessMode: SessionAccessMode, embeddedInSplit: Bool = false) {
+    init(session: SessionEvent, accessMode: SessionAccessMode, embeddedInSplit: Bool = false, initialTab: Int? = nil) {
         _session = State(initialValue: session)
         self.accessMode = accessMode
         self.embeddedInSplit = embeddedInSplit
-        _selectedTab = State(initialValue: session.sessionType == .teamPractice ? 0 : 1)
+        _selectedTab = State(initialValue: initialTab ?? (session.sessionType == .teamPractice ? 0 : 1))
     }
     /// Measured roster row heights; sizes the non-scrolling attendance List.
     @State private var rosterRowHeights: [UUID: CGFloat] = [:]
@@ -57,6 +57,8 @@ struct FlightySessionPageView: View {
     @State private var showingCardShareSheet = false
     @State private var cardExportError: String?
     @State private var drillPickerSection: CurriculumSection = .warmup
+    /// Set when the plan dashboard's "Find drills" opens the picker.
+    @State private var pickerAttribute: DrillAttribute?
     @State private var selectedDrillForDetail: DrillItem?
     /// Open media viewer keyed to a (drillId, index) pair so the cover
     /// rebuilds correctly when the user taps different tiles.
@@ -796,6 +798,14 @@ struct FlightySessionPageView: View {
     }
     
     // MARK: - Plan Tab
+    /// A team practice's target: the skills its team's focus plays need.
+    private var teamFocusSkills: [String] {
+        guard let teamId = session.curriculum.teamId,
+              let team = dataManager.teams.first(where: { $0.id == teamId }) else { return [] }
+        let book = team.playbook
+        return book.skills(in: book.focusPlays)
+    }
+
     private var planTab: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return ScrollView(showsIndicators: false) {
@@ -813,6 +823,21 @@ struct FlightySessionPageView: View {
                 } else if accessMode.canEdit {
                     generatePlanButton
                 }
+
+                // What the plan trains vs what it should (November 2026).
+                SessionPlanDashboard(
+                    curriculum: session.curriculum,
+                    drills: dataManager.drills,
+                    teams: dataManager.teams,
+                    phaseFocus: parentPhase?.focus ?? [],
+                    skillTargets: parentProgram?.skillTargets,
+                    teamSkills: teamFocusSkills,
+                    canEdit: accessMode.canEdit,
+                    onFind: { axis in
+                        drillPickerSection = .main
+                        pickerAttribute = axis
+                        showingSmartDrillPicker = true
+                    })
 
                 // Warmup
                 curriculumSection(
@@ -878,7 +903,8 @@ struct FlightySessionPageView: View {
                 students: enrolledStudents,
                 allDrills: dataManager.drills,
                 currentCoachId: currentCoachId,
-                onSave: saveSession
+                onSave: saveSession,
+                attribute: pickerAttribute
             )
         }
     }
@@ -1143,6 +1169,7 @@ struct FlightySessionPageView: View {
                     Menu {
                         Button {
                             drillPickerSection = section
+                            pickerAttribute = nil
                             showingSmartDrillPicker = true
                         } label: {
                             Label(isChinese ? "从训练库添加" : "From Library", systemImage: "books.vertical")
@@ -6681,6 +6708,9 @@ struct SmartDrillPickerSheet: View {
     let allDrills: [DrillItem]
     let currentCoachId: UUID
     let onSave: () -> Void
+    /// From the plan dashboard's "Find drills": the drills strong on it
+    /// come first.
+    var attribute: DrillAttribute? = nil
 
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
 
@@ -6696,6 +6726,7 @@ struct SmartDrillPickerSheet: View {
                                           : (isChinese ? "添加到技能" : "Add to Skills"),
                 initialAge: program.map { DrillPlanGenerator.libraryAge(for: $0.ageGroup) },
                 initialBlock: section == .warmup ? .routine : .compete,
+                attribute: attribute,
                 isAdded: isDrillInSection,
                 add: { drill in
                     addDrillToSection(drill.id)

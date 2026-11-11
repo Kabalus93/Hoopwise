@@ -8,6 +8,8 @@ import Foundation
 nonisolated struct DrillWriterResult: Equatable {
     let instructions: [String]
     let keyPoints: [String]
+    /// What the drill develops on the eight axes (DrillAttribute order).
+    var attributes: [Int]? = nil
 }
 
 nonisolated enum DrillWriter {
@@ -21,6 +23,11 @@ nonisolated enum DrillWriter {
     imperative sentence each, no numbering.
     "keyPoints": 2 to 4 coaching points — what the coach watches for or corrects (technique, decision, \
     effort). Short phrases, no numbering.
+    "attributes": how much the drill develops each of eight attributes, 0 to 3 (0 not involved, 1 touched \
+    in passing, 2 worked, 3 a main focus), as eight integers in this order: ballHandling, passing, \
+    shooting, finishing, playmaking, gameIQ, defense, footwork. Most drills have one or two 3s and zeros \
+    elsewhere. The attributes:
+    \(DrillAttribute.rubric)
     """
 
     static func requestBody(name: String, description: String, minPlayers: Int, minutes: Int) -> [String: Any] {
@@ -29,8 +36,9 @@ nonisolated enum DrillWriter {
             "properties": [
                 "instructions": ["type": "array", "items": ["type": "string"]],
                 "keyPoints": ["type": "array", "items": ["type": "string"]],
+                "attributes": ["type": "array", "items": ["type": "integer"]],
             ],
-            "required": ["instructions", "keyPoints"],
+            "required": ["instructions", "keyPoints", "attributes"],
             "additionalProperties": false,
         ]
         var context = "Description:\n\(description)"
@@ -58,7 +66,8 @@ nonisolated enum DrillWriter {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
         }
-        return DrillWriterResult(instructions: lines("instructions"), keyPoints: lines("keyPoints"))
+        let scores = (answer["attributes"] as? [Int]).flatMap { $0.count == DrillAttribute.allCases.count ? $0.map { max(0, min(3, $0)) } : nil }
+        return DrillWriterResult(instructions: lines("instructions"), keyPoints: lines("keyPoints"), attributes: scores)
     }
 
     static func write(name: String, description: String, minPlayers: Int, minutes: Int, key: String) async throws -> DrillWriterResult {

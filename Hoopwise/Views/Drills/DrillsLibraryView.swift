@@ -16,6 +16,8 @@ struct DrillsLibraryView: View {
         let title: String
         let initialAge: ActivityAge?
         let initialBlock: ActivityBlock
+        /// "Find drills" for a neglected axis: drills strong on it, first.
+        var attribute: DrillAttribute? = nil
         let isAdded: (UUID) -> Bool
         let add: (DrillItem) -> Void
     }
@@ -197,6 +199,31 @@ struct DrillsLibraryView: View {
         }
     }
 
+    /// The picker opened for a neglected axis: drills of the chosen age(s),
+    /// any block, scoring 2–3 on it, strongest first; personal ones too.
+    @ViewBuilder
+    private func strongOnSection(_ axis: DrillAttribute) -> some View {
+        let byId = Dictionary(visibleDrills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let library: [(LibraryActivity, DrillItem)] = ActivityLibrary.shared.plannable.compactMap { activity in
+            guard ages.isEmpty || ages.contains(activity.age), let drill = byId[activity.id] else { return nil }
+            return drill.attributes[axis] >= 2 ? (activity, drill) : nil
+        }
+        let ranked = library.sorted { $0.1.attributes[axis] > $1.1.attributes[axis] }.prefix(30)
+        let personal = visibleDrills.filter { !$0.isLibraryDrill && $0.attributes[axis] >= 2 }
+        Section {
+            ForEach(personal) { drill in drillLink(drill) { DrillRow(drill: drill) } }
+            ForEach(Array(ranked), id: \.0.key) { pair in
+                drillLink(pair.1) { LibraryRow(activity: pair.0, drill: pair.1, showAge: ages.count > 1, showBlock: true) }
+            }
+        } header: {
+            Label(isChinese ? "擅长\(axis.title)的训练" : "Strong on \(axis.title.lowercased())", systemImage: axis.icon)
+        } footer: {
+            if personal.isEmpty && ranked.isEmpty {
+                Text(isChinese ? "这个年龄段没有找到，可以换个年龄。" : "None at this age — try another age.")
+            }
+        }
+    }
+
     /// A drill row: opens the drill; in the plan picker, an add button
     /// beside it (a check once it is in the section).
     @ViewBuilder
@@ -260,6 +287,7 @@ struct DrillsLibraryView: View {
             if isSearching {
                 searchResults
             } else {
+                if let axis = pick?.attribute { strongOnSection(axis) }
                 filterSection
                 if let age {
                     libraryContent(age)
@@ -1020,6 +1048,18 @@ struct DrillDetailView: View {
                         
                         // Description (with placeholder for empty)
                         descriptionSection
+
+                        // What it develops: the eight-axis octagon (November
+                        // 2026); the coach's Adjust wins over Claude's rating.
+                        DrillAttributesCard(drill: currentDrill, onSave: { profile in
+                            var updated = currentDrill
+                            updated.tags = profile.replacing(in: updated.tags, byCoach: true)
+                            dataManager.updateDrill(updated)
+                        }, onReset: {
+                            var updated = currentDrill
+                            updated.tags = updated.tags.filter { !$0.hasPrefix(AttributeProfile.tagPrefix) }
+                            dataManager.updateDrill(updated)
+                        })
                         
                         // Instructions (with placeholder for empty)
                         instructionsSection
@@ -2042,6 +2082,9 @@ struct AddDrillView: View {
     /// (DrillWriter); the spinner beside "Description" is the only sign.
     @State private var writing = false
     @State private var lastWritten: DrillWriterResult?
+    /// Claude's attribute rating from the same answer — saved as the drill's
+    /// attr: tags unless the coach rated it themselves.
+    @State private var writtenAttributes: AttributeProfile?
     
     var body: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
@@ -2199,6 +2242,7 @@ struct AddDrillView: View {
                 keyPoints = result.keyPoints
             }
             lastWritten = result
+            if let scores = result.attributes { writtenAttributes = AttributeProfile(array: scores) }
         }
     }
 
@@ -2212,6 +2256,9 @@ struct AddDrillView: View {
         updated.instructions = instructions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         updated.keyPoints = keyPoints.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         updated.minPlayers = minPlayers
+        if let writtenAttributes, !updated.tags.contains(AttributeProfile.coachTag) {
+            updated.tags = writtenAttributes.replacing(in: updated.tags, byCoach: false)
+        }
         updated.updatedAt = Date()
         dataManager.updateDrill(updated)
         dismiss()
@@ -2223,7 +2270,7 @@ struct AddDrillView: View {
         if let drawing, let saved = DrillDrawingMedia.save(drawing, drillId: id, existing: nil, sortOrder: 0) {
             media.append(saved)
         }
-        let drill = DrillItem(
+        var drill = DrillItem(
             id: id,
             name: name,
             category: category,
@@ -2235,6 +2282,7 @@ struct AddDrillView: View {
             minPlayers: minPlayers,
             media: media
         )
+        if let writtenAttributes { drill.tags = writtenAttributes.replacing(in: drill.tags, byCoach: false) }
         dataManager.addDrill(drill)
         dismiss()
     }

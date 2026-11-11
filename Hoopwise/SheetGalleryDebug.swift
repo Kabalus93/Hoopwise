@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import SwiftData
+import OSLog
 
 /// Presents ONE real creation sheet, full screen, over a deterministic fixture
 /// store — the verification path for "this refactor did not change the UI".
@@ -228,6 +229,37 @@ enum SheetGalleryDebug {
             ClassListImportView(preloadURL: ProcessInfo.processInfo
                 .environment["HOOPWISE_CLASSLIST_PREVIEW"].map { URL(fileURLWithPath: $0) })
 
+        case "planDashboard":
+            // A planned program session in a phase, on its Plan tab: the plan
+            // balance octagon over the phase focus + program goals target.
+            if var session = dm.sessionEvents.first(where: { s in
+                s.microCycleId != nil && !(dm.microCycles.first { $0.id == s.microCycleId }?.focus.isEmpty ?? true)
+            }) ?? dm.sessionEvents.first(where: { $0.programId != nil }) {
+                // A fresh plan from the generator, in memory only.
+                let _ = {
+                    let program = dm.programs.first { $0.id == session.programId }
+                    let phase = dm.microCycles.first { $0.id == session.microCycleId }
+                    let ctx = DrillPlanGenerator.Context(session: session, program: program, phase: phase,
+                                                         enrolledStudents: [], players: [], allDrills: dm.drills,
+                                                         programHistory: [])
+                    session.curriculum = DrillPlanGenerator.generatePlan(in: ctx).curriculum
+                }()
+                if ProcessInfo.processInfo.environment["HOOPWISE_PLAN_TARGET"] == "1" {
+                    // The dashboard alone against a Defense + Passing phase focus.
+                    ScrollView {
+                        SessionPlanDashboard(curriculum: session.curriculum, drills: dm.drills, teams: dm.teams,
+                                             phaseFocus: [.defense, .passing], skillTargets: nil, onFind: { _ in })
+                            .padding()
+                    }
+                } else {
+                    NavigationStack {
+                        FlightySessionPageView(session: session, accessMode: .execution, initialTab: 0)
+                    }
+                }
+            } else {
+                missing("planDashboard: no planned session")
+            }
+
         case "sessionPage":
             // The first program's earliest session, on its default Attendance
             // tab — the roster rows and their swipe actions.
@@ -422,6 +454,14 @@ enum SheetGalleryDebug {
         case "teams":
             // Hub → Teams.
             NavigationStack { TeamsScreen() }
+
+        case "rateLibrary":
+            // One-time: Claude rates every plannable library activity on the
+            // eight attribute axes; each rating is logged to hoopwise.mac /
+            // rater as "rate <key>|<eight scores>" (Mac demo copy, the
+            // Keychain key). tools/attributes/merge.py turns the log into
+            // ActivityLibraryAttributes.swift.
+            LibraryRatingRun()
 
         case "newDrill":
             // New Drill; with HOOPWISE_NEWDRILL_DESCRIPTION it asks Claude.
@@ -712,6 +752,59 @@ enum TeamPracticeDemo {
             roster: team.playerIds.filter { id in dm.students.contains { $0.id == id } },
             curriculum: curriculum, createdByCoachId: dm.loggedInCoachId))
         return dm.sessionEvents.first { $0.curriculum.teamId == team.id && Calendar.current.isDate($0.startTime, inSameDayAs: today) }
+    }
+}
+
+/// Rates the library in batches of 30 and logs each rating as it lands.
+struct LibraryRatingRun: View {
+    @State private var done = 0
+    @State private var status = "starting"
+    private let activities = ActivityLibrary.shared.plannable
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Rating the library").font(.title2.bold())
+            Text("\(done) / \(activities.count)").font(.largeTitle.monospacedDigit())
+            Text(status).font(.footnote).foregroundStyle(.secondary)
+        }
+        .padding(40)
+        .task { await run() }
+    }
+
+    private func run() async {
+        let log = Logger(subsystem: "hoopwise.mac", category: "rater")
+        guard let key = AnthropicKeyStore.key else { status = "no key"; log.notice("rate no key"); return }
+        let env = ProcessInfo.processInfo.environment
+        let only = env["HOOPWISE_RATE_ONLY"].flatMap(Int.init)
+        var list = only.map { Array(activities.prefix($0)) } ?? activities
+        // HOOPWISE_RATE_MISSING=1: only what the generated file lacks.
+        if env["HOOPWISE_RATE_MISSING"] == "1" { list = list.filter { ActivityLibraryAttributes.ratings[$0.key] == nil } }
+        let size = env["HOOPWISE_RATE_BATCH"].flatMap(Int.init) ?? 30
+        let batches = stride(from: 0, to: list.count, by: size).map { Array(list[$0..<min($0 + size, list.count)]) }
+        for batch in batches {
+            let items = batch.enumerated().map { DrillRater.Item(ref: "r\($0.offset + 1)", line: DrillRater.line(ref: "r\($0.offset + 1)", $0.element)) }
+            var attempt = 0
+            while attempt < 3 {
+                attempt += 1
+                do {
+                    let result = try await DrillRater.rate(items: items, key: key)
+                    for (i, activity) in batch.enumerated() {
+                        if let scores = result["r\(i + 1)"] {
+                            log.notice("rate \(activity.key, privacy: .public)|\(scores.map(String.init).joined(separator: ","), privacy: .public)")
+                        } else {
+                            log.notice("rate missing \(activity.key, privacy: .public)")
+                        }
+                    }
+                    done += batch.count
+                    break
+                } catch {
+                    status = "retry: \(error.localizedDescription)"
+                    log.notice("rate error \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+        status = "finished"
+        log.notice("rate finished \(done) of \(list.count)")
     }
 }
 #endif

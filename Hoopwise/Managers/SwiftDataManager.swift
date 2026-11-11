@@ -2462,8 +2462,11 @@ class SwiftDataManager: ObservableObject {
 
             let existing = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
             for activity in ActivityLibrary.shared.plannable {
-                let fresh = ActivityLibrary.drill(for: activity)
+                var fresh = ActivityLibrary.drill(for: activity)
                 if let sd = existing[activity.id] {
+                    // A coach's attribute rating (attr: tags) survives the
+                    // library refresh.
+                    fresh.tags += sd.tags.filter { $0.hasPrefix(AttributeProfile.tagPrefix) }
                     guard sd.lastModifiedAt == nil,
                           sd.name != fresh.name || sd.drillDescription != fresh.description
                             || sd.categoryRaw != fresh.category.rawValue || sd.tags != fresh.tags else { continue }

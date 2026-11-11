@@ -1351,6 +1351,56 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   set) gates skill-target comparisons, so a level-only blob never shows
   default 5s as targets. Tests: PlanGeneratorTests, PlanGeneratorUITests.
 
+## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
+"Give drills an attribute … a hex graph in each drill … the session plan
+becomes a dashboard … feeds back into the program." Decided: 8 axes, ship
+Claude's ratings without review, target = BOTH phase focus and program goals.
+- Models/DrillAttributes.swift: `DrillAttribute` (ballHandling, passing,
+  shooting, finishing, playmaking, gameIQ — vision merged in —, defense,
+  footwork & athleticism) and `AttributeProfile` (0–3 per axis: none ·
+  touched · worked · main). `DrillItem.attributes` resolves: the drill's own
+  `attr:<axis>=<n>` tags (coach override, marked `attr:by:coach`, or Claude's
+  rating of a personal drill) → the library rating → a guess from type /
+  category. No schema change (tags sync). syncActivityLibrary keeps attr:
+  tags when it refreshes a library drill. Mappings put TrainingFocus,
+  ActivityType skills and ProgramSkillTargets on the same axes.
+- LIBRARY RATINGS: Models/ActivityLibraryAttributes.swift is GENERATED —
+  all 422 plannable activities rated by claude-sonnet-5 (Services/
+  DrillRater.swift, rubric `DrillAttribute.rubric`) through DEBUG
+  HOOPWISE_SHOT=rateLibrary on the Mac demo copy (Keychain key; logs "rate
+  <key>|<scores>" to hoopwise.mac / rater; HOOPWISE_RATE_MISSING=1,
+  _BATCH=n, _ONLY=n) and tools/attributes/merge.py. Large batches sometimes
+  come back unusable — re-run MISSING with small batches. Don't hand-edit.
+- PERSONAL DRILLS: DrillWriter's Return answer now includes `attributes`;
+  New/Edit Drill saves them as attr: tags unless the coach rated the drill.
+- DRILL PAGE: DrillAttributesCard (Views/Components/AttributeOctagon.swift)
+  after the description — octagon, main axes as ●●○, "Also:", source
+  (Rated by Claude / Adjusted by you / Estimated); Adjust = 8 segmented
+  rows (None · Touched · Worked · Main), Save writes coach tags, "Go back to
+  Claude's rating" removes them.
+- PLAN DASHBOARD: SessionPlanDashboard (Views/Coaching/) at the top of every
+  session's Plan: `PlanCoverage.minutes` (Services/PlanCoverage.swift, pure)
+  weighs each drill's scores by its share of its block's minutes (plays = a
+  10-minute item shaped by their team breakdown skills, else IQ/create/pass);
+  octagon = emphasis (scaled to the top axis) over a dashed TARGET
+  (`PlanCoverage.target`: phase focus + program skill targets when set; a
+  team practice: its focus plays' skills); "Leans on" (≥ 0.6, with
+  minutes); "Neglected" = target ≥ 0.6 and target − plan ≥ 0.4, each with
+  Find drills → the library picker (`Pick.attribute`) opening on "Strong on
+  <axis>" (score ≥ 2 at the chosen ages, any block, strongest first).
+- PROGRAM: PhaseCoverageCard on the program page (under the phases) — one
+  phase at a time (current first, menu to switch): all its sessions' plans
+  vs the same target, "N of M sessions planned", neglected axes. Generate
+  Plan reads the same gap: `DrillPlanGenerator.phaseGaps` (target − what the
+  phase's other plans cover) adds 2 × gap × score/3 to each candidate; the
+  rationale says "fills the phase's gaps: …".
+- DEBUG: HOOPWISE_SHOT=planDashboard (a generated plan in memory, Plan tab;
+  + HOOPWISE_PLAN_TARGET=1 shows the dashboard alone against Defense +
+  Passing). Tests: DrillAttributesTests (all 422 rated, tags, guesses,
+  minutes, neglect, both targets), DrillAttributesUITests (drill page Adjust
+  → back; program phase balance — it launches twice: the first launch of a
+  UI test run has come up without its environment on the iPad mini sim).
+
 ## Cycle planner (October 2026, Luther)
 - "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,
   Services/CyclePlanner, both targets): the coach gives START, DELIVER-BY

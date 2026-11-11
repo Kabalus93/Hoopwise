@@ -131,6 +131,9 @@ struct FlightyProgramDetailView: View {
 
                     // Training phases - PRIMARY CONTENT
                     phasesSection
+
+                    // What the phase's plans train vs its focus (November 2026).
+                    PhaseCoverageCard(program: program)
                     
                     // Enrolled athletes - elegant display
                     athletesSection

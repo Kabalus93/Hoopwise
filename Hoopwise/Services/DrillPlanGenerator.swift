@@ -80,18 +80,24 @@ struct DrillPlanGenerator {
         let focus = focusTypes(phase: ctx.phase, students: ctx.enrolledStudents, players: ctx.players,
                                games: ctx.programHistory.flatMap(\.games))
         let history = History(sessions: ctx.programHistory, before: ctx.session)
+        let gaps = phaseGaps(ctx)
         let reviewShare = history.reviewShare(phase: ctx.phase, session: ctx.session)
 
         var rationale = PlanRationale(age: age, level: level, levelSource: source,
                                       ageWindow: ActivityAge.allCases.filter { window[$0] != nil },
                                       focus: focus.types)
         rationale.notes = focus.notes
+        let topGaps = gaps.filter { $0.value >= 0.4 }.sorted { $0.value > $1.value }.prefix(2).map(\.key.title)
+        if !topGaps.isEmpty {
+            let zh = LocalizationManager.shared.currentLanguage == .chinese
+            rationale.notes.append((zh ? "补本阶段的短板：" : "fills the phase's gaps: ") + topGaps.joined(separator: ", "))
+        }
 
         let candidates = candidates(drills: ctx.allDrills, window: window, age: age)
         var used: Set<UUID> = []
         func fill(_ slot: Slot, _ budget: Int) -> [UUID] {
             let picks = pick(slot: slot, budget: budget, candidates: candidates, focus: Set(focus.types),
-                             history: history, reviewShare: reviewShare, exclude: used, random: random)
+                             history: history, reviewShare: reviewShare, exclude: used, gaps: gaps, random: random)
             used.formUnion(picks.map(\.id))
             for p in picks { if history.count(p.id) > 0 { rationale.reviewCount += 1 } else { rationale.newCount += 1 } }
             return picks.map(\.id)
@@ -105,6 +111,28 @@ struct DrillPlanGenerator {
             warmupMinutes: warmupBudget, skillsMinutes: skillsBudget, gameMinutes: gameBudget,
             notes: cur.notes)
         return (curriculum, rationale)
+    }
+
+    /// Target minus what the phase's other planned sessions already train
+    /// (both 0…1 by axis); empty with no target.
+    static func phaseGaps(_ ctx: Context) -> [DrillAttribute: Double] {
+        guard let target = PlanCoverage.target(phaseFocus: ctx.phase?.focus ?? [],
+                                               skillTargets: ctx.program?.skillTargets) else { return [:] }
+        let phaseSessions = ctx.programHistory.filter { session in
+            session.id != ctx.session.id && !SessionLifecycle.didNotHappen(session)
+                && (ctx.phase == nil || session.microCycleId == ctx.phase?.id)
+        }
+        var minutes: [DrillAttribute: Double] = [:]
+        for session in phaseSessions {
+            for (axis, v) in PlanCoverage.minutes(of: session.curriculum, drills: ctx.allDrills) { minutes[axis, default: 0] += v }
+        }
+        let covered = PlanCoverage.normalized(minutes)
+        var gaps: [DrillAttribute: Double] = [:]
+        for (axis, want) in target {
+            let gap = want - (covered[axis] ?? 0)
+            if gap > 0 { gaps[axis] = gap }
+        }
+        return gaps
     }
 
     // MARK: - Age and level
@@ -296,6 +324,8 @@ struct DrillPlanGenerator {
         let category: DrillCategory
         let ageWeight: Double
         let isFavorite: Bool
+        /// What it develops (November 2026), for filling a phase's gaps.
+        var attributes = AttributeProfile()
     }
 
     private static func candidates(drills: [DrillItem], window: [ActivityAge: Double], age: ActivityAge) -> [Candidate] {
@@ -303,7 +333,8 @@ struct DrillPlanGenerator {
             if let a = drill.libraryActivity {
                 guard !a.isRule, let w = window[a.age] else { return nil }
                 return Candidate(id: drill.id, minutes: drill.durationMinutes, block: a.block, type: a.type,
-                                 category: drill.category, ageWeight: w, isFavorite: drill.isFavorite)
+                                 category: drill.category, ageWeight: w, isFavorite: drill.isFavorite,
+                                 attributes: drill.attributes)
             }
             // A coach's own drill: eligible when untagged or tagged for this age.
             let profile = DrillProfile(drill)
@@ -311,7 +342,8 @@ struct DrillPlanGenerator {
                 || profile.ageGroups.contains { libraryAge(for: $0) == age || window[libraryAge(for: $0)] != nil }
             guard fits else { return nil }
             return Candidate(id: drill.id, minutes: drill.durationMinutes, block: nil, type: nil,
-                             category: drill.category, ageWeight: 0.6, isFavorite: drill.isFavorite)
+                             category: drill.category, ageWeight: 0.6, isFavorite: drill.isFavorite,
+                             attributes: drill.attributes)
         }
     }
 
@@ -332,6 +364,7 @@ struct DrillPlanGenerator {
 
     static func pick(slot: Slot, budget: Int, candidates: [Candidate], focus: Set<ActivityType>,
                      history: History, reviewShare: Double, exclude: Set<UUID>,
+                     gaps: [DrillAttribute: Double] = [:],
                      random: () -> Double) -> [Candidate] {
         guard budget > 0 else { return [] }
         let eligible = candidates.filter {
@@ -342,6 +375,9 @@ struct DrillPlanGenerator {
             var s = c.ageWeight * 3
             if let t = c.type, focus.contains(t) { s += 2 }
             if c.isFavorite { s += 1 }
+            // What the phase has neglected so far (PlanCoverage): drills
+            // strong on a gap weigh more.
+            for (axis, gap) in gaps { s += 2 * gap * Double(c.attributes[axis]) / 3 }
             // Spaced review: something seen once or twice is worth revisiting;
             // something run many times already less so.
             let n = history.count(c.id)
