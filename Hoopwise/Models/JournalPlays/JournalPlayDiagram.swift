@@ -86,12 +86,18 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         case screen
         /// Solid red line to the rim: the player shoots (November 2026).
         case shot
+        /// Short solid line ending in a double bar: the player hands the
+        /// ball to `receiver` (12 November 2026, Luther). Older builds
+        /// cannot decode it, as with `shot`.
+        case handoff
 
         /// The player runs along it (cut, dribble, screen); a pass or shot
         /// sends the ball and leaves the player where they are.
         var movesPlayer: Bool { self == .cut || self == .dribble || self == .screen }
-        /// The ball leaves the player's hands (pass, shot).
-        var throwsBall: Bool { self == .pass || self == .shot }
+        /// The ball leaves the player's hands (pass, shot, hand-off).
+        var throwsBall: Bool { self == .pass || self == .shot || self == .handoff }
+        /// The ball goes to a teammate, who is named (pass, hand-off).
+        var hasReceiver: Bool { self == .pass || self == .handoff }
     }
 
     /// How a line runs through its bend points (Luther, November 2026: a

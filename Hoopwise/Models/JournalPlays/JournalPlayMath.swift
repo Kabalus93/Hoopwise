@@ -26,19 +26,84 @@ nonisolated extension JournalPlayMath {
     /// thrown in playback order.
     static func ballsAfter(_ diagram: JournalPlayDiagram) -> [Int] {
         var holders = diagram.balls
-        for pass in passOrder(diagram).all { transfer(pass, holders: &holders) }
+        for pass in schedule(diagram).throwsInOrder.map({ diagram.actions[$0.index] }) {
+            transfer(pass, holders: &holders)
+        }
         return holders
     }
 
-    /// The passes and shots in the order they fly: those drawn before their passer's
-    /// move (pass and cut) first, then the rest (drive and kick).
-    static func passOrder(_ diagram: JournalPlayDiagram) -> (early: [JournalPlayDiagram.Action], late: [JournalPlayDiagram.Action], all: [JournalPlayDiagram.Action]) {
-        var early: [JournalPlayDiagram.Action] = [], late: [JournalPlayDiagram.Action] = []
-        for (i, action) in diagram.actions.enumerated() where action.kind.throwsBall {
-            let movesAfter = diagram.actions[(i + 1)...].contains { $0.player == action.player && $0.kind.movesPlayer }
-            if movesAfter { early.append(action) } else { late.append(action) }
+    /// One action on the step's timeline, in beats.
+    struct Timed: Equatable, Sendable {
+        var index: Int
+        var start: Double
+        var end: Double
+    }
+
+    /// The step's timeline (Luther, November 2026: "the logic behind what
+    /// happens first is inconsistent" — a pass drawn to a cutter flew before
+    /// the cutter moved, then the ball jumped back to them). The actions run
+    /// in the order they are DRAWN, each as soon as it can:
+    /// · a move starts when its player is free (a dribble also needs the ball);
+    /// · a pass, shot or hand-off leaves when the passer is free and has the
+    ///   ball; to a teammate who moved earlier in the drawing it is a LEAD
+    ///   pass, timed to land as they arrive — the editor drew it to where
+    ///   they end up;
+    /// · the passer can move on just after letting go (pass and cut); the
+    ///   receiver waits for the catch before any move drawn after it.
+    /// Everyone who is free moves at once, as before.
+    struct Schedule: Equatable, Sendable {
+        var items: [Timed]
+        var total: Double
+        var throwsInOrder: [Timed]
+    }
+
+    static func beats(_ kind: JournalPlayDiagram.ActionKind) -> Double {
+        switch kind {
+        case .cut, .dribble, .screen: return playMoveBeats
+        case .pass, .shot: return 1
+        case .handoff: return 0.6
         }
-        return (early, late, early + late)
+    }
+
+    static func schedule(_ diagram: JournalPlayDiagram) -> Schedule {
+        var ready: [Int: Double] = [:]
+        var lastMoveEnd: [Int: Double] = [:]
+        // When each ball is in hand: (holder, from).
+        var balls: [(holder: Int, from: Double)] = diagram.balls.map { ($0, 0) }
+        var items: [Timed] = []
+        for (i, action) in diagram.actions.enumerated() {
+            let p = action.player
+            let duration = beats(action.kind)
+            if action.kind.movesPlayer {
+                var start = ready[p] ?? 0
+                if action.kind == .dribble, let ball = balls.first(where: { $0.holder == p }) {
+                    start = max(start, ball.from)
+                }
+                let end = start + duration
+                ready[p] = end
+                lastMoveEnd[p] = end
+                items.append(Timed(index: i, start: start, end: end))
+            } else if action.kind.throwsBall {
+                let ballIndex = balls.firstIndex(where: { $0.holder == p }) ?? (balls.count == 1 ? 0 : nil)
+                var start = max(ready[p] ?? 0, ballIndex.map { balls[$0].from } ?? 0)
+                if let r = action.receiver, let arrives = lastMoveEnd[r], arrives - duration > start {
+                    start = arrives - duration
+                }
+                let end = start + duration
+                ready[p] = start + min(duration, 0.35)
+                if action.kind == .shot {
+                    if let b = ballIndex { balls.remove(at: b) }
+                } else if let r = action.receiver {
+                    if let b = ballIndex { balls[b] = (r, end) } else { balls.append((r, end)) }
+                    ready[r] = max(ready[r] ?? 0, end)
+                }
+                items.append(Timed(index: i, start: start, end: end))
+            }
+        }
+        let total = items.map(\.end).max() ?? 0
+        let throwsInOrder = items.filter { diagram.actions[$0.index].kind.throwsBall }
+            .enumerated().sorted { ($0.element.end, $0.offset) < ($1.element.end, $1.offset) }.map(\.element)
+        return Schedule(items: items, total: total, throwsInOrder: throwsInOrder)
     }
 
     /// Which ball a pass throws: the passer's; with one ball on the floor,
@@ -101,59 +166,57 @@ nonisolated extension JournalPlayMath {
         var ball: JournalCourtPoint? { balls.first?.at }
     }
 
-    /// Playback time in beats: all the moving takes one and a half beats
-    /// (everyone runs at once), each pass one beat.
+    /// Playback time in beats: a move takes one and a half beats, a pass or
+    /// shot one, a hand-off 0.6 — on the step's timeline (`schedule`).
     static let playMoveBeats = 1.5
 
     /// How long a step's playback is, in beats.
     static func playBeats(_ diagram: JournalPlayDiagram) -> Double {
-        let passes = diagram.actions.filter { $0.kind.throwsBall }.count
-        let moves = diagram.actions.contains { $0.kind.movesPlayer }
-        return Double(passes) + (moves ? playMoveBeats : 0)
+        schedule(diagram).total
     }
 
-    /// Everyone at moment `t` (0…1) of a step, in the order the actions
-    /// are drawn: a pass drawn before its passer's cut is thrown first
-    /// (pass and cut); then everyone runs their paths, eased in and out;
-    /// then the other passes fly, one by one (drive and kick).
+    /// Everyone at moment `t` (0…1) of a step, on its timeline: each move
+    /// eased in and out over its own span, each ball with its holder or in
+    /// the air along its pass.
     static func frame(_ diagram: JournalPlayDiagram, at t: Double) -> PlayFrame {
         let t = min(max(t, 0), 1)
-        let movers = Set(diagram.actions.filter { $0.kind.movesPlayer }.map(\.player))
-        let (early, late, passes) = passOrder(diagram)
-        let total = playBeats(diagram)
-        let beat = total > 0 ? 1 / total : 0
-        let moveStart = Double(early.count) * beat
-        let moveEnd = moveStart + (movers.isEmpty ? 0 : playMoveBeats * beat)
+        let plan = schedule(diagram)
+        let now = t * plan.total
 
-        let move = t >= moveEnd ? 1 : t <= moveStart ? 0 : eased((t - moveStart) / (moveEnd - moveStart))
         var players: [Int: JournalCourtPoint] = [:]
         for player in diagram.offense {
-            let path = diagram.actions.filter { $0.player == player.number && $0.kind.movesPlayer }.flatMap(drawnPath)
-            players[player.number] = path.isEmpty ? player.at : point(along: path, at: move)
+            var at = player.at
+            for item in plan.items where diagram.actions[item.index].player == player.number
+                && diagram.actions[item.index].kind.movesPlayer {
+                let path = drawnPath(diagram.actions[item.index])
+                if now >= item.end { at = path.last ?? at; continue }
+                if now > item.start {
+                    at = point(along: path, at: eased((now - item.start) / (item.end - item.start)))
+                }
+                break
+            }
+            players[player.number] = at
         }
 
-        // The balls: one along the pass in the air, the others with whoever has them.
+        // The balls: in the air along their pass, else with whoever has them.
         var holders = diagram.balls
-        var flight: (ball: Int?, at: JournalCourtPoint)?
-        /// Balls shot this step, resting at the rim.
+        var flights: [(ball: Int?, at: JournalCourtPoint)] = []
         var landed: [JournalCourtPoint] = []
-        for (i, pass) in passes.enumerated() {
-            let begin = i < early.count ? Double(i) * beat : moveEnd + Double(i - early.count) * beat
-            if t >= begin + beat {
+        for item in plan.throwsInOrder {
+            let pass = diagram.actions[item.index]
+            if now >= item.end {
                 if pass.kind == .shot, let rim = pass.path.last { landed.append(rim) }
                 transfer(pass, holders: &holders)
-                continue
+            } else if now > item.start {
+                let f = eased((now - item.start) / (item.end - item.start))
+                flights.append((ballIndex(thrownBy: pass, holders: holders), point(along: pass.path, at: f)))
             }
-            if t > begin {
-                flight = (ballIndex(thrownBy: pass, holders: holders), point(along: pass.path, at: eased((t - begin) / beat)))
-            }
-            break
         }
         var balls: [PlayFrame.Ball] = holders.enumerated().compactMap { i, holder in
-            if let flight, flight.ball == i { return PlayFrame.Ball(at: flight.at, inFlight: true) }
+            if let flight = flights.first(where: { $0.ball == i }) { return PlayFrame.Ball(at: flight.at, inFlight: true) }
             return players[holder].map { PlayFrame.Ball(at: $0, inFlight: false) }
         }
-        if let flight, flight.ball == nil { balls.append(PlayFrame.Ball(at: flight.at, inFlight: true)) }
+        balls += flights.filter { $0.ball == nil }.map { PlayFrame.Ball(at: $0.at, inFlight: true) }
         balls += landed.map { PlayFrame.Ball(at: $0, inFlight: false) }
         return PlayFrame(players: players, balls: balls)
     }

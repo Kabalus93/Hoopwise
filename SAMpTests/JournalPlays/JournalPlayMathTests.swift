@@ -43,20 +43,60 @@ struct JournalPlayMathTests {
         #expect(spots.first?.at == P(14, 3))
     }
 
-    @Test func playbackMovesFirstThenPasses() {
+    @Test func aPassToNobodyMovingFliesWhileOthersRun() {
+        // 1's pass to a standing 4 is drawn first: it leaves at once, while
+        // 5 and 2 run (moves 1.5 beats, the pass 1).
+        #expect(JournalPlayMath.playBeats(Self.entry) == 1.5)
         let start = JournalPlayMath.frame(Self.entry, at: 0)
         #expect(start.players[5] == P(11.6, 0.7))
         #expect(start.ball == P(7.5, 10.3))  // with 1
-        // Moves take 1.5 of the 2.5 beats; at 0.6 the pass hasn't left.
-        #expect(JournalPlayMath.playBeats(Self.entry) == 2.5)
-        let moved = JournalPlayMath.frame(Self.entry, at: 0.6)
-        #expect(moved.players[5] == P(2.9, 0.7))
-        #expect(moved.ball == P(7.5, 10.3))
-        // Half-way through the pass, the ball is half-way along its line.
-        let mid = JournalPlayMath.frame(Self.entry, at: 0.8)
+        let mid = JournalPlayMath.frame(Self.entry, at: 1.0 / 3)  // half a beat
         #expect(mid.ball.map { abs($0.y - 8.1) < 0.001 } == true)
         let end = JournalPlayMath.frame(Self.entry, at: 1)
         #expect(end.ball == P(7.5, 5.9))  // with 4
+        #expect(end.players[5] == P(2.9, 0.7))
+    }
+
+    @Test func aPassToACutterLandsAsTheyArrive() {
+        // Getafe Wave's outlet (Luther, 12 Nov 2026): 4 sprints up the
+        // wing, 1 passes ahead to where 4 is going, then 1 runs. The ball
+        // used to fly first and jump back to 4 at the start.
+        let outlet = JournalPlayDiagram(
+            offense: [.init(number: 1, at: P(0.25, 6.66)), .init(number: 4, at: P(0.43, 12.45))], ball: 1,
+            actions: [.init(kind: .cut, player: 4, path: [P(0.43, 12.45), P(12.08, 12.37)]),
+                      .init(kind: .pass, player: 1, path: [P(0.25, 6.66), P(12.08, 12.37)], receiver: 4),
+                      .init(kind: .cut, player: 1, path: [P(0.25, 6.66), P(18.88, 2.43)])])
+        let plan = JournalPlayMath.schedule(outlet)
+        #expect(plan.items[1].start == 0.5 && plan.items[1].end == 1.5)   // lands with 4's arrival
+        #expect(abs(plan.items[2].start - 0.85) < 0.001)                  // 1 goes after letting go
+        // While the ball is in the air nobody holds it; it lands on 4.
+        let thrown = JournalPlayMath.frame(outlet, at: 1.0 / plan.total)
+        #expect(thrown.balls.first?.inFlight == true)
+        let caught = JournalPlayMath.frame(outlet, at: 1.5 / plan.total)
+        #expect(caught.ball == P(12.08, 12.37))
+        #expect(caught.players[4] == P(12.08, 12.37))
+    }
+
+    @Test func aReceiverWaitsForTheCatchBeforeMovingOn() {
+        // 1 passes to 2, then 2 drives: the drive starts on the catch.
+        let catchAndGo = JournalPlayDiagram(
+            offense: [.init(number: 1, at: P(7.5, 9.6)), .init(number: 2, at: P(12.6, 6.6))], ball: 1,
+            actions: [.init(kind: .pass, player: 1, path: [P(7.5, 9.6), P(12.6, 6.6)], receiver: 2),
+                      .init(kind: .dribble, player: 2, path: [P(12.6, 6.6), P(8, 1.5)])])
+        let plan = JournalPlayMath.schedule(catchAndGo)
+        #expect(plan.items[1].start == 1 && plan.total == 2.5)
+    }
+
+    @Test func aHandOffGoesToItsReceiverAndCountsAsTheBall() {
+        // 5 dribbles to the wing, hands off to 2 coming around.
+        let dho = JournalPlayDiagram(
+            offense: [.init(number: 5, at: P(7.5, 8)), .init(number: 2, at: P(13, 4))], ball: 5,
+            actions: [.init(kind: .dribble, player: 5, path: [P(7.5, 8), P(10.5, 7)]),
+                      .init(kind: .cut, player: 2, path: [P(13, 4), P(11.3, 7.6)]),
+                      .init(kind: .handoff, player: 5, path: [P(10.5, 7), P(11.3, 7.6)], receiver: 2)])
+        #expect(JournalPlayMath.ballsAfter(dho) == [2])
+        #expect(JournalPlayMath.playBeats(dho) == 2.1)  // 1.5 + 0.6
+        #expect(JournalPlayMath.frame(dho, at: 1).ball == P(11.3, 7.6))
     }
 
     @Test func aPlayerWhoPassesAndCutsThrowsFirst() {
@@ -65,11 +105,13 @@ struct JournalPlayMathTests {
             offense: [.init(number: 1, at: P(7.5, 9.6)), .init(number: 2, at: P(12.6, 6.6))], ball: 1,
             actions: [.init(kind: .pass, player: 1, path: [P(7.5, 9.6), P(12.6, 6.6)], receiver: 2),
                       .init(kind: .cut, player: 1, path: [P(7.5, 9.6), P(7.5, 2.2)])])
-        // Beats: pass 1, moves 1.5, so the pass is the first 40%.
-        let throwing = JournalPlayMath.frame(passAndCut, at: 0.2)
+        // The pass takes beat 0…1; 1 sets off just after letting go (0.35).
+        let total = JournalPlayMath.playBeats(passAndCut)
+        #expect(abs(total - 1.85) < 0.001)
+        let throwing = JournalPlayMath.frame(passAndCut, at: 0.3 / total)
         #expect(throwing.players[1] == P(7.5, 9.6))
-        #expect(throwing.ball.map { abs($0.x - 10.05) < 0.001 } == true)
-        let cutting = JournalPlayMath.frame(passAndCut, at: 0.7)
+        #expect(throwing.balls.first?.inFlight == true)
+        let cutting = JournalPlayMath.frame(passAndCut, at: 1.2 / total)
         #expect(cutting.ball == P(12.6, 6.6))  // with 2
         #expect(cutting.players[1].map { $0.y < 9.6 && $0.y > 2.2 } == true)
         #expect(JournalPlayMath.frame(passAndCut, at: 1).players[1] == P(7.5, 2.2))

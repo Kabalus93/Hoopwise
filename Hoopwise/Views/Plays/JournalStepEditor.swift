@@ -122,7 +122,7 @@ struct JournalPlayStepEditor: View {
     }
 
     enum Tool: String, CaseIterable, Identifiable {
-        case move, cut, dribble, pass, shot, screen, player, defender, ball, cone, erase
+        case move, cut, dribble, pass, handoff, shot, screen, player, defender, ball, cone, erase
         var id: String { rawValue }
 
         /// Player and Cone are a drill's: a play always has its five.
@@ -136,6 +136,7 @@ struct JournalPlayStepEditor: View {
             case .cut: "Cut"
             case .dribble: "legend.dribble"
             case .pass: "Pass"
+            case .handoff: "Hand-off"
             case .shot: "Shot"
             case .screen: "Screen"
             case .player: "Player"
@@ -161,6 +162,7 @@ struct JournalPlayStepEditor: View {
             case .cut: "Drag from a player to where they run."
             case .dribble: "Drag from the ball handler to where they dribble."
             case .pass: "Drag from the passer to a teammate."
+            case .handoff: "Drag from the ball handler to the teammate they hand the ball to."
             case .shot: "Drag from the shooter toward the basket; the line ends in the rim."
             case .screen: "Drag from a player to where they set the screen."
             case .player: "Tap the court to add a player."
@@ -176,6 +178,7 @@ struct JournalPlayStepEditor: View {
             case .cut: .cut
             case .dribble: .dribble
             case .pass: .pass
+            case .handoff: .handoff
             case .shot: .shot
             case .screen: .screen
             default: nil
@@ -193,6 +196,7 @@ struct JournalPlayStepEditor: View {
             case .cut: "c"
             case .dribble: "d"
             case .pass: "p"
+            case .handoff: "f"
             case .shot: "h"
             case .screen: "s"
             case .player: "o"
@@ -205,7 +209,7 @@ struct JournalPlayStepEditor: View {
 
         /// The rail's groups: select | lines | marks | erase.
         static func railGroups(drill: Bool) -> [[Tool]] {
-            [[.move], [.cut, .dribble, .pass, .shot, .screen],
+            [[.move], [.cut, .dribble, .pass, .handoff, .shot, .screen],
              drill ? [.player, .defender, .ball, .cone] : [.defender, .ball], [.erase]]
         }
     }
@@ -862,6 +866,7 @@ struct JournalPlayStepEditor: View {
             if diagram.actions.indices.contains(i) {
                 let action = diagram.actions[i]
                 inspectorSection(action.kind == .pass ? "Pass from \(action.player) to \(action.receiver ?? 0)"
+                                 : action.kind == .handoff ? "Hand-off from \(action.player) to \(action.receiver ?? 0)"
                                  : action.kind == .shot ? "Shot by \(action.player)" : "Line by \(action.player)") {
                     if action.kind.movesPlayer {
                         Picker(selection: Binding(get: { diagram.actions.indices.contains(i) ? diagram.actions[i].kind : .cut },
@@ -1007,7 +1012,7 @@ struct JournalPlayStepEditor: View {
             return diagram
         }
         var out = diagram
-        if kind == .pass {
+        if kind.hasReceiver {
             out.actions.append(.init(kind: kind, player: player, path: [points[0], points[points.count - 1]]))
         } else if kind == .shot {
             let end = points[points.count - 1]
@@ -1170,8 +1175,8 @@ struct JournalPlayStepEditor: View {
 
     // MARK: - Tools
 
-    /// Two rows (five, then four), all in reach: 44 pt high, icon and name.
-    /// A drill's eleven tools sit six and five, the name under the icon.
+    /// Two rows of five, all in reach: 44 pt high, icon and name.
+    /// A drill's twelve tools sit six and six, the name under the icon.
     private var tools: some View {
         let columns = Array(repeating: GridItem(.flexible(), spacing: JSpacing.xxs), count: isDrill ? 6 : 5)
         return LazyVGrid(columns: columns, spacing: JSpacing.xxs) {
@@ -1187,7 +1192,7 @@ struct JournalPlayStepEditor: View {
                             .font(isDrill ? .caption2.weight(tool == item ? .semibold : .regular)
                                   : .caption.weight(tool == item ? .semibold : .regular))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .minimumScaleFactor(0.6)
                     }
                     .foregroundStyle(.primary)
                     .padding(.horizontal, JSpacing.xxs)
@@ -1217,6 +1222,7 @@ struct JournalPlayStepEditor: View {
         case .cut: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .cut, player: 0, path: line)]))
         case .dribble: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .dribble, player: 0, path: line)]))
         case .pass: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .pass, player: 0, path: line)]))
+        case .handoff: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .handoff, player: 0, path: line)]))
         case .shot: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .shot, player: 0, path: line)]))
         // Upright, so the screen's bar reads as a T.
         case .screen: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .screen, player: 0, path: [JournalCourtPoint(1, 2.4), JournalCourtPoint(1, 0.15)])]))

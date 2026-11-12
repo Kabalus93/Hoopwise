@@ -194,13 +194,13 @@ nonisolated extension JournalPlayMath {
             out.actions.append(.init(kind: .shot, player: player, path: [start, rim]))
             return out
         }
-        if kind == .pass {
+        if kind.hasReceiver {
             let receivers = diagram.offense.filter { $0.number != player }.compactMap { other -> (Int, JournalCourtPoint)? in
                 endPosition(of: other.number, in: diagram).map { (other.number, $0) }
             }
             guard let (receiver, at) = receivers.min(by: { $0.1.distance(to: end) < $1.1.distance(to: end) }),
                   at.distance(to: end) <= radius * 2, start.distance(to: at) >= shortestAction else { return nil }
-            out.actions.append(.init(kind: .pass, player: player, path: [start, at], receiver: receiver))
+            out.actions.append(.init(kind: kind, player: player, path: [start, at], receiver: receiver))
             return out
         }
         let path = shaped(points, shape)
@@ -256,7 +256,7 @@ nonisolated extension JournalPlayMath {
             if action.player == number, action.path.first.map({ $0.distance(to: old) < 0.05 }) == true {
                 action.path[0] = point
             }
-            if action.kind == .pass, action.receiver == number,
+            if action.kind.hasReceiver, action.receiver == number,
                let last = action.path.last, last.distance(to: old) < 0.05 {
                 action.path[action.path.count - 1] = point
             }
@@ -277,7 +277,7 @@ nonisolated extension JournalPlayMath {
             let fromHere = action.path.first.map { $0.distance(to: old) < 0.05 } == true
             let toHere = action.path.last.map { $0.distance(to: old) < 0.05 } == true
             if fromHere, action.player == player { out.actions[i].path[0] = point }
-            if toHere, action.kind == .pass, action.receiver == player {
+            if toHere, action.kind.hasReceiver, action.receiver == player {
                 out.actions[i].path[action.path.count - 1] = point
             }
         }
@@ -306,7 +306,7 @@ nonisolated extension JournalPlayMath {
     static func removing(player number: Int, from diagram: JournalPlayDiagram) -> JournalPlayDiagram {
         var out = diagram
         out.offense.removeAll { $0.number == number }
-        out.actions.removeAll { $0.player == number || ($0.kind == .pass && $0.receiver == number) }
+        out.actions.removeAll { $0.player == number || ($0.kind.hasReceiver && $0.receiver == number) }
         out.balls.removeAll { $0 == number }
         return out
     }

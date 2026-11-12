@@ -67,13 +67,16 @@ enum JournalPlayAuthoring {
       – screen: the player goes to "path"'s end and sets a screen there (a bar), angled along the last segment.
       – pass: {"kind": "pass", "player": 1, "to": 4} — from where 1 is to where 4 is at that moment. No path.
       – shot: {"kind": "shot", "player": 2} — a red line into the nearest rim. No path. The ball leaves play.
+      – handoff: {"kind": "handoff", "player": 5, "to": 2} — 5 hands the ball to 2 (a line ending in a double bar);     write the moves that bring them together first (5 dribbles over, 2 cuts around). No path.
       A path starts where the player is (after their earlier moves in this step); give only where they go. \
     "straight" draws straight segments with corners at the bends; "curved" one smooth curve through them (default: straight \
     for one point, curved for bends). A player's later move starts where their earlier one ended (screen, then roll).
     • notes: [{"text": "Rebound", "x": 3.5, "y": 4}] — a word or two written on the court; a single character is drawn large (①).
 
-    PLAYBACK runs a step as: passes written before their passer's move fly first (pass and cut), then everyone runs at once, \
-    then the remaining passes and shots one by one (drive and kick). Split a play into steps where the coach would pause to explain.
+    PLAYBACK follows the order the actions are written, each as soon as it can: everyone free moves at once; a pass leaves \
+    when the passer is free and has the ball (written before their own cut = pass and cut; after their dribble = drive and \
+    kick); a pass to someone whose cut was written EARLIER is a lead pass, landing as they arrive; a receiver waits for the \
+    catch before any move written after it. Split a play into steps where the coach would pause to explain.
 
     GOOD HABITS: one idea per step; 2–5 steps for a concept; captions a coach would say aloud; keep players at least ~1.5 m apart; \
     put defenders between their man and the basket; read get_play on an existing play to see the format filled in.
@@ -264,7 +267,7 @@ enum JournalPlayAuthoring {
                 let where_ = "\(label).actions[\(i)]"
                 guard let a = item as? [String: Any], let kindText = a["kind"] as? String,
                       let kind = D.ActionKind(rawValue: kindText.lowercased()) else {
-                    throw JournalPlayAuthoringError.invalid("\(where_).kind: cut, dribble, pass, shot or screen.")
+                    throw JournalPlayAuthoringError.invalid("\(where_).kind: cut, dribble, pass, handoff, shot or screen.")
                 }
                 guard let player = int(a["player"]), d.player(player) != nil else {
                     throw JournalPlayAuthoringError.invalid("\(where_).player: a number on the floor (players: \(d.offense.map(\.number))).")
@@ -273,15 +276,18 @@ enum JournalPlayAuthoring {
                 guard let from = JournalPlayMath.endPosition(of: player, in: d) else { continue }
                 let action: D.Action
                 switch kind {
-                case .pass:
+                case .pass, .handoff:
                     guard let to = int(a["to"] ?? a["receiver"]), to != player, d.player(to) != nil,
                           let at = JournalPlayMath.endPosition(of: to, in: d) else {
-                        throw JournalPlayAuthoringError.invalid("\(where_): a pass needs \"to\": a teammate's number (players: \(d.offense.map(\.number))).")
+                        throw JournalPlayAuthoringError.invalid("\(where_): a \(kind.rawValue) needs \"to\": a teammate's number (players: \(d.offense.map(\.number))).")
                     }
                     if from.distance(to: at) < JournalPlayMath.shortestAction {
                         throw JournalPlayAuthoringError.invalid("\(where_): \(player) and \(to) stand on the same spot; move one first.")
                     }
-                    action = D.Action(kind: .pass, player: player, path: [from, at], receiver: to)
+                    action = D.Action(kind: kind, player: player, path: [from, at], receiver: to)
+                    if kind == .handoff, from.distance(to: at) > 3 {
+                        warnings.append("\(where_): \(player) and \(to) are \(Int(from.distance(to: at).rounded())) m apart for a hand-off; bring them together first.")
+                    }
                 case .shot:
                     let rim = court.baskets.min { $0.distance(to: from) < $1.distance(to: from) } ?? from
                     action = D.Action(kind: .shot, player: player, path: [from, rim])
@@ -527,7 +533,7 @@ enum JournalPlayAuthoring {
             "actions": d.actions.map { a -> [String: Any] in
                 var item: [String: Any] = ["kind": a.kind.rawValue, "player": a.player]
                 switch a.kind {
-                case .pass: item["to"] = a.receiver ?? 0
+                case .pass, .handoff: item["to"] = a.receiver ?? 0
                 case .shot: break
                 default:
                     item["path"] = a.path.dropFirst().map(xy)

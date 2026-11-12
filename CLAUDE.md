@@ -894,6 +894,25 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   added in this editor goes at once, a saved one is hidden and only deleted
   on Done — Cancel brings it back. The Screen icon is
   upright — a T. PlayEditorWorkspaceUITests.testMovingBetweenSteps (iPad).
+  (h) PLAYBACK FOLLOWS THE DRAWING + HAND-OFF (12 November 2026, Luther:
+  "the logic behind what happens first is inconsistent … the ball travels
+  first and reappears on the target before he got there" — Getafe Wave's
+  outlet). Playback was phased (passes drawn before their passer's cut,
+  then every move, then the other passes); a pass the editor drew to a
+  cutter's END flew before the cutter moved and the ball jumped back to
+  them. `JournalPlayMath.schedule` is now a TIMELINE in drawing order, each
+  action as soon as it can: a move when its player is free (a dribble also
+  needs the ball); a pass when the passer is free and holds the ball — to a
+  teammate who moved EARLIER in the drawing it is a LEAD PASS landing as
+  they arrive; the passer moves on 0.35 beat after letting go; a receiver
+  waits for the catch before a move drawn after it. Independent balls fly
+  at once. frame / playBeats / ballsAfter read it. ActionKind `.handoff`
+  (tool F, after Pass): a solid line to the receiver ending in a double bar
+  just short of them, 0.6 beat, `hasReceiver` like a pass (snaps, follows
+  moved players, removed with the receiver); connector kind "handoff"
+  {"to"} warns past 3 m. Older builds cannot decode "handoff" (the step
+  reads empty there, as with shots). Tests: JournalPlayMathTests (outlet,
+  catch-and-go, hand-off), JournalPlayBallsTests.
 - TWENTY-FIRST sanctioned exception (8 November 2026, Luther's request):
   on a PRIVATE session (SessionPrivacy), the session page's Add Athlete adds
   to THAT SESSION ONLY — `addStudentsToSessionOnly` (roster = who was

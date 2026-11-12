@@ -276,7 +276,7 @@ struct JournalPlayDiagramView: View {
         guard points.count >= 2 else { return }
         // Leave the player's circle, and stop short of where it lands.
         points[0] = Self.moved(points[0], toward: points[1], by: r)
-        if action.kind != .screen {
+        if action.kind != .screen && action.kind != .handoff {
             let n = points.count - 1
             points[n] = Self.moved(points[n], toward: points[n - 1], by: r + width)
         }
@@ -303,6 +303,27 @@ struct JournalPlayDiagramView: View {
             context.stroke(Self.zigzag(along: line, scale: s * k), with: shading,
                            style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
             if let head { arrow(head, in: &context, scale: s, k: k, shading: shading) }
+        case .handoff:
+            // A solid line to the exchange, closed by two short bars across
+            // it (the standard hand-off mark) just short of the receiver.
+            let n = points.count - 1
+            let to = points[n], from = points[n - 1]
+            let dx = to.x - from.x, dy = to.y - from.y
+            let len = max((dx * dx + dy * dy).squareRoot(), 0.001)
+            let ux = dx / len, uy = dy / len
+            let gap = JournalPlayCourt.screenBar * s * k * 0.28
+            let barEnd = Self.moved(to, toward: from, by: r + width * 1.5)
+            let first = CGPoint(x: barEnd.x - ux * gap, y: barEnd.y - uy * gap)
+            var stem = Path()
+            stem.move(to: points[0]); stem.addLine(to: first)
+            context.stroke(stem, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round))
+            let half = JournalPlayCourt.screenBar * s * k / 2
+            var bars = Path()
+            for c in [first, barEnd] {
+                bars.move(to: CGPoint(x: c.x - uy * half, y: c.y + ux * half))
+                bars.addLine(to: CGPoint(x: c.x + uy * half, y: c.y - ux * half))
+            }
+            context.stroke(bars, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
         case .screen:
             context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
             let end = points[points.count - 1], before = points[points.count - 2]
@@ -488,6 +509,7 @@ struct JournalPlayLegend: View {
             item(1, "Defender", JournalPlayDiagram(defense: [.init(at: P(1, 1))])),
             item(2, "Cut or run", JournalPlayDiagram(actions: [.init(kind: .cut, player: 0, path: line)])),
             item(3, "Pass", JournalPlayDiagram(actions: [.init(kind: .pass, player: 0, path: line)])),
+            item(10, "Hand-off", JournalPlayDiagram(actions: [.init(kind: .handoff, player: 0, path: [P(-0.6, 1), P(2.2, 1)])])),
             item(9, "Shot (a drive to the basket is red too)",
                  JournalPlayDiagram(actions: [.init(kind: .shot, player: 0, path: line)])),
             item(4, "legend.dribble",

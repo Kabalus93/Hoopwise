@@ -27,11 +27,12 @@ struct JournalPlayBallsTests {
     @Test func playbackDrawsEveryBall() {
         let start = JournalPlayMath.frame(Self.twoBalls, at: 0)
         #expect(start.balls.map(\.at) == [P(5, 10), P(10, 10)])
-        // Halfway through the first pass: 1's ball in the air, 2's still held.
-        let mid = JournalPlayMath.frame(Self.twoBalls, at: 0.25)
+        // Two passes with two balls don't wait for each other: both fly at once.
+        #expect(JournalPlayMath.playBeats(Self.twoBalls) == 1)
+        let mid = JournalPlayMath.frame(Self.twoBalls, at: 0.5)
         #expect(mid.balls.count == 2)
-        #expect(mid.balls[0].inFlight && !mid.balls[1].inFlight)
-        #expect(mid.balls[1].at == P(10, 10))
+        #expect(mid.balls[0].inFlight && mid.balls[1].inFlight)
+        #expect(mid.balls[1].at == P(11.5, 7.5))
         let end = JournalPlayMath.frame(Self.twoBalls, at: 1)
         #expect(end.balls.map(\.at) == [P(2, 5), P(13, 5)])
     }
