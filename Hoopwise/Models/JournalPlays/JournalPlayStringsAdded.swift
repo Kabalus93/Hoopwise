@@ -12,6 +12,12 @@ nonisolated enum JournalPlayStringsAdded {
                   enOne: nil, zh: "点击选中球员、防守人或线条；拖动可移动它，或拖动线的终点和弯折点。"),
         "Shot": .init(en: "Shot", enOne: nil, zh: "投篮"),
         "Hand-off": .init(en: "Hand-off", enOne: nil, zh: "手递手"),
+        "By hand": .init(en: "By hand", enOne: nil, zh: "手动"),
+        "Man": .init(en: "Man", enOne: nil, zh: "人盯人"),
+        "Defense": .init(en: "Defense", enOne: nil, zh: "防守"),
+        "Tap the court to add a defender; tap one to mark the one to read. Defense below places them for you.":
+            .init(en: "Tap the court to add a defender; tap one to mark the one to read. Defense below places them for you.",
+                  enOne: nil, zh: "点球场添加防守人；点一个防守人标记为要读的人。下方的“防守”可以自动摆放他们。"),
         "Drag from the ball handler to the teammate they hand the ball to.":
             .init(en: "Drag from the ball handler to the teammate they hand the ball to.", enOne: nil,
                   zh: "从持球人拖到他要手递手交球的队友。"),

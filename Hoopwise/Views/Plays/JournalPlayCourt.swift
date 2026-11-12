@@ -196,11 +196,17 @@ struct JournalPlayDiagramView: View {
         }
 
         // Defenders.
-        for defender in diagram.defense {
-            let c = JournalPlayCourt.point(defender.at, scale: s)
-            context.draw(Text(verbatim: "X")
-                .font(.system(size: JournalPlayCourt.defenderSize * s * (compact ? 1.4 : k), weight: .semibold))
-                .foregroundStyle(defender.isRead ? JPalette.read : Color.secondary), at: c)
+        for (i, defender) in diagram.defense.enumerated() {
+            let at = frame.flatMap { i < $0.defense.count ? $0.defense[i] : nil } ?? defender.at
+            let c = JournalPlayCourt.point(at, scale: s)
+            let size = JournalPlayCourt.defenderSize * s * (compact ? 1.4 : k)
+            let tint = defender.isRead ? JPalette.read : Color.secondary
+            context.draw(Text(verbatim: "X").font(.system(size: size, weight: .semibold)).foregroundStyle(tint), at: c)
+            // Man-to-man: the man he guards, small beside the X.
+            if !compact, diagram.defenseMode == .man, let man = defender.guards {
+                context.draw(Text(verbatim: "\(man)").font(.system(size: size * 0.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(tint), at: CGPoint(x: c.x + size * 0.48, y: c.y + size * 0.36))
+            }
         }
 
         // Players and the ball.

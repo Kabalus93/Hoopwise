@@ -122,13 +122,13 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     @ViewBuilder
     private func diagram(_ step: Step, isCurrent: Bool) -> some View {
         if isCurrent, let frozen {
-            JournalPlayDiagramView(diagram: step.diagram, court: court, frame: JournalPlayMath.frame(step.diagram, at: frozen))
+            JournalPlayDiagramView(diagram: step.diagram, court: court, frame: JournalPlayMath.frame(step.diagram, at: frozen, court: court))
         } else if isCurrent, playing, !reduceMotion {
             let diagram = step.diagram
             let duration = Self.duration(diagram)
             TimelineView(.animation) { timeline in
                 let t = timeline.date.timeIntervalSince(stepStart) / duration
-                JournalPlayDiagramView(diagram: diagram, court: court, frame: JournalPlayMath.frame(diagram, at: t))
+                JournalPlayDiagramView(diagram: diagram, court: court, frame: JournalPlayMath.frame(diagram, at: t, court: court))
             }
         } else {
             JournalPlayDiagramView(diagram: step.diagram, court: court)

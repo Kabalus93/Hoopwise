@@ -166,7 +166,7 @@ struct JournalPlayStepEditor: View {
             case .shot: "Drag from the shooter toward the basket; the line ends in the rim."
             case .screen: "Drag from a player to where they set the screen."
             case .player: "Tap the court to add a player."
-            case .defender: "Tap the court to add a defender; tap one to mark the one to read."
+            case .defender: "Tap the court to add a defender; tap one to mark the one to read. Defense below places them for you."
             case .ball: "Tap a player to give or take a ball. Several players can each have one."
             case .cone: "Tap the court to add a cone."
             case .erase: "Tap a line, a defender or a note to erase it."
@@ -300,7 +300,7 @@ struct JournalPlayStepEditor: View {
 
     /// A step after this one, starting where this one's DRAFT ends.
     private func addStep() {
-        let new = Page(draft: Draft(diagram: JournalPlayMath.startOfNextStep(after: diagram), caption: "", text: ""))
+        let new = Page(draft: Draft(diagram: JournalPlayMath.startOfNextStep(after: diagram, court: court), caption: "", text: ""))
         pages.insert(new, at: currentIndex + 1)
         show(new.id)
     }
@@ -543,6 +543,22 @@ struct JournalPlayStepEditor: View {
                 if isWorkspace { workspace } else { compactLayout }
             }
             .background(JPalette.background)
+            #if DEBUG
+            // HOOPWISE_PLAYS_DEFENSE=man|zone23|zone32 opens on the Defender
+            // tool with that defense (screenshots, checks).
+            .onAppear {
+                if let raw = ProcessInfo.processInfo.environment["HOOPWISE_PLAYS_DEFENSE"],
+                   let mode = JournalPlayDiagram.DefenseMode(rawValue: raw) {
+                    tool = .defender
+                    setDefense(mode)
+                }
+            }
+            #endif
+            // Auto defense: defenders follow every change to the offense.
+            .onChange(of: diagram) { _, new in
+                let placed = JournalPlayMath.placingDefense(new, court: court)
+                if placed != new { diagram = placed }
+            }
             // The phone's steps bar says which step; the title would repeat it.
             .navigationTitle(isWorkspace ? JText("Step \(number)") : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -618,6 +634,7 @@ struct JournalPlayStepEditor: View {
                         .accessibilityIdentifier("plays.editor.lineShape")
                     }
                 }
+                if tool == .defender { defensePicker }
                 TextField(text: $text, axis: .vertical) { JText("What happens, and what to read") }
                     .lineLimit(2...5)
                     .padding(JSpacing.s)
@@ -808,7 +825,38 @@ struct JournalPlayStepEditor: View {
             if tool.shapesLine {
                 shapePicker($lineShapeRaw)
             }
+            if tool == .defender { defensePicker }
         }
+    }
+
+    /// Auto defense for the whole part (12 November 2026, Luther): drawn by
+    /// hand, man-to-man (matched by nearest, switch on every screen), or a
+    /// 2-3 / 3-2 zone. Changing it re-matches from the first step on.
+    private var defensePicker: some View {
+        Picker(selection: Binding(get: { diagram.defenseMode?.rawValue ?? "off" },
+                                  set: { setDefense(JournalPlayDiagram.DefenseMode(rawValue: $0)) })) {
+            JText("By hand").tag("off")
+            JText("Man").tag(JournalPlayDiagram.DefenseMode.man.rawValue)
+            Text(verbatim: "2-3").tag(JournalPlayDiagram.DefenseMode.zone23.rawValue)
+            Text(verbatim: "3-2").tag(JournalPlayDiagram.DefenseMode.zone32.rawValue)
+        } label: { JText("Defense") }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("plays.editor.defense")
+    }
+
+    private func setDefense(_ mode: JournalPlayDiagram.DefenseMode?) {
+        guard mode != diagram.defenseMode else { return }
+        pushUndo()
+        stash()
+        let applied = JournalPlayMath.applyingDefense(mode, to: pages.map(\.draft.diagram), court: court)
+        for (i, d) in applied.enumerated() where i != currentIndex {
+            if pages[i].draft.diagram != d {
+                pages[i].draft.undo.append(pages[i].draft.diagram)
+                pages[i].draft.diagram = d
+            }
+        }
+        if applied.indices.contains(currentIndex) { diagram = applied[currentIndex] }
+        selection = nil
     }
 
     private func inspectorSection<Content: View>(_ title: JPString, @ViewBuilder content: () -> Content) -> some View {
@@ -963,8 +1011,13 @@ struct JournalPlayStepEditor: View {
         case .defender(let i)?:
             guard diagram.defense.indices.contains(i) else { return }
             pushUndo()
-            diagram.defense[i].at.x += dx
-            diagram.defense[i].at.y += dy
+            let at = diagram.defense[i].at
+            if diagram.defenseMode != nil {
+                diagram = JournalPlayMath.nudging(defender: i, to: JournalCourtPoint(at.x + dx, at.y + dy), in: diagram, court: court)
+            } else {
+                diagram.defense[i].at.x += dx
+                diagram.defense[i].at.y += dy
+            }
         case .cone(let i)?:
             guard diagram.cones.indices.contains(i) else { return }
             pushUndo()
@@ -1083,7 +1136,13 @@ struct JournalPlayStepEditor: View {
     private func update(to point: JournalCourtPoint) {
         switch drag {
         case .player(let n): diagram = JournalPlayMath.moving(player: n, to: point, in: diagram)
-        case .defender(let i): if diagram.defense.indices.contains(i) { diagram.defense[i].at = point }
+        case .defender(let i):
+            guard diagram.defense.indices.contains(i) else { break }
+            if diagram.defenseMode != nil {
+                diagram = JournalPlayMath.nudging(defender: i, to: point, in: diagram, court: court)
+            } else {
+                diagram.defense[i].at = point
+            }
         case .cone(let i): if diagram.cones.indices.contains(i) { diagram.cones[i] = point }
         case .actionEnd(let i): diagram = JournalPlayMath.moving(endOf: i, to: point, in: diagram)
         case .bend(let a, let p): diagram = JournalPlayMath.moving(bend: p, of: a, to: point, in: diagram)

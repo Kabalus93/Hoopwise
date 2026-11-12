@@ -64,7 +64,7 @@ extension JournalPlayPart {
     func addStep(after step: JournalPlayStep?, in context: ModelContext) -> JournalPlayStep {
         let steps = sortedSteps
         let previous = step ?? steps.last
-        let diagram = previous.map { JournalPlayMath.startOfNextStep(after: $0.diagram) }
+        let diagram = previous.map { JournalPlayMath.startOfNextStep(after: $0.diagram, court: play?.court ?? .half) }
             ?? JournalPlayMath.defaultAlignment(play?.court ?? .half)
         let order = previous.map { $0.order + 1 } ?? 0
         for later in steps where later.order >= order { later.order += 1 }

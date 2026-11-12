@@ -49,13 +49,18 @@ nonisolated extension JournalPlayMath {
     ///   pass, timed to land as they arrive — the editor drew it to where
     ///   they end up;
     /// · the passer can move on just after letting go (pass and cut); the
-    ///   receiver waits for the catch before any move drawn after it.
+    ///   receiver waits for the catch before any move drawn after it;
+    /// · a move drawn after a teammate's screen that runs past it waits for
+    ///   the screen (it leaves 0.4 beat before the screener arrives).
     /// Everyone who is free moves at once, as before.
     struct Schedule: Equatable, Sendable {
         var items: [Timed]
         var total: Double
         var throwsInOrder: [Timed]
     }
+
+    /// A move passing within this many metres of a screen uses it.
+    static let screenReach = 1.5
 
     static func beats(_ kind: JournalPlayDiagram.ActionKind) -> Double {
         switch kind {
@@ -71,6 +76,8 @@ nonisolated extension JournalPlayMath {
         // When each ball is in hand: (holder, from).
         var balls: [(holder: Int, from: Double)] = diagram.balls.map { ($0, 0) }
         var items: [Timed] = []
+        // Screens set so far: where, by whom, when they are set.
+        var screens: [(spot: JournalCourtPoint, player: Int, end: Double)] = []
         for (i, action) in diagram.actions.enumerated() {
             let p = action.player
             let duration = beats(action.kind)
@@ -78,6 +85,19 @@ nonisolated extension JournalPlayMath {
                 var start = ready[p] ?? 0
                 if action.kind == .dribble, let ball = balls.first(where: { $0.holder == p }) {
                     start = max(start, ball.from)
+                }
+                // A move drawn after a teammate's screen that runs past it
+                // uses it: it leaves as the screen is nearly set (0.4 beat
+                // before the screener arrives).
+                let path = drawnPath(action)
+                for screen in screens where screen.player != p {
+                    let passes = (0...16).contains { k in
+                        point(along: path, at: Double(k) / 16).distance(to: screen.spot) <= screenReach
+                    }
+                    if passes { start = max(start, screen.end - 0.4) }
+                }
+                if action.kind == .screen, let spot = action.path.last {
+                    screens.append((spot, p, start + duration))
                 }
                 let end = start + duration
                 ready[p] = end
@@ -131,15 +151,17 @@ nonisolated extension JournalPlayMath {
 
     /// The step's end: everyone where their actions took them, the ball
     /// passed on, no actions drawn. The next step starts here.
-    static func startOfNextStep(after diagram: JournalPlayDiagram) -> JournalPlayDiagram {
+    static func startOfNextStep(after diagram: JournalPlayDiagram, court: JournalCourtKind = .half) -> JournalPlayDiagram {
         var next = diagram
+        // Auto defense carries on with the switches made (placed below).
+        if diagram.defenseMode != nil { next.defense = carriedDefense(from: diagram) }
         next.offense = diagram.offense.map { player in
             JournalPlayDiagram.Player(number: player.number, at: endPosition(of: player.number, in: diagram) ?? player.at)
         }
         next.balls = ballsAfter(diagram)
         next.actions = []
         next.notes = []
-        return next
+        return placingDefense(next, court: court)
     }
 
     /// The dashed rings of the diagrams: where each player who moves ends up.
@@ -162,6 +184,10 @@ nonisolated extension JournalPlayMath {
             var inFlight: Bool
         }
 
+        /// Auto defense: where each defender is (empty when drawn by hand —
+        /// they stand where the drawing puts them).
+        var defense: [JournalCourtPoint] = []
+
         /// The first ball: the play's ball when there is only one.
         var ball: JournalCourtPoint? { balls.first?.at }
     }
@@ -177,12 +203,33 @@ nonisolated extension JournalPlayMath {
 
     /// Everyone at moment `t` (0…1) of a step, on its timeline: each move
     /// eased in and out over its own span, each ball with its holder or in
-    /// the air along its pass.
-    static func frame(_ diagram: JournalPlayDiagram, at t: Double) -> PlayFrame {
+    /// the air along its pass, and an auto defense reacting a fraction of a
+    /// beat behind.
+    static func frame(_ diagram: JournalPlayDiagram, at t: Double, court: JournalCourtKind = .half) -> PlayFrame {
         let t = min(max(t, 0), 1)
         let plan = schedule(diagram)
         let now = t * plan.total
+        var frame = rawFrame(diagram, plan: plan, at: now)
+        if diagram.defenseMode != nil, !diagram.defense.isEmpty {
+            let swaps = switches(diagram, plan: plan)
+            // Each defender's spot averaged over the last reactionBeats: he
+            // follows, a switch or a closeout slides.
+            let samples = 6
+            var sum = [JournalCourtPoint](repeating: JournalCourtPoint(0, 0), count: diagram.defense.count)
+            for k in 0..<samples {
+                let at = max(0, now - reactionBeats * Double(k) / Double(samples - 1))
+                let moment = k == 0 ? frame : rawFrame(diagram, plan: plan, at: at)
+                let spots = defenseSpots(diagram, players: moment.players, ball: moment.ball,
+                                         guards: guards(diagram, at: at, switches: swaps), court: court)
+                for i in spots.indices { sum[i].x += spots[i].x; sum[i].y += spots[i].y }
+            }
+            frame.defense = sum.map { JournalCourtPoint($0.x / Double(samples), $0.y / Double(samples)) }
+        }
+        return frame
+    }
 
+    /// The offense and the balls `now` beats into the step.
+    static func rawFrame(_ diagram: JournalPlayDiagram, plan: Schedule, at now: Double) -> PlayFrame {
         var players: [Int: JournalCourtPoint] = [:]
         for player in diagram.offense {
             var at = player.at

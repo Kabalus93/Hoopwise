@@ -913,6 +913,32 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   {"to"} warns past 3 m. Older builds cannot decode "handoff" (the step
   reads empty there, as with shots). Tests: JournalPlayMathTests (outlet,
   catch-and-go, hand-off), JournalPlayBallsTests.
+  (i) AUTO DEFENSE (12 November 2026, Luther: "assign a defender to an
+  offensive player … the defender follows him in a natural way … awareness
+  of screens"; decided: calculated with nudging, matched by NEAREST player,
+  SWITCH EVERYTHING, a choice of man / 2-3 / 3-2). Models/JournalPlays/
+  JournalPlayDefense.swift. Per step, inside the diagram JSON (no schema
+  change): `defenseMode` (.man / .zone23 / .zone32, written only when set)
+  and per defender `guards` + `nudge` (optionals — older builds keep the
+  defenders at `at`, which is always the calculated start spot). Spots are
+  WORKED OUT: man = ball–you–man (1.5 m off the ball toward the rim; off
+  the ball sagging toward rim and ball line with distance — continuous, so
+  closeouts happen); zones = five spots around the rim shifting with the
+  ball, the nearest stepping up to it; nudge added on top. SWITCH: a move
+  drawn after a screen passing within `screenReach` (1.5 m) of its spot
+  uses it — the two defenders swap men as he goes by, carried to later
+  steps (`carriedDefense`, in startOfNextStep). Playback: PlayFrame.defense,
+  each spot averaged over the last `reactionBeats` (0.35) so defenders
+  follow, and a switch slides. THE TIMELINE also gained: a move using a
+  teammate's screen (drawn after it, passing it) leaves 0.4 beat before
+  the screen is set — before, the user and the screener moved together.
+  Editor: Defender tool → "Defense: By hand · Man · 2-3 · 3-2" (both
+  layouts), applied to every step of the part from the first (re-matched);
+  `.onChange(of: diagram)` re-places after every edit; dragging or arrow-
+  nudging a defender sets his nudge. Defenders show the man's number small
+  beside the X. Connector: step "defense_mode" (man | 2-3 | 3-2 | off);
+  get_play returns it and "guards". DEBUG HOOPWISE_PLAYS_DEFENSE=man|zone23|
+  zone32 (with HOOPWISE_PLAYS_OPEN=editor). Tests: JournalPlayDefenseTests.
 - TWENTY-FIRST sanctioned exception (8 November 2026, Luther's request):
   on a PRIVATE session (SessionPrivacy), the session page's Add Athlete adds
   to THAT SESSION ONLY — `addStudentsToSessionOnly` (roster = who was

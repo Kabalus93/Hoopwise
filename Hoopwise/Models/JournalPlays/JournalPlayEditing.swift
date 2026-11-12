@@ -36,7 +36,10 @@ nonisolated extension JournalPlayMath {
             : { JournalCourtPoint($0.y, 28 - $0.x) }
         var out = diagram
         out.offense = diagram.offense.map { .init(number: $0.number, at: map($0.at)) }
-        out.defense = diagram.defense.map { .init(at: map($0.at), isRead: $0.isRead) }
+        // A nudge is a vector: turned with the court, not moved.
+        let turn: (JournalCourtPoint) -> JournalCourtPoint = to == .full
+            ? { JournalCourtPoint(-$0.y, $0.x) } : { JournalCourtPoint($0.y, -$0.x) }
+        out.defense = diagram.defense.map { var d = $0; d.at = map($0.at); d.nudge = $0.nudge.map(turn); return d }
         out.actions = diagram.actions.map { .init(kind: $0.kind, player: $0.player, path: $0.path.map(map),
                                                   receiver: $0.receiver, shape: $0.shape) }
         out.notes = diagram.notes.map { .init(text: $0.text, at: map($0.at)) }

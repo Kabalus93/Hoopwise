@@ -73,6 +73,19 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         var at: JournalCourtPoint
         /// The defender the ball handler reads (amber in the diagrams).
         var isRead = false
+        /// Man-to-man (`defenseMode` .man): the offensive player this
+        /// defender guards. Optional, so older builds read the drawing and
+        /// keep the defender at `at` (12 November 2026).
+        var guards: Int? = nil
+        /// The coach's nudge from the calculated spot, in metres: "X2 plays
+        /// him tighter" follows him through every move.
+        var nudge: JournalCourtPoint? = nil
+    }
+
+    /// Auto defense (12 November 2026, Luther): defenders are placed by the
+    /// rules in JournalPlayDefense instead of by hand. nil = drawn by hand.
+    enum DefenseMode: String, Codable, CaseIterable, Sendable {
+        case man, zone23, zone32
     }
 
     enum ActionKind: String, Codable, CaseIterable, Sendable {
@@ -144,6 +157,9 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     /// and a drawing without cones writes no `cones` key, so plays' JSON is
     /// unchanged and older builds read a drawing with cones minus the cones.
     var cones: [JournalCourtPoint] = []
+    /// Auto defense; nil when the defenders are drawn by hand. Written only
+    /// when set, so a hand-drawn step's JSON is unchanged.
+    var defenseMode: DefenseMode? = nil
 
     /// The first ball's holder: the play's ball when there is only one.
     var ball: Int? {
@@ -168,7 +184,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     // Stored as before with `ball` (the first holder) beside `balls`, so a
     // build from before several balls still reads a drawing's first ball,
     // and a drawing it saved (no `balls`) reads back as that one ball.
-    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones }
+    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones, defenseMode }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -180,6 +196,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         let all = try c.decodeIfPresent([Int].self, forKey: .balls)
         balls = all ?? first.map { [$0] } ?? []
         cones = try c.decodeIfPresent([JournalCourtPoint].self, forKey: .cones) ?? []
+        defenseMode = try? c.decodeIfPresent(DefenseMode.self, forKey: .defenseMode)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -191,6 +208,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         try c.encode(actions, forKey: .actions)
         try c.encode(notes, forKey: .notes)
         if !cones.isEmpty { try c.encode(cones, forKey: .cones) }
+        try c.encodeIfPresent(defenseMode, forKey: .defenseMode)
     }
 
     /// The number a new player takes: one past the highest on the court.

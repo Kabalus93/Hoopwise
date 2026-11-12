@@ -71,6 +71,9 @@ enum JournalPlayAuthoring {
       A path starts where the player is (after their earlier moves in this step); give only where they go. \
     "straight" draws straight segments with corners at the bends; "curved" one smooth curve through them (default: straight \
     for one point, curved for bends). A player's later move starts where their earlier one ended (screen, then roll).
+    • defense_mode: "man" | "2-3" | "3-2" | "off" — AUTO DEFENSE: defenders are placed for you and follow the offense in \
+    playback (man: matched to the nearest player, one each, ball–you–man positions, and on every screen the two defenders \
+    SWITCH; zones shift toward the ball). Set it on the first step; later steps carry it. With it on, do not give "defense".
     • notes: [{"text": "Rebound", "x": 3.5, "y": 4}] — a word or two written on the court; a single character is drawn large (①).
 
     PLAYBACK follows the order the actions are written, each as soon as it can: everyone free moves at once; a pass leaves \
@@ -321,6 +324,26 @@ enum JournalPlayAuthoring {
             }
         }
 
+        // Auto defense: "defense_mode" matches the defenders here (man by
+        // nearest; zones to their spots); without it a step carries the
+        // previous step's mode, re-placed for where the offense now stands.
+        if let raw = spec["defense_mode"] {
+            if raw is NSNull || (raw as? String)?.lowercased() == "off" {
+                d = JournalPlayMath.applyingDefense(nil, to: [d], court: court)[0]
+            } else {
+                let mode: D.DefenseMode
+                switch (raw as? String)?.lowercased() {
+                case "man": mode = .man
+                case "2-3", "zone23": mode = .zone23
+                case "3-2", "zone32": mode = .zone32
+                default: throw JournalPlayAuthoringError.invalid("\(label).defense_mode: man, 2-3, 3-2 or off.")
+                }
+                d = JournalPlayMath.applyingDefense(mode, to: [d], court: court)[0]
+            }
+        } else {
+            d = JournalPlayMath.placingDefense(d, court: court)
+        }
+
         // Crowding: two players on the same spot read as one.
         for (i, a) in d.offense.enumerated() {
             for b in d.offense[(i + 1)...] where a.at.distance(to: b.at) < 0.9 {
@@ -355,7 +378,7 @@ enum JournalPlayAuthoring {
             plans.append(StepPlan(caption: (step["caption"] as? String ?? "").trimmed,
                                   text: (step["text"] as? String ?? "").trimmed, diagram: d))
             warnings += w
-            base = JournalPlayMath.startOfNextStep(after: d)
+            base = JournalPlayMath.startOfNextStep(after: d, court: court)
         }
         return (plans, warnings)
     }
@@ -468,7 +491,7 @@ enum JournalPlayAuthoring {
             previous = steps.last
         }
         let court = part.play?.court ?? .half
-        let base = previous.map { JournalPlayMath.startOfNextStep(after: $0.diagram) } ?? JournalPlayMath.defaultAlignment(court)
+        let base = previous.map { JournalPlayMath.startOfNextStep(after: $0.diagram, court: court) } ?? JournalPlayMath.defaultAlignment(court)
         let (d, warnings) = try diagram(spec["diagram"] as? [String: Any], base: base, court: court, label: "diagram")
         let step: JournalPlayStep
         if let previous {
@@ -527,6 +550,7 @@ enum JournalPlayAuthoring {
             "defense": d.defense.map { def -> [String: Any] in
                 var item: [String: Any] = ["x": r(def.at.x), "y": r(def.at.y)]
                 if def.isRead { item["read"] = true }
+                if let g = def.guards { item["guards"] = g }
                 return item
             },
             "balls": d.balls,
@@ -542,6 +566,7 @@ enum JournalPlayAuthoring {
                 return item
             },
         ]
+        if let mode = d.defenseMode { out["defense_mode"] = mode == .man ? "man" : mode == .zone23 ? "2-3" : "3-2" }
         if !d.notes.isEmpty { out["notes"] = d.notes.map { ["text": $0.text, "x": r($0.at.x), "y": r($0.at.y)] } }
         return out
     }
