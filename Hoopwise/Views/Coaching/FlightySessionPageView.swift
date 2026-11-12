@@ -137,6 +137,12 @@ struct FlightySessionPageView: View {
         return dataManager.students.filter { ids.contains($0.id) }
     }
     
+    /// The status bar / Dynamic Island inset of a pushed page (0 in a sheet).
+    @State private var windowSafeTop: CGFloat = 0
+    /// Back and ⋯ sit just under the status bar on a full page, 30 pt into
+    /// the card in a sheet.
+    private var floatingButtonsTop: CGFloat { windowSafeTop > 0 ? windowSafeTop + 4 : 30 }
+
     var programColor: Color {
         parentProgram.map { Color(hex: $0.colorHex) } ?? .blue
     }
@@ -146,14 +152,14 @@ struct FlightySessionPageView: View {
     }
     
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack(alignment: .top) {
                 #if os(iOS)
                 Group {
                     if selectedTab == 1 {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 0) {
-                                heroCard(safeAreaTop: geometry.safeAreaInsets.top)
+                                heroCard(safeAreaTop: windowSafeTop)
                                 primarySessionCTA
                                 tabSelector
                                     .frame(maxWidth: .infinity)
@@ -164,7 +170,7 @@ struct FlightySessionPageView: View {
                     } else {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 0) {
-                                heroCard(safeAreaTop: geometry.safeAreaInsets.top)
+                                heroCard(safeAreaTop: windowSafeTop)
                                 primarySessionCTA
                                 tabSelector
                                     .frame(maxWidth: .infinity)
@@ -176,7 +182,7 @@ struct FlightySessionPageView: View {
                 #else
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        heroCard(safeAreaTop: geometry.safeAreaInsets.top)
+                        heroCard(safeAreaTop: windowSafeTop)
                         primarySessionCTA
                         tabSelector
                             .frame(maxWidth: .infinity)
@@ -291,11 +297,24 @@ struct FlightySessionPageView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, geometry.safeAreaInsets.top + 30)
+                .padding(.top, floatingButtonsTop)
             }
         }
+        // No iOS 26 scroll-edge bar at the top: it drew a grey band beside
+        // the Dynamic Island over the hero's blue on a pushed page.
+        .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        // The REAL top inset (status bar / Dynamic Island): the GeometryReader
+        // above sits inside ignoresSafeArea and always reads 0, which put Back
+        // and ⋯ in the status bar on a pushed page. A sheet reads 0 here.
+        .background {
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { windowSafeTop = g.safeAreaInsets.top }
+                    .onChange(of: g.safeAreaInsets.top) { _, top in windowSafeTop = top }
+            }
+        }
         // `.navigationBarHidden(true)` (the legacy API) disables the
         // interactive edge-swipe back gesture. The modern equivalent hides
         // the bar visually while keeping the swipe-to-pop gesture alive.
@@ -593,7 +612,7 @@ struct FlightySessionPageView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
-        .padding(.top, safeAreaTop + 82)
+        .padding(.top, floatingButtonsTop + 52)
         .frame(maxWidth: .infinity, minHeight: 200 + safeAreaTop, alignment: .bottomLeading)
         .background {
             ZStack {

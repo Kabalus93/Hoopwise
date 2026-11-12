@@ -1186,6 +1186,12 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   hero's content starts below the floating Back / ⋯ (safe area + 82) with the
   card growing to fit (minHeight 200 + safe area) instead of a fixed height
   that pushed the content up under the buttons.
+  PUSHED PAGE (same day, Luther: the blue was cut by a grey bar beside the
+  Dynamic Island, Back / ⋯ in the status bar): the page's GeometryReader sits
+  inside ignoresSafeArea and read a top inset of 0, and iOS 26's scroll-edge
+  bar drew over the hero. The real inset is read outside (`windowSafeTop`;
+  0 in a sheet), the buttons sit at inset + 4 (30 in a sheet) and
+  `.scrollEdgeEffectHidden(true, for: .top)` lets the blue run to the top.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",
