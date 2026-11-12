@@ -312,7 +312,7 @@ struct JournalPlayDiagramView: View {
                            style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
             if let head { arrow(head, in: &context, scale: s, k: k, shading: shading) }
         case .handoff:
-            // The hand-off mark — a "#" (Luther's reference, 12 Nov 2026) —
+            // The hand-off mark — two bars struck through (Luther's reference) —
             // midway between the two circles, with a line from the giver
             // when they stand further apart.
             let raw = action.path.map { JournalPlayCourt.point($0, scale: s) }
@@ -334,18 +334,18 @@ struct JournalPlayDiagramView: View {
                 stem.addLine(to: CGPoint(x: c.x - ux * size / 2, y: c.y - uy * size / 2))
                 context.stroke(stem, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round))
             }
-            let h = size / 2, g = size * 0.2
+            let h = size / 2, g = size * 0.22
             var mark = Path()
+            // Two bars across the line …
             for side in [-g, g] {
-                // Two bars across the line …
                 let o = CGPoint(x: c.x + ux * side, y: c.y + uy * side)
                 mark.move(to: CGPoint(x: o.x - uy * h, y: o.y + ux * h))
                 mark.addLine(to: CGPoint(x: o.x + uy * h, y: o.y - ux * h))
-                // … crossed by two along it.
-                let q = CGPoint(x: c.x - uy * side, y: c.y + ux * side)
-                mark.move(to: CGPoint(x: q.x - ux * h, y: q.y - uy * h))
-                mark.addLine(to: CGPoint(x: q.x + ux * h, y: q.y + uy * h))
             }
+            // … struck through by one along it (Luther: "two vertical bars
+            // strikethrough by one").
+            mark.move(to: CGPoint(x: c.x - ux * h, y: c.y - uy * h))
+            mark.addLine(to: CGPoint(x: c.x + ux * h, y: c.y + uy * h))
             context.stroke(mark, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
         case .screen:
             context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))

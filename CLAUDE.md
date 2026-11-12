@@ -912,8 +912,8 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Luther, reference image "#"): the one tool does both — drawn to a teammate
   from more than `handoffGap` (1.9 m) + 0.3 away it adds a DRIBBLE along the
   stroke (straight/curved switch applies) ending 1.9 m short of him, then
-  the hand-off (`addingHandoff`); closer, a plain hand-off. Drawn as a "#"
-  next to the receiver (`handoffMark` 0.62 m), with a line from the giver
+  the hand-off (`addingHandoff`); closer, a plain hand-off. Drawn as two
+  bars struck through by one ("ǂ" turned along the line) next to the receiver (`handoffMark` 0.62 m), with a line from the giver
   when they stand apart. Connector "handoff" {"to"} adds the dribble the
   same way. Older builds cannot decode "handoff" (the step
   reads empty there, as with shots). Tests: JournalPlayMathTests (outlet,
