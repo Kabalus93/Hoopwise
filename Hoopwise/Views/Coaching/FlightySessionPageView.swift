@@ -660,7 +660,7 @@ struct FlightySessionPageView: View {
     /// headers used to be random Unsplash photos — third-party content App
     /// Review rejected (4.1(a), October 2026); stored URLs are ignored.
     private var heroMapBackground: some View {
-        CardCourtBackground(color: programColor)
+        CardCourtBackground(color: programColor, style: CourtArtStyle(session.sessionType))
     }
     
     

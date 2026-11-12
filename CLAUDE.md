@@ -1192,6 +1192,19 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   bar drew over the hero. The real inset is read outside (`windowSafeTop`;
   0 in a sheet), the buttons sit at inset + 4 (30 in a sheet) and
   `.scrollEdgeEffectHidden(true, for: .top)` lets the blue run to the top.
+- HEADER COURTS PER SESSION TYPE (12 November 2026, Luther: the header court
+  was "inaccurate … the lines are messy" — lane, circle and arc were each
+  scaled to the card's width or height, so it stretched). Views/Components/
+  CourtArtwork.swift draws a FIBA court in METRES (lane 4.9 × 5.8, arc 6.75
+  with 0.9 m corners, no-charge 1.25, circles 1.8, rim 1.575 from the
+  baseline) through one projection, hairlines fading toward the text side.
+  `CourtArtStyle(sessionType)`: training = half court from above; scrimmage
+  = full court; game prep = tactics board (basket at the top, a set drawn:
+  O's, pass, cut, X's); recovery = centre circle with calm rings;
+  assessment = half court with shooting-test spots and lane marks; team
+  practice = a true pinhole camera over the top of the key (broadcast).
+  CardCourtBackground(color:style:) — athlete headers keep .halfCourt.
+  HOOPWISE_SHOT=courtArt shows all six.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

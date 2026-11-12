@@ -474,6 +474,23 @@ enum SheetGalleryDebug {
                 AddDrillView()
             }
 
+        case "courtArt":
+            // Every session type's header court, one card each.
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(SessionType.allCases, id: \.self) { type in
+                        ZStack(alignment: .bottomLeading) {
+                            CardCourtBackground(color: Color(red: 0.08, green: 0.3, blue: 0.75), style: CourtArtStyle(type))
+                            LinearGradient(colors: [.black.opacity(0.5), .black.opacity(0.25), .black.opacity(0.8)],
+                                           startPoint: .top, endPoint: .bottom)
+                            Text(type.displayName).font(.headline).foregroundStyle(.white).padding(12)
+                        }
+                        .frame(height: 240)
+                        .clipShape(.rect(cornerRadius: 14))
+                    }
+                }
+                .padding(12)
+            }
         case "lexicon":
             // Hub → Lexicon; HOOPWISE_LEXICON_TERM=<term> opens that entry.
             NavigationStack {

@@ -373,28 +373,18 @@ struct StudentProfileHeaderView: View {
     .background(Color.gray.opacity(0.2))
 }
 
-/// The card header's background: a deep gradient in `color` with a half
-/// court drawn over it in thin white lines. Original artwork, drawn in code.
+/// The card header's background: a deep gradient in `color` with a FIBA
+/// court drawn over it in hairlines (CourtArtwork — each session type has its
+/// own angle). Original artwork, drawn in code.
 struct CardCourtBackground: View {
     let color: Color
+    var style: CourtArtStyle = .halfCourt
 
     var body: some View {
         ZStack {
             LinearGradient(colors: [color, color.opacity(0.75), .black.opacity(0.55)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
-            Canvas { ctx, size in
-                let w = size.width, h = size.height
-                var court = Path()
-                // Free-throw lane and circle, three-point arc, from the bottom edge.
-                let laneW = w * 0.22, laneH = h * 0.62
-                court.addRect(CGRect(x: w / 2 - laneW / 2, y: h - laneH, width: laneW, height: laneH))
-                court.addEllipse(in: CGRect(x: w / 2 - laneW / 2, y: h - laneH - laneW / 2, width: laneW, height: laneW))
-                court.addArc(center: CGPoint(x: w / 2, y: h), radius: w * 0.42,
-                             startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
-                court.addArc(center: CGPoint(x: w / 2, y: h - h * 0.12), radius: w * 0.03,
-                             startAngle: .zero, endAngle: .degrees(360), clockwise: false)
-                ctx.stroke(court, with: .color(.white.opacity(0.16)), lineWidth: 2)
-            }
+            CourtArtwork(style: style)
         }
     }
 }
