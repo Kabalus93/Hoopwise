@@ -1382,7 +1382,7 @@ Claude's ratings without review, target = BOTH phase focus and program goals.
   session's Plan: `PlanCoverage.minutes` (Services/PlanCoverage.swift, pure)
   weighs each drill's scores by its share of its block's minutes (plays = a
   10-minute item shaped by their team breakdown skills, else IQ/create/pass);
-  octagon = emphasis (scaled to the top axis) over a dashed TARGET
+  octagon = emphasis (scaled to the top axis) against a TARGET
   (`PlanCoverage.target`: phase focus + program skill targets when set; a
   team practice: its focus plays' skills); "Leans on" (≥ 0.6, with
   minutes); "Neglected" = target ≥ 0.6 and target − plan ≥ 0.4, each with
@@ -1394,6 +1394,14 @@ Claude's ratings without review, target = BOTH phase focus and program goals.
   Plan reads the same gap: `DrillPlanGenerator.phaseGaps` (target − what the
   phase's other plans cover) adds 2 × gap × score/3 to each candidate; the
   rationale says "fills the phase's gaps: …".
+- THE LOOK (12 Nov 2026, Luther: the first chart "looks more like a bug
+  than a chart"): hairline grid (0.5 pt) on a faint base, the plan as ONE
+  1.75 pt stroke with a soft gradient fill and 5 pt vertex dots, every shape
+  floored at a 0.12 ring (a zero pulled the outline into the centre and
+  drew spikes), the TARGET as a short rounded TICK across each spoke it
+  asks for (≥ 0.45; orange when neglected) — a dashed outline of a sparse
+  target drew a star — and corner labels anchored outward so the outline
+  never runs into them.
 - LAYOUT: every octagon card goes through `OctagonCardLayout` — words
   beside the chart from 520 pt wide, UNDER it when narrower (on a phone the
   side column broke words mid-word: "De-fense", Luther 12 Nov 2026).

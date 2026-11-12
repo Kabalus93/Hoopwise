@@ -2,8 +2,14 @@ import SwiftUI
 
 // The eight-axis chart (November 2026): one drill's shape on its page, the
 // whole plan's shape on the session's Plan, a phase's coverage on the
-// program. Values are 0…1 per axis; an optional TARGET is drawn as a dashed
-// outline so "what we train" sits over "what we wanted".
+// program. Values are 0…1 per axis. An optional TARGET is a tick across each
+// spoke it asks for, so "what we train" reads against "what we wanted".
+//
+// Drawn quietly (Luther: the first version "looks more like a bug than a
+// chart"): hairline grid on a faint base, one 1.75 pt stroke with small
+// vertex dots, target ticks instead of a dashed outline, and every shape
+// floored at a small inner ring — a zero used to pull the outline into the
+// centre and draw spikes.
 
 struct AttributeOctagon: View {
     let values: [DrillAttribute: Double]
@@ -14,44 +20,49 @@ struct AttributeOctagon: View {
     var flagged: Set<DrillAttribute> = []
 
     private let axes = DrillAttribute.allCases
+    /// A zero sits on this ring, not at the centre.
+    private let floorRing = 0.12
 
     var body: some View {
         GeometryReader { geo in
             let size = min(geo.size.width, geo.size.height)
-            let inset: CGFloat = showLabels ? max(34, size * 0.17) : 4
+            let inset: CGFloat = showLabels ? max(28, size * 0.15) : 4
             let radius = size / 2 - inset
             let centre = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
             ZStack {
-                // Grid: three rings (1, 2, 3 on a drill's scale) and spokes.
-                ForEach(1...3, id: \.self) { ring in
-                    polygon(centre: centre, radius: radius) { _ in Double(ring) / 3 }
-                        .stroke(Color.secondary.opacity(ring == 3 ? 0.35 : 0.18), lineWidth: ring == 3 ? 1 : 0.6)
-                }
-                Path { path in
-                    for i in axes.indices {
-                        path.move(to: centre)
-                        path.addLine(to: point(i, 1, centre: centre, radius: radius))
+                grid(centre: centre, radius: radius)
+
+
+                if values.values.contains(where: { $0 > 0 }) {
+                    let shape = polygon(centre: centre, radius: radius) { shown(values[$0] ?? 0) }
+                    shape.fill(LinearGradient(colors: [tint.opacity(0.32), tint.opacity(0.14)],
+                                              startPoint: .top, endPoint: .bottom))
+                    shape.stroke(tint, style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
+                    ForEach(Array(axes.enumerated()), id: \.offset) { i, axis in
+                        if (values[axis] ?? 0) > 0.02 {
+                            Circle()
+                                .fill(tint)
+                                .frame(width: 5, height: 5)
+                                .position(point(i, shown(values[axis] ?? 0), centre: centre, radius: radius))
+                        }
                     }
                 }
-                .stroke(Color.secondary.opacity(0.18), lineWidth: 0.6)
 
-                let shape = polygon(centre: centre, radius: radius) { values[$0] ?? 0 }
-                shape.fill(tint.opacity(0.28))
-                shape.stroke(tint, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
-
+                // The target: a tick across each spoke it asks for, at the
+                // level it asks for — a sparse target drawn as an area made
+                // a star.
                 if let target {
-                    polygon(centre: centre, radius: radius) { target[$0] ?? 0 }
-                        .stroke(Color.primary.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, lineJoin: .round, dash: [4, 3]))
+                    ForEach(Array(axes.enumerated()), id: \.offset) { i, axis in
+                        if let want = target[axis], want >= 0.45 {
+                            targetTick(i, shown(want), centre: centre, radius: radius,
+                                       colour: flagged.contains(axis) ? .orange : Color.primary.opacity(0.55))
+                        }
+                    }
                 }
 
                 if showLabels {
                     ForEach(Array(axes.enumerated()), id: \.offset) { i, axis in
-                        let p = point(i, 1, centre: centre, radius: radius + inset * 0.55)
-                        Text(axis.short)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(flagged.contains(axis) ? Color.orange : .secondary)
-                            .fixedSize()
-                            .position(p)
+                        label(axis, at: i, centre: centre, radius: radius + 7)
                     }
                 }
             }
@@ -60,6 +71,61 @@ struct AttributeOctagon: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(DrillAttribute.allCases
             .map { "\($0.title) \(Int(((values[$0] ?? 0) * 3).rounded()))" }.joined(separator: ", "))
+    }
+
+    /// Hairline rings at 1, 2 and 3 of a drill's scale, faint spokes, and a
+    /// barely-there fill so the chart reads as one object.
+    private func grid(centre: CGPoint, radius: CGFloat) -> some View {
+        ZStack {
+            polygon(centre: centre, radius: radius) { _ in 1 }
+                .fill(Color.primary.opacity(0.035))
+            ForEach(1...3, id: \.self) { ring in
+                polygon(centre: centre, radius: radius) { _ in shown(Double(ring) / 3) }
+                    .stroke(Color.primary.opacity(ring == 3 ? 0.16 : 0.08), lineWidth: 0.5)
+            }
+            Path { path in
+                for i in axes.indices {
+                    path.move(to: point(i, floorRing, centre: centre, radius: radius))
+                    path.addLine(to: point(i, 1, centre: centre, radius: radius))
+                }
+            }
+            .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+        }
+    }
+
+    /// A short rounded bar across spoke `i` at `value`.
+    private func targetTick(_ i: Int, _ value: Double, centre: CGPoint, radius: CGFloat, colour: Color) -> some View {
+        let angle = -Double.pi / 2 + Double(i) * 2 * Double.pi / Double(axes.count)
+        let p = point(i, value, centre: centre, radius: radius)
+        let half: CGFloat = 6
+        let dx = CGFloat(-sin(angle)) * half, dy = CGFloat(cos(angle)) * half
+        return Path { path in
+            path.move(to: CGPoint(x: p.x - dx, y: p.y - dy))
+            path.addLine(to: CGPoint(x: p.x + dx, y: p.y + dy))
+        }
+        .stroke(colour, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+    }
+
+    /// A corner label sitting OUTSIDE its corner: right-side labels grow
+    /// rightward, left-side leftward, top and bottom centred.
+    private func label(_ axis: DrillAttribute, at i: Int, centre: CGPoint, radius: CGFloat) -> some View {
+        let angle = -Double.pi / 2 + Double(i) * 2 * Double.pi / Double(axes.count)
+        let p = point(i, 1, centre: centre, radius: radius)
+        let c = cos(angle), sn = sin(angle)
+        let alignment: Alignment = abs(c) < 0.2 ? (sn < 0 ? .bottom : .top) : (c > 0 ? .leading : .trailing)
+        let isFlagged = flagged.contains(axis)
+        return Text(axis.short)
+            .font(.caption2.weight(isFlagged ? .semibold : .medium))
+            .foregroundStyle(isFlagged ? Color.orange : Color.secondary)
+            .fixedSize()
+            .frame(width: 120, height: 30, alignment: alignment)
+            .position(x: p.x + (alignment == .leading ? 60 : alignment == .trailing ? -60 : 0),
+                      y: p.y + (alignment == .bottom ? -15 : alignment == .top ? 15 : 0))
+    }
+
+    /// 0…1 drawn between the floor ring and the edge.
+    private func shown(_ value: Double) -> Double {
+        floorRing + (1 - floorRing) * max(0, min(1, value))
     }
 
     private func point(_ i: Int, _ value: Double, centre: CGPoint, radius: CGFloat) -> CGPoint {

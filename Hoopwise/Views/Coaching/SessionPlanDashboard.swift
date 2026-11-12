@@ -100,11 +100,14 @@ struct SessionPlanDashboard: View {
     }
 
     private func legend(dashed: Bool, text: String) -> some View {
-        HStack(spacing: 5) {
-            Path { p in p.move(to: CGPoint(x: 0, y: 4)); p.addLine(to: CGPoint(x: 16, y: 4)) }
-                .stroke(dashed ? Color.primary.opacity(0.55) : Color.accentColor,
-                        style: StrokeStyle(lineWidth: dashed ? 1.5 : 2, dash: dashed ? [4, 3] : []))
-                .frame(width: 16, height: 8)
+        HStack(spacing: 6) {
+            if dashed {
+                // The target is a tick across a spoke, so its key is one.
+                Capsule().fill(Color.primary.opacity(0.55)).frame(width: 2.5, height: 12)
+                    .frame(width: 14)
+            } else {
+                Capsule().fill(Color.accentColor).frame(width: 14, height: 2)
+            }
             Text(text)
         }
     }
