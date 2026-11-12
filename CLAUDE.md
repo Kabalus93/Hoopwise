@@ -1179,6 +1179,13 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   (.hoopwiseHomePins / .hoopwisePlayActivity) and an on-demand fetch.
   HOOPWISE_SHOT=homeCards (pins the demo team, marks its play edited).
   Tests: HomeTeamPlayUITests.
+- SESSION HEADER CLEARS THE BACK BUTTON (12 November 2026, Luther: the
+  Scheduled tag sat under Back on the iPhone and was tight on the Mac). The
+  status is now the FIRST pill of the meta row (status · format · date ·
+  time, a FlowLayout that wraps instead of running off a phone), and the
+  hero's content starts below the floating Back / ⋯ (safe area + 82) with the
+  card growing to fit (minHeight 200 + safe area) instead of a fixed height
+  that pushed the content up under the buttons.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

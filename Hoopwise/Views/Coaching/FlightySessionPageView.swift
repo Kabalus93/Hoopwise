@@ -544,12 +544,61 @@ struct FlightySessionPageView: View {
     
     // MARK: - Hero Card (Extends under Dynamic Island)
     private func heroCard(safeAreaTop: CGFloat) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            // Map background (darkened)
-            heroMapBackground
-            
-            // Dark gradient overlay for text visibility
+        // The content starts BELOW the floating back / ⋯ buttons (40 pt at
+        // safe area + 30) and the card grows to fit it, so nothing ever sits
+        // under them (Luther, 12 Nov 2026: the status tag ran under Back).
+        VStack(alignment: .leading, spacing: 8) {
+            // Title
+            Text(session.title)
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+                .opacity(session.status == .cancelled ? 0.6 : 1)
+                .strikethrough(session.status == .cancelled)
+                .lineLimit(2)
+
+            // Location
+            if let location = session.location, !location.isEmpty {
+                Label {
+                    Text(location)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                } icon: {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.caption)
+                }
+                .foregroundStyle(.white.opacity(0.9))
+            }
+
+            // Phase info
+            if let phase = parentPhase {
+                Text(LocalizationManager.shared.currentLanguage == .chinese ? "阶段 \(phase.phaseNumber): \(phase.title)" : "Phase \(phase.phaseNumber): \(phase.title)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+
+            // Status, format, date, time — one row that wraps instead of
+            // running off the edge on a phone.
+            FlowLayout(spacing: 8) {
+                heroStatusPill
+                FormatBadge(format: dataManager.sessionFormat(session), size: .compact)
+                heroMetaPill(
+                    icon: "calendar",
+                    value: session.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                )
+                heroMetaPill(
+                    icon: "clock",
+                    value: "\(session.startTime.formatted(date: .omitted, time: .shortened)) – \(session.endTime.formatted(date: .omitted, time: .shortened))"
+                )
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+        .padding(.top, safeAreaTop + 82)
+        .frame(maxWidth: .infinity, minHeight: 200 + safeAreaTop, alignment: .bottomLeading)
+        .background {
             ZStack {
+                heroMapBackground
+                // Dark gradient overlay for text visibility
                 Rectangle()
                     .fill(Color.black.opacity(0.18))
                     .blendMode(.multiply)
@@ -563,75 +612,28 @@ struct FlightySessionPageView: View {
                     endPoint: .bottom
                 )
             }
-            
-            // Content
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    // Status badge — native glass capsule
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(statusColor)
-                            .frame(width: 8, height: 8)
-                            .symbolEffect(.pulse, options: .repeating, isActive: session.status == .inProgress)
-                        Text(session.status.displayName)
-                            .font(.caption.weight(.semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .glassEffect(.regular, in: Capsule())
-
-                    // Title
-                    Text(session.title)
-                        .font(.title2.bold())
-                        .foregroundStyle(.white)
-                        .opacity(session.status == .cancelled ? 0.6 : 1)
-                        .strikethrough(session.status == .cancelled)
-                        .lineLimit(2)
-
-                    // Location
-                    if let location = session.location, !location.isEmpty {
-                        Label {
-                            Text(location)
-                                .font(.caption.weight(.medium))
-                                .lineLimit(1)
-                        } icon: {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.caption)
-                        }
-                        .foregroundStyle(.white.opacity(0.9))
-                    }
-
-                    // Phase info
-                    if let phase = parentPhase {
-                        Text(LocalizationManager.shared.currentLanguage == .chinese ? "阶段 \(phase.phaseNumber): \(phase.title)" : "Phase \(phase.phaseNumber): \(phase.title)")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-
-                    HStack(spacing: 8) {
-                        FormatBadge(format: dataManager.sessionFormat(session), size: .compact)
-
-                        heroMetaPill(
-                            icon: "calendar",
-                            value: session.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                        )
-
-                        heroMetaPill(
-                            icon: "clock",
-                            value: "\(session.startTime.formatted(date: .omitted, time: .shortened)) – \(session.endTime.formatted(date: .omitted, time: .shortened))"
-                        )
-                    }
-                }
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-            .padding(.top, safeAreaTop + 50)
         }
-        .frame(height: 200 + safeAreaTop) // Extend height to include safe area
         .clipped()
+    }
+
+    /// The session's status as a pill in the meta row, in its colour.
+    private var heroStatusPill: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(statusColor)
+                .frame(width: 7, height: 7)
+                .symbolEffect(.pulse, options: .repeating, isActive: session.status == .inProgress)
+            Text(session.status.displayName)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background {
+            Capsule().fill(statusColor.opacity(0.28))
+        }
+        .glassEffect(.regular, in: Capsule())
     }
     
     // MARK: - Hero Background
