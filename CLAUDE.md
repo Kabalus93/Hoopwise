@@ -1394,6 +1394,9 @@ Claude's ratings without review, target = BOTH phase focus and program goals.
   Plan reads the same gap: `DrillPlanGenerator.phaseGaps` (target − what the
   phase's other plans cover) adds 2 × gap × score/3 to each candidate; the
   rationale says "fills the phase's gaps: …".
+- LAYOUT: every octagon card goes through `OctagonCardLayout` — words
+  beside the chart from 520 pt wide, UNDER it when narrower (on a phone the
+  side column broke words mid-word: "De-fense", Luther 12 Nov 2026).
 - DEBUG: HOOPWISE_SHOT=planDashboard (a generated plan in memory, Plan tab;
   + HOOPWISE_PLAN_TARGET=1 shows the dashboard alone against Defense +
   Passing). Tests: DrillAttributesTests (all 422 rated, tags, guesses,

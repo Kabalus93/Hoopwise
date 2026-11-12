@@ -37,9 +37,10 @@ struct SessionPlanDashboard: View {
             .foregroundStyle(.secondary)
             .accessibilityIdentifier("plan.dashboard")
 
-            HStack(alignment: .center, spacing: 16) {
+            OctagonCardLayout {
                 AttributeOctagon(values: plan, target: target, flagged: Set(neglected))
                     .frame(width: 180, height: 180)
+            } details: {
                 VStack(alignment: .leading, spacing: 10) {
                     if empty {
                         Text(isChinese ? "添加训练后，这里会显示计划练了哪些能力。" : "Add drills and this shows what the plan trains.")
@@ -80,7 +81,6 @@ struct SessionPlanDashboard: View {
                             .font(.footnote.weight(.medium)).foregroundStyle(.green)
                     }
                 }
-                Spacer(minLength: 0)
             }
 
             if target != nil {
@@ -181,9 +181,10 @@ struct PhaseCoverageCard: View {
                     Text(phase.title).font(.subheadline.weight(.semibold))
                 }
             }
-            HStack(alignment: .center, spacing: 16) {
+            OctagonCardLayout {
                 AttributeOctagon(values: PlanCoverage.normalized(minutes), target: target, flagged: Set(neglected))
                     .frame(width: 170, height: 170)
+            } details: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(isChinese ? "\(planned.count) / \(sessions.count) 节课已有计划" : "\(planned.count) of \(sessions.count) sessions planned")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -201,7 +202,6 @@ struct PhaseCoverageCard: View {
                             .font(.footnote.weight(.medium)).foregroundStyle(.green)
                     }
                 }
-                Spacer(minLength: 0)
             }
         }
         .padding(16)

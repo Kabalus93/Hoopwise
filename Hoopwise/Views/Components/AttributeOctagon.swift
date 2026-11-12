@@ -110,9 +110,10 @@ struct DrillAttributesCard: View {
                     .font(.subheadline.weight(.semibold))
                     .accessibilityIdentifier("drill.attributes.adjust")
             }
-            HStack(alignment: .center, spacing: 16) {
+            OctagonCardLayout {
                 AttributeOctagon(values: profile.normalized)
                     .frame(width: 190, height: 190)
+            } details: {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(profile.main, id: \.self) { axis in
                         HStack(spacing: 6) {
@@ -129,7 +130,6 @@ struct DrillAttributesCard: View {
                     }
                     Text(sourceLine).font(.caption2).foregroundStyle(.tertiary).padding(.top, 2)
                 }
-                Spacer(minLength: 0)
             }
         }
         .padding(16)
@@ -204,5 +204,33 @@ struct AttributeEditorSheet: View {
                 }
             }
         }
+    }
+}
+
+/// An octagon with its words: side by side when the card is wide, the words
+/// UNDER the chart when it is narrow — beside it on a phone they broke
+/// mid-word ("De-fense", Luther, November 2026).
+struct OctagonCardLayout<Chart: View, Details: View>: View {
+    @ViewBuilder var chart: () -> Chart
+    @ViewBuilder var details: () -> Details
+    @State private var width: CGFloat = 0
+
+    var body: some View {
+        Group {
+            if width >= 520 {
+                HStack(alignment: .center, spacing: 16) {
+                    chart()
+                    details()
+                    Spacer(minLength: 0)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    chart().frame(maxWidth: .infinity)
+                    details()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 }
