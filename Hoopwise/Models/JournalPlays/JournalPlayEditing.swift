@@ -197,6 +197,9 @@ nonisolated extension JournalPlayMath {
             out.actions.append(.init(kind: .shot, player: player, path: [start, rim]))
             return out
         }
+        if kind == .handoff {
+            return addingHandoff(by: player, along: points, to: diagram, radius: radius, shape: shape)
+        }
         if kind.hasReceiver {
             let receivers = diagram.offense.filter { $0.number != player }.compactMap { other -> (Int, JournalCourtPoint)? in
                 endPosition(of: other.number, in: diagram).map { (other.number, $0) }
@@ -209,6 +212,45 @@ nonisolated extension JournalPlayMath {
         let path = shaped(points, shape)
         guard length(of: path) >= shortestAction else { return nil }
         out.actions.append(.init(kind: kind, player: player, path: path, shape: shape))
+        return out
+    }
+
+    /// Where a dribble hand-off's handler stops: this far from the receiver
+    /// (two circles and the hand-off mark between them).
+    static let handoffGap = 1.9
+
+    /// The hand-off tool (12 November 2026, Luther: "add a dribble hand-off
+    /// tool, let it replace the existing hand-off or make them work
+    /// together"): drawn to a teammate from more than `handoffGap` + 0.3 m
+    /// away it is a DRIBBLE HAND-OFF — the handler dribbles along the drawn
+    /// line to `handoffGap` short of him, then hands off; closer, a plain
+    /// hand-off. The receiver is whoever is nearest the finger's end.
+    static func addingHandoff(by player: Int, along points: [JournalCourtPoint], to diagram: JournalPlayDiagram,
+                              radius: Double, shape: JournalPlayDiagram.PathShape = .straight) -> JournalPlayDiagram? {
+        guard let start = points.first, let end = points.last else { return nil }
+        let receivers = diagram.offense.filter { $0.number != player }.compactMap { other -> (Int, JournalCourtPoint)? in
+            endPosition(of: other.number, in: diagram).map { (other.number, $0) }
+        }
+        guard let (receiver, at) = receivers.min(by: { $0.1.distance(to: end) < $1.1.distance(to: end) }),
+              at.distance(to: end) <= radius * 2, start.distance(to: at) >= shortestAction else { return nil }
+        var out = diagram
+        var from = start
+        if start.distance(to: at) > handoffGap + 0.3 {
+            // The dribble: the drawn stroke, ending handoffGap short of the
+            // receiver, on the side it arrives from.
+            var stroke = points.filter { $0.distance(to: at) > handoffGap }
+            let last = stroke.last ?? start
+            let d = max(last.distance(to: at), 0.01)
+            let stop = JournalCourtPoint(at.x + (last.x - at.x) / d * handoffGap, at.y + (last.y - at.y) / d * handoffGap)
+            stroke.append(stop)
+            if stroke.count < 2 { stroke.insert(start, at: 0) }
+            let path = shaped(stroke, shape)
+            if length(of: path) >= shortestAction {
+                out.actions.append(.init(kind: .dribble, player: player, path: path, shape: shape))
+                from = path.last ?? stop
+            }
+        }
+        out.actions.append(.init(kind: .handoff, player: player, path: [from, at], receiver: receiver))
         return out
     }
 

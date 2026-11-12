@@ -32,6 +32,8 @@ enum JournalPlayCourt {
     static let courtLineWidth = 0.06
     static let arrowLength = 0.34
     static let screenBar = 0.9
+    /// The hand-off "#", metres across.
+    static let handoffMark = 0.62
     static let ballRadius = 0.2
     /// A cone's half width at the base.
     static let coneSize = 0.32
@@ -310,26 +312,41 @@ struct JournalPlayDiagramView: View {
                            style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
             if let head { arrow(head, in: &context, scale: s, k: k, shading: shading) }
         case .handoff:
-            // A solid line to the exchange, closed by two short bars across
-            // it (the standard hand-off mark) just short of the receiver.
-            let n = points.count - 1
-            let to = points[n], from = points[n - 1]
-            let dx = to.x - from.x, dy = to.y - from.y
+            // The hand-off mark — a "#" (Luther's reference, 12 Nov 2026) —
+            // midway between the two circles, with a line from the giver
+            // when they stand further apart.
+            let raw = action.path.map { JournalPlayCourt.point($0, scale: s) }
+            let a = raw[0], b = raw[raw.count - 1]
+            let dx = b.x - a.x, dy = b.y - a.y
             let len = max((dx * dx + dy * dy).squareRoot(), 0.001)
             let ux = dx / len, uy = dy / len
-            let gap = JournalPlayCourt.screenBar * s * k * 0.28
-            let barEnd = Self.moved(to, toward: from, by: r + width * 1.5)
-            let first = CGPoint(x: barEnd.x - ux * gap, y: barEnd.y - uy * gap)
-            var stem = Path()
-            stem.move(to: points[0]); stem.addLine(to: first)
-            context.stroke(stem, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round))
-            let half = JournalPlayCourt.screenBar * s * k / 2
-            var bars = Path()
-            for c in [first, barEnd] {
-                bars.move(to: CGPoint(x: c.x - uy * half, y: c.y + ux * half))
-                bars.addLine(to: CGPoint(x: c.x + uy * half, y: c.y - ux * half))
+            let edgeA = CGPoint(x: a.x + ux * r, y: a.y + uy * r)
+            let edgeB = CGPoint(x: b.x - ux * r, y: b.y - uy * r)
+            let size = JournalPlayCourt.handoffMark * s * k
+            let between = max(0, len - 2 * r)
+            // The mark sits next to the receiver, its middle a mark's length
+            // from his circle (or midway when they are close).
+            let back = min(size * 0.75, between / 2)
+            let c = CGPoint(x: edgeB.x - ux * back, y: edgeB.y - uy * back)
+            if between > size * 1.6 {
+                var stem = Path()
+                stem.move(to: edgeA)
+                stem.addLine(to: CGPoint(x: c.x - ux * size / 2, y: c.y - uy * size / 2))
+                context.stroke(stem, with: shading, style: StrokeStyle(lineWidth: width, lineCap: .round))
             }
-            context.stroke(bars, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
+            let h = size / 2, g = size * 0.2
+            var mark = Path()
+            for side in [-g, g] {
+                // Two bars across the line …
+                let o = CGPoint(x: c.x + ux * side, y: c.y + uy * side)
+                mark.move(to: CGPoint(x: o.x - uy * h, y: o.y + ux * h))
+                mark.addLine(to: CGPoint(x: o.x + uy * h, y: o.y - ux * h))
+                // … crossed by two along it.
+                let q = CGPoint(x: c.x - uy * side, y: c.y + ux * side)
+                mark.move(to: CGPoint(x: q.x - ux * h, y: q.y - uy * h))
+                mark.addLine(to: CGPoint(x: q.x + ux * h, y: q.y + uy * h))
+            }
+            context.stroke(mark, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
         case .screen:
             context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
             let end = points[points.count - 1], before = points[points.count - 2]
@@ -515,7 +532,7 @@ struct JournalPlayLegend: View {
             item(1, "Defender", JournalPlayDiagram(defense: [.init(at: P(1, 1))])),
             item(2, "Cut or run", JournalPlayDiagram(actions: [.init(kind: .cut, player: 0, path: line)])),
             item(3, "Pass", JournalPlayDiagram(actions: [.init(kind: .pass, player: 0, path: line)])),
-            item(10, "Hand-off", JournalPlayDiagram(actions: [.init(kind: .handoff, player: 0, path: [P(-0.6, 1), P(2.2, 1)])])),
+            item(10, "Hand-off", JournalPlayDiagram(actions: [.init(kind: .handoff, player: 0, path: [P(-0.8, 1), P(2.4, 1)])])),
             item(9, "Shot (a drive to the basket is red too)",
                  JournalPlayDiagram(actions: [.init(kind: .shot, player: 0, path: line)])),
             item(4, "legend.dribble",

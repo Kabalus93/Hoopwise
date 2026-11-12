@@ -907,10 +907,15 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   they arrive; the passer moves on 0.35 beat after letting go; a receiver
   waits for the catch before a move drawn after it. Independent balls fly
   at once. frame / playBeats / ballsAfter read it. ActionKind `.handoff`
-  (tool F, after Pass): a solid line to the receiver ending in a double bar
-  just short of them, 0.6 beat, `hasReceiver` like a pass (snaps, follows
-  moved players, removed with the receiver); connector kind "handoff"
-  {"to"} warns past 3 m. Older builds cannot decode "handoff" (the step
+  (tool F, after Pass), 0.6 beat, `hasReceiver` like a pass (snaps, follows
+  moved players, removed with the receiver). DRIBBLE HAND-OFF (same day,
+  Luther, reference image "#"): the one tool does both — drawn to a teammate
+  from more than `handoffGap` (1.9 m) + 0.3 away it adds a DRIBBLE along the
+  stroke (straight/curved switch applies) ending 1.9 m short of him, then
+  the hand-off (`addingHandoff`); closer, a plain hand-off. Drawn as a "#"
+  next to the receiver (`handoffMark` 0.62 m), with a line from the giver
+  when they stand apart. Connector "handoff" {"to"} adds the dribble the
+  same way. Older builds cannot decode "handoff" (the step
   reads empty there, as with shots). Tests: JournalPlayMathTests (outlet,
   catch-and-go, hand-off), JournalPlayBallsTests.
   (i) AUTO DEFENSE (12 November 2026, Luther: "assign a defender to an

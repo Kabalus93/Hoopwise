@@ -23,9 +23,9 @@ nonisolated enum JournalPlayStringsAdded {
         "The zone shifts with the ball. Drag a defender to nudge him.":
             .init(en: "The zone shifts with the ball. Drag a defender to nudge him.", enOne: nil,
                   zh: "联防随球移动。拖动防守人可以微调位置。"),
-        "Drag from the ball handler to the teammate they hand the ball to.":
-            .init(en: "Drag from the ball handler to the teammate they hand the ball to.", enOne: nil,
-                  zh: "从持球人拖到他要手递手交球的队友。"),
+        "Drag from the ball handler to a teammate: from a distance he dribbles over and hands it off; next to him, a plain hand-off.":
+            .init(en: "Drag from the ball handler to a teammate: from a distance he dribbles over and hands it off; next to him, a plain hand-off.",
+                  enOne: nil, zh: "从持球人拖到队友：离得远就运球过去再手递手；就在旁边就直接手递手。"),
         "Hand-off from %lld to %lld": .init(en: "Hand-off from %lld to %lld", enOne: nil, zh: "%1$lld 手递手给 %2$lld"),
         "Drag from the shooter toward the basket; the line ends in the rim.":
             .init(en: "Drag from the shooter toward the basket; the line ends in the rim.", enOne: nil,

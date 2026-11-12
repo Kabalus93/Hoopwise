@@ -146,3 +146,31 @@ struct JournalPlayMathTests {
         #expect(JournalPlayMath.eased(0) == 0 && JournalPlayMath.eased(1) == 1 && JournalPlayMath.eased(0.5) == 0.5)
     }
 }
+
+/// The hand-off tool makes a dribble hand-off from a distance (12 Nov 2026).
+struct JournalPlayDribbleHandoffTests {
+    typealias P = JournalCourtPoint
+
+    static let floor = JournalPlayDiagram(
+        offense: [.init(number: 5, at: P(7.5, 9)), .init(number: 2, at: P(12.5, 7))], ball: 5)
+
+    @Test func fromADistanceHeDribblesOverThenHandsOff() throws {
+        let d = try #require(JournalPlayMath.addingHandoff(by: 5, along: [P(7.5, 9), P(10, 8), P(12.4, 7.1)],
+                                                            to: Self.floor, radius: 1))
+        #expect(d.actions.map(\.kind) == [.dribble, .handoff])
+        let stop = try #require(d.actions[0].path.last)
+        #expect(abs(stop.distance(to: P(12.5, 7)) - JournalPlayMath.handoffGap) < 0.01)
+        #expect(d.actions[1].receiver == 2 && d.actions[1].path.first == stop)
+        // The ball goes 5 → 2 after he dribbles over.
+        #expect(JournalPlayMath.ballsAfter(d) == [2])
+        let plan = JournalPlayMath.schedule(d)
+        #expect(plan.items[1].start >= plan.items[0].end)
+    }
+
+    @Test func nextToHimItIsAPlainHandoff() throws {
+        var close = Self.floor
+        close.offense[1].at = P(9, 9)
+        let d = try #require(JournalPlayMath.addingHandoff(by: 5, along: [P(7.5, 9), P(9, 9)], to: close, radius: 1))
+        #expect(d.actions.map(\.kind) == [.handoff])
+    }
+}

@@ -287,10 +287,19 @@ enum JournalPlayAuthoring {
                     if from.distance(to: at) < JournalPlayMath.shortestAction {
                         throw JournalPlayAuthoringError.invalid("\(where_): \(player) and \(to) stand on the same spot; move one first.")
                     }
-                    action = D.Action(kind: kind, player: player, path: [from, at], receiver: to)
-                    if kind == .handoff, from.distance(to: at) > 3 {
-                        warnings.append("\(where_): \(player) and \(to) are \(Int(from.distance(to: at).rounded())) m apart for a hand-off; bring them together first.")
+                    var start = from
+                    if kind == .handoff, from.distance(to: at) > JournalPlayMath.handoffGap + 0.3 {
+                        // A dribble hand-off: he dribbles over first, as in the editor.
+                        let apart = from.distance(to: at)
+                        let stop = JournalCourtPoint(at.x + (from.x - at.x) / apart * JournalPlayMath.handoffGap,
+                                                     at.y + (from.y - at.y) / apart * JournalPlayMath.handoffGap)
+                        d.actions.append(D.Action(kind: .dribble, player: player, path: [from, stop], shape: .straight))
+                        start = stop
+                        if !holders.contains(player), holders.count != 1 {
+                            warnings.append("\(where_): \(player) dribbles without a ball (balls: \(holders)).")
+                        }
                     }
+                    action = D.Action(kind: kind, player: player, path: [start, at], receiver: to)
                 case .shot:
                     let rim = court.baskets.min { $0.distance(to: from) < $1.distance(to: from) } ?? from
                     action = D.Action(kind: .shot, player: player, path: [from, rim])

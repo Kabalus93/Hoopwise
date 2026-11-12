@@ -163,7 +163,7 @@ struct JournalPlayStepEditor: View {
             case .cut: "Drag from a player to where they run."
             case .dribble: "Drag from the ball handler to where they dribble."
             case .pass: "Drag from the passer to a teammate."
-            case .handoff: "Drag from the ball handler to the teammate they hand the ball to."
+            case .handoff: "Drag from the ball handler to a teammate: from a distance he dribbles over and hands it off; next to him, a plain hand-off."
             case .shot: "Drag from the shooter toward the basket; the line ends in the rim."
             case .screen: "Drag from a player to where they set the screen."
             case .player: "Tap the court to add a player."
@@ -187,7 +187,7 @@ struct JournalPlayStepEditor: View {
         }
 
         /// Lines that can run straight or curved (a pass is always straight).
-        var shapesLine: Bool { self == .cut || self == .dribble || self == .screen }
+        var shapesLine: Bool { self == .cut || self == .dribble || self == .screen || self == .handoff }
 
         /// The workspace's single-key shortcut (graphics-app convention:
         /// V for the pointer).
@@ -1096,7 +1096,14 @@ struct JournalPlayStepEditor: View {
             return diagram
         }
         var out = diagram
-        if kind.hasReceiver {
+        if kind == .handoff {
+            // Over a teammate: the hand-off as it will be kept; on the way,
+            // the dribble it starts with.
+            if let snapped = JournalPlayMath.addingHandoff(by: player, along: points, to: diagram, radius: 0.9, shape: lineShape) {
+                return snapped
+            }
+            out.actions.append(.init(kind: .dribble, player: player, path: JournalPlayMath.shaped(points, lineShape), shape: lineShape))
+        } else if kind.hasReceiver {
             out.actions.append(.init(kind: kind, player: player, path: [points[0], points[points.count - 1]]))
         } else if kind == .shot {
             let end = points[points.count - 1]
