@@ -27,7 +27,7 @@ struct JournalPlayDefenseTests {
     @Test func theBallHandlersDefenderStandsBetweenHimAndTheBasket() {
         let spot = JournalPlayMath.manSpot(guarding: P(7.5, 9), ball: P(7.5, 9), court: .half)
         #expect(abs(spot.x - 7.5) < 0.01)
-        #expect(spot.y < 9 && spot.y > 7.5)            // about a metre off, toward the rim
+        #expect(abs(spot.y - 7.5) < 0.01)               // 1.5 m off, toward the rim
         // Two passes away he sags toward the basket and the ball.
         let help = JournalPlayMath.manSpot(guarding: P(1.2, 8), ball: P(13, 6), court: .half)
         #expect(help.x > 2.5)
