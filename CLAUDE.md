@@ -932,8 +932,10 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   follow, and a switch slides. THE TIMELINE also gained: a move using a
   teammate's screen (drawn after it, passing it) leaves 0.4 beat before
   the screen is set — before, the user and the screener moved together.
-  Editor: Defender tool → "Defense: By hand · Man · 2-3 · 3-2" (both
-  layouts), applied to every step of the part from the first (re-matched);
+  Editor: "Defense: By hand · Man · 2-3 · 3-2" — ALWAYS in the workspace
+  inspector (under This step, with a line saying what the mode does; it hid
+  under the Defender tool and Luther took a By-hand play for a broken zone),
+  under the Defender tool on the phone; applied to every step of the part from the first (re-matched);
   `.onChange(of: diagram)` re-places after every edit; dragging or arrow-
   nudging a defender sets his nudge. Defenders show the man's number small
   beside the X. Connector: step "defense_mode" (man | 2-3 | 3-2 | off);

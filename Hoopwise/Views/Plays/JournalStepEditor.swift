@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import OSLog
 
 /// Draw a part's steps: drag players and defenders, draw cuts, dribbles,
 /// passes, shots and screens from a player, add defenders and the one to
@@ -166,7 +167,7 @@ struct JournalPlayStepEditor: View {
             case .shot: "Drag from the shooter toward the basket; the line ends in the rim."
             case .screen: "Drag from a player to where they set the screen."
             case .player: "Tap the court to add a player."
-            case .defender: "Tap the court to add a defender; tap one to mark the one to read. Defense below places them for you."
+            case .defender: "Tap the court to add a defender; tap one to mark the one to read."
             case .ball: "Tap a player to give or take a ball. Several players can each have one."
             case .cone: "Tap the court to add a cone."
             case .erase: "Tap a line, a defender or a note to erase it."
@@ -551,12 +552,22 @@ struct JournalPlayStepEditor: View {
                    let mode = JournalPlayDiagram.DefenseMode(rawValue: raw) {
                     tool = .defender
                     setDefense(mode)
+                    // _BALL=<n>: 2 s later that player alone holds the ball.
+                    if let n = ProcessInfo.processInfo.environment["HOOPWISE_PLAYS_DEFENSE_BALL"].flatMap(Int.init) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { diagram.balls = [n] }
+                    }
                 }
             }
             #endif
             // Auto defense: defenders follow every change to the offense.
             .onChange(of: diagram) { _, new in
                 let placed = JournalPlayMath.placingDefense(new, court: court)
+                #if DEBUG
+                if new.defenseMode != nil {
+                    Logger(subsystem: "hoopwise.mac", category: "defense").log(
+                        "placed \(new.defenseMode?.rawValue ?? "-", privacy: .public) ball \(new.balls, privacy: .public) \(placed.defense.map { "(\(Int($0.at.x * 10)),\(Int($0.at.y * 10)))" }.joined(), privacy: .public)")
+                }
+                #endif
                 if placed != new { diagram = placed }
             }
             // The phone's steps bar says which step; the title would repeat it.
@@ -703,6 +714,7 @@ struct JournalPlayStepEditor: View {
                     inspectorSection("This step") { stepFields(notesLines: 2...4) }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     VStack(alignment: .leading, spacing: JSpacing.m) {
+                        defenseSection
                         toolSection
                         if let selection { selectionSection(selection) }
                     }
@@ -790,6 +802,7 @@ struct JournalPlayStepEditor: View {
             VStack(alignment: .leading, spacing: JSpacing.l) {
                 stepsSection
                 inspectorSection("This step") { stepFields(notesLines: 3...10) }
+                defenseSection
                 toolSection
                 if let selection {
                     selectionSection(selection)
@@ -825,7 +838,22 @@ struct JournalPlayStepEditor: View {
             if tool.shapesLine {
                 shapePicker($lineShapeRaw)
             }
-            if tool == .defender { defensePicker }
+        }
+    }
+
+    /// The workspace always shows the defense (Luther, 12 Nov 2026: a play
+    /// left "By hand" looked broken — the choice hid under the Defender tool).
+    private var defenseSection: some View {
+        inspectorSection("Defense") {
+            defensePicker
+            JText(diagram.defenseMode == nil
+                  ? "By hand: defenders stay where you put them."
+                  : diagram.defenseMode == .man
+                  ? "Each defender follows the nearest player; on a screen they switch. Drag one to nudge him."
+                  : "The zone shifts with the ball. Drag a defender to nudge him.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -845,6 +873,9 @@ struct JournalPlayStepEditor: View {
     }
 
     private func setDefense(_ mode: JournalPlayDiagram.DefenseMode?) {
+        #if DEBUG
+        Logger(subsystem: "hoopwise.mac", category: "defense").log("set \(mode?.rawValue ?? "off", privacy: .public) was \(diagram.defenseMode?.rawValue ?? "off", privacy: .public)")
+        #endif
         guard mode != diagram.defenseMode else { return }
         pushUndo()
         stash()
