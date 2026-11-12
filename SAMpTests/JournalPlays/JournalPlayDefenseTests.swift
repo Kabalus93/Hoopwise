@@ -86,3 +86,50 @@ struct JournalPlayDefenseTests {
         #expect(off.defenseMode == nil && off.defense.map(\.at) == auto.defense.map(\.at))
     }
 }
+
+/// The deeper rules (12 Nov 2026, Luther: "the zone only reacts to the ball
+/// and disregards the other players' movement … make it really good").
+struct JournalPlayDefenseDepthTests {
+    typealias P = JournalCourtPoint
+
+    @Test func aZoneDefenderShadesTheAttackerInHisArea() {
+        // Ball at the top; 3 moves from the left wing to the left corner.
+        let ball = P(7.5, 9.5)
+        let wing = JournalPlayMath.zoneSpots(.zone23, ball: ball, players: [1: ball, 3: P(1.8, 6)], court: .half)
+        let corner = JournalPlayMath.zoneSpots(.zone23, ball: ball, players: [1: ball, 3: P(0.8, 1.2)], court: .half)
+        // Somebody follows 3: the zone is not the same with him elsewhere.
+        #expect(wing != corner)
+        let nearestToCorner = corner.map { $0.distance(to: P(0.8, 1.2)) }.min()!
+        let nearestToCornerBefore = wing.map { $0.distance(to: P(0.8, 1.2)) }.min()!
+        #expect(nearestToCorner < nearestToCornerBefore)
+    }
+
+    @Test func theZoneAlwaysProtectsThePaint() {
+        // Everyone spread wide around the arc, the ball in a corner.
+        let ball = P(0.8, 1.2)
+        let players = [1: ball, 2: P(14.2, 1.2), 3: P(1.5, 7), 4: P(13.5, 7), 5: P(7.5, 9.5)]
+        let spots = JournalPlayMath.zoneSpots(.zone32, ball: ball, players: players, court: .half)
+        #expect(spots.contains { $0.distance(to: P(7.5, 3)) < 2.6 })
+    }
+
+    @Test func aWeakSideDefenderHelpsOnTheDrive() {
+        // 1 drives to the rim from the right; 3 waits in the left corner.
+        let players = [1: P(9, 3.2), 3: P(0.8, 1.2)]
+        let guards: [Int?] = [1, 3]
+        let own = [JournalPlayMath.manSpot(guarding: players[1]!, ball: players[1]!, court: .half),
+                   JournalPlayMath.manSpot(guarding: players[3]!, ball: players[1]!, court: .half)].map(Optional.some)
+        let team = JournalPlayMath.manTeamSpots(own, guards: guards, players: players, ball: players[1]!, court: .half)
+        // X3 left 3 and stepped toward the driving line.
+        #expect(team[1]!.distance(to: players[1]!) < own[1]!.distance(to: players[1]!))
+        #expect(team[1]!.distance(to: players[3]!) > own[1]!.distance(to: players[3]!))
+    }
+
+    @Test func aPostManIsPlayedOnTheBallSide() {
+        // 5 on the right block, the ball on the right wing.
+        let players = [2: P(13, 6), 5: P(9.5, 2)]
+        let behind = JournalPlayMath.manSpot(guarding: players[5]!, ball: players[2]!, court: .half)
+        let team = JournalPlayMath.manTeamSpots([nil, behind], guards: [2, 5], players: players, ball: players[2]!, court: .half)
+        // Fronting: closer to the passer than the plain spot behind him.
+        #expect(team[1]!.distance(to: players[2]!) < behind.distance(to: players[2]!))
+    }
+}

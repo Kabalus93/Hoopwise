@@ -923,8 +923,19 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   defenders at `at`, which is always the calculated start spot). Spots are
   WORKED OUT: man = ball–you–man (1.5 m off the ball toward the rim; off
   the ball sagging toward rim and ball line with distance — continuous, so
-  closeouts happen); zones = five spots around the rim shifting with the
-  ball, the nearest stepping up to it; nudge added on top. SWITCH: a move
+  closeouts happen); nudge added on top. DEEPER (same day, Luther: "for
+  zone the defense only reacts to the ball … make it really good"): ZONE =
+  AREAS — five anchors shift with the ball; every attacker within 9.5 m of
+  the rim belongs to the nearest anchor's area (cutters are handed on);
+  ball in your area → guard it; one attacker → shade him 60 % (between him
+  and the rim, leaning to the ball); two → the one nearer the rim, 45 %;
+  none → sink toward ball and paint; the ball outside every area → the
+  nearest shows (all the way inside the arc, 40 % beyond); someone always
+  within 2.5 m of the front of the rim. MAN TEAM RULES (`manTeamSpots`):
+  POST — a man within ~3.8 m of the rim is played three-quarters on the
+  ball side; HELP — as the ball gets within 5.5 m of the rim the defender
+  nearest the driving line whose man is ≥ 4 m away steps in 1.4 m in front
+  of the ball. No defender stands within 1 m of an attacker (`clearOf`). SWITCH: a move
   drawn after a screen passing within `screenReach` (1.5 m) of its spot
   uses it — the two defenders swap men as he goes by, carried to later
   steps (`carriedDefense`, in startOfNextStep). Playback: PlayFrame.defense,

@@ -11,8 +11,12 @@ import Foundation
 //   handler toward the basket; off the ball, the further from the ball the
 //   more he sags toward the basket and the ball line (help). Continuous, so
 //   a closeout happens by itself as a pass flies.
-// · 2-3 / 3-2 — five zone spots around the basket that shift toward the
-//   ball; the spot nearest the ball steps up to it.
+// · help and the post (man): the weak-side defender nearest the driving
+//   line steps in as the ball nears the rim; a post man is played three-
+//   quarters on the ball side (`manTeamSpots`);
+// · 2-3 / 3-2 — five areas around the basket that shift with the ball; each
+//   defender guards the ball or shades the attacker in his area, sinks when
+//   it is empty, and someone always protects the paint (`zoneSpots`).
 // · the coach's NUDGE (`Defender.nudge`) is added on top and carried.
 // · SWITCH EVERYTHING: when a player uses a screen (a move drawn after it
 //   that passes within 1.5 m of where it was set), the two defenders swap
@@ -72,23 +76,125 @@ nonisolated extension JournalPlayMath {
         }
     }
 
-    /// Every zone defender's spot with the ball at `ball`.
-    static func zoneSpots(_ mode: JournalPlayDiagram.DefenseMode, ball: JournalCourtPoint?, court: JournalCourtKind) -> [JournalCourtPoint] {
+    /// Every zone defender's spot (12 November 2026, Luther: "for zone the
+    /// defense only reacts to the ball and disregards the other players").
+    /// A zone guards AREAS and plays whoever is in them:
+    /// · the five spots shift toward the ball (`anchors`); every attacker
+    ///   within reach belongs to the area of the nearest spot — so the areas
+    ///   move with the ball and a cutter is handed from area to area;
+    /// · the ball in your area: guard the ball;
+    /// · one attacker in your area: shade him — between him and the basket,
+    ///   leaning to the ball — without leaving your spot (60 %);
+    /// · two: the one nearer the basket, less far (45 %);
+    /// · none: sink toward the ball and the paint;
+    /// · the ball outside every area (deep): the nearest spot shows, no chase;
+    /// · someone always protects the paint.
+    static func zoneSpots(_ mode: JournalPlayDiagram.DefenseMode, ball: JournalCourtPoint?,
+                          players: [Int: JournalCourtPoint] = [:], court: JournalCourtKind) -> [JournalCourtPoint] {
         let (basket, out, side) = defenseFrame(court)
         func world(_ s: Double, _ o: Double) -> JournalCourtPoint {
             JournalCourtPoint(basket.x + side.x * s + out.x * o, basket.y + side.y * s + out.y * o)
         }
+        func lerp(_ a: JournalCourtPoint, _ b: JournalCourtPoint, _ t: Double) -> JournalCourtPoint {
+            JournalCourtPoint(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+        }
         let ball = ball ?? world(0, 6.5)
         let bs = (ball.x - basket.x) * side.x + (ball.y - basket.y) * side.y
         let bo = (ball.x - basket.x) * out.x + (ball.y - basket.y) * out.y
-        var spots = zoneSlots(mode).map { slot in
+        let anchors = zoneSlots(mode).map { slot in
             world(slot.side + bs * 0.3, slot.out + min(max(bo - 5, -2), 2) * 0.2)
         }
-        // The spot nearest the ball steps up to it (inside the zone's reach).
-        if bo < 10, let i = spots.indices.min(by: { spots[$0].distance(to: ball) < spots[$1].distance(to: ball) }) {
-            spots[i] = manSpot(guarding: ball, ball: ball, court: court)
+        guard !anchors.isEmpty else { return [] }
+
+        // Who holds the ball: the attacker on it.
+        let holder = players.min { $0.value.distance(to: ball) < $1.value.distance(to: ball) }
+            .flatMap { $0.value.distance(to: ball) < 0.6 ? $0.key : nil }
+        // Every attacker within the zone's reach (inside ~9.5 m of the rim),
+        // in the area of the nearest spot.
+        var areas = [[Int]](repeating: [], count: anchors.count)
+        for (number, at) in players where at.distance(to: basket) <= 9.5 {
+            let i = anchors.indices.min { anchors[$0].distance(to: at) < anchors[$1].distance(to: at) }!
+            areas[i].append(number)
+        }
+        var spots = anchors
+        var ballCovered = false
+        for i in anchors.indices {
+            let here = areas[i]
+            if let h = holder, here.contains(h) {
+                spots[i] = manSpot(guarding: ball, ball: ball, court: court)
+                ballCovered = true
+            } else if let man = here.min(by: { players[$0]!.distance(to: basket) < players[$1]!.distance(to: basket) }) {
+                spots[i] = lerp(anchors[i], manSpot(guarding: players[man]!, ball: ball, court: court), here.count == 1 ? 0.6 : 0.45)
+            } else {
+                spots[i] = lerp(anchors[i], lerp(ball, basket, 0.6), 0.15)
+            }
+        }
+        // The ball handler outside every area (or no players given): the
+        // nearest spot steps up — all the way inside the arc, half beyond it.
+        if !ballCovered, let i = anchors.indices.min(by: { anchors[$0].distance(to: ball) < anchors[$1].distance(to: ball) }) {
+            spots[i] = lerp(anchors[i], manSpot(guarding: ball, ball: ball, court: court), bo < 8.5 ? 1 : 0.4)
+        }
+        // Paint protection: someone stays within 2.5 m of the front of the rim.
+        let paint = world(bs > 0 ? 0.6 : -0.6, 1.4)
+        if !spots.contains(where: { $0.distance(to: paint) < 2.5 }) {
+            let free = anchors.indices.filter { areas[$0].isEmpty }
+            let pool = free.isEmpty ? Array(anchors.indices) : free
+            if let i = pool.min(by: { spots[$0].distance(to: paint) < spots[$1].distance(to: paint) }) {
+                spots[i] = lerp(spots[i], paint, 0.8)
+            }
         }
         return spots.map { clamp($0, court) }
+    }
+
+    // MARK: - Man-to-man: help and the post
+
+    /// The man defense's team rules on top of each defender's own spot:
+    /// · POST: a man within ~3.8 m of the rim (not the ball) is played three-
+    ///   quarters on the ball side, not from behind;
+    /// · HELP: as the ball gets within 5.5 m of the rim, the weak-side
+    ///   defender nearest the driving line (his man ≥ 4 m from the ball)
+    ///   steps into it, 1.4 m in front of the ball — leaving his man open.
+    static func manTeamSpots(_ spots: [JournalCourtPoint?], guards: [Int?], players: [Int: JournalCourtPoint],
+                             ball: JournalCourtPoint?, court: JournalCourtKind) -> [JournalCourtPoint?] {
+        guard let ball else { return spots }
+        let basket = defenseFrame(court).basket
+        func lerp(_ a: JournalCourtPoint, _ b: JournalCourtPoint, _ t: Double) -> JournalCourtPoint {
+            JournalCourtPoint(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+        }
+        func unit(_ from: JournalCourtPoint, _ to: JournalCourtPoint) -> JournalCourtPoint {
+            let d = max(from.distance(to: to), 0.01)
+            return JournalCourtPoint((to.x - from.x) / d, (to.y - from.y) / d)
+        }
+        var out = spots
+        let holder = players.min { $0.value.distance(to: ball) < $1.value.distance(to: ball) }
+            .flatMap { $0.value.distance(to: ball) < 0.6 ? $0.key : nil }
+
+        // Post: three-quarter on the ball side.
+        for i in out.indices {
+            guard let spot = out[i], let g = guards[i], g != holder, let man = players[g] else { continue }
+            let dRim = man.distance(to: basket)
+            let p = min(max((3.8 - dRim) / 1.5, 0), 1)
+            guard p > 0, ball.distance(to: man) < 9 else { continue }
+            let toBall = unit(man, ball), toRim = unit(man, basket)
+            let front = JournalCourtPoint(man.x + toBall.x * 0.9 + toRim.x * 0.4, man.y + toBall.y * 0.9 + toRim.y * 0.4)
+            out[i] = lerp(spot, front, p)
+        }
+
+        // Help on the drive.
+        let dBall = ball.distance(to: basket)
+        let s = min(max((5.5 - dBall) / 2.5, 0), 1)
+        if s > 0 {
+            let toRim = unit(ball, basket)
+            let gap = JournalCourtPoint(ball.x + toRim.x * 1.4, ball.y + toRim.y * 1.4)
+            let candidates = out.indices.filter { i in
+                guard out[i] != nil, let g = guards[i], g != holder, let man = players[g] else { return false }
+                return man.distance(to: ball) >= 4
+            }
+            if let helper = candidates.min(by: { out[$0]!.distance(to: gap) < out[$1]!.distance(to: gap) }) {
+                out[helper] = lerp(out[helper]!, gap, s)
+            }
+        }
+        return out
     }
 
     // MARK: - Spots for a moment
@@ -99,18 +205,41 @@ nonisolated extension JournalPlayMath {
     static func defenseSpots(_ diagram: JournalPlayDiagram, players: [Int: JournalCourtPoint], ball: JournalCourtPoint?,
                              guards: [Int?], court: JournalCourtKind) -> [JournalCourtPoint] {
         guard let mode = diagram.defenseMode else { return diagram.defense.map(\.at) }
-        let zone = mode == .man ? [] : zoneSpots(mode, ball: ball, court: court)
-        return diagram.defense.enumerated().map { i, defender in
-            let base: JournalCourtPoint?
-            if mode == .man {
-                base = (i < guards.count ? guards[i] : nil).flatMap { players[$0] }.map { manSpot(guarding: $0, ball: ball, court: court) }
-            } else {
-                base = i < zone.count ? zone[i] : nil
+        var bases: [JournalCourtPoint?]
+        if mode == .man {
+            bases = diagram.defense.indices.map { i in
+                (i < guards.count ? guards[i] : nil).flatMap { players[$0] }.map { manSpot(guarding: $0, ball: ball, court: court) }
             }
-            guard let base else { return defender.at }
+            bases = manTeamSpots(bases, guards: diagram.defense.indices.map { $0 < guards.count ? guards[$0] : nil },
+                                 players: players, ball: ball, court: court)
+        } else {
+            let zone = zoneSpots(mode, ball: ball, players: players, court: court)
+            bases = diagram.defense.indices.map { $0 < zone.count ? zone[$0] : nil }
+        }
+        let basket = defenseFrame(court).basket
+        return diagram.defense.enumerated().map { i, defender in
+            guard var base = bases[i] else { return defender.at }
+            base = clearOf(players.values, base, basket: basket)
             let n = defender.nudge ?? JournalCourtPoint(0, 0)
             return clamp(JournalCourtPoint(base.x + n.x, base.y + n.y), court)
         }
+    }
+
+    /// A defender never stands on an attacker (he would hide under the
+    /// circle): within a metre of one, he is pushed out to a metre — away
+    /// from him, else toward the basket.
+    static func clearOf<S: Sequence>(_ attackers: S, _ spot: JournalCourtPoint, basket: JournalCourtPoint) -> JournalCourtPoint
+    where S.Element == JournalCourtPoint {
+        var spot = spot
+        for a in attackers {
+            let d = spot.distance(to: a)
+            guard d < 1.0 else { continue }
+            var dx = spot.x - a.x, dy = spot.y - a.y
+            if d < 0.05 { dx = basket.x - a.x; dy = basket.y - a.y }
+            let len = max((dx * dx + dy * dy).squareRoot(), 0.01)
+            spot = JournalCourtPoint(a.x + dx / len * 1.0, a.y + dy / len * 1.0)
+        }
+        return spot
     }
 
     // MARK: - Switch everything
