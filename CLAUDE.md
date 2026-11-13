@@ -1215,6 +1215,11 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   oldest age first; the plays added, existing ones kept; minutes 15 + half
   the rest; Rebuild asks first) and WHO DOES WHAT (each expected person's
   roles in the focus plays with the standard; "No role in these plays").
+  COMPACT (13 Nov 2026, Luther: "how can this be compressed?"): one header
+  row — badge, team name, "Working on: <plays>" as its subtitle, a small
+  Build plan / Rebuild button (the wand alone on a phone) and Team; skills
+  on one line; each person ONE line (role number, 24 pt photo, name, the
+  standard), two columns in regular width with more than two people.
   Tests: TeamPlaybookTests (workout, demands, round trip, never billed,
   focus → plan),
   TeamsUITests (section → breakdown → role → workout on the team page).

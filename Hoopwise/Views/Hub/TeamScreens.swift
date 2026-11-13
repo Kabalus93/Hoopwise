@@ -1195,6 +1195,7 @@ struct SessionTeamPlanCard: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var openTeam = false
     @State private var confirmingRebuild = false
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         if let team = dataManager.teams.first(where: { $0.id == teamId }) {
@@ -1210,97 +1211,90 @@ struct SessionTeamPlanCard: View {
         let withParts = people.filter { !book.parts(of: $0.id, in: plays).isEmpty }
         let without = people.filter { book.parts(of: $0.id, in: plays).isEmpty }
         let planIsEmpty = curriculum.warmupDrillIds.isEmpty && curriculum.skillDrillIds.isEmpty
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                TeamBadge(team: team, size: 40)
+        // Compact (13 Nov 2026, Luther: "how can this be compressed?"): the
+        // focus plays are the header's subtitle, the build button sits beside
+        // Team, skills take one line, and each person one line — two columns
+        // when the page is wide.
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                TeamBadge(team: team, size: 32)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(team.name).font(.headline)
-                    Text(isChinese ? "球队训练 · 不计费" : "Team practice · never billed")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text(team.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(plays.isEmpty ? (isChinese ? "还没有当前重点" : "No focus plays yet")
+                                       : (isChinese ? "正在练：" : "Working on: ") + plays.map(\.name).joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 6)
+                if canEdit && !plays.isEmpty {
+                    Button {
+                        if planIsEmpty { build(book, plays) } else { confirmingRebuild = true }
+                    } label: {
+                        Label(planIsEmpty ? (isChinese ? "生成计划" : "Build plan")
+                                          : (isChinese ? "重新生成" : "Rebuild"),
+                              systemImage: "wand.and.stars")
+                            .font(.caption.weight(.semibold))
+                            // On a phone the wand alone, so the focus play keeps its room.
+                            .labelStyle(AdaptiveLabelStyle(iconOnly: sizeClass != .regular))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(colour)
+                    .accessibilityIdentifier("session.buildFromTeam")
+                }
                 Button { openTeam = true } label: {
-                    Text(isChinese ? "球队" : "Team").font(.subheadline.weight(.semibold))
+                    Text(isChinese ? "球队" : "Team").font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
                 .tint(colour)
                 .accessibilityIdentifier("session.openTeam")
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(isChinese ? "正在练" : "WORKING ON").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                if plays.isEmpty {
-                    Text(isChinese ? "球队还没有当前重点。在球队页面选出要练的战术，计划就能从中生成。"
-                                   : "The team has no focus yet. Pick the plays practice works on in the team page and the plan builds from them.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                } else {
-                    FlowLayout(spacing: 8) {
-                        ForEach(plays, id: \.key) { ref in
-                            Text(verbatim: ref.name)
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(colour.opacity(0.16), in: .capsule)
-                                .fixedSize()
-                        }
-                    }
-                    let skills = book.skills(in: plays).compactMap { ActivityType(rawValue: $0)?.title }
-                    if !skills.isEmpty {
-                        Text((isChinese ? "需要的技术：" : "Skills: ") + skills.joined(separator: " · "))
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
+            if plays.isEmpty {
+                Text(isChinese ? "在球队页面选出要练的战术，计划就能从中生成。"
+                               : "Pick the plays practice works on in the team page and the plan builds from them.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                let skills = book.skills(in: plays).compactMap { ActivityType(rawValue: $0)?.title }
+                if !skills.isEmpty {
+                    Text((isChinese ? "技术：" : "Skills: ") + skills.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-            }
-
-            if canEdit && !plays.isEmpty {
-                Button {
-                    if planIsEmpty { build(book, plays) } else { confirmingRebuild = true }
-                } label: {
-                    Label(planIsEmpty ? (isChinese ? "用球队重点生成计划" : "Build the plan from the team")
-                                      : (isChinese ? "按球队重点重新生成" : "Rebuild from the team"),
-                          systemImage: "wand.and.stars")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(colour)
-                .accessibilityIdentifier("session.buildFromTeam")
             }
 
             if !withParts.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(isChinese ? "谁打什么" : "WHO DOES WHAT").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .leading),
+                                    count: sizeClass == .regular && withParts.count > 2 ? 2 : 1)
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
                     ForEach(withParts) { player in
-                        HStack(alignment: .top, spacing: 10) {
-                            StudentAvatarView(student: player, size: 32)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(player.primaryDisplayName).font(.subheadline.weight(.semibold))
-                                ForEach(Array(book.parts(of: player.id, in: plays).enumerated()), id: \.offset) { _, part in
-                                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                        Text("\(part.role.number)")
-                                            .font(.caption2.weight(.heavy).monospacedDigit())
-                                            .foregroundStyle(.white)
-                                            .frame(width: 18, height: 18)
-                                            .background(colour, in: Circle())
-                                        Text(partLine(part, single: plays.count == 1))
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
+                        let parts = book.parts(of: player.id, in: plays)
+                        HStack(spacing: 8) {
+                            HStack(spacing: 2) {
+                                ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                                    Text("\(part.role.number)")
+                                        .font(.caption2.weight(.heavy).monospacedDigit())
+                                        .foregroundStyle(.white)
+                                        .frame(width: 18, height: 18)
+                                        .background(colour, in: Circle())
                                 }
                             }
+                            StudentAvatarView(student: player, size: 24)
+                            Text(player.primaryDisplayName).font(.footnote.weight(.semibold)).lineLimit(1)
+                                .layoutPriority(1)
+                            Text(parts.map { partLine($0, single: plays.count == 1) }.joined(separator: " · "))
+                                .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("session.teamPart")
                     }
-                    if !without.isEmpty {
-                        Text((isChinese ? "这些战术里没有号位：" : "No role in these plays: ") + without.map(\.primaryDisplayName).joined(separator: ", "))
-                            .font(.caption).foregroundStyle(.tertiary)
-                    }
+                }
+                if !without.isEmpty {
+                    Text((isChinese ? "这些战术里没有号位：" : "No role in these plays: ") + without.map(\.primaryDisplayName).joined(separator: ", "))
+                        .font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                 }
             }
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(colour.opacity(0.08), in: .rect(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(colour.opacity(0.25), lineWidth: 1))
@@ -1342,6 +1336,15 @@ struct SessionTeamPlanCard: View {
                                        durationMinutes: durationMinutes, keeping: curriculum)
         onChange()
         HapticFeedback.notification(.success)
+    }
+}
+
+/// A label that shows its icon alone when asked (the session's team card on
+/// a phone), title and icon otherwise.
+struct AdaptiveLabelStyle: LabelStyle {
+    let iconOnly: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        if iconOnly { configuration.icon } else { Label(configuration) }
     }
 }
 
