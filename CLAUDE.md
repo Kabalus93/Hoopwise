@@ -1449,11 +1449,14 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   line "November CN¥… · October CN¥…", then each private client with an
   active bundle as their photo in a RING of the bundle left (orange at
   ≤ 2, nearest renewal first, five + "+N"), "N bundles · N sessions left";
-  opens MonthlyRevenueHistoryView. Tiles: LIBRARY — Plays, Drills (was
+  the money line, "+N" and the footer open Revenue — PUSHED as a full page
+  (`MonthlyRevenueHistoryView(pushed: true)`: no stack of its own, no Done;
+  it was a popup) — and each client bubble opens their contract card
+  (PrivateClientDetailSheet: history, sessions, Schedule) as a popup. Tiles: LIBRARY — Plays, Drills (was
   "Coach"), Lexicon (three across when wide, Lexicon wide on a phone) —
   and PEOPLE — Teams, Organization. Icons are DRAWN (Views/Hub/
   HubGlyphs.swift: play diagram, cone, open book, jersey "23", org chart)
-  in the ink colour on a neutral tile; only the cone is orange (Luther).
+  in the ink colour on a neutral tile — the cone too (Luther).
   Identifiers hub.plays / hub.drills / hub.lexicon / hub.teams /
   hub.organization / hub.revenue. Tests: PlaysUITests (Drills,
   Organization open), TeamsUITests, LexiconUITests, OrganizationUITests.

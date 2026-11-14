@@ -10,6 +10,7 @@ struct FlightyHubView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var currentTime = Date()
     @State private var showingRevenueHistory = false
+    @State private var presentedClient: Contract?
     @Environment(\.modelContext) private var modelContext
     
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -75,8 +76,15 @@ struct FlightyHubView: View {
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
         }
         .onReceive(timer) { _ in currentTime = Date() }
-        .sheet(isPresented: $showingRevenueHistory) {
-            MonthlyRevenueHistoryView()
+        // Revenue is a full page (15 Nov 2026, Luther: it opened in a popup).
+        .navigationDestination(isPresented: $showingRevenueHistory) {
+            MonthlyRevenueHistoryView(pushed: true)
+        }
+        // A client in the header opens their private contract card: history,
+        // sessions, Schedule.
+        .sheet(item: $presentedClient) { contract in
+            PrivateClientDetailSheet(contract: contract)
+                .environmentObject(dataManager)
         }
     }
 
@@ -172,19 +180,19 @@ struct FlightyHubView: View {
         let monthName = Date().formatted(.dateTime.month(.wide))
         let lastName = Calendar.current.date(byAdding: .month, value: -1, to: Date())?.formatted(.dateTime.month(.wide)) ?? ""
         let shown = Array(bundles.prefix(5))
-        return Button {
-            showingRevenueHistory = true
-        } label: {
-            VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 14) {
+            // The money line and the footer open Revenue; each client opens
+            // their contract card.
+            Button {
+                showingRevenueHistory = true
+            } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(isChinese ? "私教课" : "PRIVATE LESSONS")
                         .font(.caption2.weight(.bold))
                         .tracking(1)
                         .foregroundStyle(.white.opacity(0.7))
                     Spacer(minLength: 4)
-                    Text(isChinese
-                         ? "\(monthName) \(money(monthlyEarnings)) · \(lastName) \(money(last))"
-                         : "\(monthName) \(money(monthlyEarnings)) · \(lastName) \(money(last))")
+                    Text("\(monthName) \(money(monthlyEarnings)) · \(lastName) \(money(last))")
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
@@ -193,36 +201,55 @@ struct FlightyHubView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.6))
                 }
-                if shown.isEmpty {
-                    Text(isChinese ? "没有进行中的私教课包" : "No private bundles running")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
-                } else {
-                    HStack(alignment: .top, spacing: 10) {
-                        ForEach(shown) { clientBubble($0) }
-                        if bundles.count > shown.count {
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("hub.revenue")
+
+            if shown.isEmpty {
+                Text(isChinese ? "没有进行中的私教课包" : "No private bundles running")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.75))
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(shown) { contract in
+                        Button {
+                            presentedClient = contract
+                        } label: {
+                            clientBubble(contract)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("hub.client")
+                    }
+                    if bundles.count > shown.count {
+                        Button {
+                            showingRevenueHistory = true
+                        } label: {
                             Text("+\(bundles.count - shown.count)")
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(.white)
                                 .frame(width: 52, height: 52)
                                 .background(.white.opacity(0.15), in: Circle())
                         }
-                        Spacer(minLength: 0)
+                        .buttonStyle(.plain)
                     }
+                    Spacer(minLength: 0)
+                }
+                Button {
+                    showingRevenueHistory = true
+                } label: {
                     Text(isChinese ? "\(bundles.count) 个课包 · 剩余 \(sessionsLeft) 节"
                                    : "\(bundles.count) \(bundles.count == 1 ? "bundle" : "bundles") · \(sessionsLeft) \(sessionsLeft == 1 ? "session" : "sessions") left")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(0.75))
                 }
+                .buttonStyle(.plain)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect(cornerRadius: 20))
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.tint(.white.opacity(0.06)).interactive(), in: .rect(cornerRadius: 20))
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular.tint(.white.opacity(0.06)), in: .rect(cornerRadius: 20))
         .sensoryFeedback(.selection, trigger: showingRevenueHistory)
-        .accessibilityIdentifier("hub.revenue")
     }
 
     private func money(_ amount: Double) -> String {
@@ -345,7 +372,7 @@ struct FlightyHubView: View {
 
     private var drillsLink: some View {
         NavigationLink(destination: DrillsLibraryView()) {
-            hubTile(.drills, tint: .orange, title: isChinese ? "训练" : "Drills",
+            hubTile(.drills, title: isChinese ? "训练" : "Drills",
                     count: "\(dataManager.drills.count)", unit: isChinese ? "个训练" : "drills")
         }
         .buttonStyle(.plain)
@@ -362,7 +389,7 @@ struct FlightyHubView: View {
     }
 
     /// Icons in the ink colour on a neutral tile (15 Nov 2026, Luther: "we
-    /// can do without the colors, only the cone may remain orange").
+    /// can do without the colors" — the cone too, the same day).
     private func glyphTile(_ kind: HubGlyph.Kind, tint: Color?, size: CGFloat) -> some View {
         HubGlyph(kind: kind, tint: tint ?? .primary, size: size * 0.56)
             .frame(width: size, height: size)
@@ -552,8 +579,19 @@ struct MonthlyRevenueHistoryView: View {
         .sorted { $0.amount > $1.amount }
     }
 
+    /// Pushed from the Hub as a full page (15 Nov 2026): no stack of its own
+    /// and no Done — the page's Back returns.
+    var pushed = false
+
     var body: some View {
-        NavigationStack {
+        if pushed {
+            content
+        } else {
+            NavigationStack { content }
+        }
+    }
+
+    private var content: some View {
             List {
                 summarySection
                 if breakdown.total > 0 {
@@ -579,8 +617,10 @@ struct MonthlyRevenueHistoryView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     monthMenu
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.fontWeight(.semibold)
+                if !pushed {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }.fontWeight(.semibold)
+                    }
                 }
             }
             .sheet(item: studentSheetBinding) { box in
@@ -596,7 +636,6 @@ struct MonthlyRevenueHistoryView: View {
             .sheet(isPresented: $showingReclassify) {
                 ReclassifyContractsSheet()
             }
-        }
     }
 
     // MARK: - Header summary with prev/next month nav
