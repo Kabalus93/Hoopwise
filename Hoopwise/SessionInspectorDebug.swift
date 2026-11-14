@@ -264,7 +264,7 @@ enum SessionInspectorDebug {
         var merged = 0, deleted = 0, refunded = 0
         for decision in plan.automatic {
             let slotsBefore = dm.contracts.reduce(0) { $0 + $1.bundleSessionIds.count }
-            dm.updateSessionEvent(decision.survivor)
+            dm.updateSessionEvent(decision.survivor, keepLiveFields: false)
             for doomedId in decision.deletedIds {
                 guard let doomed = dm.sessionEvents.first(where: { $0.id == doomedId }) else { continue }
                 dm.deleteSessionEvent(doomed)
@@ -1046,7 +1046,7 @@ enum SessionInspectorDebug {
 
         // ---- APPLY
         let merged = SessionDedupe.merged(survivor, absorbing: doomed)
-        dm.updateSessionEvent(merged)
+        dm.updateSessionEvent(merged, keepLiveFields: false)
         dm.deleteSessionEvent(doomed)
 
         // ---- AFTER

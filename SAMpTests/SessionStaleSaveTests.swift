@@ -38,6 +38,33 @@ final class SessionStaleSaveTests: XCTestCase {
         XCTAssertEqual(stored.excusedAbsences, [other])
     }
 
+    /// 14 November 2026: the Home tab's "ending soon" roll-call photo saved
+    /// the live engine's copy of the session — taken when class STARTED —
+    /// and three games recorded since were gone. A plain save now keeps the
+    /// stored games and marks, and the photo is written on its own.
+    func testTheClassStartCopySavedWithAPhotoKeepsTheGames() throws {
+        let dm = SwiftDataManager.inMemoryForTesting()
+        let (classStart, kid, _) = setUp(dm)
+        dm.setStudentAttendanceState(sessionId: classStart.id, studentId: kid, state: .present)
+        for n in 1...3 {
+            var game = SessionGame(sessionId: classStart.id, gameNumber: n, status: n < 3 ? .completed : .inProgress)
+            game.playerStats = [SessionPlayerStats(playerId: kid, gameId: game.id, teamId: game.id, points: 2 * n)]
+            dm.appendSessionGame(toSessionId: classStart.id, game: game)
+        }
+
+        // What MainTabView did: the engine's copy, the photo set, saved whole.
+        var old = classStart
+        old.attendancePhotoPath = "rollcall.jpg"
+        dm.updateSessionEvent(old)
+        // What it does now: the photo alone.
+        dm.setSessionAttendancePhoto(sessionId: classStart.id, path: "rollcall.jpg")
+
+        let stored = try XCTUnwrap(dm.sessionEvents.first { $0.id == classStart.id })
+        XCTAssertEqual(stored.games.count, 3, "the games were erased")
+        XCTAssertEqual(stored.actualAttendeeIds, [kid], "the roll call was erased")
+        XCTAssertEqual(stored.attendancePhotoPath, "rollcall.jpg")
+    }
+
     func testAnErasingOverwriteKeepsACopyThatRestores() throws {
         let dm = SwiftDataManager.inMemoryForTesting()
         let (stale, kid, _) = setUp(dm)
@@ -46,8 +73,8 @@ final class SessionStaleSaveTests: XCTestCase {
         game.playerStats = [SessionPlayerStats(playerId: kid, gameId: game.id, teamId: game.id, points: 4)]
         dm.appendSessionGame(toSessionId: stale.id, game: game)
 
-        // Any other whole-record writer with an old copy (no guard).
-        dm.updateSessionEvent(stale)
+        // A writer that says it writes the live fields, with an old copy.
+        dm.updateSessionEvent(stale, keepLiveFields: false)
         XCTAssertEqual(dm.sessionEvents.first { $0.id == stale.id }?.games.count, 0)
 
         let versions = dm.sessionRevisions(for: stale.id)

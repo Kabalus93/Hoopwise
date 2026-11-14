@@ -158,10 +158,13 @@ struct MainTabView: View {
                 #if os(iOS)
                 if let s = liveEngine.session,
                    let path = PhotoCaptureManager.shared.saveAttendancePhoto(image, for: s.id) {
+                    // The photo ALONE (14 Nov 2026): the engine's copy dates
+                    // from the start of class, and saving it whole erased
+                    // every game and mark recorded since.
+                    dataManager.setSessionAttendancePhoto(sessionId: s.id, path: path)
                     var updated = s
                     updated.attendancePhotoPath = path
                     liveEngine.session = updated
-                    dataManager.updateSessionEvent(updated)
                 }
                 #endif
                 liveEngine.dismissRollCallPrompt()

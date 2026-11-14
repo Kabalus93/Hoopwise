@@ -2616,6 +2616,19 @@ STILL OPEN, needs a decision rather than a verdict:
   SessionSnapshotV1.apply did not restore unexcusedAbsences — fixed.
 - Never add a whole-record session save from a view's copy without
   keepLiveFields. Tests: SessionStaleSaveTests.
+- SECOND TIME (14 November 2026, Luther, U14 intermediate 10:00): three games
+  vanished when the Home tab's "ending soon" roll-call photo was taken —
+  MainTabView saved `liveEngine.session` (a copy from the START of class)
+  whole, with the photo path set. FIX: that sheet writes the photo alone
+  (`setSessionAttendancePhoto`), and `keepLiveFields` now DEFAULTS TO TRUE —
+  a whole-record save keeps the stored games, marks and photo unless the
+  caller passes `keepLiveFields: false` (only duplicate-session merges,
+  whose survivor carries the merged games/marks, and DEBUG seeding). Live
+  fields have field-level writers: appendSessionGame / deleteSessionGame /
+  replaceSessionGames, setStudentAttendanceStates / setSessionAttendance,
+  setSessionAttendancePhoto. The bad write was redeemed through
+  updateContractsForAttendance, which never un-charges, so balances were
+  untouched; the "Before overwrite" revision restores games and marks.
 
 ## No third-party imagery (App Review 4.1(a), 29 October 2026)
 - Version 1.0 (5) was REJECTED under 4.1(a) Copycats: "the app's metadata

@@ -1497,7 +1497,8 @@ class SwiftDataManager: ObservableObject {
 
         var deleted = 0
         for decision in plan.automatic {
-            updateSessionEvent(decision.survivor)
+            // The survivor carries the merged games and marks.
+            updateSessionEvent(decision.survivor, keepLiveFields: false)
             for doomedId in decision.deletedIds {
                 guard let doomed = cachedSessionEvents.first(where: { $0.id == doomedId }) else { continue }
                 deleteSessionEvent(doomed)
@@ -1928,7 +1929,16 @@ class SwiftDataManager: ObservableObject {
     /// session page saves this way: its `@State` copy can be older than the
     /// store, and a whole-record save from it erased games and attendance
     /// taken during a class (Luther, 25 October 2026).
-    func updateSessionEvent(_ event: SessionEvent, keepLiveFields: Bool = false) {
+    ///
+    /// THE DEFAULT SINCE 14 NOVEMBER 2026: the Home tab's "ending soon"
+    /// roll-call photo saved the live engine's copy of the session — taken
+    /// when class STARTED — and erased three games recorded since (Luther,
+    /// U14 intermediate, 10:00 class). Every caller now keeps the live fields
+    /// unless it says it is writing them (`keepLiveFields: false`: merges of
+    /// duplicate sessions and DEBUG seeding). Games, marks and the photo have
+    /// their own field-level writers (setSessionAttendancePhoto,
+    /// setStudentAttendanceStates, the game helpers).
+    func updateSessionEvent(_ event: SessionEvent, keepLiveFields: Bool = true) {
         var event = event
         let before = cachedSessionEvents.first { $0.id == event.id }
         do {

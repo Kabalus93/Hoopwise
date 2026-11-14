@@ -112,7 +112,7 @@ enum ScreenshotStore {
                     session.excusedAbsences = []
                     session.unexcusedAbsences = []
                 }
-                dm.updateSessionEvent(session)
+                dm.updateSessionEvent(session, keepLiveFields: false)
             }
             for var phase in dm.microCycles where phase.programId == program.id {
                 phase.startDate = phase.startDate.map(shift)
