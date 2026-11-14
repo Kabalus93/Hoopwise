@@ -78,5 +78,14 @@ nonisolated enum JournalPlayStringsAdded {
         "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line.":
             .init(en: "Click to select a player, a defender, a cone or a line; drag to move it, or the end or a bend of a line.",
                   enOne: nil, zh: "点击选中球员、防守人、标志桶或线条；拖动可移动它，或拖动线的终点和弯折点。"),
+        // Apple Pencil (15 Nov 2026).
+        "Apple Pencil": .init(en: "Apple Pencil", enOne: nil, zh: "Apple Pencil"),
+        "Pencil draws, finger moves": .init(en: "Pencil draws, finger moves", enOne: nil, zh: "笔画线，手指移动"),
+        "The Pencil draws with the tool; a finger moves and selects, whatever the tool. Double-tap or squeeze the Pencil for the eraser, the last tool or the tools. Tap with two fingers to undo, three to redo.":
+            .init(en: "The Pencil draws with the tool; a finger moves and selects, whatever the tool. Double-tap or squeeze the Pencil for the eraser, the last tool or the tools. Tap with two fingers to undo, three to redo.",
+                  enOne: nil, zh: "Apple Pencil 用当前工具画线；手指无论选了什么工具都用来移动和选择。轻点两下或捏一下笔可切换橡皮、上一个工具或打开工具栏。两指轻点撤销，三指轻点重做。"),
+        "The Pencil and a finger both use the tool. Double-tap or squeeze the Pencil for the eraser, the last tool or the tools. Tap with two fingers to undo, three to redo.":
+            .init(en: "The Pencil and a finger both use the tool. Double-tap or squeeze the Pencil for the eraser, the last tool or the tools. Tap with two fingers to undo, three to redo.",
+                  enOne: nil, zh: "Apple Pencil 和手指都使用当前工具。轻点两下或捏一下笔可切换橡皮、上一个工具或打开工具栏。两指轻点撤销，三指轻点重做。"),
     ]
 }

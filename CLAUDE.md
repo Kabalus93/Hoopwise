@@ -991,6 +991,33 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   The Mac's Return → Claude section still sits above. DEBUG
   HOOPWISE_LIBRARY_SEARCH=<text> opens with a search typed. Pinned by
   ActivityLibraryUITests.testSearchCoversTheWholeLibrary.
+- APPLE PENCIL IN THE PLAY EDITOR (15 November 2026, Luther: "add pencil
+  support for iPad, focus here is how to take advantage of it in the play
+  editor"). The court's input is no longer a SwiftUI DragGesture (it cannot
+  tell a Pencil from a finger): Views/Plays/CourtInputLayer.swift, a UIKit
+  view that tracks ONE touch and says whether it is the Pencil (precise
+  location). The editor's begin/update/finish rules are unchanged
+  (`handle(_:size:)`, `cancelDrag`). What the Pencil adds:
+  · PENCIL DRAWS, FINGER MOVES: once a Pencil touches the court, the Pencil
+    uses the tool and a finger is Move (pick up, drag, select) whatever the
+    tool — no switching to Move between strokes (`gestureTool`; AppStorage
+    `plays.pencilDraws`, on; an "Apple Pencil" inspector section appears
+    once one is seen). A Pencil landing while a finger is down takes over;
+    fingers while the Pencil draws are ignored (a resting hand).
+  · HOVER (Pencil hover on supported iPads, and the Mac pointer): a ring on
+    what the stroke would use — the player a line starts from (dashed), or
+    what Move / Erase / Ball / Defender would hit.
+  · DOUBLE-TAP / SQUEEZE (UIPencilInteraction, not on Catalyst) follow the
+    system Pencil setting: switch to Erase and back, the previous tool, or a
+    tool palette (glass capsule of the tools) at the tip.
+  · Two-finger tap = undo, three-finger tap = redo (a second finger cancels
+    the first finger's gesture first, so a tap tool adds nothing).
+  Mouse / trackpad on the Mac arrive as ordinary touches — unchanged.
+  Verified on the iPad Air 13 simulator: a finger-drawn cut, two-finger
+  undo; PlayEditorWorkspaceUITests, PlaysUITests, PlayDefenseUITests pass.
+  Pencil touches, hover, double-tap and squeeze cannot be simulated — they
+  need a real iPad. (DrillVisualUITests.testNewDrillCanBeDrawnWith…
+  fails before the editor: it never finds "newDrill.draw" — unrelated.)
 - DRILL VISUALS ARE DRAWN IN THE PLAYS EDITOR (9 November 2026, Luther's
   request: "the same editor that's in plays … remove the popup"). The drill
   page's "Add a visual" (and the carousel's + tile) opens

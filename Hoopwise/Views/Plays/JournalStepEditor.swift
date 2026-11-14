@@ -75,9 +75,24 @@ struct JournalPlayStepEditor: View {
     @State private var caption: String
     @State private var text: String
     @State private var tool: Tool = .move
+    /// APPLE PENCIL (15 Nov 2026): once a Pencil touches the court, the
+    /// Pencil draws with the tool and a finger moves / selects whatever the
+    /// tool (`plays.pencilDraws`, on by default). `gestureTool` is the tool
+    /// the touch in progress uses.
+    @State private var pencilSeen = false
+    @State private var gestureTool: Tool?
+    @State private var previousTool: Tool = .move
+    /// Where the Pencil (or the Mac pointer) hovers, in metres.
+    @State private var hoverPoint: JournalCourtPoint?
+    /// The tool palette a squeeze (or double-tap, per the system setting)
+    /// opens at the Pencil tip, in the court's points.
+    @State private var paletteAt: CGPoint?
+    @AppStorage("plays.pencilDraws") private var pencilDraws = true
     @State private var undoStack: [JournalPlayDiagram] = []
     @State private var redoStack: [JournalPlayDiagram] = []
     @State private var drag: Drag?
+    /// Where the touch in progress began (points), for tap-versus-drag.
+    @State private var dragStart: CGPoint?
     @State private var confirmingDiscard = false
     @State private var selection: Selection?
     /// The rail tool under the pointer: its name shows beside it.
@@ -113,6 +128,9 @@ struct JournalPlayStepEditor: View {
     }
 
     private var isWorkspace: Bool { sizeClass == .regular }
+    /// The tool the current touch draws with (Move for a finger in Pencil
+    /// mode), else the selected one.
+    private var activeTool: Tool { gestureTool ?? tool }
     /// Single-key shortcuts only in the workspace, and never while typing.
     private var keysActive: Bool { isWorkspace && focus == nil }
     /// Straight or curved for new lines; remembered on this device.
@@ -559,6 +577,11 @@ struct JournalPlayStepEditor: View {
                 }
             }
             #endif
+            // The Pencil's "previous tool" (double-tap) goes back to this.
+            .onChange(of: tool) { old, _ in
+                previousTool = old
+                paletteAt = nil
+            }
             // Auto defense: defenders follow every change to the offense.
             .onChange(of: diagram) { _, new in
                 let placed = JournalPlayMath.placingDefense(new, court: court)
@@ -804,6 +827,7 @@ struct JournalPlayStepEditor: View {
                 inspectorSection("This step") { stepFields(notesLines: 3...10) }
                 defenseSection
                 toolSection
+                if pencilSeen { pencilSection }
                 if let selection {
                     selectionSection(selection)
                 }
@@ -838,6 +862,20 @@ struct JournalPlayStepEditor: View {
             if tool.shapesLine {
                 shapePicker($lineShapeRaw)
             }
+        }
+    }
+
+    /// Shown once a Pencil has touched the court (15 Nov 2026).
+    private var pencilSection: some View {
+        inspectorSection("Apple Pencil") {
+            Toggle(isOn: $pencilDraws) { JText("Pencil draws, finger moves") }
+                .accessibilityIdentifier("plays.editor.pencilDraws")
+            JText(pencilDraws
+                  ? "The Pencil draws with the tool; a finger moves and selects, whatever the tool. Double-tap or squeeze the Pencil for the eraser, the last tool or the tools. Tap with two fingers to undo, three to redo."
+                  : "The Pencil and a finger both use the tool. Double-tap or squeeze the Pencil for the eraser, the last tool or the tools. Tap with two fingers to undo, three to redo.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -1076,9 +1114,14 @@ struct JournalPlayStepEditor: View {
         JournalPlayDiagramView(diagram: shown, court: court, showsBends: tool == .move, highlight: selection?.hit)
             .overlay {
                 GeometryReader { proxy in
-                    Color.clear
-                        .contentShape(.rect)
-                        .gesture(gesture(size: proxy.size))
+                    CourtInputLayer(
+                        onTouch: { handle($0, size: proxy.size) },
+                        onHover: { point in hoverPoint = point.map { metres($0, size: proxy.size) } },
+                        onUndo: { cancelDrag(); undo() },
+                        onRedo: { cancelDrag(); redo() },
+                        onPencil: { shortcut, at in pencilShortcut(shortcut, at: at, size: proxy.size) })
+                    .overlay(alignment: .topLeading) { hoverRing(size: proxy.size) }
+                    .overlay(alignment: .topLeading) { pencilPalette(size: proxy.size) }
                 }
             }
             .padding(JSpacing.xs)
@@ -1092,7 +1135,7 @@ struct JournalPlayStepEditor: View {
     /// The drawing with the line being drawn, already straight or curved
     /// as it will be kept, so the hand's shake never shows.
     private var shown: JournalPlayDiagram {
-        guard case .line(let player, let points)? = drag, points.count >= 2, let kind = tool.lineKind else {
+        guard case .line(let player, let points)? = drag, points.count >= 2, let kind = activeTool.lineKind else {
             return diagram
         }
         var out = diagram
@@ -1116,35 +1159,144 @@ struct JournalPlayStepEditor: View {
         return out
     }
 
-    private func gesture(size: CGSize) -> some Gesture {
+    private func metres(_ p: CGPoint, size: CGSize) -> JournalCourtPoint {
         let s = JournalPlayCourt.scale(court, width: size.width)
-        func metres(_ p: CGPoint) -> JournalCourtPoint {
-            JournalCourtPoint(p.x / s - JournalPlayCourt.margin, p.y / s - JournalPlayCourt.margin)
-        }
-        // A finger's reach: a player's circle, at least 22 pt; a pointer is
-        // precise, so the workspace only asks for the circle (at least 12 pt).
-        let radius = isWorkspace
+        return JournalCourtPoint(p.x / s - JournalPlayCourt.margin, p.y / s - JournalPlayCourt.margin)
+    }
+
+    private func viewPoint(_ m: JournalCourtPoint, size: CGSize) -> CGPoint {
+        let s = JournalPlayCourt.scale(court, width: size.width)
+        return CGPoint(x: (m.x + JournalPlayCourt.margin) * s, y: (m.y + JournalPlayCourt.margin) * s)
+    }
+
+    /// A finger's reach: a player's circle, at least 22 pt; a pointer or the
+    /// Pencil is precise, so they only ask for the circle (at least 12 pt).
+    private func hitRadius(size: CGSize, precise: Bool) -> Double {
+        let s = JournalPlayCourt.scale(court, width: size.width)
+        return (isWorkspace || precise)
             ? max(JournalPlayCourt.playerRadius * max(1, 17 / s), 12 / s)
             : max(JournalPlayCourt.playerRadius * max(1, 17 / s) * 1.3, 22 / s)
-        return DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                if drag == nil {
-                    focus = nil
-                    drag = begin(at: metres(value.startLocation), radius: radius)
+    }
+
+    /// One touch from the court's input layer (a finger, the Pencil, the
+    /// Mac's pointer): the old drag gesture's rules, with the Pencil's.
+    private func handle(_ event: CourtInputEvent, size: CGSize) {
+        let point = metres(event.location, size: size)
+        let radius = hitRadius(size: size, precise: event.isPencil)
+        switch event.phase {
+        case .began:
+            paletteAt = nil
+            if event.isPencil { pencilSeen = true }
+            // Pencil mode: the Pencil draws with the tool, a finger moves.
+            gestureTool = (pencilDraws && pencilSeen && !event.isPencil) ? .move : nil
+            focus = nil
+            dragStart = event.location
+            drag = begin(at: point, radius: radius)
+        case .moved:
+            guard drag != nil, let start = dragStart,
+                  hypot(event.location.x - start.x, event.location.y - start.y) > 4 else { return }
+            update(to: point)
+        case .ended:
+            guard drag != nil else { return }
+            let start = dragStart ?? event.location
+            let distance = hypot(event.location.x - start.x, event.location.y - start.y)
+            finish(at: point, isTap: distance <= 8, radius: radius)
+            drag = nil
+            gestureTool = nil
+            dragStart = nil
+        case .cancelled:
+            cancelDrag()
+        }
+    }
+
+    /// Drops the touch in progress as if it never happened (a second finger
+    /// came down, the Pencil took over).
+    private func cancelDrag() {
+        switch drag {
+        case .player, .defender, .cone, .actionEnd, .bend:
+            if let previous = undoStack.popLast() { diagram = previous }
+        default:
+            break
+        }
+        drag = nil
+        gestureTool = nil
+        dragStart = nil
+    }
+
+    private func pencilShortcut(_ shortcut: PencilShortcut, at: CGPoint?, size: CGSize) {
+        pencilSeen = true
+        switch shortcut {
+        case .eraser:
+            if tool == .erase { tool = previousTool == .erase ? .move : previousTool } else { tool = .erase }
+        case .previousTool:
+            let back = previousTool
+            tool = back
+        case .palette:
+            paletteAt = at ?? CGPoint(x: size.width / 2, y: size.height / 2)
+        }
+    }
+
+    /// A ring on what a Pencil stroke (or the pointer) would use: the
+    /// player a line starts from, or what Move picks up.
+    @ViewBuilder
+    private func hoverRing(size: CGSize) -> some View {
+        if drag == nil, let hover = hoverPoint, let target = hoverTarget(hover, size: size) {
+            let s = JournalPlayCourt.scale(court, width: size.width)
+            let d = JournalPlayCourt.playerRadius * s * 2 + 10
+            Circle()
+                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: tool.lineKind != nil ? [4, 3] : []))
+                .frame(width: d, height: d)
+                .position(viewPoint(target, size: size))
+                .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.12), value: target.x + target.y)
+        }
+    }
+
+    private func hoverTarget(_ point: JournalCourtPoint, size: CGSize) -> JournalCourtPoint? {
+        let radius = hitRadius(size: size, precise: true)
+        if tool.lineKind != nil {
+            return JournalPlayMath.lineStart(at: point, in: diagram, radius: radius)?.from
+        }
+        guard tool == .move || tool == .erase || tool == .ball || tool == .defender else { return nil }
+        switch JournalPlayMath.hit(point, in: diagram, radius: radius) {
+        case .player(let n)?: return diagram.player(n)?.at
+        case .defender(let i)?: return diagram.defense.indices.contains(i) ? diagram.defense[i].at : nil
+        case .cone(let i)?: return diagram.cones.indices.contains(i) ? diagram.cones[i] : nil
+        default: return nil
+        }
+    }
+
+    /// The tools at the Pencil tip (squeeze / the system's palette action).
+    @ViewBuilder
+    private func pencilPalette(size: CGSize) -> some View {
+        if let at = paletteAt {
+            let items = Tool.available(drill: isDrill)
+            let width = CGFloat(items.count) * 40 + 16
+            HStack(spacing: 0) {
+                ForEach(items) { item in
+                    Button {
+                        tool = item
+                        paletteAt = nil
+                    } label: {
+                        icon(item)
+                            .frame(width: 24, height: 22)
+                            .frame(width: 40, height: 40)
+                            .background(tool == item ? JPalette.fill : .clear, in: .rect(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(JText(item.label))
                 }
-                let distance = hypot(value.translation.width, value.translation.height)
-                guard distance > 4 else { return }
-                update(to: metres(value.location))
             }
-            .onEnded { value in
-                let distance = hypot(value.translation.width, value.translation.height)
-                finish(at: metres(value.location), isTap: distance <= 8, radius: radius)
-                drag = nil
-            }
+            .padding(8)
+            .glassEffect(.regular, in: .capsule)
+            .position(x: min(max(at.x, width / 2 + 4), size.width - width / 2 - 4),
+                      y: max(at.y - 56, 28))
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+        }
     }
 
     private func begin(at point: JournalCourtPoint, radius: Double) -> Drag {
-        if tool == .move {
+        if activeTool == .move {
             let hit = JournalPlayMath.hit(point, in: diagram, radius: radius)
             if isWorkspace {
                 // Whatever is picked up is selected, for the inspector and keys.
@@ -1165,7 +1317,7 @@ struct JournalPlayStepEditor: View {
             default: return .tap
             }
         }
-        if tool.lineKind != nil, let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius) {
+        if activeTool.lineKind != nil, let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius) {
             return .line(player: start.player, points: [start.from])
         }
         return .tap
@@ -1196,7 +1348,7 @@ struct JournalPlayStepEditor: View {
     private func finish(at point: JournalCourtPoint, isTap: Bool, radius: Double) {
         switch drag {
         case .line(let player, let points):
-            if let kind = tool.lineKind,
+            if let kind = activeTool.lineKind,
                let added = JournalPlayMath.adding(kind, by: player, along: points + [point], to: diagram, radius: radius,
                                                   shape: lineShape, court: court) {
                 pushUndo()
@@ -1223,7 +1375,7 @@ struct JournalPlayStepEditor: View {
 
     private func tap(at point: JournalCourtPoint, radius: Double) {
         let hit = JournalPlayMath.hit(point, in: diagram, radius: radius)
-        switch tool {
+        switch activeTool {
         case .move:
             guard !isWorkspace, case .action(let i)? = hit, diagram.actions[i].kind.movesPlayer else { return }
             pushUndo()
