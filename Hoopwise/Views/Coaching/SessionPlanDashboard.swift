@@ -37,15 +37,22 @@ struct SessionPlanDashboard: View {
             .foregroundStyle(.secondary)
             .accessibilityIdentifier("plan.dashboard")
 
-            OctagonCardLayout {
-                AttributeOctagon(values: plan, target: target, flagged: Set(neglected))
-                    .frame(width: 180, height: 180)
-            } details: {
-                VStack(alignment: .leading, spacing: 10) {
-                    if empty {
-                        Text(isChinese ? "添加训练后，这里会显示计划练了哪些能力。" : "Add drills and this shows what the plan trains.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    } else {
+            if empty {
+                // Nothing planned yet: a small chart, centred, the line under it.
+                VStack(spacing: 8) {
+                    AttributeOctagon(values: [:], target: target, flagged: Set(neglected))
+                        .frame(width: 240, height: 150)
+                    Text(isChinese ? "添加训练后，这里会显示计划练了哪些能力。" : "Add drills and this shows what the plan trains.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                OctagonCardLayout {
+                    AttributeOctagon(values: plan, target: target, flagged: Set(neglected))
+                        .frame(width: 240, height: 190)
+                } details: {
+                    VStack(alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(isChinese ? "侧重" : "Leans on").font(.caption).foregroundStyle(.secondary)
                             ForEach(Array(leans), id: \.self) { axis in
@@ -57,32 +64,32 @@ struct SessionPlanDashboard: View {
                                 }
                             }
                         }
-                    }
-                    if !neglected.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(isChinese ? "被忽略" : "Neglected").font(.caption).foregroundStyle(.orange)
-                            ForEach(neglected, id: \.self) { axis in
-                                HStack(spacing: 6) {
-                                    Image(systemName: axis.icon).font(.caption).foregroundStyle(.orange).frame(width: 18)
-                                    Text(axis.title).font(.subheadline.weight(.medium))
-                                    Spacer(minLength: 4)
-                                    if canEdit {
-                                        Button(isChinese ? "找训练" : "Find drills") { onFind(axis) }
-                                            .font(.caption.weight(.semibold))
-                                            .buttonStyle(.bordered)
-                                            .controlSize(.mini)
-                                            .accessibilityIdentifier("plan.find.\(axis.rawValue)")
+                        if !neglected.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(isChinese ? "被忽略" : "Neglected").font(.caption).foregroundStyle(.orange)
+                                ForEach(neglected, id: \.self) { axis in
+                                    HStack(spacing: 6) {
+                                        Image(systemName: axis.icon).font(.caption).foregroundStyle(.orange).frame(width: 18)
+                                        Text(axis.title).font(.subheadline.weight(.medium))
+                                        Spacer(minLength: 4)
+                                        if canEdit {
+                                            Button(isChinese ? "找训练" : "Find drills") { onFind(axis) }
+                                                .font(.caption.weight(.semibold))
+                                                .buttonStyle(.bordered)
+                                                .controlSize(.mini)
+                                                .accessibilityIdentifier("plan.find.\(axis.rawValue)")
+                                        }
                                     }
                                 }
                             }
+                        } else if target != nil {
+                            Label(isChinese ? "覆盖了本阶段的重点" : "Covers what this stage asks for", systemImage: "checkmark.circle.fill")
+                                .font(.footnote.weight(.medium)).foregroundStyle(.green)
                         }
-                    } else if target != nil && !empty {
-                        Label(isChinese ? "覆盖了本阶段的重点" : "Covers what this stage asks for", systemImage: "checkmark.circle.fill")
-                            .font(.footnote.weight(.medium)).foregroundStyle(.green)
                     }
                 }
-            }
 
+            }
             if target != nil {
                 HStack(spacing: 14) {
                     legend(dashed: false, text: isChinese ? "计划" : "Plan")
@@ -186,7 +193,7 @@ struct PhaseCoverageCard: View {
             }
             OctagonCardLayout {
                 AttributeOctagon(values: PlanCoverage.normalized(minutes), target: target, flagged: Set(neglected))
-                    .frame(width: 170, height: 170)
+                    .frame(width: 230, height: 170)
             } details: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(isChinese ? "\(planned.count) / \(sessions.count) 节课已有计划" : "\(planned.count) of \(sessions.count) sessions planned")

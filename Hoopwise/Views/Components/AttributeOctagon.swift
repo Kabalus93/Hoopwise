@@ -25,9 +25,12 @@ struct AttributeOctagon: View {
 
     var body: some View {
         GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height)
-            let inset: CGFloat = showLabels ? max(28, size * 0.15) : 4
-            let radius = size / 2 - inset
+            // Corner labels sit OUTSIDE the corners, and the side ones are
+            // wide ("Defend", "Shoot"): leave room for them inside the frame —
+            // they used to spill past it and clip at a card's edge.
+            let hInset: CGFloat = showLabels ? 48 : 4
+            let vInset: CGFloat = showLabels ? 22 : 4
+            let radius = max(10, min(geo.size.width / 2 - hInset, geo.size.height / 2 - vInset))
             let centre = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
             ZStack {
                 grid(centre: centre, radius: radius)
@@ -67,7 +70,8 @@ struct AttributeOctagon: View {
                 }
             }
         }
-        .aspectRatio(1, contentMode: .fit)
+        // Square without labels; with them the caller's frame is the room.
+        .modifier(SquareUnlessLabelled(labelled: showLabels))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(DrillAttribute.allCases
             .map { "\($0.title) \(Int(((values[$0] ?? 0) * 3).rounded()))" }.joined(separator: ", "))
@@ -178,7 +182,7 @@ struct DrillAttributesCard: View {
             }
             OctagonCardLayout {
                 AttributeOctagon(values: profile.normalized)
-                    .frame(width: 190, height: 190)
+                    .frame(width: 250, height: 190)
             } details: {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(profile.main, id: \.self) { axis in
@@ -270,6 +274,13 @@ struct AttributeEditorSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct SquareUnlessLabelled: ViewModifier {
+    let labelled: Bool
+    func body(content: Content) -> some View {
+        if labelled { content } else { content.aspectRatio(1, contentMode: .fit) }
     }
 }
 

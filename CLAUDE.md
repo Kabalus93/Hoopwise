@@ -1598,6 +1598,12 @@ Claude's ratings without review, target = BOTH phase focus and program goals.
 - LAYOUT: every octagon card goes through `OctagonCardLayout` — words
   beside the chart from 520 pt wide, UNDER it when narrower (on a phone the
   side column broke words mid-word: "De-fense", Luther 12 Nov 2026).
+  LABEL ROOM (14 Nov 2026, Luther: "Defend" clipped at the card edge): a
+  labelled octagon leaves 48 pt each side and 22 pt top/bottom INSIDE its
+  frame for the corner labels, and is no longer forced square — frames are
+  wider than tall (plan 240×190, drill 250×190, phase 230×170). An EMPTY plan
+  shows a small centred chart (240×150) with its line under it, not the
+  side-by-side layout.
 - DEBUG: HOOPWISE_SHOT=planDashboard (a generated plan in memory, Plan tab;
   + HOOPWISE_PLAN_TARGET=1 shows the dashboard alone against Defense +
   Passing). Tests: DrillAttributesTests (all 422 rated, tags, guesses,
