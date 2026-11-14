@@ -1351,6 +1351,26 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   player of the game's row tinted with a crown on the photo). The random tip
   line and the CTR column are deleted. ≤ 720 pt wide. HOOPWISE_SHOT=gameRecap
   (a scratch Black v White game with a basket log).
+- SESSION NOTES TAB REDONE (14 November 2026, Luther: "the weakest point of
+  the session. have lines like a notebook. change the reflection tab for
+  reminders. redo this notes section to be more aligned with the app", all
+  platforms — his request). Notes | Reminders (the Reflection tab is gone).
+  NOTES: the session's notes in a ruled card (Views/Components/
+  RuledNotebookEditor.swift — rules at the body line height + 8 pt spacing
+  from the text view's 8 pt inset, a programme-colour margin line; the
+  editor GROWS with its text, scrollDisabled, so the rules never drift); an
+  older coach reflection (coachNotes) keeps its own ruled card only while it
+  has text — nothing new is written there; previous class's notes as a
+  card; then HOW DID IT GO (stars, a word for the rating, tap the same star
+  to clear) and PLAYER OF THE SESSION (was "Man of the Match" — same stored
+  manOfTheMatchId) as cards, side by side in regular width. REMINDERS:
+  `dataManager.reminders` with this sessionId — one-line quick add (Return
+  saves; due "Before next class · <day>" = the program's next class after
+  now − 1 h, else tomorrow 09:00; Tomorrow / In a week), the slider button
+  opens the full AddReminderSheet, rows (circle toggles done, due in its
+  status colour, tagged athletes), tap = edit, context menu Delete, a
+  folded DONE list. Due reminders still surface in Home's attention
+  (rule 5). The old SessionReminderSection component stays unused.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

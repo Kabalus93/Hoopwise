@@ -86,6 +86,15 @@ struct FlightySessionPageView: View {
     @State private var inlineDrillTextBySection: [CurriculumSection: String] = [:]
     @State private var notesEditorTarget: NotesEditorTarget = .session
     @FocusState private var focusedNotesEditor: NotesEditorTarget?
+    /// Notes tab: the notebook or this session's reminders (14 Nov 2026 —
+    /// Reminders replaced the Reflection tab).
+    @State private var notesPane: NotesPane = .notes
+    @State private var quickReminderText = ""
+    @State private var quickReminderDue: QuickReminderDue = .beforeNextClass
+    @State private var editingSessionReminder: Reminder?
+    @State private var showingNewSessionReminder = false
+    @State private var showDoneReminders = false
+    @FocusState private var quickReminderFocused: Bool
     
     // Plan tab drill management
     @State private var expandedDrillId: UUID?
@@ -2928,6 +2937,12 @@ struct FlightySessionPageView: View {
         case reflections
     }
 
+    private enum NotesPane: Hashable { case notes, reminders }
+
+    private enum QuickReminderDue: Hashable, CaseIterable {
+        case beforeNextClass, tomorrow, nextWeek
+    }
+
     private enum NotesViewMode: Hashable {
         case all
         case sticky
@@ -2969,34 +2984,330 @@ struct FlightySessionPageView: View {
         return Array(filteredNoteCards.prefix(6))
     }
     
+    // THE NOTES TAB (14 November 2026, Luther: "the weakest point of the
+    // session … have lines like a notebook. change the reflection tab for
+    // reminders. redo this notes section to be more aligned with the app").
+    // Notes = a ruled notebook card (the session's notes; an older coach
+    // reflection keeps its own card when it has text), the previous class's
+    // notes, then the rating and player of the session as cards. Reminders =
+    // this session's follow-ups, added in one line ("before next class" by
+    // default), due ones surface in Home's attention as before.
     private var notesTab: some View {
         ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                notesTypeToggle
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        notesFullBleedEditor
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 14) {
+                    notesTypeToggle
+                    if notesPane == .notes {
+                        notebookCard(title: isChinese ? "课程笔记" : "SESSION NOTES",
+                                     icon: "note.text",
+                                     text: activeSessionNotesBinding,
+                                     target: .session,
+                                     placeholder: isChinese ? "笔记、观察、提示..." : "Notes, observations, cues...")
+                        if !(session.coachNotes ?? "").isEmpty {
+                            notebookCard(title: isChinese ? "教练复盘" : "REFLECTION",
+                                         icon: "text.quote",
+                                         text: Binding(get: { session.coachNotes ?? "" },
+                                                       set: { session.coachNotes = $0.isEmpty ? nil : $0 }),
+                                         target: .reflections,
+                                         placeholder: "")
+                        }
                         previousNotesIndentSection
-                        if session.status == .completed { ratingSection.padding(.horizontal, 20).padding(.top, 20) }
-                        if session.status == .completed || session.status == .inProgress { manOfTheMatchSection.padding(.horizontal, 20).padding(.top, 16) }
-                        Spacer(minLength: 120)
+                        afterClassCards
+                    } else {
+                        sessionRemindersPane
                     }
+                    Spacer(minLength: 120)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
-            .background(Color(.systemBackground))
+            .background(Color(.systemGroupedBackground))
 
             if showMentionPicker { notesMentionPickerOverlay }
             if showTagPicker { notesTagPickerOverlay }
-            if showFloatingActionBar { notesFloatingActionBar }
+            if showFloatingActionBar && notesPane == .notes { notesFloatingActionBar }
         }
         .gesture(DragGesture(minimumDistance: 30).onEnded { v in if v.translation.height < -40 { showFloatingBar() } })
+        .onChange(of: focusedNotesEditor) { _, target in
+            if let target { notesEditorTarget = target }
+        }
+        .sheet(isPresented: $showingNewSessionReminder) {
+            AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: nil)
+        }
+        .sheet(item: $editingSessionReminder) { reminder in
+            AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: reminder)
+        }
         .onDisappear { saveSession() }
     }
-    
+
+    private var activeSessionNotesBinding: Binding<String> {
+        Binding(get: { session.notes ?? "" }, set: { session.notes = $0.isEmpty ? nil : $0 })
+    }
+
+    // MARK: Notebook
+
+    private func notebookCard(title: String, icon: String, text: Binding<String>,
+                              target: NotesEditorTarget, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label {
+                    Text(title).font(.caption2.weight(.bold)).monospaced()
+                } icon: {
+                    Image(systemName: icon).font(.caption).foregroundStyle(programColor)
+                }
+                .foregroundStyle(.secondary)
+                Spacer()
+                Text(session.startTime.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 14)
+
+            RuledNotebookEditor(text: text, placeholder: placeholder, marginColor: programColor)
+                .focused($focusedNotesEditor, equals: target)
+                .disabled(!accessMode.canAddNotes)
+                .onChange(of: text.wrappedValue) { _, newValue in
+                    checkForMentionTrigger(in: newValue)
+                }
+                .padding(.bottom, 10)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityIdentifier(target == .session ? "notes.notebook" : "notes.reflection")
+    }
+
+    // MARK: Rating + player of the session
+
+    @ViewBuilder
+    private var afterClassCards: some View {
+        let showRating = session.status == .completed
+        let showPlayer = session.status == .completed || session.status == .inProgress
+        if showRating || showPlayer {
+            if pageSizeClass == .regular {
+                HStack(alignment: .top, spacing: 14) {
+                    if showRating { ratingSection }
+                    if showPlayer { manOfTheMatchSection }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                if showRating { ratingSection }
+                if showPlayer { manOfTheMatchSection }
+            }
+        }
+    }
+
+    // MARK: Reminders
+
+    /// The program's next class after this one — and after now, so a
+    /// reminder written on an old session is not born overdue.
+    private var nextClassAfterSession: SessionEvent? {
+        guard let programId = session.programId else { return nil }
+        let after = max(session.endTime, Date().addingTimeInterval(3600))
+        return dataManager.cachedSessionEvents
+            .filter { $0.programId == programId && $0.startTime > after && !SessionLifecycle.didNotHappen($0) }
+            .min { $0.startTime < $1.startTime }
+    }
+
+    private func dueDate(for choice: QuickReminderDue) -> Date {
+        let cal = Calendar.current
+        let tomorrowMorning = cal.date(bySettingHour: 9, minute: 0, second: 0,
+                                       of: cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()) ?? Date()
+        switch choice {
+        case .beforeNextClass:
+            return nextClassAfterSession.map { $0.startTime.addingTimeInterval(-3600) } ?? tomorrowMorning
+        case .tomorrow:
+            return tomorrowMorning
+        case .nextWeek:
+            return cal.date(byAdding: .day, value: 6, to: tomorrowMorning) ?? tomorrowMorning
+        }
+    }
+
+    private func dueLabel(for choice: QuickReminderDue) -> String {
+        switch choice {
+        case .beforeNextClass:
+            if let next = nextClassAfterSession {
+                let day = next.startTime.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                return isChinese ? "下节课前 · \(day)" : "Before next class · \(day)"
+            }
+            return isChinese ? "明天" : "Tomorrow"
+        case .tomorrow: return isChinese ? "明天" : "Tomorrow"
+        case .nextWeek: return isChinese ? "一周后" : "In a week"
+        }
+    }
+
+    private func addQuickReminder() {
+        let title = quickReminderText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        dataManager.addReminder(Reminder(title: title, dueDate: dueDate(for: quickReminderDue),
+                                         sessionId: session.id, programId: session.programId))
+        quickReminderText = ""
+        quickReminderFocused = true
+    }
+
+    private var sessionRemindersPane: some View {
+        let all = dataManager.reminders.filter { $0.sessionId == session.id }
+        let open = all.filter { !$0.isCompleted }.sorted { $0.dueDate < $1.dueDate }
+        let done = all.filter(\.isCompleted).sorted { ($0.completedAt ?? $0.updatedAt) > ($1.completedAt ?? $1.updatedAt) }
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label {
+                        Text(isChinese ? "这节课的提醒" : "REMINDERS FROM THIS SESSION").font(.caption2.weight(.bold)).monospaced()
+                    } icon: {
+                        Image(systemName: "bell").font(.caption).foregroundStyle(.orange)
+                    }
+                    .foregroundStyle(.secondary)
+                    Spacer()
+                    if !open.isEmpty {
+                        Text("\(open.count)").font(.caption.weight(.bold).monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+
+                if accessMode.canAddNotes {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.orange)
+                            TextField(isChinese ? "添加提醒，按回车保存" : "Add a reminder — Return saves", text: $quickReminderText)
+                                .focused($quickReminderFocused)
+                                .submitLabel(.done)
+                                .onSubmit(addQuickReminder)
+                                .accessibilityIdentifier("reminders.quickAdd")
+                            Button {
+                                showingNewSessionReminder = true
+                            } label: {
+                                Image(systemName: "slider.horizontal.3").font(.subheadline)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .help(isChinese ? "更多选项" : "More options")
+                        }
+                        Menu {
+                            ForEach(QuickReminderDue.allCases, id: \.self) { choice in
+                                Button(dueLabel(for: choice)) { quickReminderDue = choice }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "calendar")
+                                Text(dueLabel(for: quickReminderDue))
+                                Image(systemName: "chevron.down").font(.caption2)
+                            }
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.primary.opacity(0.06), in: Capsule())
+                        }
+                        .padding(.leading, 34)
+                    }
+                    .padding(12)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                if open.isEmpty {
+                    Text(isChinese ? "课后要跟进的事写在这里。到期时会出现在首页的待办里。"
+                                   : "Things to follow up after this class. When one is due it shows in Home's attention.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(open) { reminder in
+                            sessionReminderRow(reminder)
+                            if reminder.id != open.last?.id { Divider().padding(.leading, 36) }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            if !done.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { showDoneReminders.toggle() }
+                    } label: {
+                        HStack {
+                            Label {
+                                Text(isChinese ? "已完成 · \(done.count)" : "DONE · \(done.count)").font(.caption2.weight(.bold)).monospaced()
+                            } icon: {
+                                Image(systemName: "checkmark.circle").font(.caption)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption2.weight(.semibold))
+                                .rotationEffect(.degrees(showDoneReminders ? 180 : 0))
+                        }
+                        .foregroundStyle(.secondary)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if showDoneReminders {
+                        ForEach(done) { sessionReminderRow($0) }
+                    }
+                }
+                .padding(16)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+        }
+        .accessibilityIdentifier("notes.reminders")
+    }
+
+    private func sessionReminderRow(_ reminder: Reminder) -> some View {
+        let tagged = dataManager.students.filter { reminder.taggedStudentIds.contains($0.id) }
+        return HStack(alignment: .top, spacing: 12) {
+            Button {
+                dataManager.toggleReminderCompletion(reminder)
+            } label: {
+                Image(systemName: reminder.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(reminder.isCompleted ? Color.green : reminder.statusColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(!accessMode.canAddNotes)
+            .sensoryFeedback(.success, trigger: reminder.isCompleted)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(reminder.title)
+                    .font(.body)
+                    .strikethrough(reminder.isCompleted)
+                    .foregroundStyle(reminder.isCompleted ? .secondary : .primary)
+                if let note = reminder.note, !note.isEmpty {
+                    Text(note).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                }
+                HStack(spacing: 8) {
+                    Label(reminder.relativeTimeString, systemImage: "calendar")
+                        .foregroundStyle(reminder.isCompleted ? Color.secondary : reminder.statusColor)
+                    if !tagged.isEmpty {
+                        HStack(spacing: -6) {
+                            ForEach(tagged.prefix(4)) { StudentAvatarView(student: $0, size: 18) }
+                        }
+                        Text(tagged.prefix(2).map(\.primaryDisplayName).joined(separator: ", "))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .font(.caption)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { if accessMode.canAddNotes { editingSessionReminder = reminder } }
+        .contextMenu {
+            Button { editingSessionReminder = reminder } label: { Label(isChinese ? "编辑" : "Edit", systemImage: "pencil") }
+            Button(role: .destructive) { dataManager.deleteReminder(reminder) } label: {
+                Label(isChinese ? "删除" : "Delete", systemImage: "trash")
+            }
+        }
+        .accessibilityIdentifier("reminders.row")
+    }
+
     /// Get the previous session in the same program (for notes carryover)
     private var previousSessionInProgram: SessionEvent? {
         guard let programId = session.programId else { return nil }
@@ -3015,43 +3326,15 @@ struct FlightySessionPageView: View {
     // MARK: - iOS Notes Style Components
     
     private var notesTypeToggle: some View {
-        Picker("Notes Target", selection: $notesEditorTarget) {
-            Text(isChinese ? "课程" : "Session").tag(NotesEditorTarget.session)
-            Text(isChinese ? "复盘" : "Reflection").tag(NotesEditorTarget.reflections)
+        Picker("Notes", selection: $notesPane) {
+            Text(isChinese ? "笔记" : "Notes").tag(NotesPane.notes)
+            Text(isChinese ? "提醒" : "Reminders").tag(NotesPane.reminders)
         }
         .pickerStyle(.segmented)
-        .sensoryFeedback(.selection, trigger: notesEditorTarget)
-        .onChange(of: notesEditorTarget) { _, newValue in
-            focusedNotesEditor = newValue
-        }
+        .sensoryFeedback(.selection, trigger: notesPane)
+        .accessibilityIdentifier("notes.pane")
     }
-    
-    private var notesFullBleedEditor: some View {
-        ZStack(alignment: .topLeading) {
-            TextEditor(text: activeNotesBinding)
-                .focused($focusedNotesEditor, equals: notesEditorTarget)
-                .font(.body)
-                .lineSpacing(6)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 300)
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .disabled(!accessMode.canAddNotes)
-                .onChange(of: activeNotesBinding.wrappedValue) { _, newValue in
-                    checkForMentionTrigger(in: newValue)
-                }
 
-            if activeNotesBinding.wrappedValue.isEmpty {
-                Text(isChinese ? "笔记、观察、提示..." : "Notes, observations, cues...")
-                    .font(.body)
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 25)
-                    .padding(.top, 16)
-                    .allowsHitTesting(false)
-            }
-        }
-    }
-    
     private var previousNotesIndentSection: some View {
         Group {
             if let prev = previousSessionInProgram, (prev.notes != nil || prev.coachNotes != nil) {
@@ -3081,8 +3364,8 @@ struct FlightySessionPageView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
                     .sensoryFeedback(.impact(weight: .light), trigger: showPreviousNotes)
 
                     if showPreviousNotes {
@@ -3100,10 +3383,11 @@ struct FlightySessionPageView: View {
                             .padding(.vertical, 8)
                             Spacer()
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 14)
                     }
                 }
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
     }
@@ -3865,89 +4149,91 @@ struct FlightySessionPageView: View {
             }
     }
     
-    private var ratingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func afterClassCard<Content: View>(_ title: String, icon: String, tint: Color,
+                                               @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             Label {
-                Text(isChinese ? "课程评分" : "SESSION RATING")
-                    .font(.caption2.weight(.bold))
-                    .monospaced()
+                Text(title).font(.caption2.weight(.bold)).monospaced()
             } icon: {
-                Image(systemName: "star")
-                    .font(.caption)
+                Image(systemName: icon).font(.caption).foregroundStyle(tint)
             }
             .foregroundStyle(.secondary)
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
 
-            HStack(spacing: 8) {
+    private var ratingSection: some View {
+        afterClassCard(isChinese ? "课程评分" : "HOW DID IT GO", icon: "star.fill", tint: .yellow) {
+            HStack(spacing: 10) {
                 ForEach(1...5, id: \.self) { star in
                     Button {
-                        session.rating = star
+                        session.rating = session.rating == star ? nil : star
                         saveSession()
                     } label: {
                         Image(systemName: star <= (session.rating ?? 0) ? "star.fill" : "star")
-                            .font(.title)
-                            .foregroundStyle(Color.accentColor)
+                            .font(.title2)
+                            .foregroundStyle(star <= (session.rating ?? 0) ? Color.yellow : Color.secondary.opacity(0.5))
                             .symbolEffect(.bounce, value: session.rating)
+                            .frame(width: 36, height: 36)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .disabled(!accessMode.canAddNotes)
                     .sensoryFeedback(.impact(weight: .light), trigger: session.rating)
                 }
-                Spacer()
+                Spacer(minLength: 0)
+                if let r = session.rating {
+                    Text(ratingWord(r))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(16)
-            .glassEffect(.regular, in: .rect(cornerRadius: 14))
         }
+        .accessibilityIdentifier("notes.rating")
+    }
+
+    private func ratingWord(_ r: Int) -> String {
+        let en = ["Rough", "So-so", "Solid", "Good", "Great"], zh = ["较差", "一般", "不错", "很好", "非常好"]
+        let i = max(1, min(5, r)) - 1
+        return isChinese ? zh[i] : en[i]
     }
 
     private var manOfTheMatchSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label {
-                Text(isChinese ? "最佳球员" : "MAN OF THE MATCH")
-                    .font(.caption2.weight(.bold))
-                    .monospaced()
-            } icon: {
-                Image(systemName: "trophy")
-                    .font(.caption)
-            }
-            .foregroundStyle(.secondary)
-
+        afterClassCard(isChinese ? "本课最佳" : "PLAYER OF THE SESSION", icon: "crown.fill", tint: .orange) {
             if let momId = session.manOfTheMatchId,
                let student = dataManager.students.first(where: { $0.id == momId }) {
                 HStack(spacing: 12) {
-                    Image(systemName: "star.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color.accentColor)
-                        .symbolEffect(.bounce, value: momId)
-
-                    StudentAvatarView(student: student, size: 40)
-
-                    Text(student.primaryDisplayName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-
-                    if accessMode.canAddNotes {
-                        Button(isChinese ? "更换" : "Change") {
-                            showingStudentPicker = true
+                    StudentAvatarView(student: student, size: 44)
+                        .overlay(Circle().strokeBorder(Color.orange, lineWidth: 2).padding(-3))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(student.primaryDisplayName)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if let second = student.secondaryNameLine {
+                            Text(second).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.capsule)
-                        .controlSize(.small)
-                        .tint(Color.accentColor)
+                    }
+                    Spacer(minLength: 4)
+                    if accessMode.canAddNotes {
+                        Button(isChinese ? "更换" : "Change") { showingStudentPicker = true }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.small)
                     }
                 }
-                .padding(16)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
             } else {
                 Button {
                     showingStudentPicker = true
                 } label: {
-                    HStack {
-                        Image(systemName: "star")
-                            .foregroundStyle(.tertiary)
-                        Text(isChinese ? "选择最佳球员" : "Select Man of the Match")
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, height: 44)
+                        Text(isChinese ? "选择本课最佳球员" : "Choose who stood out")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -3955,15 +4241,14 @@ struct FlightySessionPageView: View {
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
-                    .padding(16)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
                 .disabled(!accessMode.canAddNotes)
                 .sensoryFeedback(.selection, trigger: showingStudentPicker)
             }
         }
+        .accessibilityIdentifier("notes.player")
     }
     
     // MARK: - Actions
