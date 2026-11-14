@@ -1354,7 +1354,8 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
 - SESSION NOTES TAB REDONE (14 November 2026, Luther: "the weakest point of
   the session. have lines like a notebook. change the reflection tab for
   reminders. redo this notes section to be more aligned with the app", all
-  platforms — his request). Notes | Reminders (the Reflection tab is gone).
+  platforms — his request). Reminders | Notes — Reminders first and the
+  default (Luther, same day); the Reflection tab is gone.
   NOTES: the session's notes in a ruled card (Views/Components/
   RuledNotebookEditor.swift — rules at the body line height + 8 pt spacing
   from the text view's 8 pt inset, a programme-colour margin line; the

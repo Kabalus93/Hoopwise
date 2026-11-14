@@ -86,9 +86,9 @@ struct FlightySessionPageView: View {
     @State private var inlineDrillTextBySection: [CurriculumSection: String] = [:]
     @State private var notesEditorTarget: NotesEditorTarget = .session
     @FocusState private var focusedNotesEditor: NotesEditorTarget?
-    /// Notes tab: the notebook or this session's reminders (14 Nov 2026 —
-    /// Reminders replaced the Reflection tab).
-    @State private var notesPane: NotesPane = .notes
+    /// Notes tab: this session's reminders (the default, on the left) or
+    /// the notebook (14 Nov 2026 — Reminders replaced the Reflection tab).
+    @State private var notesPane: NotesPane = .reminders
     @State private var quickReminderText = ""
     @State private var quickReminderDue: QuickReminderDue = .beforeNextClass
     @State private var editingSessionReminder: Reminder?
@@ -3456,8 +3456,8 @@ struct FlightySessionPageView: View {
     
     private var notesTypeToggle: some View {
         Picker("Notes", selection: $notesPane) {
-            Text(isChinese ? "笔记" : "Notes").tag(NotesPane.notes)
             Text(isChinese ? "提醒" : "Reminders").tag(NotesPane.reminders)
+            Text(isChinese ? "笔记" : "Notes").tag(NotesPane.notes)
         }
         .pickerStyle(.segmented)
         .sensoryFeedback(.selection, trigger: notesPane)
