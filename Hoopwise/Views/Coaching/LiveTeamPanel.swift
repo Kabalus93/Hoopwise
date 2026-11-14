@@ -22,6 +22,9 @@ struct GameStatAction: Equatable {
     let kind: Kind
     /// The passer credited with an assist on a basket.
     var assistId: UUID? = nil
+    /// The basket's entry in the game's log (points only), so Undo removes
+    /// exactly the one it added.
+    var basketId = UUID()
 
     private var stat: StatType {
         switch kind {
@@ -35,11 +38,16 @@ struct GameStatAction: Equatable {
     func apply(to game: inout SessionGame) {
         game.addStat(stat, for: playerId, teamId: teamId)
         if let assistId { game.addStat(.assist, for: assistId, teamId: teamId) }
+        if case .points(let n) = kind {
+            game.baskets.append(GameBasket(id: basketId, scorerId: playerId, assisterId: assistId,
+                                           points: n, teamId: teamId))
+        }
     }
 
     func undo(on game: inout SessionGame) {
         game.removeStat(stat, for: playerId, teamId: teamId)
         if let assistId { game.removeStat(.assist, for: assistId, teamId: teamId) }
+        game.baskets.removeAll { $0.id == basketId }
     }
 }
 

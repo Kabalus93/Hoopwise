@@ -31,6 +31,7 @@ struct FlightySessionPageView: View {
     }
     /// Measured roster row heights; sizes the non-scrolling attendance List.
     @State private var rosterRowHeights: [UUID: CGFloat] = [:]
+    @Environment(\.horizontalSizeClass) private var pageSizeClass
     @Environment(\.displayScale) private var displayScale
     @State private var showingEditSheet = false
     @State private var showingDeleteConfirmation = false
@@ -800,7 +801,59 @@ struct FlightySessionPageView: View {
     }
 
     // MARK: - Tab Selector (native segmented)
+    @ViewBuilder
     private var tabSelector: some View {
+        #if targetEnvironment(macCatalyst)
+        macTabSelector
+        #else
+        systemTabSelector
+        #endif
+    }
+
+    #if targetEnvironment(macCatalyst)
+    @Namespace private var macTabPill
+
+    /// The Mac's tab bar (14 Nov 2026, Luther: "increase the height … mac
+    /// only"): a segmented control cannot be made taller on Catalyst, so the
+    /// same look is drawn — a capsule track, the selected tab a sliding pill —
+    /// at 44 pt with larger labels.
+    private var macTabSelector: some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        let tabs = [isChinese ? "计划" : "Plan", isChinese ? "出勤" : "Attend",
+                    isChinese ? "比赛" : "Games", isChinese ? "笔记" : "Notes"]
+        return HStack(spacing: 4) {
+            ForEach(Array(tabs.enumerated()), id: \.offset) { i, title in
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { selectedTab = i }
+                } label: {
+                    Text(title)
+                        .font(.body.weight(selectedTab == i ? .semibold : .medium))
+                        .foregroundStyle(selectedTab == i ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background {
+                            if selectedTab == i {
+                                Capsule()
+                                    .fill(Color(.tertiarySystemFill))
+                                    .overlay(Capsule().fill(.white.opacity(0.06)))
+                                    .matchedGeometryEffect(id: "pill", in: macTabPill)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selectedTab == i ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .frame(height: 44)
+        .background(Capsule().fill(Color(.secondarySystemFill)))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .sensoryFeedback(.selection, trigger: selectedTab)
+    }
+    #endif
+
+    private var systemTabSelector: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return Picker("Tab", selection: $selectedTab) {
             Text(isChinese ? "计划" : "Plan").tag(0)
@@ -1849,7 +1902,97 @@ struct FlightySessionPageView: View {
     /// stays in the page's ScrollView, where its glass and chips render as
     /// designed. Rows report their height so the List is exactly as tall as
     /// the stack it replaced.
+    @ViewBuilder
     private var attendanceRoster: some View {
+        if pageSizeClass == .regular {
+            attendanceGrid
+        } else {
+            attendanceList
+                .background(Color(.secondarySystemGroupedBackground))
+        }
+    }
+
+    /// iPad / Mac (14 Nov 2026, Luther: "instead of a list with barely
+    /// visible names, a double row list with larger player names and
+    /// pictures"): two columns of cards — 56 pt photo, the name large, the
+    /// second name and the mark under it, the same three-position control.
+    /// No swipes here, so Photo is in the card's menu.
+    private var attendanceGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            ForEach(enrolledStudents) { student in
+                attendanceCard(student: student)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    private func attendanceCard(student: Student) -> some View {
+        let mark: AttendanceMark = session.effectiveAttendanceMark(for: student.id)
+        return HStack(spacing: 14) {
+            Button {
+                selectedStudentForPeep = student
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack(alignment: .bottomTrailing) {
+                        StudentAvatarView(student: student, size: 56)
+                        Circle()
+                            .fill(mark.tint)
+                            .frame(width: 18, height: 18)
+                            .overlay(Image(systemName: mark.icon).font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                            .overlay(Circle().strokeBorder(Color(.secondarySystemGroupedBackground), lineWidth: 2))
+                            .offset(x: 2, y: 2)
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(student.primaryDisplayName)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        if let second = student.secondaryNameLine {
+                            Text(second)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Text(mark.label(isChinese: isChinese))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(mark == .unmarked ? Color.secondary : mark.tint)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Spacer(minLength: 8)
+            AttendanceMarkControl(mark: mark) { newMark in
+                setAttendanceState(for: student.id, state: newMark)
+            }
+            .disabled(!accessMode.canTakeAttendance)
+        }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(mark == .present ? mark.tint.opacity(0.45) : Color.clear, lineWidth: 1.5)
+        )
+        .contextMenu {
+            if accessMode.canTakeAttendance {
+                AttendanceMarkMenu(mark: mark) { newMark in
+                    setAttendanceState(for: student.id, state: newMark)
+                }
+            }
+            #if os(iOS) && !targetEnvironment(macCatalyst)
+            Button {
+                studentForPhoto = student
+            } label: {
+                Label(isChinese ? "拍照" : "Photo", systemImage: "camera.fill")
+            }
+            #endif
+        }
+        .accessibilityIdentifier("attendance.card")
+    }
+
+    private var attendanceList: some View {
         let students = enrolledStudents
         // Each row rounded UP to whole points, because that is how tall the
         // List makes its cells. Summing the raw fractions left the frame a
@@ -1909,7 +2052,6 @@ struct FlightySessionPageView: View {
             VStack(spacing: 8) {
                 markAllPresentBar
                 attendanceRoster
-                    .background(Color(.secondarySystemGroupedBackground))
                 coachesOnRoster
 
                 attendanceFooter
@@ -4229,43 +4371,28 @@ struct SessionGamesTabView: View {
     
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                gamesHeader
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-
-                if session.games.isEmpty {
-                    emptyGamesState
-                        .padding(.horizontal, 16)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(session.games.enumerated()), id: \.element.id) { index, game in
-                            gameRow(game)
-                            if index < session.games.count - 1 {
-                                Divider()
-                                    .padding(.leading, 16)
-                            }
-                        }
-                    }
-                    .glassEffect(.regular, in: .rect(cornerRadius: 14))
-                    .padding(.horizontal, 16)
+            // The record of games and, beside it on iPad / Mac (under it on
+            // the phone), the dashboard of how they were played (14 Nov 2026).
+            if horizontalSizeClass == .regular {
+                HStack(alignment: .top, spacing: 20) {
+                    gamesColumn
+                        .frame(minWidth: 320, idealWidth: 420, maxWidth: 480)
+                    analysisColumn
+                        .padding(.top, 12)
+                        .padding(.trailing, 16)
+                        .frame(maxWidth: .infinity)
                 }
-
-                // At most three things worth acting on from the program's
-                // games so far (October 2026, Luther: limited, smart).
-                let report = gameStats
-                let insights = GameStatsReport.insights(report: report, sessions: statsSessions,
-                                                        roster: enrolledStudents.map(\.id))
-                if !insights.isEmpty {
-                    GameInsightsView(insights: insights, games: report.games, sessions: report.sessions,
-                                     students: dataManager.students)
+                .padding(.top, 8)
+                .padding(.bottom, 100)
+            } else {
+                VStack(spacing: 24) {
+                    gamesColumn
+                    analysisColumn
                         .padding(.horizontal, 16)
-                        .padding(.top, 24)
+                    Spacer(minLength: 76)
                 }
-                Spacer(minLength: 100)
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
         }
         .alert(LocalizationManager.shared.currentLanguage == .chinese ? "删除比赛" : "Delete Game", isPresented: Binding(
             get: { gameToDelete != nil },
@@ -4319,6 +4446,51 @@ struct SessionGamesTabView: View {
 
     }
     
+    private var gamesColumn: some View {
+        VStack(spacing: 0) {
+            gamesHeader
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            if session.games.isEmpty {
+                emptyGamesState
+                    .padding(.horizontal, 16)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(session.games.enumerated()), id: \.element.id) { index, game in
+                        gameRow(game)
+                        if index < session.games.count - 1 {
+                            Divider()
+                                .padding(.leading, 16)
+                        }
+                    }
+                }
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    /// The dashboard, then at most three things worth acting on from the
+    /// program's games so far (October 2026, Luther: limited, smart).
+    @ViewBuilder
+    private var analysisColumn: some View {
+        let report = gameStats
+        let insights = GameStatsReport.insights(report: report, sessions: statsSessions,
+                                                roster: enrolledStudents.map(\.id))
+        let played = statsSessions.contains { $0.games.contains(where: GameStatsReport.played) }
+        VStack(alignment: .leading, spacing: 24) {
+            if played {
+                GameDashboardView(programSessions: statsSessions, session: session,
+                                  roster: enrolledStudents.map(\.id), students: dataManager.students,
+                                  excluding: Set(dataManager.staffCoaches.map(\.id)))
+            }
+            if !insights.isEmpty {
+                GameInsightsView(insights: insights, games: report.games, sessions: report.sessions,
+                                 students: dataManager.students)
+            }
+        }
+    }
+
     private var gamesHeader: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return HStack {

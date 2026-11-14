@@ -188,14 +188,48 @@ struct StudentQuickPeepView: View {
     }
     
     private var insights: [StudentInsight] {
-        StudentInsightEngine.generateInsights(
+        (StudentInsightEngine.generateInsights(
             student: student,
             trainingStats: trainingStats,
             skills: skills,
             attendanceRate: attendanceRate,
             recentAttendance: recentAttendance,
             contract: contract
-        )
+        ) + chemistryInsights).sorted { $0.priority > $1.priority }
+    }
+
+    /// How this player scores and who they play best with, from the games'
+    /// basket logs (GameChemistry, 14 Nov 2026).
+    private var chemistryInsights: [StudentInsight] {
+        let coaches = Set(dataManager.staffCoaches.map(\.id))
+        let me = GameChemistry.player(student.id, sessions: dataManager.sessionEvents, excluding: coaches)
+        func name(_ id: UUID) -> String {
+            dataManager.students.first { $0.id == id }?.primaryDisplayName ?? (isChinese ? "队友" : "a teammate")
+        }
+        return GameChemistry.readings(for: me).map { reading in
+            switch reading {
+            case .finisher(let a, let of):
+                return StudentInsight(title: "Finisher", titleChinese: "终结者",
+                    description: "\(a) of \(of) baskets came off a teammate's pass — scores best when found. Work on getting open and finishing off the catch.",
+                    descriptionChinese: "\(of) 个进球里有 \(a) 个来自队友传球——被队友找到时最能得分。多练摆脱接球和接球后终结。",
+                    icon: "arrow.down.right.circle.fill", color: .teal, priority: 7)
+            case .creator(let own, let of):
+                return StudentInsight(title: "Creates Own Shot", titleChinese: "自己创造投篮",
+                    description: "\(own) of \(of) baskets were self-created. A shot creator — next, teach finding the open teammate when help comes.",
+                    descriptionChinese: "\(of) 个进球里有 \(own) 个是自己创造的。能自己得分——下一步练习在对方协防时找到空位队友。",
+                    icon: "bolt.circle.fill", color: .orange, priority: 7)
+            case .feeds(let player, let count, let of):
+                return StudentInsight(title: "Looks for \(name(player))", titleChinese: "最常找 \(name(player))",
+                    description: "\(count) of \(of) assists went to \(name(player)). A real connection — or a habit: check the whole floor is being read.",
+                    descriptionChinese: "\(of) 次助攻里有 \(count) 次传给 \(name(player))。配合默契——也可能是习惯：留意是否看到了全场。",
+                    icon: "arrow.triangle.branch", color: .blue, priority: 6)
+            case .fedBy(let player, let count, let of):
+                return StudentInsight(title: "Fed by \(name(player))", titleChinese: "\(name(player)) 最常喂球",
+                    description: "\(count) of \(of) assisted baskets came from \(name(player)). Keep them on the floor together.",
+                    descriptionChinese: "\(of) 个助攻得分里有 \(count) 个来自 \(name(player))。让他们多一起上场。",
+                    icon: "person.2.fill", color: .indigo, priority: 6)
+            }
+        }
     }
 
     private struct GameStatSnapshot {

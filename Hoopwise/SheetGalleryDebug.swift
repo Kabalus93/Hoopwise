@@ -98,20 +98,31 @@ enum SheetGalleryDebug {
     /// coach sees — detent, corner radius and navigation bar included — rather
     /// than the view body rendered bare as a root.
     static func root(shot: String, dataManager dm: DataManager) -> some View {
-        Color.black
+        // HOOPWISE_GALLERY_FULL=1 shows any shot full screen — an iPad page at
+        // the window's real (regular) width instead of a form-sheet's compact one.
+        let full = shot == "liveGame" || ProcessInfo.processInfo.environment["HOOPWISE_GALLERY_FULL"] == "1"
+        return Color.black
             .ignoresSafeArea()
             // The live game is a full-screen cover in the app (an iPad shows
             // its wide layout there); everything else is a sheet.
-            .sheet(isPresented: .constant(shot != "liveGame")) {
+            .sheet(isPresented: .constant(!full)) {
                 sheetContent(shot: shot, dataManager: dm)
                     .environmentObject(dm)
                     .modelContainer(dm.modelContainer)
             }
-            .fullScreenCover(isPresented: .constant(shot == "liveGame")) {
-                sheetContent(shot: shot, dataManager: dm)
+            .fullScreenCover(isPresented: .constant(full)) {
+                ObservedShot(dm: dm) { sheetContent(shot: shot, dataManager: dm) }
                     .environmentObject(dm)
                     .modelContainer(dm.modelContainer)
             }
+    }
+
+    /// Redraws a shot when the store finishes loading (a cover presented at
+    /// launch is built before the data arrives).
+    private struct ObservedShot<Content: View>: View {
+        @ObservedObject var dm: DataManager
+        @ViewBuilder let content: () -> Content
+        var body: some View { content() }
     }
 
     @ViewBuilder
@@ -169,6 +180,22 @@ enum SheetGalleryDebug {
                 .background(Color(.systemGroupedBackground))
             } else {
                 missing("gameStats: no program")
+            }
+
+        case "gameDashboard":
+            // The Games tab's dashboard over the same made-up season — in
+            // memory, never saved.
+            if let program = dm.programs.first {
+                let roster = program.enrolledStudentIds
+                let sessions = demoSessions(roster: roster.count > 1 ? Array(roster.dropLast()) : roster)
+                ScrollView {
+                    GameDashboardView(programSessions: sessions, session: sessions.last!, roster: roster,
+                                      students: dm.students, excluding: [])
+                        .padding(16)
+                }
+                .background(Color(.systemGroupedBackground))
+            } else {
+                missing("gameDashboard: no program")
             }
 
         case "studentProfile":
@@ -263,12 +290,15 @@ enum SheetGalleryDebug {
         case "sessionPage":
             // The first program's earliest session, on its default Attendance
             // tab — the roster rows and their swipe actions.
+            // HOOPWISE_SESSION_TAB=<0…3> opens another tab.
             if let program = dm.programs.first,
                let session = dm.sessionEvents
                 .filter({ $0.programId == program.id })
                 .min(by: { $0.startTime < $1.startTime }) {
+                let env = ProcessInfo.processInfo.environment
                 NavigationStack {
-                    FlightySessionPageView(session: session, accessMode: .execution)
+                    FlightySessionPageView(session: session, accessMode: .execution,
+                                           initialTab: env["HOOPWISE_SESSION_TAB"].flatMap(Int.init))
                 }
             } else {
                 missing("sessionPage: no program session in the store")
@@ -320,7 +350,8 @@ enum SheetGalleryDebug {
                 .filter({ $0.status == .scheduled && $0.endTime < Date() })
                 .max(by: { $0.startTime < $1.startTime }) {
                 NavigationStack {
-                    FlightySessionPageView(session: session, accessMode: .architect)
+                    FlightySessionPageView(session: session, accessMode: .architect,
+                                           initialTab: ProcessInfo.processInfo.environment["HOOPWISE_SESSION_TAB"].flatMap(Int.init))
                 }
             } else {
                 missing("pastSession: no past scheduled session")
@@ -701,8 +732,21 @@ extension SheetGalleryDebug {
                                               rebounds: (i + week) % 3, assists: (i + g + week / 2) % 3,
                                               steals: (i + week) % 2, blocks: i % 4 == 0 ? 1 : 0)
                 }
-                s.games.append(SessionGame(sessionId: s.id, gameNumber: g + 1, playerStats: lines,
-                                           status: .completed))
+                var game = SessionGame(sessionId: s.id, gameNumber: g + 1, playerStats: lines,
+                                       status: .completed)
+                // A basket log behind the lines (the dashboard's chemistry):
+                // the third player makes their own; the others are mostly set
+                // up by the next one or two in the list.
+                for line in lines {
+                    let i = players.firstIndex(of: line.playerId) ?? 0
+                    for j in 0..<(line.points / 2) {
+                        var passer: UUID? = j % 3 == 2 || i == 2 ? nil : players[(i + 1 + j % 2) % players.count]
+                        if passer == line.playerId { passer = nil }
+                        game.baskets.append(GameBasket(scorerId: line.playerId, assisterId: passer,
+                                                       points: 2, teamId: gid))
+                    }
+                }
+                s.games.append(game)
             }
             sessions.append(s)
         }

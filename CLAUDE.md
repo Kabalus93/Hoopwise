@@ -1289,6 +1289,42 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   practice = a true pinhole camera over the top of the key (broadcast).
   CardCourtBackground(color:style:) — athlete headers keep .halfCourt.
   HOOPWISE_SHOT=courtArt shows all six.
+- GAME CHEMISTRY + WIDE SESSION PAGE (14 November 2026, Luther: "when a
+  player gets most of their shots from assists or generates their own …
+  who one player assists the most or receives from the most … the game page
+  beside the record of games should have a ready dashboard"; "on mac and ipad
+  … a double row list with larger player name and pictures"; "increase the
+  height of the navigation bar in sessions (mac only)").
+  (a) BASKET LOG: `SessionGame.baskets: [GameBasket]` (scorer, assister?,
+  points, team, time) inside the games JSON — no schema change, older games
+  decode with none. The live entry (`GameStatAction.apply`) appends one per
+  basket and Undo removes exactly it (`basketId`). Stat lines still hold
+  only counts, so CHEMISTRY ONLY KNOWS GAMES SCORED SINCE THIS BUILD. The
+  old per-player +1/+2/+3 screen in FlightySessionPageView writes no log
+  (no longer reached on any layout).
+  (b) Services/GameChemistry.swift (pure): `summary` (creation per player —
+  off a pass vs self-created —, passer→scorer duos, playmakers with their
+  favourite target), `player` + `readings` behind thresholds (≥ 5 baskets
+  and ≥ 70 % for finisher / creates own shot; ≥ 3 links, ≥ 2 with one
+  teammate and ≥ 50 % for "looks for" / "fed by"). Same scope rules as
+  GameStatsReport: skipped sessions out, staff coaches stripped.
+  (c) Quick peep Coach Insights add those readings (StudentQuickPeepView
+  `chemistryInsights`, neutral wording, bilingual).
+  (d) GameDashboardView (Views/Coaching/): the Games tab is two columns in
+  regular width — games | dashboard + GAME INSIGHTS — and stacked on the
+  phone. Tiles (games, points/game, boards/game, % off a pass), HOW THEY
+  SCORE split bars, CHEMISTRY duos, PLAYMAKERS; This session | Program
+  (starts on this session when it has games). Empty: how to drag an assist.
+  (e) Attendance in regular width = two columns of cards (`attendanceGrid`:
+  56 pt photo, name title3, second name, mark caption, the same segmented
+  control, Photo in the card menu — no swipes there); compact keeps the List.
+  (f) Mac only: the Plan / Attend / Games / Notes selector is a 44 pt capsule
+  with a sliding pill (`macTabSelector`); iPhone/iPad keep the system picker.
+  DEBUG: HOOPWISE_SHOT=gameDashboard; HOOPWISE_GALLERY_FULL=1 shows any shot
+  full screen (an iPad page at regular width — a form sheet is compact);
+  HOOPWISE_SESSION_TAB=<0–3> on sessionPage / pastSession. Tests:
+  GameChemistryTests, SessionWideLayoutUITests (iPad Air 13 — the iPad mini
+  demo store has lost its sessions).
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

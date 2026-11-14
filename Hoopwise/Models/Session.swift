@@ -380,6 +380,26 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
     var hasStats: Bool { points > 0 || rebounds > 0 || assists > 0 || steals > 0 || blocks > 0 }
 }
 
+/// One basket in a game's log: who scored, who passed (nil = made on his
+/// own), how many points, for which team, when.
+struct GameBasket: Codable, Hashable, Identifiable {
+    let id: UUID
+    var scorerId: UUID
+    var assisterId: UUID?
+    var points: Int
+    var teamId: UUID
+    var at: Date
+
+    init(id: UUID = UUID(), scorerId: UUID, assisterId: UUID? = nil, points: Int, teamId: UUID, at: Date = Date()) {
+        self.id = id
+        self.scorerId = scorerId
+        self.assisterId = assisterId
+        self.points = points
+        self.teamId = teamId
+        self.at = at
+    }
+}
+
 enum SessionGameStatus: String, Codable, CaseIterable {
     case setup, ready, inProgress, paused, completed
     
@@ -424,6 +444,12 @@ struct SessionGame: Codable, Hashable, Identifiable {
     var notes: String?
     var createdAt: Date
     var updatedAt: Date
+    /// Every basket as it was scored — scorer, passer, points (14 Nov 2026,
+    /// Luther: "who assists who … gets his shots from assists or generates
+    /// his own"). The stat lines keep only counts; this log is what lets the
+    /// app read creation and chemistry. Inside the games JSON (no schema
+    /// change); games scored before it have none and simply say nothing.
+    var baskets: [GameBasket] = []
     
     init(id: UUID = UUID(), sessionId: UUID, gameNumber: Int = 1,
          gameType: SessionGameType = .twoTeam, teams: [GameTeam] = [], 
@@ -477,12 +503,13 @@ struct SessionGame: Codable, Hashable, Identifiable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        baskets = (try? container.decodeIfPresent([GameBasket].self, forKey: .baskets)) ?? []
     }
     
     private enum CodingKeys: String, CodingKey {
         case id, sessionId, gameNumber, gameType, teams, activeTeamIds, teamScores
         case playerStats, durationMinutes, basketValue, roundNumber, status, startedAt, endedAt
-        case winningTeamId, notes, createdAt, updatedAt
+        case winningTeamId, notes, createdAt, updatedAt, baskets
     }
     
     /// Get teams currently on court
