@@ -92,8 +92,12 @@ struct FlightySessionPageView: View {
     @State private var quickReminderText = ""
     @State private var quickReminderDue: QuickReminderDue = .beforeNextClass
     @State private var editingSessionReminder: Reminder?
-    @State private var showingNewSessionReminder = false
     @State private var showDoneReminders = false
+    @State private var quickReminderCustomDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    @State private var quickReminderPriority: ReminderPriority = .medium
+    @State private var quickReminderStudents: Set<UUID> = []
+    @State private var quickReminderNote = ""
+    @State private var showQuickReminderNote = false
     @FocusState private var quickReminderFocused: Bool
     
     // Plan tab drill management
@@ -2940,7 +2944,7 @@ struct FlightySessionPageView: View {
     private enum NotesPane: Hashable { case notes, reminders }
 
     private enum QuickReminderDue: Hashable, CaseIterable {
-        case beforeNextClass, tomorrow, nextWeek
+        case beforeNextClass, tomorrow, nextWeek, custom
     }
 
     private enum NotesViewMode: Hashable {
@@ -3033,9 +3037,6 @@ struct FlightySessionPageView: View {
         .onChange(of: focusedNotesEditor) { _, target in
             if let target { notesEditorTarget = target }
         }
-        .sheet(isPresented: $showingNewSessionReminder) {
-            AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: nil)
-        }
         .sheet(item: $editingSessionReminder) { reminder in
             AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: reminder)
         }
@@ -3122,6 +3123,8 @@ struct FlightySessionPageView: View {
             return tomorrowMorning
         case .nextWeek:
             return cal.date(byAdding: .day, value: 6, to: tomorrowMorning) ?? tomorrowMorning
+        case .custom:
+            return quickReminderCustomDate
         }
     }
 
@@ -3135,16 +3138,157 @@ struct FlightySessionPageView: View {
             return isChinese ? "明天" : "Tomorrow"
         case .tomorrow: return isChinese ? "明天" : "Tomorrow"
         case .nextWeek: return isChinese ? "一周后" : "In a week"
+        case .custom: return isChinese ? "选择日期…" : "Choose a date…"
         }
     }
 
     private func addQuickReminder() {
         let title = quickReminderText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
-        dataManager.addReminder(Reminder(title: title, dueDate: dueDate(for: quickReminderDue),
-                                         sessionId: session.id, programId: session.programId))
+        let note = quickReminderNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        dataManager.addReminder(Reminder(title: title, note: note.isEmpty ? nil : note,
+                                         dueDate: dueDate(for: quickReminderDue),
+                                         priority: quickReminderPriority,
+                                         sessionId: session.id, programId: session.programId,
+                                         taggedStudentIds: Array(quickReminderStudents)))
         quickReminderText = ""
+        quickReminderNote = ""
+        showQuickReminderNote = false
+        quickReminderStudents = []
+        quickReminderPriority = .medium
         quickReminderFocused = true
+    }
+
+    /// The reminder's details as chips under the quick-add field (14 Nov
+    /// 2026, Luther: the sliders button opened a separate sheet — the
+    /// options belong next to the due date). Due · athletes · priority ·
+    /// note. Coach tagging was removed (no other coaches use the app).
+    private var quickReminderOptions: some View {
+        let athletes = enrolledStudents
+        return FlowLayout(spacing: 8) {
+            Menu {
+                ForEach(QuickReminderDue.allCases, id: \.self) { choice in
+                    Button {
+                        quickReminderDue = choice
+                    } label: {
+                        if quickReminderDue == choice { Label(dueLabel(for: choice), systemImage: "checkmark") }
+                        else { Text(dueLabel(for: choice)) }
+                    }
+                }
+            } label: {
+                reminderChip(icon: "calendar",
+                             text: quickReminderDue == .custom
+                                ? quickReminderCustomDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                                : dueLabel(for: quickReminderDue),
+                             active: true, tint: .accentColor)
+            }
+            if quickReminderDue == .custom {
+                DatePicker("", selection: $quickReminderCustomDate, in: Date()...,
+                           displayedComponents: [.date, .hourAndMinute])
+                    .labelsHidden()
+                    .datePickerStyle(.compact)
+            }
+
+            if !athletes.isEmpty {
+                Menu {
+                    ForEach(athletes) { student in
+                        Button {
+                            if quickReminderStudents.contains(student.id) { quickReminderStudents.remove(student.id) }
+                            else { quickReminderStudents.insert(student.id) }
+                        } label: {
+                            if quickReminderStudents.contains(student.id) { Label(student.primaryDisplayName, systemImage: "checkmark") }
+                            else { Text(student.primaryDisplayName) }
+                        }
+                    }
+                } label: {
+                    reminderChip(icon: "person.fill",
+                                 text: taggedLabel(athletes.filter { quickReminderStudents.contains($0.id) }.map(\.primaryDisplayName),
+                                                   empty: isChinese ? "学员" : "Athlete"),
+                                 active: !quickReminderStudents.isEmpty, tint: .blue)
+                }
+                .menuActionDismissBehavior(.disabled)
+            }
+
+            Menu {
+                ForEach(ReminderPriority.allCases, id: \.self) { p in
+                    Button {
+                        quickReminderPriority = p
+                    } label: {
+                        Label(p.displayName, systemImage: quickReminderPriority == p ? "checkmark" : p.icon)
+                    }
+                }
+            } label: {
+                reminderChip(icon: quickReminderPriority.icon, text: quickReminderPriority.displayName,
+                             active: quickReminderPriority != .medium, tint: quickReminderPriority.color)
+            }
+
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { showQuickReminderNote.toggle() }
+            } label: {
+                reminderChip(icon: "text.alignleft", text: isChinese ? "备注" : "Note",
+                             active: showQuickReminderNote || !quickReminderNote.isEmpty, tint: .orange, menu: false)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// "@" in the quick-add field: the session's athletes first, then
+    /// everyone; a tap writes the name and tags them (the reminder then shows
+    /// on their profile).
+    @ViewBuilder
+    private var mentionSuggestions: some View {
+        if let query = ReminderMentions.activeQuery(in: quickReminderText) {
+            let found = ReminderMentions.matches(query, in: dataManager.students,
+                                                 preferred: enrolledStudents.map(\.id))
+            if !found.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(found) { student in
+                            Button {
+                                quickReminderText = ReminderMentions.inserting(student.primaryDisplayName, into: quickReminderText)
+                                quickReminderStudents.insert(student.id)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    StudentAvatarView(student: student, size: 22)
+                                    Text(student.primaryDisplayName).font(.subheadline.weight(.medium))
+                                }
+                                .padding(.leading, 4)
+                                .padding(.trailing, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.blue.opacity(0.14), in: Capsule())
+                                .foregroundStyle(.blue)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("reminders.mention")
+                        }
+                    }
+                }
+                .padding(.leading, 34)
+            }
+        }
+    }
+
+    private func taggedLabel(_ names: [String], empty: String) -> String {
+        switch names.count {
+        case 0: return empty
+        case 1: return names[0]
+        default: return "\(names[0]) +\(names.count - 1)"
+        }
+    }
+
+    private func reminderChip(icon: String, text: String, active: Bool, tint: Color, menu: Bool = true) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.caption)
+            Text(text).lineLimit(1)
+            if menu {
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
+            }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(active ? tint : Color.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(active ? tint.opacity(0.14) : Color.primary.opacity(0.06), in: Capsule())
     }
 
     private var sessionRemindersPane: some View {
@@ -3172,37 +3316,22 @@ struct FlightySessionPageView: View {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
                                 .foregroundStyle(.orange)
-                            TextField(isChinese ? "添加提醒，按回车保存" : "Add a reminder — Return saves", text: $quickReminderText)
+                            TextField(isChinese ? "添加提醒，@ 标记学员，按回车保存" : "Add a reminder — @ tags an athlete, Return saves", text: $quickReminderText)
                                 .focused($quickReminderFocused)
                                 .submitLabel(.done)
                                 .onSubmit(addQuickReminder)
                                 .accessibilityIdentifier("reminders.quickAdd")
-                            Button {
-                                showingNewSessionReminder = true
-                            } label: {
-                                Image(systemName: "slider.horizontal.3").font(.subheadline)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            .help(isChinese ? "更多选项" : "More options")
                         }
-                        Menu {
-                            ForEach(QuickReminderDue.allCases, id: \.self) { choice in
-                                Button(dueLabel(for: choice)) { quickReminderDue = choice }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "calendar")
-                                Text(dueLabel(for: quickReminderDue))
-                                Image(systemName: "chevron.down").font(.caption2)
-                            }
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.primary.opacity(0.06), in: Capsule())
+                        mentionSuggestions
+                        quickReminderOptions
+                            .padding(.leading, 34)
+                        if showQuickReminderNote {
+                            TextField(isChinese ? "备注（可选）" : "Note (optional)", text: $quickReminderNote, axis: .vertical)
+                                .font(.subheadline)
+                                .lineLimit(1...4)
+                                .padding(.leading, 34)
+                                .accessibilityIdentifier("reminders.quickNote")
                         }
-                        .padding(.leading, 34)
                     }
                     .padding(12)
                     .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))

@@ -672,9 +672,7 @@ struct FlightyActionableDashboard: View {
         let currentCoachId = dataManager.loggedInCoachId ?? dataManager.coach.id
         let isSharedWithMe = reminder.isSharedWith(coachId: currentCoachId)
         let creatorName = isSharedWithMe ? dataManager.staffCoaches.first { $0.id == reminder.creatorCoachId }?.name : nil
-        let taggedStudentNames = reminder.taggedStudentIds.compactMap { id in
-            dataManager.students.first { $0.id == id }?.name
-        }
+        let taggedStudentNames = dataManager.reminderAthleteNames(reminder)
         
         return HStack(spacing: 12) {
             Button {
@@ -708,6 +706,12 @@ struct FlightyActionableDashboard: View {
                             Image(systemName: "person.fill").font(.caption2)
                         }
                         .foregroundStyle(Color.accentColor)
+                    }
+                    if let source = dataManager.reminderSource(reminder) {
+                        Text(source)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                     if let creatorName = creatorName {
                         Label {

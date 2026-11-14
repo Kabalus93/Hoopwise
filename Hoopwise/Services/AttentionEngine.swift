@@ -379,7 +379,11 @@ enum AttentionEngine {
                 key: "reminder:\(reminder.id)",
                 kind: .reminderDue, category: .closeOut,
                 title: reminder.title,
-                subtitle: isChinese ? "已到期" : "Due \(relative(reminder.dueDate, from: now))",
+                // Who and which class, then when (14 Nov 2026: reminders
+                // carry context — "Maya Chen · from Elite U8 · Sat 26 Sep").
+                subtitle: [dataManager.reminderContext(reminder),
+                           isChinese ? "已到期" : "Due \(relative(reminder.dueDate, from: now))"]
+                    .compactMap { $0 }.joined(separator: " · "),
                 urgency: 2,
                 deadline: reminder.dueDate.addingTimeInterval(48 * 3600),
                 reminderId: reminder.id))

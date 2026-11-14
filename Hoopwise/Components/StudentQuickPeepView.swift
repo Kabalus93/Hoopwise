@@ -502,6 +502,8 @@ struct StudentQuickPeepView: View {
                     insightsSection
                 }
 
+                StudentRemindersCard(student: student, showWhenEmpty: false)
+
                 contractInfoSection
 
                 // About this athlete — provenance footer (Phase 1 of export/import)
@@ -538,6 +540,8 @@ struct StudentQuickPeepView: View {
             if !insights.isEmpty {
                 insightsSection
             }
+
+            StudentRemindersCard(student: student, showWhenEmpty: false)
             
             // Contract info section (same as Intelligence Profile)
             contractInfoSection

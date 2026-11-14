@@ -55,6 +55,9 @@ struct StudentDetailView: View {
                     // Contract & Risk Analysis section (comprehensive)
                     contractAndRiskSection
 
+                    // Reminders that tag this athlete (14 Nov 2026).
+                    StudentRemindersCard(student: student)
+
                     // Team workout (Hub → Teams): drills from the roles
                     // this athlete plays in a team's play breakdowns.
                     TeamWorkoutProfileSection(memberId: student.id)

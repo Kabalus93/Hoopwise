@@ -363,33 +363,6 @@ struct AddReminderSheet: View {
                             }
                             .buttonStyle(.plain)
                             
-                            // Tag coach button (only show if there are staff coaches)
-                            if !dataManager.staffCoaches.isEmpty {
-                                Button(action: { showingCoachPicker = true }) {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "person.badge.shield.checkmark.fill")
-                                            .font(.system(size: 12))
-                                        Text(isChinese ? "教练" : "Coach")
-                                            .font(.system(size: 12, weight: .medium))
-                                        if !taggedCoachIds.isEmpty {
-                                            Text("\(taggedCoachIds.count)")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.purple)
-                                                .cornerRadius(10)
-                                        }
-                                    }
-                                    .foregroundColor(.purple)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(Color.purple.opacity(0.1))
-                                    .cornerRadius(20)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            
                             Spacer()
                         }
                         
@@ -399,7 +372,7 @@ struct AddReminderSheet: View {
                                 // Tagged students
                                 ForEach(taggedStudents) { student in
                                     TagChip(
-                                        name: student.name,
+                                        name: student.primaryDisplayName,
                                         color: .blue,
                                         icon: "person.fill",
                                         onRemove: { taggedStudentIds.remove(student.id) }
@@ -418,17 +391,6 @@ struct AddReminderSheet: View {
                             }
                         }
                         
-                        // Hint about coach tagging
-                        if !taggedCoachIds.isEmpty {
-                            HStack(spacing: 6) {
-                                Image(systemName: "info.circle")
-                                    .font(.system(size: 11))
-                                Text(isChinese ? "标记的教练会在他们的首页看到此提醒" : "Tagged coaches will see this reminder on their dashboard")
-                                    .font(.system(size: 11))
-                            }
-                            .foregroundColor(.gray)
-                            .padding(.top, 4)
-                        }
                     }
                     
                     // Priority selector

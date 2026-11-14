@@ -1371,6 +1371,30 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   status colour, tagged athletes), tap = edit, context menu Delete, a
   folded DONE list. Due reminders still surface in Home's attention
   (rule 5). The old SessionReminderSection component stays unused.
+  SAME DAY, second pass (Luther: options next to the date, not a sheet; "@
+  should tag the student and attach the reminder to their profile … no
+  collab with other coaches, remove tagging coaches … make tagging work
+  well throughout the app so reminders and alerts are smart and carry
+  context"): the sliders button is gone — chips under the field: due
+  (Before next class / Tomorrow / In a week / Choose a date… → compact
+  DatePicker), Athlete (multi-select menu of the session's athletes),
+  priority, Note (a field appears). "@" in the field suggests athletes (the
+  session's first, then everyone, NameIndex matching — pinyin, initials,
+  Chinese), a tap writes the name and tags them. Services/
+  ReminderContext.swift: `ReminderMentions` (activeQuery — "@" at the start
+  or after a space, so emails are not mentions —, inserting, matches) and
+  DataManager `openReminders(taggedWith:)`, `reminderSource` ("from <program>
+  · <day>"), `reminderAthleteNames`, `reminderContext`. Tagged reminders show
+  on the athlete: StudentRemindersCard (Views/Components) on the profile
+  (always, with a one-line add that tags them, due tomorrow 09:00) and the
+  quick peep (only when there are some). Home's reminder alert subtitle is
+  now "<athletes> · from <program> · <day> · Due …"; the briefing row adds
+  the source. COACH TAGGING removed from the UI (quick add and
+  AddReminderSheet); stored coach tags are untouched.
+  FIXED: `refreshAllCaches` (the launch path) never called loadReminders —
+  reminders appeared only after something ran the synchronous refresh (a
+  write, an iCloud change), so on reopening a session its reminders looked
+  gone. Tests: ReminderMentionsTests.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

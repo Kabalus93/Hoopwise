@@ -759,6 +759,12 @@ class SwiftDataManager: ObservableObject {
             loadLeagueData()
 
             debugLog("📊 Caches refreshed: \(cachedStudents.count) students, \(cachedPrograms.count) programs, \(teams.count) teams, \(staffCoaches.count) coaches, \(locations.count) locations, \(schools.count) schools")
+
+            // Reminders load here too (14 Nov 2026): only the synchronous
+            // refresh loaded them, so at launch they stayed empty until some
+            // write or an iCloud change happened to run that path — a
+            // session's reminders "vanished" on reopening.
+            loadReminders()
         } catch {
             debugLog("❌ Failed to refresh caches: \(error)")
             errorMessage = "Failed to load data: \(error.localizedDescription)"
