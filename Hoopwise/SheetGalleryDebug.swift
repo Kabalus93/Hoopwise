@@ -579,6 +579,16 @@ enum SheetGalleryDebug {
         case "hub":
             FlightyHubView()
 
+        case "gameRecap":
+            // A finished 2-team game over the demo roster, with a basket log
+            // (scratch, never saved) — the Game Recap sheet.
+            let players = Array(dm.students.prefix(6))
+            if players.count >= 2 {
+                GameRecapView(game: demoRecapGame(players.map(\.id)), students: players, allGamesInSession: [])
+            } else {
+                missing("gameRecap: no students")
+            }
+
         case "liveGame":
             // A live 5-on-5 game over the demo roster (scratch, never saved).
             // The demo roster has five; the second team is scratch players
@@ -714,6 +724,33 @@ private struct LiveGameGalleryHost: View {
 }
 
 extension SheetGalleryDebug {
+    /// One finished Black v White game: the first half of the players on
+    /// Black, the rest on White, baskets logged with their passers.
+    static func demoRecapGame(_ ids: [UUID]) -> SessionGame {
+        let black = GameTeam(name: "Black", colorHex: "#1C1C1E", playerIds: Array(ids.prefix((ids.count + 1) / 2)))
+        let white = GameTeam(name: "White", colorHex: "#F2F2F7", playerIds: Array(ids.dropFirst((ids.count + 1) / 2)))
+        var game = SessionGame(sessionId: UUID(), gameNumber: 2, teams: [black, white])
+        game.activeTeamIds = [black.id, white.id]
+        // (scorer index, passer index or nil, points)
+        let script: [(Int, Int?, Int)] = [(0, 1, 2), (1, 0, 2), (0, 1, 2), (2, nil, 2), (0, nil, 2), (1, 2, 2),
+                                          (0, 1, 2), (2, 0, 2), (3, nil, 2), (4, 3, 2), (3, nil, 2)]
+        for (s, p, n) in script where s < ids.count {
+            let team = black.playerIds.contains(ids[s]) ? black.id : white.id
+            GameStatAction(playerId: ids[s], teamId: team, kind: .points(n),
+                           assistId: p.flatMap { $0 < ids.count ? ids[$0] : nil }).apply(to: &game)
+        }
+        for (i, kind) in [(1, GameStatAction.Kind.rebound), (1, .rebound), (2, .steal), (4, .rebound),
+                          (4, .rebound), (5, .block), (0, .steal)] where i < ids.count {
+            let team = black.playerIds.contains(ids[i]) ? black.id : white.id
+            GameStatAction(playerId: ids[i], teamId: team, kind: kind).apply(to: &game)
+        }
+        game.status = .completed
+        game.startedAt = fixedDate
+        game.endedAt = fixedDate.addingTimeInterval(8 * 60)
+        game.winningTeamId = game.score(for: black.id) >= game.score(for: white.id) ? black.id : white.id
+        return game
+    }
+
     /// Eight sessions of two games each, scoring rising over time.
     static func demoSessions(roster: [UUID]) -> [SessionEvent] {
         var sessions: [SessionEvent] = []

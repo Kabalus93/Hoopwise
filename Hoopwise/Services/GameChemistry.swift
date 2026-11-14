@@ -75,6 +75,20 @@ enum GameChemistry {
 
     static func summary(sessions: [SessionEvent], excluding: Set<UUID> = []) -> Summary {
         let (games, log) = baskets(in: sessions, excluding: excluding)
+        return summary(log: log, games: games)
+    }
+
+    /// One game (or a few) on their own — the game recap.
+    static func summary(games: [SessionGame], excluding: Set<UUID> = []) -> Summary {
+        let log = games.flatMap(\.baskets).filter { !excluding.contains($0.scorerId) }.map { b -> GameBasket in
+            var basket = b
+            if let a = b.assisterId, excluding.contains(a) { basket.assisterId = nil }
+            return basket
+        }
+        return summary(log: log, games: games.filter { !$0.baskets.isEmpty }.count)
+    }
+
+    private static func summary(log: [GameBasket], games: Int) -> Summary {
         var made: [UUID: (Int, Int)] = [:]
         var pairs: [String: (UUID, UUID, Int)] = [:]
         var given: [UUID: [UUID: Int]] = [:]

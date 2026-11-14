@@ -1325,6 +1325,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   HOOPWISE_SESSION_TAB=<0–3> on sessionPage / pastSession. Tests:
   GameChemistryTests, SessionWideLayoutUITests (iPad Air 13 — the iPad mini
   demo store has lost its sessions).
+- GAME RECAP REDESIGNED (14 November 2026, Luther: "another page that's a
+  weak point of our design. make it match the vision", all platforms — his
+  request, so a sanctioned iPhone change). Views/Coaching/GameRecapView.swift
+  (moved out of FlightySessionPageView): a HERO over CardCourtBackground
+  (.fullCourt) — "GAME N · FINAL · M MIN", both teams' scores in big rounded
+  type, a WIN pill, "Black won by 10" (a Battle Royal shows a podium); then
+  glass cards under caps headers: PLAYER OF THE GAME (still picked by the
+  contribution formula, which is no longer shown; five stats, zeros dimmed,
+  ↑/↓ against their previous game today), HOW THEY SCORED (the basket log —
+  % off a pass, split bar, the strongest passer → scorer; hidden without a
+  log, `GameChemistry.summary(games:)`), AWARDS (award over player, value +
+  unit; a tie is nobody's award; "Most Improved" never fired and is gone),
+  BOX SCORE by team (team display colour + score, PTS REB AST STL BLK, the
+  player of the game's row tinted with a crown on the photo). The random tip
+  line and the CTR column are deleted. ≤ 720 pt wide. HOOPWISE_SHOT=gameRecap
+  (a scratch Black v White game with a basket log).
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",
