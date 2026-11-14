@@ -16,6 +16,7 @@ struct FlightyCoachProfileView: View {
     @State private var showingEditProfile = false
     @State private var localSettings: AppSettings = AppSettings.default
     @State private var calendarSyncOn = UserDefaults.standard.bool(forKey: CalendarSync.enabledKey)
+    @AppStorage(ProfileBackgroundRemoval.enabledKey) private var removePhotoBackgrounds = true
     @State private var calendarSyncMessage: String?
     @StateObject private var syncMonitor = CloudSyncMonitor.shared
     @State private var iCloudAccountLabel: String?
@@ -601,8 +602,19 @@ struct FlightyCoachProfileView: View {
                 })) {
                     Label(isChinese ? "触感反馈" : "Haptic Feedback", systemImage: "hand.tap")
                 }
+
+            // ProfileBackgroundRemoval: after a profile photo, the subject is
+            // cut out on this device and a background colour picked.
+            Toggle(isOn: $removePhotoBackgrounds) {
+                Label(isChinese ? "去除照片背景" : "Remove Photo Backgrounds", systemImage: "person.crop.circle.badge.minus")
+            }
+            .accessibilityIdentifier("profile.removePhotoBackgrounds")
         } header: {
             Text(isChinese ? "偏好设置" : "Preferences")
+        } footer: {
+            Text(isChinese
+                 ? "拍学员头像后，在本机自动抠出人物并选择背景颜色。照片不会离开设备。"
+                 : "After you take an athlete's photo, the person is cut out on this device and you pick a background colour. Photos never leave the device.")
         }
     }
 

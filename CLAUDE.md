@@ -1360,6 +1360,37 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   researched; chrome is bilingual. Hub card under Teams. HOOPWISE_SHOT=
   lexicon (+ HOOPWISE_LEXICON_TERM=<term> opens an entry). Tests:
   LexiconTests, LexiconUITests.
+- TWENTY-FOURTH sanctioned exception (14 November 2026, Luther's request,
+  iPhone + iPad + Mac): PROFILE PHOTO BACKGROUND REMOVAL. After the shutter
+  in ProfilePhotoCamera (Add/Edit Student, the roster's Photo swipe) the shot
+  goes to ProfileBackgroundPicker (Views/Components/): the subject is cut out
+  ON THE DEVICE (Services/ProfileBackgroundRemoval.swift — Apple Vision's
+  VNGenerateForegroundInstanceMaskRequest only; no network, no third-party
+  model), swatches recolour at once (9 colours + "Original"; the last one is
+  preselected, UserDefaults `profilePhoto.backgroundColor`), Retake / Use
+  Photo; the result saves through the existing profileImageData + thumbnail
+  path. Decided (Luther): NO original kept (no schema change), colour PICKED
+  at capture, ON by default with Profile → Preferences → "Remove Photo
+  Backgrounds" (device setting `profilePhoto.removeBackground`), and Edit
+  Student has "Remove Background" for the photo already there (stored only on
+  Save, like every edit on that page). Rules: the instance under the circle's
+  centre wins, else the nearest; a touching instance under 40 % of its area
+  joins (a ball Vision returned on its own), a second person beside stays out
+  (`chooseInstances`, pure); the mask is feathered (Gaussian, 0.2 % of the
+  side). From the camera, no subject / Vision error = the plain photo goes
+  through unchanged — never blocks or loses a capture. VISION'S FOREGROUND
+  MODEL DOES NOT RUN ON THE SIMULATOR (the cut-out returns nil there, so the
+  simulator always takes the plain-photo path); it runs in the Mac Catalyst
+  build (verified: ~0.7 s cold, ~0.2 s warm on the drawn stills). Test
+  images are DRAWN (ProfileBackgroundDebug.swift, ProfileBackgroundTestScene)
+  and exported to SAMpTests/Resources/BackgroundRemoval — no real photos.
+  HOOPWISE_SHOT=backgroundRemoval (+ HOOPWISE_BG_SCENE=single|twoPeople|
+  empty) shows the picker in Edit Student mode and logs "bg <scene> found|
+  none <s>" to hoopwise.mac / background, writing results to the App Group
+  Library/Caches/background-<scene>.png. Tests: ProfileBackgroundRemovalTests
+  (the three Vision tests skip on the simulator; the Catalyst test runner does
+  not launch — "Could not launch HoopwiseTests" — so check Vision with the
+  Mac shot). Edge quality, gym light and A15 speed need a real device.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

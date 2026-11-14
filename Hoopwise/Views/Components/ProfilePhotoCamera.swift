@@ -16,6 +16,10 @@ import UIKit
 // - shows the avatar's circle as a mask, and
 // - crops the captured photo to exactly that circle's square, so the framing
 //   on screen is the framing saved. No edit step.
+// BACKGROUND (November 2026, Luther): with Profile → "Remove Photo
+// Backgrounds" on (the default) the shot goes to ProfileBackgroundPicker —
+// subject cut out on the device, a colour picked, Use Photo. No subject
+// found: the plain photo goes through unchanged.
 //
 // SHARPNESS (October 2026, Luther: "sometimes the image stays blurry"). It
 // used the plain wide camera only — which cannot focus closer than ~15–20 cm
@@ -35,10 +39,22 @@ struct ProfilePhotoCamera: View {
     @StateObject private var camera = ProfileCameraModel()
     @State private var circleRect: CGRect = .zero
     @State private var focusTap: CGPoint?
+    /// The shot, waiting for its background colour.
+    @State private var review: UIImage?
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
     var body: some View {
+        if let review {
+            ProfileBackgroundPicker(image: review) { result in
+                if let result { onFinish(result) } else { self.review = nil }
+            }
+        } else {
+            viewfinder
+        }
+    }
+
+    private var viewfinder: some View {
         GeometryReader { proxy in
             let diameter = min(proxy.size.width, proxy.size.height) * 0.8
             let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height * 0.42)
@@ -129,7 +145,8 @@ struct ProfilePhotoCamera: View {
 
             Button {
                 camera.capture(circle: circleRect) { image in
-                    if let image { onFinish(image) }
+                    guard let image else { return }
+                    if ProfileBackgroundRemoval.isEnabled { review = image } else { onFinish(image) }
                 }
             } label: {
                 ZStack {

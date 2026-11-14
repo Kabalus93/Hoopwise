@@ -105,6 +105,8 @@ struct EditStudentView: View {
     // Profile Image
     @State private var showingImagePicker = false
     @State private var showingProfileCamera = false
+    /// The current photo, open in the background picker (Remove Background).
+    @State private var backgroundSource: IdentifiedImage?
     @State private var showingPhotoSourceDialog = false
     #if os(iOS)
     @State private var selectedImage: UIImage?
@@ -270,6 +272,14 @@ struct EditStudentView: View {
                 ProfilePhotoCamera { image in
                     if let image { selectedImage = image }
                     showingProfileCamera = false
+                }
+            }
+            // Remove Background on the photo already here; like every edit on
+            // this page it is only stored on Save.
+            .fullScreenCover(item: $backgroundSource) { source in
+                ProfileBackgroundPicker(image: source.image, fromCamera: false) { image in
+                    if let image { selectedImage = image }
+                    backgroundSource = nil
                 }
             }
             .confirmationDialog(
@@ -693,16 +703,33 @@ struct EditStudentView: View {
             // Photo actions
             #if os(iOS)
             if profileImageUrl != nil || selectedImage != nil || localImageData != nil {
-                Button(action: removePhoto) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12))
-                        Text("Remove Photo")
-                            .font(.system(size: 12, weight: .medium))
+                HStack(spacing: 20) {
+                    if let current = currentPhoto {
+                        Button {
+                            backgroundSource = IdentifiedImage(image: current)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "person.crop.circle.badge.minus")
+                                    .font(.system(size: 12))
+                                Text(LocalizationManager.shared.currentLanguage == .chinese ? "去除背景" : "Remove Background")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundStyle(AppTheme.accentColor)
+                        }
+                        .disabled(isUploadingImage)
+                        .accessibilityIdentifier("editStudent.removeBackground")
                     }
-                    .foregroundColor(.red.opacity(0.8))
+                    Button(action: removePhoto) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 12))
+                            Text("Remove Photo")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundColor(.red.opacity(0.8))
+                    }
+                    .disabled(isUploadingImage)
                 }
-                .disabled(isUploadingImage)
             }
             #endif
             
@@ -724,6 +751,14 @@ struct EditStudentView: View {
         .padding(.vertical, 20)
     }
     
+    #if os(iOS)
+    /// The photo on screen now, for Remove Background.
+    private var currentPhoto: UIImage? {
+        if let localImageData, let image = UIImage(data: localImageData) { return image }
+        return selectedImage
+    }
+    #endif
+
     private var defaultAvatar: some View {
         ZStack {
             Circle()
@@ -1157,6 +1192,12 @@ private func removePhoto() {
 
 // MARK: - Image Picker (iOS only)
 #if os(iOS)
+/// A photo handed to a `fullScreenCover(item:)`.
+struct IdentifiedImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     /// Source can be `.photoLibrary` (default) or `.camera`. Callers should

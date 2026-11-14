@@ -155,6 +155,10 @@ enum SheetGalleryDebug {
         case "profileCamera":
             ProfilePhotoCamera { _ in }
 
+        case "backgroundRemoval":
+            // The background picker over a drawn scene; results logged.
+            ProfileBackgroundDebugShot()
+
         case "editStudent":
             // The edit page of the first program's first enrolled student.
             if let program = dm.programs.first,
