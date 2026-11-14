@@ -89,6 +89,17 @@ struct FlightySessionPageView: View {
     /// Notes tab: this session's reminders (the default, on the left) or
     /// the notebook (14 Nov 2026 — Reminders replaced the Reflection tab).
     @State private var notesPane: NotesPane = .reminders
+    /// The Notes tab's width: from 1100 pt (a Mac window, a 13" iPad in
+    /// landscape) Reminders and Notes sit side by side, no switch.
+    @State private var notesTabWidth: CGFloat = 0
+    /// DEBUG HOOPWISE_NOTES_WIDE_AT=<pt> moves the threshold (checking the
+    /// wide layout on an iPad simulator in portrait).
+    private var notesWideAt: CGFloat {
+        #if DEBUG
+        if let v = ProcessInfo.processInfo.environment["HOOPWISE_NOTES_WIDE_AT"].flatMap(Double.init) { return CGFloat(v) }
+        #endif
+        return 1100
+    }
     @State private var quickReminderText = ""
     @State private var quickReminderDue: QuickReminderDue = .beforeNextClass
     @State private var editingSessionReminder: Reminder?
@@ -2999,39 +3010,41 @@ struct FlightySessionPageView: View {
     private var notesTab: some View {
         ZStack(alignment: .bottom) {
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 14) {
-                    notesTypeToggle
-                    if notesPane == .notes {
-                        notebookCard(title: isChinese ? "课程笔记" : "SESSION NOTES",
-                                     icon: "note.text",
-                                     text: activeSessionNotesBinding,
-                                     target: .session,
-                                     placeholder: isChinese ? "笔记、观察、提示..." : "Notes, observations, cues...")
-                        if !(session.coachNotes ?? "").isEmpty {
-                            notebookCard(title: isChinese ? "教练复盘" : "REFLECTION",
-                                         icon: "text.quote",
-                                         text: Binding(get: { session.coachNotes ?? "" },
-                                                       set: { session.coachNotes = $0.isEmpty ? nil : $0 }),
-                                         target: .reflections,
-                                         placeholder: "")
-                        }
-                        previousNotesIndentSection
-                        afterClassCards
-                    } else {
+                if notesTabWidth >= notesWideAt {
+                    // Wide window (15 Nov 2026, Luther: the Mac "not taking
+                    // advantage of the window size"): both panes at once,
+                    // Reminders on the left as in the switch.
+                    HStack(alignment: .top, spacing: 20) {
                         sessionRemindersPane
+                            .frame(width: min(560, notesTabWidth * 0.4))
+                        VStack(spacing: 14) { notebookColumn }
+                            .frame(maxWidth: .infinity)
                     }
-                    Spacer(minLength: 120)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 14)
+                    .padding(.bottom, 120)
+                } else {
+                    VStack(spacing: 14) {
+                        notesTypeToggle
+                        if notesPane == .notes {
+                            notebookColumn
+                        } else {
+                            sessionRemindersPane
+                        }
+                        Spacer(minLength: 120)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .frame(maxWidth: 860)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { notesTabWidth = $0 }
             .background(Color(.systemGroupedBackground))
 
             if showMentionPicker { notesMentionPickerOverlay }
             if showTagPicker { notesTagPickerOverlay }
-            if showFloatingActionBar && notesPane == .notes { notesFloatingActionBar }
+            if showFloatingActionBar && (notesPane == .notes || notesTabWidth >= notesWideAt) { notesFloatingActionBar }
         }
         .gesture(DragGesture(minimumDistance: 30).onEnded { v in if v.translation.height < -40 { showFloatingBar() } })
         .onChange(of: focusedNotesEditor) { _, target in
@@ -3041,6 +3054,27 @@ struct FlightySessionPageView: View {
             AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: reminder)
         }
         .onDisappear { saveSession() }
+    }
+
+    /// The notebook, an older reflection, the previous class's notes, then
+    /// the rating and player of the session.
+    @ViewBuilder
+    private var notebookColumn: some View {
+        notebookCard(title: isChinese ? "课程笔记" : "SESSION NOTES",
+                     icon: "note.text",
+                     text: activeSessionNotesBinding,
+                     target: .session,
+                     placeholder: isChinese ? "笔记、观察、提示..." : "Notes, observations, cues...")
+        if !(session.coachNotes ?? "").isEmpty {
+            notebookCard(title: isChinese ? "教练复盘" : "REFLECTION",
+                         icon: "text.quote",
+                         text: Binding(get: { session.coachNotes ?? "" },
+                                       set: { session.coachNotes = $0.isEmpty ? nil : $0 }),
+                         target: .reflections,
+                         placeholder: "")
+        }
+        previousNotesIndentSection
+        afterClassCards
     }
 
     private var activeSessionNotesBinding: Binding<String> {

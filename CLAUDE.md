@@ -1355,7 +1355,12 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   the session. have lines like a notebook. change the reflection tab for
   reminders. redo this notes section to be more aligned with the app", all
   platforms — his request). Reminders | Notes — Reminders first and the
-  default (Luther, same day); the Reflection tab is gone.
+  default (Luther, same day); the Reflection tab is gone. WIDE (15 Nov
+  2026, Luther: the Mac "not taking advantage of the window size"): from
+  1100 pt the switch goes and both show side by side — Reminders on the
+  left (≤ 560 pt, 40 %), the notebook column on the right; narrower keeps
+  the switch in an ≤ 860 pt column. DEBUG HOOPWISE_NOTES_WIDE_AT=<pt> moves
+  the threshold (check on the iPad Air 13 in portrait with 900).
   NOTES: the session's notes in a ruled card (Views/Components/
   RuledNotebookEditor.swift — rules at the body line height + 8 pt spacing
   from the text view's 8 pt inset, a programme-colour margin line; the
