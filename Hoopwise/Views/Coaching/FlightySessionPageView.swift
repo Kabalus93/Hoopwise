@@ -4331,6 +4331,7 @@ struct SkipSessionSheet: View {
 struct SessionGamesTabView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var session: SessionEvent
     let enrolledStudents: [Student]
     let programColor: Color
@@ -4457,7 +4458,7 @@ struct SessionGamesTabView: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(session.games.enumerated()), id: \.element.id) { index, game in
-                        gameRow(game)
+                        if horizontalSizeClass == .regular { wideGameRow(game) } else { gameRow(game) }
                         if index < session.games.count - 1 {
                             Divider()
                                 .padding(.leading, 16)
@@ -4799,6 +4800,101 @@ struct SessionGamesTabView: View {
         }
     }
 
+    private func openGame(_ game: SessionGame) {
+        if game.status == .completed { selectedRecapGame = game } else { selectedGame = game }
+    }
+
+    /// iPad / Mac (14 Nov 2026, Luther: "Game 1 and completed, a bit
+    /// awkward" — in the narrower games column the old row broke its words
+    /// letter by letter). One line each side: the game and how it is played;
+    /// the score with the winner bright; a ⋯ menu instead of two buttons.
+    private func wideGameRow(_ game: SessionGame) -> some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        let teams = game.activeTeams.isEmpty ? game.teams : game.activeTeams
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Text(isChinese ? "第\(game.gameNumber)场" : "Game \(game.gameNumber)")
+                        .font(.headline)
+                    if game.status == .completed {
+                        Text(isChinese ? "终场" : "FINAL")
+                            .font(.caption2.weight(.bold))
+                            .tracking(0.8)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        statusBadge(game.status)
+                    }
+                }
+                .lineLimit(1)
+                Label {
+                    Text("\(game.gameType.displayName) · \(game.durationMinutes) min")
+                } icon: {
+                    Image(systemName: game.gameType.icon)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            if teams.count == 2 {
+                let a = game.score(for: teams[0].id), b = game.score(for: teams[1].id)
+                HStack(spacing: 8) {
+                    wideScore(teams[0], a, bright: a >= b || game.status != .completed, dotFirst: true)
+                    Text("–").font(.subheadline).foregroundStyle(.tertiary)
+                    wideScore(teams[1], b, bright: b >= a || game.status != .completed, dotFirst: false)
+                }
+                .fixedSize()
+            } else if let leader = game.individualLeaderboard.first {
+                Text("\(leader.points)")
+                    .font(.title3.weight(.bold).monospacedDigit())
+            }
+
+            Menu {
+                Button {
+                    openGame(game)
+                } label: {
+                    Label(game.status == .completed ? (isChinese ? "比赛回顾" : "Game Recap") : (isChinese ? "继续记分" : "Keep Scoring"),
+                          systemImage: game.status == .completed ? "chart.bar.fill" : "play.fill")
+                }
+                Button(role: .destructive) {
+                    gameToDelete = game
+                } label: {
+                    Label(isChinese ? "删除比赛" : "Delete Game", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("games.row.menu")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .onTapGesture { openGame(game) }
+        .accessibilityIdentifier("games.row")
+    }
+
+    private func wideScore(_ team: GameTeam, _ score: Int, bright: Bool, dotFirst: Bool) -> some View {
+        let dot = Circle()
+            .fill(Color(hex: team.colorHex))
+            .overlay(Circle().strokeBorder(Color.primary.opacity(0.35), lineWidth: 1))
+            .frame(width: 12, height: 12)
+        let number = Text("\(score)")
+            .font(.title3.weight(.bold).monospacedDigit())
+            .foregroundStyle(bright ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+            .contentTransition(.numericText(value: Double(score)))
+        return HStack(spacing: 6) {
+            if dotFirst { dot; number } else { number; dot }
+        }
+    }
+
     private func compactTeamScore(team: GameTeam, score: Int) -> some View {
         HStack(spacing: 4) {
             Circle()
@@ -4811,7 +4907,7 @@ struct SessionGamesTabView: View {
                 )
             Text("\(score)")
                 .font(.subheadline.bold().monospacedDigit())
-                .foregroundStyle(Color(hex: team.colorHex))
+                .foregroundStyle(team.displayColor(for: colorScheme))
                 .contentTransition(.numericText(value: Double(score)))
         }
     }

@@ -1315,6 +1315,16 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   phone. Tiles (games, points/game, boards/game, % off a pass), HOW THEY
   SCORE split bars, CHEMISTRY duos, PLAYMAKERS; This session | Program
   (starts on this session when it has games). Empty: how to drag an assist.
+  GAME ROW (same day, Luther: "Game 1 and completed, a bit awkward" — in
+  the narrower games column the old row broke its words letter by letter):
+  regular width uses `wideGameRow` — "Game N" + FINAL (or the live status
+  pill), "Regular · 3 min" on one line, the score with team dots and the
+  winner bright, a ⋯ menu (Game Recap / Keep Scoring, Delete) in place of
+  the two buttons; the row opens the game. The phone keeps its row, but its
+  scores now use `GameTeam.displayColor` (the black team's score vanished
+  in dark mode). Dashboard tile captions and chemistry lines wrap to two
+  lines instead of truncating. HOOPWISE_SESSION_TODAY=1 (sessionPage) opens
+  today's session that has games.
   (e) Attendance in regular width = two columns of cards (`attendanceGrid`:
   56 pt photo, name title3, second name, mark caption, the same segmented
   control, Photo in the card menu — no swipes there); compact keeps the List.

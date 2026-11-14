@@ -71,23 +71,25 @@ struct GameDashboardView: View {
     private func tiles(_ report: GameStatsReport.Report, _ chem: GameChemistry.Summary) -> some View {
         let values = scope == .session || !hasOtherSessions ? (report.thisSession ?? report.average) : report.average
         let gamesCount = scope == .session || !hasOtherSessions ? session.games.filter(GameStatsReport.played).count : report.games
-        return HStack(spacing: 10) {
+        return HStack(alignment: .top, spacing: 10) {
             tile("\(gamesCount)", isChinese ? "比赛" : "Games", icon: "sportscourt")
             tile(String(format: "%.1f", values[.points] ?? 0), isChinese ? "场均得分" : "Points / game", icon: "flame")
             tile(String(format: "%.1f", values[.rebounds] ?? 0), isChinese ? "场均篮板" : "Boards / game", icon: "arrow.down.to.line")
             tile(chem.isEmpty ? "—" : "\(Int((chem.assistedShare * 100).rounded()))%",
                  isChinese ? "助攻得分占比" : "Off a pass", icon: "arrow.triangle.branch")
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func tile(_ value: String, _ caption: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Image(systemName: icon).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.title2.weight(.bold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
-            Text(caption).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(caption).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 
@@ -161,7 +163,8 @@ struct GameDashboardView: View {
                             let share = Int((Double(duo.count) / Double(max(1, assisted)) * 100).rounded())
                             Text(isChinese ? "\(name(duo.scorer)) 助攻得分的 \(share)%"
                                            : "\(share)% of \(name(duo.scorer))'s assisted baskets")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 4)
                         Text("×\(duo.count)").font(.headline.monospacedDigit()).foregroundStyle(Color.accentColor)

@@ -294,9 +294,13 @@ enum SheetGalleryDebug {
         case "sessionPage":
             // The first program's earliest session, on its default Attendance
             // tab — the roster rows and their swipe actions.
-            // HOOPWISE_SESSION_TAB=<0…3> opens another tab.
+            // HOOPWISE_SESSION_TAB=<0…3> opens another tab; HOOPWISE_SESSION_TODAY=1
+            // opens today's session that has games instead.
             if let program = dm.programs.first,
-               let session = dm.sessionEvents
+               let session = (ProcessInfo.processInfo.environment["HOOPWISE_SESSION_TODAY"] == "1"
+                    ? dm.sessionEvents.first(where: { Calendar.current.isDateInToday($0.startTime) && !$0.games.isEmpty })
+                    : nil)
+                ?? dm.sessionEvents
                 .filter({ $0.programId == program.id })
                 .min(by: { $0.startTime < $1.startTime }) {
                 let env = ProcessInfo.processInfo.environment
