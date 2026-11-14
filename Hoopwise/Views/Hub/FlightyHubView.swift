@@ -486,10 +486,6 @@ struct MonthlyRevenueHistoryView: View {
         dataManager.coachRevenue(in: focusedMonth)
     }
 
-    private var activePrivateContracts: [Contract] {
-        dataManager.contracts.filter { $0.kind == .privatePayPerSession || $0.kind == .privateBundle }
-    }
-
     // MARK: - Financial breakdown / forecast
 
     private struct MonthBreakdown {
@@ -597,8 +593,8 @@ struct MonthlyRevenueHistoryView: View {
                 if breakdown.total > 0 {
                     breakdownSection
                 }
-                if !activeBundles.isEmpty {
-                    activeBundlesSection
+                if !activeBundles.isEmpty || !payPerSessionClients.isEmpty || !recentlyUsedUp.isEmpty {
+                    privateClientsSection
                 }
                 trendSection
                 if !studentSlices.isEmpty {
@@ -843,26 +839,116 @@ struct MonthlyRevenueHistoryView: View {
         }
     }
 
-    // MARK: - Active bundles (redemption progress)
+    // MARK: - Private clients (15 Nov 2026)
+    //
+    // ONE section (Luther: "Active bundles" and "Active private contracts"
+    // repeated the same clients — the second was an empty-month stand-in
+    // listing every private contract, used-up ones included, despite its
+    // title). Bundles with sessions left (nearest to running out first),
+    // pay-per-session clients with their rate and this month's sessions, and
+    // bundles used up in the last 30 days, dimmed, so a renewal does not slip.
+    // Every row opens the contract card.
 
-    private var activeBundlesSection: some View {
-        Section {
+    private var payPerSessionClients: [Contract] {
+        dataManager.contracts.filter { $0.kind == .privatePayPerSession && $0.status == .active }
+    }
+
+    /// Bundles with nothing left whose last session was within 30 days.
+    private var recentlyUsedUp: [(contract: Contract, last: Date)] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        return dataManager.contracts
+            .filter { $0.kind == .privateBundle && $0.bundleSize > 0 && ($0.bundleRedemptionsRemaining ?? 0) == 0 }
+            .compactMap { contract -> (Contract, Date)? in
+                let ids = Set(contract.bundleSessionIds)
+                guard let last = dataManager.cachedSessionEvents.filter({ ids.contains($0.id) }).map(\.startTime).max(),
+                      last >= cutoff else { return nil }
+                return (contract, last)
+            }
+            .sorted { $0.1 > $1.1 }
+    }
+
+    private var privateClientsSection: some View {
+        let count = activeBundles.count + payPerSessionClients.count + recentlyUsedUp.count
+        return Section {
             ForEach(activeBundles) { contract in
                 activeBundleRow(contract)
             }
+            ForEach(payPerSessionClients) { contract in
+                payPerSessionRow(contract)
+            }
+            ForEach(recentlyUsedUp, id: \.contract.id) { item in
+                usedUpRow(item.contract, last: item.last)
+            }
         } header: {
             HStack {
-                Text("Active bundles")
+                Text("Private clients")
                 Spacer()
-                Text("^[\(activeBundles.count) bundle](inflect: true)")
+                Text("^[\(count) client](inflect: true)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .textCase(nil)
             }
         } footer: {
-            Text("Each bundle is paid for up-front. Sessions tick down as the student attends.")
+            Text("A bundle is paid up front and counts in the month it is bought; its sessions tick down as the student attends. Pay-per-session adds the price each time the student attends.")
                 .font(.caption2)
         }
+    }
+
+    private func payPerSessionRow(_ contract: Contract) -> some View {
+        let student = dataManager.students.first { $0.id == contract.studentId }
+        let thisMonth = dataManager.revenueEvents(in: Date())
+            .filter { $0.contractId == contract.id && $0.kind == .paygAttendance }.count
+        return Button {
+            presentedContract = contract
+        } label: {
+            HStack(spacing: 12) {
+                if let s = student { StudentAvatarView(student: s, size: 36) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(student?.primaryDisplayName ?? "—")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Text("Pay per session · \(contract.pricePerSession.formatted(.currency(code: currencyCode).precision(.fractionLength(0)))) each")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(thisMonth)")
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.primary)
+                    Text("this month")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func usedUpRow(_ contract: Contract, last: Date) -> some View {
+        let student = dataManager.students.first { $0.id == contract.studentId }
+        return Button {
+            presentedContract = contract
+        } label: {
+            HStack(spacing: 12) {
+                if let s = student { StudentAvatarView(student: s, size: 36).opacity(0.6) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(student?.primaryDisplayName ?? "—")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Text("\(contract.bundleSize)-pack used up · last session \(last.formatted(.dateTime.month(.abbreviated).day()))")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+                Text("Renew?")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
     }
 
     private func activeBundleRow(_ contract: Contract) -> some View {
@@ -1053,20 +1139,12 @@ struct MonthlyRevenueHistoryView: View {
 
     // MARK: - Body sections
 
+    /// A past month with nothing billed says so; the current month's summary
+    /// already reads "No revenue this month" and the clients are listed
+    /// above, so it adds nothing.
     @ViewBuilder
     private var emptyMonthSection: some View {
-        if isFocusedOnCurrentMonth && !activePrivateContracts.isEmpty {
-            Section {
-                ForEach(activePrivateContracts) { contract in
-                    contractStatusRow(contract)
-                }
-            } header: {
-                Text("Active private contracts")
-            } footer: {
-                Text("Bundles count their full amount in the month they're purchased. Pay-per-session contracts add the per-session price each time the student attends a private session.")
-                    .font(.caption2)
-            }
-        } else {
+        if !isFocusedOnCurrentMonth {
             Section {
                 ContentUnavailableView(
                     "No revenue",
@@ -1091,47 +1169,6 @@ struct MonthlyRevenueHistoryView: View {
                     .font(.footnote.weight(.semibold).monospacedDigit())
                     .foregroundStyle(Color.accentColor)
             }
-        }
-    }
-
-    @ViewBuilder
-    private func contractStatusRow(_ contract: Contract) -> some View {
-        let student = dataManager.students.first(where: { $0.id == contract.studentId })
-        Button {
-            selectedStudentId = contract.studentId
-        } label: {
-            HStack(spacing: 12) {
-                if let s = student { StudentAvatarView(student: s, size: 36) }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(student?.primaryDisplayName ?? "—")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
-                    Text(privateStatusLine(for: contract))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func privateStatusLine(for contract: Contract) -> String {
-        let symbol = currency.symbol
-        switch contract.kind {
-        case .privateBundle:
-            let used = contract.bundleSessionIds.count
-            let left = max(0, contract.bundleSize - used)
-            let purchase = contract.effectiveBundlePurchaseDate
-                .formatted(.dateTime.month(.abbreviated).year())
-            return "Bundle · \(used)/\(contract.bundleSize) used · \(left) left · purchased \(purchase)"
-        case .privatePayPerSession:
-            return "Pay per session · \(symbol)\(Int(contract.pricePerSession))/attendance"
-        case .group:
-            return ""
         }
     }
 

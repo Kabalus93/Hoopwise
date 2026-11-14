@@ -1452,7 +1452,13 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   the money line, "+N" and the footer open Revenue — PUSHED as a full page
   (`MonthlyRevenueHistoryView(pushed: true)`: no stack of its own, no Done;
   it was a popup) — and each client bubble opens their contract card
-  (PrivateClientDetailSheet: history, sessions, Schedule) as a popup. Tiles: LIBRARY — Plays, Drills (was
+  (PrivateClientDetailSheet: history, sessions, Schedule) as a popup. On
+  the Revenue page "Active bundles" and the empty-month "Active private
+  contracts" (which listed every private contract, used-up ones too, and
+  opened the profile) are ONE "Private clients" section: bundles with
+  sessions left, active pay-per-session clients (rate, sessions this month),
+  bundles used up in the last 30 days (dimmed, "Renew?"); every row opens
+  the contract card; a past empty month says "No revenue". Tiles: LIBRARY — Plays, Drills (was
   "Coach"), Lexicon (three across when wide, Lexicon wide on a phone) —
   and PEOPLE — Teams, Organization. Icons are DRAWN (Views/Hub/
   HubGlyphs.swift: play diagram, cone, open book, jersey "23", org chart)
