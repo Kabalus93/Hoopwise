@@ -1031,19 +1031,14 @@ struct DrillDetailView: View {
 
                     // Content
                     VStack(spacing: 16) {
-                        // Inline info chips (replaces cards)
-                        quickInfoChips
+                        // Age, block, type, minutes and players are in the
+                        // hero; a quick note still shows how complete it is.
+                        if isQuickNoteDrill { quickInfoChips }
 
-                        // Activity library: age · block · type, and the source.
+                        // Activity library: the source.
                         if let activity = currentDrill.libraryActivity {
-                            VStack(alignment: .leading, spacing: 12) {
-                                LibraryBadges(activity: activity)
-                                if let zh = activity.nameZh, zh != currentDrill.localizedName {
-                                    Text(zh).font(.subheadline).foregroundStyle(.secondary)
-                                }
-                                LibrarySourceView(activity: activity)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            LibrarySourceView(activity: activity)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         
                         // Description (with placeholder for empty)
@@ -1284,69 +1279,108 @@ struct DrillDetailView: View {
         }
     }
     
-    // MARK: - Compact Hero Header
+    // MARK: - Hero
+    /// The drill's hero (14 Nov 2026, Luther: the header "is awkward … make
+    /// the page more fitting to the app and designed with purpose"). The
+    /// session page's language: a card in the drill's BLOCK colour with that
+    /// block's court drawn in code, the facts as caps + title + glass pills.
+    /// A library drill's legacy category and difficulty are guesses, so they
+    /// are not shown; a personal drill keeps its category and difficulty.
     private var heroHeader: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Gradient background - more compact
-            LinearGradient(
-                colors: [categoryColor, categoryColor.opacity(0.7)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 140)
-            
-            // Smaller watermark icon
-            Image(systemName: drill.category.icon)
-                .font(.system(size: 80, weight: .bold))
-                .foregroundColor(.white.opacity(0.1))
-                .offset(x: 220, y: -10)
-            
-            // Content - tighter spacing
-            VStack(alignment: .leading, spacing: 6) {
-                // Category + visibility as inline pills
-                HStack(spacing: 6) {
-                    Text(currentDrill.localizedCategory.uppercased())
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.white.opacity(0.2))
-                        .cornerRadius(4)
-
-                    if let visibilityLabel {
-                        Text(visibilityLabel)
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.95))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.black.opacity(0.22))
-                            .cornerRadius(4)
-                    }
+        let activity = currentDrill.libraryActivity
+        let zhName = activity?.nameZh.flatMap { $0 != currentDrill.localizedName ? $0 : nil }
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(heroEyebrow)
+                .font(.caption2.weight(.bold))
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.75))
+            Text(currentDrill.localizedName)
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let zhName {
+                Text(zhName)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            FlowLayout(spacing: 8) {
+                if let activity {
+                    heroPill(icon: activity.type.icon, activity.type.title)
+                } else {
+                    heroPill(icon: drill.category.icon, currentDrill.localizedCategory)
                 }
-                
-                // Drill name - single line with truncation
-                Text(currentDrill.localizedName)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                
-                // Difficulty dots closer to name
-                HStack(spacing: 5) {
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .fill(i < currentDrill.difficulty.level ? .white : .white.opacity(0.3))
-                            .frame(width: 7, height: 7)
-                    }
-                    Text(currentDrill.localizedDifficulty)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
+                heroPill(icon: "clock", currentDrill.localizedDuration)
+                heroPill(icon: "person.2", currentDrill.localizedPlayerRange)
+                if activity == nil {
+                    heroPill(icon: "chart.bar", currentDrill.localizedDifficulty)
+                }
+                if let visibilityLabel {
+                    heroPill(icon: "eye", visibilityLabel)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
+            .padding(.top, 4)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, minHeight: 168, alignment: .bottomLeading)
+        .background {
+            ZStack {
+                CardCourtBackground(color: heroColor, style: heroCourt)
+                LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.55)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, AppTheme.spacing)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("drill.hero")
+    }
+
+    /// "U10 · ROUTINE", or "PERSONAL" for the coach's own drills.
+    private var heroEyebrow: String {
+        if let activity = currentDrill.libraryActivity {
+            return "\(activity.age.title) · \(activity.block.title)".uppercased()
+        }
+        return (isChinese ? "个人训练" : "Personal drill").uppercased()
+    }
+
+    /// The block's colour, the same family as the session headers.
+    private var heroColor: Color {
+        switch currentDrill.libraryActivity?.block {
+        case .routine: return Color(hex: "#1F6F8B")
+        case .smallGames: return Color(hex: "#5B3FA8")
+        case .compete: return Color(hex: "#B4461C")
+        case .game: return Color(hex: "#1E7A45")
+        case nil: return categoryColor
         }
     }
-    
+
+    /// Each block's court: stations for a routine, a board for small games,
+    /// the half court to compete, the whole floor for a game.
+    private var heroCourt: CourtArtStyle {
+        switch currentDrill.libraryActivity?.block {
+        case .routine: return .testSpots
+        case .smallGames: return .tacticsBoard
+        case .compete: return .halfCourt
+        case .game: return .fullCourt
+        case nil: return .halfCourt
+        }
+    }
+
+    private func heroPill(icon: String, _ text: String) -> some View {
+        Label {
+            Text(text).font(.caption.weight(.semibold)).lineLimit(1)
+        } icon: {
+            Image(systemName: icon).font(.caption2.weight(.semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background { Capsule().fill(.black.opacity(0.3)) }
+        .glassEffect(.regular, in: Capsule())
+    }
+
     // MARK: - Inline Info Chips (replaces cards)
     private var quickInfoChips: some View {
         HStack(spacing: 16) {

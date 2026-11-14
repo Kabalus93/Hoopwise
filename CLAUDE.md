@@ -1065,6 +1065,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   caption field and its focus away. Step controls are icon buttons, Add a
   step its own prominent button. Pinned by
   PlayEditorWorkspaceUITests.testInspectorFollowsTheWindowShape (iPad mini).
+- DRILL PAGE HERO (14 November 2026, Luther: the header "is awkward … make
+  the page more fitting to the app and designed with purpose"). The drill
+  page's header is the session page's language: a rounded card in the
+  drill's BLOCK colour (routine teal-blue, small games violet, compete
+  orange-red, game green; a personal drill its category colour) over
+  CardCourtBackground with the block's court (routine = test spots, small
+  games = tactics board, compete = half court, game = full court), then
+  "U10 · ROUTINE" (or "PERSONAL DRILL") caps, the name, the Chinese name,
+  and glass pills: type, minutes, players (+ difficulty and visibility for
+  a personal drill). A library drill's legacy category and difficulty are
+  guesses and are NOT shown (the old banner said "Shooting · Intermediate"
+  on a U10 lay-up routine). The rows under it that repeated age/block/
+  type/minutes/players are gone; Source stays; a quick note keeps its
+  completion count. NOTE: a gallery shot of the drill page in light
+  appearance looks half dark — AppTheme follows the in-app theme, applied
+  by MainTabView's preferredColorScheme, which a gallery shot bypasses.
 - SEVERAL DRAWINGS ON ONE DRILL (9 November 2026, Luther: two drawings sat
   one under the other). DrillDrawingsView (DrillDrawingMedia.swift) lays a
   drill's drawings out SIDE BY SIDE (two columns) when the drawings area is
