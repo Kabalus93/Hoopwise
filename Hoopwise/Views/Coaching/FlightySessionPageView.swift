@@ -3052,6 +3052,7 @@ struct FlightySessionPageView: View {
         }
         .sheet(item: $editingSessionReminder) { reminder in
             AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: reminder)
+                .environmentObject(dataManager)
         }
         .onDisappear { saveSession() }
     }

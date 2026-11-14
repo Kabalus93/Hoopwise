@@ -1401,6 +1401,11 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   reminders appeared only after something ran the synchronous refresh (a
   write, an iCloud change), so on reopening a session its reminders looked
   gone. Tests: ReminderMentionsTests.
+  CRASH FIXED (15 Nov 2026, Mac): tapping a reminder in the quick peep's
+  Reminders card trapped in AddReminderSheet's @EnvironmentObject getter —
+  the peep is itself a sheet and the store did not reach the nested sheet.
+  Both AddReminderSheet presentations pass `.environmentObject(dataManager)`
+  explicitly; do the same for any sheet opened from inside a sheet.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

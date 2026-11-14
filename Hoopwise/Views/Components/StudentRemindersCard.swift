@@ -57,8 +57,12 @@ struct StudentRemindersCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .sheet(item: $editing) { reminder in
+                // Hand the store on explicitly: inside the quick peep (itself a
+                // sheet) the environment object did not reach this sheet and
+                // AddReminderSheet trapped on reading it (Mac, 15 Nov 2026).
                 AddReminderSheet(sessionId: reminder.sessionId ?? UUID(), programId: reminder.programId,
                                  existingReminder: reminder)
+                    .environmentObject(dataManager)
             }
             .accessibilityIdentifier("athlete.reminders")
         }
