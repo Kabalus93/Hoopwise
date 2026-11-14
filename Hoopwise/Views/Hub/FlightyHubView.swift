@@ -62,270 +62,313 @@ struct FlightyHubView: View {
         }
     }
 
+    // THE HUB, REDESIGNED (15 November 2026, Luther: "the command center bar
+    // should be more like a header that occupies the upper half … change
+    // Coach to Drills … a better set of icons, bespoke to the app … the
+    // private class tracker deserves to be better presented"). A court hero
+    // in the session page's language carries the title and the PRIVATE
+    // LESSONS tracker (this month, against last month, six months of bars,
+    // bundles and sessions left); under it two groups of tiles with the
+    // Hub's own glyphs (HubGlyphs.swift): LIBRARY — Plays, Drills, Lexicon —
+    // and PEOPLE — Teams, Organization.
     private var hubColumn: some View {
+        GeometryReader { outer in
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 16) {
-                    // Header with time
-                    headerSection
-                    
-                    // Revenue Dashboard Card
-                    revenueDashboard
-                        .padding(.horizontal, 16)
-                    
-                    // Main Navigation Grid
+                VStack(alignment: .leading, spacing: 22) {
+                    hubHero(topInset: outer.safeAreaInsets.top)
                     navigationGrid
                         .padding(.horizontal, 16)
-                    
                     Spacer(minLength: 100)
                 }
-                .padding(.top, 8)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: -geo.frame(in: .named("scroll")).minY
-                        )
-                    }
-                )
             }
-            .coordinateSpace(name: "scroll")
+            .ignoresSafeArea(edges: .top)
+            .scrollEdgeEffectHidden(true, for: .top)
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .onReceive(timer) { _ in
-                currentTime = Date()
-            }
-    }
-    
-    // MARK: - Header Section
-    private var headerSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(LocalizationManager.shared.currentLanguage == .chinese ? "控制中心" : "COMMAND CENTER")
-                    .font(.caption2.weight(.bold))
-                    .monospaced()
-                    .foregroundStyle(Color.accentColor)
-
-                Text(LocalizationManager.shared.currentLanguage == .chinese ? "中心" : "Hub")
-                    .font(.title3.bold())
-                    .foregroundStyle(.primary)
-            }
-
-            Spacer()
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    themeManager.toggle()
-                }
-            } label: {
-                Image(systemName: themeManager.isDarkMode ? "moon.fill" : "sun.max.fill")
-                    .font(.subheadline.weight(.medium))
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.roundedRectangle(radius: 12))
-            .controlSize(.regular)
-            .tint(.secondary)
-            .sensoryFeedback(.impact(weight: .light), trigger: themeManager.isDarkMode)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(.regularMaterial)
-    }
-    
-    // MARK: - Revenue Dashboard
-    private var revenueDashboard: some View {
-        Button {
-            showingRevenueHistory = true
-        } label: {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 8, height: 8)
-                        Text(Date().formatted(.dateTime.month(.wide).year()).uppercased())
-                            .font(.caption2.weight(.bold))
-                            .monospaced()
-                            .foregroundStyle(Color.accentColor)
-                    }
-
-                    Text(monthlyEarnings, format: .currency(code: currency.currencyCode))
-                        .font(.title.bold().monospacedDigit())
-                        .foregroundStyle(.primary)
-                        .contentTransition(.numericText())
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(newContractsThisMonth)")
-                        .font(.title3.bold().monospacedDigit())
-                        .foregroundStyle(Color.accentColor)
-                        .contentTransition(.numericText(value: Double(newContractsThisMonth)))
-                    Text(LocalizationManager.shared.currentLanguage == .chinese ? "事件" : "EVENTS")
-                        .font(.caption2.weight(.bold))
-                        .monospaced()
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.accentColor.opacity(0.15), in: .rect(cornerRadius: 12))
-            }
-            .padding(18)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
-        .sensoryFeedback(.selection, trigger: showingRevenueHistory)
+        .onReceive(timer) { _ in currentTime = Date() }
         .sheet(isPresented: $showingRevenueHistory) {
             MonthlyRevenueHistoryView()
         }
     }
-    
-    // MARK: - Navigation Grid
-    private var navigationGrid: some View {
-        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        return VStack(spacing: 10) {
-            // Plays replaced League here (Luther, November 2026): HoopWise
-            // Journal's Plays tab, taken as is (Views/Plays/).
-            // The glass goes on the LINK, never inside its label: a
-            // glassEffect in a NavigationLink's label swallowed every tap on
-            // iOS 26 — none of the three Hub cards (League included) opened.
-            NavigationLink(destination: JournalPlaysScreen()) {
-                hubNavCardWide(
-                    icon: "sportscourt",
-                    title: jp("Plays"),
-                    subtitle: jp("\((try? modelContext.fetchCount(FetchDescriptor<JournalPlay>())) ?? 0) plays")
-                )
-            }
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            .accessibilityIdentifier("hub.plays")
-            .buttonStyle(.plain)
 
-            // Teams I coach: roster and playbook (November 2026).
-            NavigationLink(destination: TeamsScreen()) {
-                hubNavCardWide(
-                    icon: "person.3.sequence.fill",
-                    title: isChinese ? "球队" : "Teams",
-                    subtitle: isChinese ? "\(dataManager.teams.count) 支球队" : "\(dataManager.teams.count) \(dataManager.teams.count == 1 ? "team" : "teams")"
-                )
-            }
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            .accessibilityIdentifier("hub.teams")
-            .buttonStyle(.plain)
+    // MARK: - Hero
 
-            // The basketball lexicon: terms, actions, defenses, rules
-            // (November 2026, from Luther's researched doc).
-            NavigationLink(destination: LexiconScreen()) {
-                hubNavCardWide(
-                    icon: "character.book.closed.fill",
-                    title: isChinese ? "术语词典" : "Lexicon",
-                    subtitle: isChinese ? "\(Lexicon.shared.entryCount) 个篮球术语" : "\(Lexicon.shared.entryCount) basketball terms"
-                )
-            }
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            .accessibilityIdentifier("hub.lexicon")
-            .buttonStyle(.plain)
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
-            HStack(spacing: 10) {
-                NavigationLink(destination: DrillsLibraryView()) {
-                    hubNavCard(
-                        icon: "sportscourt.fill",
-                        title: isChinese ? "训练" : "Coach",
-                        subtitle: isChinese ? "\(dataManager.drills.count) 个训练" : "\(dataManager.drills.count) drills"
-                    )
+    private func hubHero(topInset: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isChinese ? "控制中心" : "COMMAND CENTER")
+                        .font(.caption.weight(.bold))
+                        .tracking(1.2)
+                        .foregroundStyle(.white.opacity(0.75))
+                    Text(isChinese ? "中心" : "Hub")
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(.white)
                 }
-                .glassEffect(.regular, in: .rect(cornerRadius: 16))
-                .buttonStyle(.plain)
-
-                NavigationLink(destination: OrganizationView()) {
-                    hubNavCard(
-                        icon: "building.2.fill",
-                        title: isChinese ? "组织" : "Organization",
-                        subtitle: organizationSubtitle(isChinese: isChinese)
-                    )
-                }
-                .glassEffect(.regular, in: .rect(cornerRadius: 16))
-                .buttonStyle(.plain)
-            }
-        }
-    }
-    
-    /// Organization subtitle showing staff count
-    private func organizationSubtitle(isChinese: Bool) -> String {
-        return isChinese ? "\(dataManager.staffCoaches.count) 名员工" : "\(dataManager.staffCoaches.count) staff"
-    }
-    
-private func hubNavCardWide(icon: String, title: String, subtitle: String, badge: String? = nil) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.15))
-                    .frame(width: 48, height: 48)
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(Color.accentColor)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if let badge = badge {
-                Text(badge)
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.red, in: .rect(cornerRadius: 10))
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(.rect(cornerRadius: 16))
-    }
-
-    private func hubNavCard(icon: String, title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                ZStack {
-                    Circle()
-                        .fill(Color.accentColor.opacity(0.15))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: icon)
-                        .font(.headline)
-                        .foregroundStyle(Color.accentColor)
-                }
-
                 Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) { themeManager.toggle() }
+                } label: {
+                    Image(systemName: themeManager.isDarkMode ? "moon.fill" : "sun.max.fill")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .sensoryFeedback(.impact(weight: .light), trigger: themeManager.isDarkMode)
+                .accessibilityLabel(isChinese ? "切换外观" : "Switch appearance")
+            }
+            privateLessonsPanel
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, topInset + (horizontalSizeClass == .regular ? 40 : 16))
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            CardCourtBackground(color: Color(red: 0.08, green: 0.3, blue: 0.75), style: .fullCourt)
+        )
+        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 28, bottomTrailingRadius: 28, style: .continuous))
+    }
 
+    // MARK: - Private lessons tracker
+
+    private var privateBundles: [Contract] {
+        dataManager.contracts.filter { $0.kind == .privateBundle && ($0.bundleRedemptionsRemaining ?? 0) > 0 }
+    }
+
+    private var privateLessonsPanel: some View {
+        let history = Array(dataManager.coachRevenueHistory(months: 6).reversed())   // oldest first
+        let last = history.dropLast().last?.amount ?? 0
+        let bundles = privateBundles
+        let sessionsLeft = bundles.reduce(0) { $0 + ($1.bundleRedemptionsRemaining ?? 0) }
+        let nearlyDone = bundles.filter { ($0.bundleRedemptionsRemaining ?? 0) <= 2 }.count
+        let monthName = Date().formatted(.dateTime.month(.wide))
+        return Button {
+            showingRevenueHistory = true
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .bottom, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(isChinese ? "私教课" : "PRIVATE LESSONS")
+                            .font(.caption2.weight(.bold))
+                            .tracking(1)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text(monthlyEarnings, format: .currency(code: currency.currencyCode))
+                            .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .contentTransition(.numericText())
+                        comparisonLine(month: monthName, previous: last)
+                    }
+                    Spacer(minLength: 8)
+                    revenueBars(history)
+                        .frame(width: 112, height: 58)
+                }
+                HStack(spacing: 0) {
+                    heroStat("\(newContractsThisMonth)", isChinese ? "本月收入笔数" : "payments")
+                    heroStat("\(bundles.count)", isChinese ? "进行中课包" : "active bundles")
+                    heroStat("\(sessionsLeft)", isChinese ? "剩余课时" : "sessions left")
+                }
+                if nearlyDone > 0 {
+                    Label(isChinese ? "\(nearlyDone) 个课包快用完了" : "\(nearlyDone) \(nearlyDone == 1 ? "bundle is" : "bundles are") nearly used up",
+                          systemImage: "exclamationmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .glassEffect(.regular.tint(.orange.opacity(0.55)), in: .capsule)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect(cornerRadius: 20))
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.tint(.white.opacity(0.06)).interactive(), in: .rect(cornerRadius: 20))
+        .sensoryFeedback(.selection, trigger: showingRevenueHistory)
+        .accessibilityIdentifier("hub.revenue")
+    }
+
+    /// "November · October was CN¥1,200" — last month as a plain figure: a
+    /// percentage against a month still under way read as a fall (−100% on
+    /// the 1st).
+    private func comparisonLine(month: String, previous: Double) -> some View {
+        let lastName = Calendar.current.date(byAdding: .month, value: -1, to: Date())?
+            .formatted(.dateTime.month(.wide)) ?? ""
+        let last = previous.formatted(.currency(code: currency.currencyCode).precision(.fractionLength(0)))
+        return Text(isChinese ? "\(month) · \(lastName)为 \(last)" : "\(month) · \(lastName) was \(last)")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.white.opacity(0.8))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    /// Six months of private-lesson revenue as small bars, this month bright.
+    private func revenueBars(_ history: [(month: Date, amount: Double)]) -> some View {
+        let top = max(history.map(\.amount).max() ?? 0, 1)
+        return HStack(alignment: .bottom, spacing: 5) {
+            ForEach(Array(history.enumerated()), id: \.offset) { i, entry in
+                VStack(spacing: 3) {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(.white.opacity(i == history.count - 1 ? 0.95 : 0.4))
+                        .frame(height: max(3, 40 * entry.amount / top))
+                    Text(entry.month.formatted(.dateTime.month(.narrow)))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .frame(maxWidth: .infinity, alignment: .bottom)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isChinese ? "近六个月私教收入" : "Private lesson revenue, last six months")
+    }
+
+    private func heroStat(_ value: String, _ caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value)
+                .font(.title3.weight(.bold).monospacedDigit())
+                .foregroundStyle(.white)
+            Text(caption)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Tiles
+
+    private var navigationGrid: some View {
+        let playCount = (try? modelContext.fetchCount(FetchDescriptor<JournalPlay>())) ?? 0
+        let teams = dataManager.teams.count
+        return VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel(isChinese ? "资料库" : "LIBRARY")
+                HStack(spacing: 10) {
+                    // The glass goes on the LINK, never inside its label: a
+                    // glassEffect in a NavigationLink's label swallowed every
+                    // tap on iOS 26.
+                    NavigationLink(destination: JournalPlaysScreen()) {
+                        hubTile(.plays, tint: .blue, title: jp("Plays"), count: "\(playCount)",
+                                unit: isChinese ? "个战术" : (playCount == 1 ? "play" : "plays"))
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .accessibilityIdentifier("hub.plays")
+
+                    NavigationLink(destination: DrillsLibraryView()) {
+                        hubTile(.drills, tint: .orange, title: isChinese ? "训练" : "Drills",
+                                count: "\(dataManager.drills.count)", unit: isChinese ? "个训练" : "drills")
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .accessibilityIdentifier("hub.drills")
+                }
+                NavigationLink(destination: LexiconScreen()) {
+                    hubWideTile(.lexicon, tint: .teal, title: isChinese ? "术语词典" : "Lexicon",
+                                detail: isChinese ? "\(Lexicon.shared.entryCount) 个篮球术语 · 战术、动作、规则、防守"
+                                                  : "\(Lexicon.shared.entryCount) terms · plays, actions, rules, defenses")
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                .accessibilityIdentifier("hub.lexicon")
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel(isChinese ? "人员" : "PEOPLE")
+                HStack(spacing: 10) {
+                    NavigationLink(destination: TeamsScreen()) {
+                        hubTile(.teams, tint: .indigo, title: isChinese ? "球队" : "Teams", count: "\(teams)",
+                                unit: isChinese ? "支球队" : (teams == 1 ? "team" : "teams"))
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .accessibilityIdentifier("hub.teams")
+
+                    NavigationLink(destination: OrganizationView()) {
+                        hubTile(.organization, tint: .green, title: isChinese ? "组织" : "Organization",
+                                count: "\(dataManager.staffCoaches.count)",
+                                unit: isChinese ? "名教练" : (dataManager.staffCoaches.count == 1 ? "coach" : "coaches"))
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .accessibilityIdentifier("hub.organization")
+                }
+            }
+        }
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.bold))
+            .monospaced()
+            .foregroundStyle(.secondary)
+            .padding(.leading, 4)
+    }
+
+    private func glyphTile(_ kind: HubGlyph.Kind, tint: Color, size: CGFloat) -> some View {
+        HubGlyph(kind: kind, tint: tint, size: size * 0.56)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+    }
+
+    private func hubTile(_ kind: HubGlyph.Kind, tint: Color, title: String, count: String, unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                glyphTile(kind, tint: tint, size: 48)
+                Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
-
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.callout.bold())
+                    .font(.headline)
                     .foregroundStyle(.primary)
-                Text(subtitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(count)
+                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(tint)
+                    Text(unit)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(.rect(cornerRadius: 16))
+        .contentShape(.rect(cornerRadius: 20))
     }
-    
+
+    private func hubWideTile(_ kind: HubGlyph.Kind, tint: Color, title: String, detail: String) -> some View {
+        HStack(spacing: 14) {
+            glyphTile(kind, tint: tint, size: 48)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(.rect(cornerRadius: 20))
+    }
 }
 
 

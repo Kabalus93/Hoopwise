@@ -69,7 +69,7 @@ final class PlaysUITests: XCTestCase {
         let hub = app.buttons["Hub"].firstMatch
         XCTAssertTrue(hub.waitForExistence(timeout: 30))
         hub.tap()
-        for prefix in ["Coach", "Organization"] {
+        for prefix in ["Drills", "Organization"] {
             let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
             XCTAssertTrue(card.waitForExistence(timeout: 10))
             card.tap()

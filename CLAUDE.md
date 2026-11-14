@@ -1433,6 +1433,24 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   the peep is itself a sheet and the store did not reach the nested sheet.
   Both AddReminderSheet presentations pass `.environmentObject(dataManager)`
   explicitly; do the same for any sheet opened from inside a sheet.
+- HUB LANDING REDESIGNED (15 November 2026, Luther: "the command center
+  bar should be more like a header that occupies the upper half … change
+  Coach to Drills … a better set of icons, preferably bespoke … the private
+  class tracker deserves to be better presented", all platforms — his
+  request). FlightyHubView.hubColumn: a full-bleed court HERO (blue,
+  CardCourtBackground .fullCourt, rounded bottom, under the status bar):
+  COMMAND CENTER · Hub + the theme switch (glass circle), and the PRIVATE
+  LESSONS panel (glass, opens MonthlyRevenueHistoryView): this month's
+  coach revenue, "November · October was CN¥…" (a plain figure — a % against
+  a month under way read as −100% on the 1st), six months of bars (this
+  month bright), payments / active bundles / sessions left, and an orange
+  "N bundles nearly used up" (≤ 2 left) when any. Under it LIBRARY — Plays,
+  Drills (was "Coach"), Lexicon (wide) — and PEOPLE — Teams, Organization —
+  as glass tiles with a count in the tile's colour. Icons are drawn
+  (Views/Hub/HubGlyphs.swift): play diagram, cone, open book, two jerseys,
+  org chart. Identifiers hub.plays / hub.drills / hub.lexicon / hub.teams /
+  hub.organization / hub.revenue. Tests: PlaysUITests (Drills, Organization
+  open), TeamsUITests, LexiconUITests, OrganizationUITests.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",
