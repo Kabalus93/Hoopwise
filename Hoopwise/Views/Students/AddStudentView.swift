@@ -86,6 +86,7 @@ struct EditStudentView: View {
     /// Adding a new athlete: the same screen as editing one (October 2026,
     /// Luther), over a fresh record that is only written on Save.
     let isNew: Bool
+    @State private var confirmingDelete = false
 
     // Basic Info
     @State private var name: String
@@ -206,6 +207,10 @@ struct EditStudentView: View {
 
                     // Sharing — exclude private students from organization exports
                     sharingSection
+
+                    // Delete (15 Nov 2026, Luther: athletes could only be
+                    // deleted through the list's hidden Select Multiple).
+                    if !isNew { deleteAthleteSection }
                 }
                 .padding(16)
             }
@@ -243,6 +248,18 @@ struct EditStudentView: View {
                         // Contracts will auto-refresh via onReceive
                     }
                 )
+            }
+            .confirmationDialog(isChinese ? "删除\(student.primaryDisplayName)？" : "Delete \(student.primaryDisplayName)?",
+                                isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button(isChinese ? "删除学员" : "Delete Athlete", role: .destructive) {
+                    let doomed = student
+                    dataManager.deleteStudent(doomed)
+                    NotificationCenter.default.post(name: .hoopwiseStudentDeleted, object: doomed.id)
+                    dismiss()
+                }
+                Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
+            } message: {
+                Text(deleteConsequences(isChinese: isChinese))
             }
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -877,6 +894,44 @@ struct EditStudentView: View {
     }
 
     @ViewBuilder
+    private var deleteAthleteSection: some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        return Button(role: .destructive) {
+            confirmingDelete = true
+        } label: {
+            Label(isChinese ? "删除学员" : "Delete Athlete", systemImage: "trash")
+                .font(.body.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.red)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.top, 12)
+        .accessibilityIdentifier("athlete.delete")
+    }
+
+    /// What deleting takes with it, said plainly — contracts carry the money.
+    private func deleteConsequences(isChinese: Bool) -> String {
+        let contractCount = dataManager.contracts.filter { $0.studentId == student.id }.count
+        let paid = dataManager.contracts.filter { $0.studentId == student.id }.reduce(0.0) { $0 + $1.amountPaid }
+        var parts: [String] = []
+        if isChinese {
+            parts.append("此操作不可撤销。资料、照片和家长信息会被删除。")
+            if contractCount > 0 {
+                parts.append("\(contractCount) 份合同及其付款记录也会删除" + (paid > 0 ? "，过去的收入统计会相应减少。" : "。"))
+            }
+            parts.append("学员会从项目、球队、之后的课程名单和提醒中移除；过去课程的考勤记录保留。")
+        } else {
+            parts.append("This can't be undone. Their profile, photo and guardian details are removed.")
+            if contractCount > 0 {
+                parts.append("\(contractCount) \(contractCount == 1 ? "contract and its payments go" : "contracts and their payments go") too" + (paid > 0 ? ", so past revenue from them leaves the Revenue page." : "."))
+            }
+            parts.append("They leave their programs, teams, upcoming class rosters and reminders; past classes keep their attendance.")
+        }
+        return parts.joined(separator: " ")
+    }
+
     private func gradeMenuSection(_ title: String, _ grades: [SchoolGrade]) -> some View {
         Section(title) {
             ForEach(grades, id: \.self) { grade in

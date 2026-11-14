@@ -343,6 +343,11 @@ struct StudentIntelligenceListView: View {
             .sheet(isPresented: $showingAddStudent) {
                 EditStudentView()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .hoopwiseStudentDeleted)) { note in
+                guard let id = note.object as? UUID else { return }
+                if selectedStudent?.id == id { selectedStudent = nil }
+                if sheetStudent?.id == id { sheetStudent = nil }
+            }
             .sheet(item: $transferMode) { mode in
                 StudentTransferView(initialMode: mode)
             }

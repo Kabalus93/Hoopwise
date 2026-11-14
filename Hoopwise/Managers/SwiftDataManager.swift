@@ -1151,7 +1151,33 @@ class SwiftDataManager: ObservableObject {
     
     func deleteStudent(_ student: Student) {
         do {
-            // First, delete all contracts associated with this student (locally)
+            // Take the athlete out of everything that names them (15 Nov
+            // 2026): program enrolments, team rosters, the rosters of classes
+            // still to come and reminder tags — the id used to stay behind
+            // and count as an expected player. Past classes keep their marks
+            // as history.
+            let studentId = student.id
+            let now = Date()
+            for program in try modelContext.fetch(FetchDescriptor<SDProgram>()) where program.enrolledStudentIds.contains(studentId) {
+                program.enrolledStudentIds.removeAll { $0 == studentId }
+                program.updatedAt = now
+            }
+            for team in try modelContext.fetch(FetchDescriptor<SDTeam>()) where team.playerIds.contains(studentId) {
+                team.playerIds.removeAll { $0 == studentId }
+            }
+            for session in try modelContext.fetch(FetchDescriptor<SDSessionEvent>())
+            where session.startTime > now && session.status == .scheduled && session.attendeeIds.contains(studentId) {
+                session.attendeeIds.removeAll { $0 == studentId }
+            }
+            for reminder in try modelContext.fetch(FetchDescriptor<SDReminder>()) {
+                guard let data = reminder.taggedStudentIdsData,
+                      var ids = try? JSONDecoder().decode([UUID].self, from: data),
+                      ids.contains(studentId) else { continue }
+                ids.removeAll { $0 == studentId }
+                reminder.taggedStudentIdsData = try? JSONEncoder().encode(ids)
+            }
+
+            // Then delete all contracts associated with this student (locally)
             let contractDescriptor = FetchDescriptor<SDContract>(predicate: #Predicate { $0.studentId == student.id })
             let studentContracts = try modelContext.fetch(contractDescriptor)
             let studentContractIds = studentContracts.map(\.id)
@@ -1174,6 +1200,7 @@ class SwiftDataManager: ObservableObject {
                 _ = studentContractIds
                 _ = studentPlayerIds
                 saveAndRefresh()
+                loadReminders()
             }
         } catch {
             debugLog("❌ Failed to delete student: \(error)")

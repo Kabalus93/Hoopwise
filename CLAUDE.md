@@ -1466,6 +1466,19 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Identifiers hub.plays / hub.drills / hub.lexicon / hub.teams /
   hub.organization / hub.revenue. Tests: PlaysUITests (Drills,
   Organization open), TeamsUITests, LexiconUITests, OrganizationUITests.
+- DELETE AN ATHLETE (15 November 2026, Luther: "I have no ability to
+  delete students"). It existed only behind Athletes → + → Select Multiple.
+  Edit Athlete (EditStudentView, existing athletes) ends with a red DELETE
+  ATHLETE; the confirmation says what goes — profile, photo, guardian; N
+  contracts AND THEIR PAYMENTS (so past revenue from them leaves the Revenue
+  page); out of programs, teams, upcoming rosters and reminders; past
+  classes keep their attendance. There is no archive (it would be a schema
+  field). `deleteStudent` now also removes the id from program enrolment,
+  team rosters, scheduled upcoming sessions' attendeeIds and reminder tags
+  (they stayed behind and counted as expected players) before deleting
+  contracts / player / student in one save. `.hoopwiseStudentDeleted`
+  (object: id) closes the profile and clears the Athletes selection.
+  Tests: DeleteStudentTests.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

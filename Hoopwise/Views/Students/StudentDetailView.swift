@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StudentDetailView: View {
     @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismissProfile
     let student: Student
     @State private var showingEditSheet = false
     @State private var contractEdit: ContractEdit?
@@ -101,6 +102,11 @@ struct StudentDetailView: View {
         }
         .sheet(isPresented: $showingEditSheet) {
             EditStudentView(student: student, player: player)
+        }
+        // Deleted from Edit: the profile closes once the edit sheet has.
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseStudentDeleted)) { note in
+            guard (note.object as? UUID) == student.id else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { dismissProfile() }
         }
         .sheet(item: $contractEdit) { edit in
             AddEditContractSheet(studentId: student.id, existing: edit.contract)

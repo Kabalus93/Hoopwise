@@ -11,6 +11,8 @@ extension Notification.Name {
     /// MainTabView observes these (the one sanctioned freeze exception).
     static let hoopwiseOpenSessionRequest = Notification.Name("hoopwiseOpenSessionRequest")
     static let hoopwiseOpenAthleteRequest = Notification.Name("hoopwiseOpenAthleteRequest")
+    /// An athlete was deleted (object: the UUID) — pages showing them close.
+    static let hoopwiseStudentDeleted = Notification.Name("hoopwiseStudentDeleted")
 }
 
 /// A widget deep link that arrived before MainTabView's observers existed —
