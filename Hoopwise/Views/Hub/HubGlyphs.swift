@@ -3,7 +3,7 @@ import SwiftUI
 /// The Hub's own icons (15 November 2026, Luther: "a better set of icons,
 /// preferably bespoke to the app" — Plays and Coach shared a court symbol and
 /// Teams' symbol overflowed its bubble). Drawn in a unit square so each fits
-/// its tile: a play diagram, two jerseys, an open book, a cone, an org chart.
+/// its tile: a play diagram, a jersey, an open book, a cone, an org chart.
 struct HubGlyph: View {
     enum Kind { case plays, teams, lexicon, drills, organization }
 
@@ -39,29 +39,23 @@ struct HubGlyph: View {
                 context.stroke(x, with: shade, style: line)
 
             case .teams:
-                // Two jerseys, one behind the other.
-                func jersey(dx: CGFloat, dy: CGFloat, k: CGFloat) -> Path {
-                    func q(_ x: CGFloat, _ y: CGFloat) -> CGPoint { p(dx + x * k, dy + y * k) }
-                    var j = Path()
-                    j.move(to: q(0.18, 0.10))
-                    j.addLine(to: q(0.36, 0.10))
-                    j.addQuadCurve(to: q(0.64, 0.10), control: q(0.50, 0.32))
-                    j.addLine(to: q(0.82, 0.10))
-                    j.addLine(to: q(0.82, 0.30))
-                    j.addQuadCurve(to: q(0.76, 0.48), control: q(0.72, 0.36))
-                    j.addLine(to: q(0.76, 0.92))
-                    j.addLine(to: q(0.24, 0.92))
-                    j.addLine(to: q(0.24, 0.48))
-                    j.addQuadCurve(to: q(0.18, 0.30), control: q(0.28, 0.36))
-                    j.closeSubpath()
-                    return j
-                }
-                let back = jersey(dx: -0.04, dy: 0.0, k: 0.68)
-                context.fill(back, with: soft)
-                context.stroke(back, with: GraphicsContext.Shading.color(tint.opacity(0.6)), style: line)
-                let front = jersey(dx: 0.32, dy: 0.2, k: 0.68)
-                context.fill(front, with: GraphicsContext.Shading.color(tint.opacity(0.18)))
-                context.stroke(front, with: shade, style: line)
+                // A team jersey with a number.
+                var j = Path()
+                j.move(to: p(0.22, 0.10))
+                j.addLine(to: p(0.38, 0.10))
+                j.addQuadCurve(to: p(0.62, 0.10), control: p(0.50, 0.30))
+                j.addLine(to: p(0.78, 0.10))
+                j.addLine(to: p(0.80, 0.30))
+                j.addQuadCurve(to: p(0.74, 0.46), control: p(0.72, 0.36))
+                j.addLine(to: p(0.74, 0.92))
+                j.addLine(to: p(0.26, 0.92))
+                j.addLine(to: p(0.26, 0.46))
+                j.addQuadCurve(to: p(0.20, 0.30), control: p(0.28, 0.36))
+                j.closeSubpath()
+                context.fill(j, with: GraphicsContext.Shading.color(tint.opacity(0.16)))
+                context.stroke(j, with: shade, style: line)
+                context.draw(Text("23").font(.system(size: s * 0.3, weight: .heavy, design: .rounded)).foregroundStyle(tint),
+                             at: p(0.50, 0.64))
 
             case .lexicon:
                 // An open book with lines on its pages.

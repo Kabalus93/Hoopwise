@@ -182,7 +182,8 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   (`contentSizeClass`) — split views inside the tabs still see .regular.
   `.sidebarAdaptable` (the top bar + sidebar toggle) is gone.
 - PHASE 1 DONE (6 November 2026): regular width only —
-  the Hub (FlightyHubView) is a NavigationSplitView: their list on the left, and the rows'
+  the Hub (FlightyHubView) was a NavigationSplitView (since 15 Nov 2026 a
+  full page — see HUB LANDING REDESIGNED): their list on the left, and the rows'
   `NavigationLink(destination:)` land in the detail column by themselves
   (the Hub's detail opens on Plays). Athletes already was one. SESSIONS AS A
   SPLIT VIEW WAS TRIED AND REVERTED (Luther: "not looking good") — the
@@ -1437,20 +1438,25 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   bar should be more like a header that occupies the upper half … change
   Coach to Drills … a better set of icons, preferably bespoke … the private
   class tracker deserves to be better presented", all platforms — his
-  request). FlightyHubView.hubColumn: a full-bleed court HERO (blue,
+  request; refined the same day). FlightyHubView: a FULL PAGE on every
+  platform (the iPad's sidebar split is gone — Luther: "the full page rather
+  than a side bar"; tiles push their pages). A full-bleed court HERO (blue,
   CardCourtBackground .fullCourt, rounded bottom, under the status bar):
-  COMMAND CENTER · Hub + the theme switch (glass circle), and the PRIVATE
-  LESSONS panel (glass, opens MonthlyRevenueHistoryView): this month's
-  coach revenue, "November · October was CN¥…" (a plain figure — a % against
-  a month under way read as −100% on the 1st), six months of bars (this
-  month bright), payments / active bundles / sessions left, and an orange
-  "N bundles nearly used up" (≤ 2 left) when any. Under it LIBRARY — Plays,
-  Drills (was "Coach"), Lexicon (wide) — and PEOPLE — Teams, Organization —
-  as glass tiles with a count in the tile's colour. Icons are drawn
-  (Views/Hub/HubGlyphs.swift): play diagram, cone, open book, two jerseys,
-  org chart. Identifiers hub.plays / hub.drills / hub.lexicon / hub.teams /
-  hub.organization / hub.revenue. Tests: PlaysUITests (Drills, Organization
-  open), TeamsUITests, LexiconUITests, OrganizationUITests.
+  phone — "COMMAND CENTER · Hub" with the theme switch on its line, the
+  tracker under; wide — switch top right, title bottom left, tracker
+  beside it (≤ 560 pt, hero ≥ 300 pt). PRIVATE LESSONS (second version —
+  month total + six bars was rejected: bundle sales arrive in lumps): one
+  line "November CN¥… · October CN¥…", then each private client with an
+  active bundle as their photo in a RING of the bundle left (orange at
+  ≤ 2, nearest renewal first, five + "+N"), "N bundles · N sessions left";
+  opens MonthlyRevenueHistoryView. Tiles: LIBRARY — Plays, Drills (was
+  "Coach"), Lexicon (three across when wide, Lexicon wide on a phone) —
+  and PEOPLE — Teams, Organization. Icons are DRAWN (Views/Hub/
+  HubGlyphs.swift: play diagram, cone, open book, jersey "23", org chart)
+  in the ink colour on a neutral tile; only the cone is orange (Luther).
+  Identifiers hub.plays / hub.drills / hub.lexicon / hub.teams /
+  hub.organization / hub.revenue. Tests: PlaysUITests (Drills,
+  Organization open), TeamsUITests, LexiconUITests, OrganizationUITests.
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

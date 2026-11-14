@@ -45,21 +45,10 @@ struct FlightyHubView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        if horizontalSizeClass == .regular {
-            // iPad (November 2026): the Hub on the left, what it opens
-            // (Plays, Coach, Organization) on the right.
-            NavigationSplitView {
-                hubColumn
-                    .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 440)
-            } detail: {
-                NavigationStack {
-                    JournalPlaysScreen()
-                }
-            }
-            .navigationSplitViewStyle(.balanced)
-        } else {
-            NavigationStack { hubColumn }
-        }
+        // Full page everywhere (15 Nov 2026, Luther: on the iPad "let the hub
+        // landing page be the full page rather than a side bar"); its tiles
+        // push their pages.
+        NavigationStack { hubColumn }
     }
 
     // THE HUB, REDESIGNED (15 November 2026, Luther: "the command center bar
@@ -95,42 +84,73 @@ struct FlightyHubView: View {
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
+    /// Title on the left and the theme switch on one line on a phone, the
+    /// tracker under them; on a wide screen the switch top right, the title
+    /// bottom left and the tracker beside it.
     private func hubHero(topInset: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isChinese ? "控制中心" : "COMMAND CENTER")
-                        .font(.caption.weight(.bold))
-                        .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.75))
-                    Text(isChinese ? "中心" : "Hub")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(.white)
+        let wide = horizontalSizeClass == .regular
+        return Group {
+            if wide {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Spacer()
+                        themeButton
+                    }
+                    Spacer(minLength: 24)
+                    HStack(alignment: .bottom, spacing: 28) {
+                        heroTitle
+                        Spacer(minLength: 0)
+                        privateLessonsPanel
+                            .frame(maxWidth: 560)
+                    }
                 }
-                Spacer()
-                Button {
-                    withAnimation(.easeInOut(duration: 0.3)) { themeManager.toggle() }
-                } label: {
-                    Image(systemName: themeManager.isDarkMode ? "moon.fill" : "sun.max.fill")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
+                .frame(minHeight: 300, alignment: .bottom)
+            } else {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .center) {
+                        heroTitle
+                        Spacer()
+                        themeButton
+                    }
+                    privateLessonsPanel
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .circle)
-                .sensoryFeedback(.impact(weight: .light), trigger: themeManager.isDarkMode)
-                .accessibilityLabel(isChinese ? "切换外观" : "Switch appearance")
             }
-            privateLessonsPanel
         }
-        .padding(.horizontal, 20)
-        .padding(.top, topInset + (horizontalSizeClass == .regular ? 40 : 16))
-        .padding(.bottom, 22)
+        .padding(.horizontal, wide ? 32 : 20)
+        .padding(.top, topInset + (wide ? 20 : 12))
+        .padding(.bottom, wide ? 28 : 22)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             CardCourtBackground(color: Color(red: 0.08, green: 0.3, blue: 0.75), style: .fullCourt)
         )
         .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 28, bottomTrailingRadius: 28, style: .continuous))
+    }
+
+    private var heroTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(isChinese ? "控制中心" : "COMMAND CENTER")
+                .font(.caption.weight(.bold))
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.75))
+            Text(isChinese ? "中心" : "Hub")
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(.white)
+        }
+    }
+
+    private var themeButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.3)) { themeManager.toggle() }
+        } label: {
+            Image(systemName: themeManager.isDarkMode ? "moon.fill" : "sun.max.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .sensoryFeedback(.impact(weight: .light), trigger: themeManager.isDarkMode)
+        .accessibilityLabel(isChinese ? "切换外观" : "Switch appearance")
     }
 
     // MARK: - Private lessons tracker
@@ -139,48 +159,60 @@ struct FlightyHubView: View {
         dataManager.contracts.filter { $0.kind == .privateBundle && ($0.bundleRedemptionsRemaining ?? 0) > 0 }
     }
 
+    /// PRIVATE LESSONS, second version (15 Nov 2026, Luther: not convinced
+    /// by the month total + bars — bundle sales arrive in lumps, so the bars
+    /// were mostly zero). Money is one small line; the body is the CLIENTS:
+    /// each private client with an active bundle as their photo in a ring of
+    /// what is left (orange at ≤ 2), nearest to renewal first.
     private var privateLessonsPanel: some View {
-        let history = Array(dataManager.coachRevenueHistory(months: 6).reversed())   // oldest first
-        let last = history.dropLast().last?.amount ?? 0
-        let bundles = privateBundles
+        let history = dataManager.coachRevenueHistory(months: 2)   // newest first
+        let last = history.count > 1 ? history[1].amount : 0
+        let bundles = privateBundles.sorted { ($0.bundleRedemptionsRemaining ?? 0) < ($1.bundleRedemptionsRemaining ?? 0) }
         let sessionsLeft = bundles.reduce(0) { $0 + ($1.bundleRedemptionsRemaining ?? 0) }
-        let nearlyDone = bundles.filter { ($0.bundleRedemptionsRemaining ?? 0) <= 2 }.count
         let monthName = Date().formatted(.dateTime.month(.wide))
+        let lastName = Calendar.current.date(byAdding: .month, value: -1, to: Date())?.formatted(.dateTime.month(.wide)) ?? ""
+        let shown = Array(bundles.prefix(5))
         return Button {
             showingRevenueHistory = true
         } label: {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .bottom, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(isChinese ? "私教课" : "PRIVATE LESSONS")
-                            .font(.caption2.weight(.bold))
-                            .tracking(1)
-                            .foregroundStyle(.white.opacity(0.7))
-                        Text(monthlyEarnings, format: .currency(code: currency.currencyCode))
-                            .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                            .contentTransition(.numericText())
-                        comparisonLine(month: monthName, previous: last)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(isChinese ? "私教课" : "PRIVATE LESSONS")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Spacer(minLength: 4)
+                    Text(isChinese
+                         ? "\(monthName) \(money(monthlyEarnings)) · \(lastName) \(money(last))"
+                         : "\(monthName) \(money(monthlyEarnings)) · \(lastName) \(money(last))")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                if shown.isEmpty {
+                    Text(isChinese ? "没有进行中的私教课包" : "No private bundles running")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                } else {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(shown) { clientBubble($0) }
+                        if bundles.count > shown.count {
+                            Text("+\(bundles.count - shown.count)")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 52, height: 52)
+                                .background(.white.opacity(0.15), in: Circle())
+                        }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 8)
-                    revenueBars(history)
-                        .frame(width: 112, height: 58)
-                }
-                HStack(spacing: 0) {
-                    heroStat("\(newContractsThisMonth)", isChinese ? "本月收入笔数" : "payments")
-                    heroStat("\(bundles.count)", isChinese ? "进行中课包" : "active bundles")
-                    heroStat("\(sessionsLeft)", isChinese ? "剩余课时" : "sessions left")
-                }
-                if nearlyDone > 0 {
-                    Label(isChinese ? "\(nearlyDone) 个课包快用完了" : "\(nearlyDone) \(nearlyDone == 1 ? "bundle is" : "bundles are") nearly used up",
-                          systemImage: "exclamationmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .glassEffect(.regular.tint(.orange.opacity(0.55)), in: .capsule)
+                    Text(isChinese ? "\(bundles.count) 个课包 · 剩余 \(sessionsLeft) 节"
+                                   : "\(bundles.count) \(bundles.count == 1 ? "bundle" : "bundles") · \(sessionsLeft) \(sessionsLeft == 1 ? "session" : "sessions") left")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
             }
             .padding(16)
@@ -193,97 +225,90 @@ struct FlightyHubView: View {
         .accessibilityIdentifier("hub.revenue")
     }
 
-    /// "November · October was CN¥1,200" — last month as a plain figure: a
-    /// percentage against a month still under way read as a fall (−100% on
-    /// the 1st).
-    private func comparisonLine(month: String, previous: Double) -> some View {
-        let lastName = Calendar.current.date(byAdding: .month, value: -1, to: Date())?
-            .formatted(.dateTime.month(.wide)) ?? ""
-        let last = previous.formatted(.currency(code: currency.currencyCode).precision(.fractionLength(0)))
-        return Text(isChinese ? "\(month) · \(lastName)为 \(last)" : "\(month) · \(lastName) was \(last)")
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.white.opacity(0.8))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+    private func money(_ amount: Double) -> String {
+        amount.formatted(.currency(code: currency.currencyCode).precision(.fractionLength(0)))
     }
 
-    /// Six months of private-lesson revenue as small bars, this month bright.
-    private func revenueBars(_ history: [(month: Date, amount: Double)]) -> some View {
-        let top = max(history.map(\.amount).max() ?? 0, 1)
-        return HStack(alignment: .bottom, spacing: 5) {
-            ForEach(Array(history.enumerated()), id: \.offset) { i, entry in
-                VStack(spacing: 3) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(.white.opacity(i == history.count - 1 ? 0.95 : 0.4))
-                        .frame(height: max(3, 40 * entry.amount / top))
-                    Text(entry.month.formatted(.dateTime.month(.narrow)))
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
+    /// A client's photo inside a ring of the bundle still to use.
+    private func clientBubble(_ contract: Contract) -> some View {
+        let left = contract.bundleRedemptionsRemaining ?? 0
+        let size = max(1, contract.bundleSize)
+        let low = left <= 2
+        let student = dataManager.students.first { $0.id == contract.studentId }
+        let firstName = student.map { $0.primaryDisplayName.components(separatedBy: " ").first ?? $0.primaryDisplayName } ?? "—"
+        return VStack(spacing: 4) {
+            ZStack {
+                Circle().stroke(.white.opacity(0.18), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: CGFloat(left) / CGFloat(size))
+                    .stroke(low ? Color.orange : .white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                if let student {
+                    StudentAvatarView(student: student, size: 44)
+                } else {
+                    Circle().fill(.white.opacity(0.2)).frame(width: 44, height: 44)
                 }
-                .frame(maxWidth: .infinity, alignment: .bottom)
             }
+            .frame(width: 52, height: 52)
+            Text(firstName)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .frame(width: 60)
+            Text(isChinese ? "剩 \(left) 节" : "\(left) left")
+                .font(.caption2.weight(.medium).monospacedDigit())
+                .foregroundStyle(low ? Color.orange : .white.opacity(0.7))
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isChinese ? "近六个月私教收入" : "Private lesson revenue, last six months")
+        .accessibilityLabel("\(student?.primaryDisplayName ?? ""), \(left) of \(size)")
     }
 
-    private func heroStat(_ value: String, _ caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value)
-                .font(.title3.weight(.bold).monospacedDigit())
-                .foregroundStyle(.white)
-            Text(caption)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     // MARK: - Tiles
 
     private var navigationGrid: some View {
         let playCount = (try? modelContext.fetchCount(FetchDescriptor<JournalPlay>())) ?? 0
         let teams = dataManager.teams.count
-        return VStack(alignment: .leading, spacing: 22) {
+        let wide = horizontalSizeClass == .regular
+        let lexiconTitle = isChinese ? "术语词典" : "Lexicon"
+        let lexiconCount = "\(Lexicon.shared.entryCount)"
+        // The glass goes on the LINK, never inside its label: a glassEffect in
+        // a NavigationLink's label swallowed every tap on iOS 26.
+        return VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel(isChinese ? "资料库" : "LIBRARY")
-                HStack(spacing: 10) {
-                    // The glass goes on the LINK, never inside its label: a
-                    // glassEffect in a NavigationLink's label swallowed every
-                    // tap on iOS 26.
-                    NavigationLink(destination: JournalPlaysScreen()) {
-                        hubTile(.plays, tint: .blue, title: jp("Plays"), count: "\(playCount)",
-                                unit: isChinese ? "个战术" : (playCount == 1 ? "play" : "plays"))
+                if wide {
+                    HStack(spacing: 12) {
+                        playsLink(playCount)
+                        drillsLink
+                        NavigationLink(destination: LexiconScreen()) {
+                            hubTile(.lexicon, title: lexiconTitle, count: lexiconCount, unit: isChinese ? "个术语" : "terms")
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .accessibilityIdentifier("hub.lexicon")
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        playsLink(playCount)
+                        drillsLink
+                    }
+                    NavigationLink(destination: LexiconScreen()) {
+                        hubWideTile(.lexicon, title: lexiconTitle,
+                                    detail: isChinese ? "\(lexiconCount) 个篮球术语 · 战术、动作、规则、防守"
+                                                      : "\(lexiconCount) terms · plays, actions, rules, defenses")
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
-                    .accessibilityIdentifier("hub.plays")
-
-                    NavigationLink(destination: DrillsLibraryView()) {
-                        hubTile(.drills, tint: .orange, title: isChinese ? "训练" : "Drills",
-                                count: "\(dataManager.drills.count)", unit: isChinese ? "个训练" : "drills")
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
-                    .accessibilityIdentifier("hub.drills")
+                    .accessibilityIdentifier("hub.lexicon")
                 }
-                NavigationLink(destination: LexiconScreen()) {
-                    hubWideTile(.lexicon, tint: .teal, title: isChinese ? "术语词典" : "Lexicon",
-                                detail: isChinese ? "\(Lexicon.shared.entryCount) 个篮球术语 · 战术、动作、规则、防守"
-                                                  : "\(Lexicon.shared.entryCount) terms · plays, actions, rules, defenses")
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
-                .accessibilityIdentifier("hub.lexicon")
             }
 
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel(isChinese ? "人员" : "PEOPLE")
-                HStack(spacing: 10) {
+                HStack(spacing: wide ? 12 : 10) {
                     NavigationLink(destination: TeamsScreen()) {
-                        hubTile(.teams, tint: .indigo, title: isChinese ? "球队" : "Teams", count: "\(teams)",
+                        hubTile(.teams, title: isChinese ? "球队" : "Teams", count: "\(teams)",
                                 unit: isChinese ? "支球队" : (teams == 1 ? "team" : "teams"))
                     }
                     .buttonStyle(.plain)
@@ -291,16 +316,41 @@ struct FlightyHubView: View {
                     .accessibilityIdentifier("hub.teams")
 
                     NavigationLink(destination: OrganizationView()) {
-                        hubTile(.organization, tint: .green, title: isChinese ? "组织" : "Organization",
+                        hubTile(.organization, title: isChinese ? "组织" : "Organization",
                                 count: "\(dataManager.staffCoaches.count)",
                                 unit: isChinese ? "名教练" : (dataManager.staffCoaches.count == 1 ? "coach" : "coaches"))
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
                     .accessibilityIdentifier("hub.organization")
+
+                    // Keeps People's tiles the width of Library's on a wide screen.
+                    if wide { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
                 }
             }
         }
+        .frame(maxWidth: 1100, alignment: .leading)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func playsLink(_ count: Int) -> some View {
+        NavigationLink(destination: JournalPlaysScreen()) {
+            hubTile(.plays, title: jp("Plays"), count: "\(count)",
+                    unit: isChinese ? "个战术" : (count == 1 ? "play" : "plays"))
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .accessibilityIdentifier("hub.plays")
+    }
+
+    private var drillsLink: some View {
+        NavigationLink(destination: DrillsLibraryView()) {
+            hubTile(.drills, tint: .orange, title: isChinese ? "训练" : "Drills",
+                    count: "\(dataManager.drills.count)", unit: isChinese ? "个训练" : "drills")
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .accessibilityIdentifier("hub.drills")
     }
 
     private func sectionLabel(_ text: String) -> some View {
@@ -311,13 +361,16 @@ struct FlightyHubView: View {
             .padding(.leading, 4)
     }
 
-    private func glyphTile(_ kind: HubGlyph.Kind, tint: Color, size: CGFloat) -> some View {
-        HubGlyph(kind: kind, tint: tint, size: size * 0.56)
+    /// Icons in the ink colour on a neutral tile (15 Nov 2026, Luther: "we
+    /// can do without the colors, only the cone may remain orange").
+    private func glyphTile(_ kind: HubGlyph.Kind, tint: Color?, size: CGFloat) -> some View {
+        HubGlyph(kind: kind, tint: tint ?? .primary, size: size * 0.56)
             .frame(width: size, height: size)
-            .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            .background((tint ?? .primary).opacity(tint == nil ? 0.07 : 0.15),
+                        in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
     }
 
-    private func hubTile(_ kind: HubGlyph.Kind, tint: Color, title: String, count: String, unit: String) -> some View {
+    private func hubTile(_ kind: HubGlyph.Kind, tint: Color? = nil, title: String, count: String, unit: String) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 glyphTile(kind, tint: tint, size: 48)
@@ -335,7 +388,7 @@ struct FlightyHubView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(count)
                         .font(.subheadline.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(tint)
+                        .foregroundStyle(.primary)
                     Text(unit)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -348,7 +401,7 @@ struct FlightyHubView: View {
         .contentShape(.rect(cornerRadius: 20))
     }
 
-    private func hubWideTile(_ kind: HubGlyph.Kind, tint: Color, title: String, detail: String) -> some View {
+    private func hubWideTile(_ kind: HubGlyph.Kind, tint: Color? = nil, title: String, detail: String) -> some View {
         HStack(spacing: 14) {
             glyphTile(kind, tint: tint, size: 48)
             VStack(alignment: .leading, spacing: 2) {
