@@ -567,6 +567,19 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   reopen, check the report; (4) wait for the upload; (5) TestFlight on the
   iPhone and iPad. The store holds TWO SDCoach and TWO SDAppSettings rows
   (made on two devices) — carried over as they are; worth a clean-up.
+  FIRST REAL ATTEMPT FAILED SILENTLY (build 30, 15 Nov 2026, iPhone): the
+  request was a UserDefaults bool followed by exit(0); the write never
+  reached disk (the app's prefs plist is 33 MB, almost all
+  `session_notes_board_v1`), so the next launch did nothing — no report, no
+  data. Pulled the phone's prefs with `devicectl device copy from
+  --domain-type appDataContainer` to prove it. FIX (build 31): the request
+  and the report are FILES beside the store (`production-move.pending`,
+  `production-move.report.json`, atomic writes). SECOND BUG FOUND THE SAME
+  TIME: external-storage values (athlete / coach / own photos, revision
+  snapshots) live in `.default_SUPPORT/_EXTERNAL_DATA`, which the copy did
+  not take — both sides read empty, so the check passed. The copy now takes
+  the support folder and the report counts them: real Mac rehearsal 795
+  files (23 MB), 0 mismatched rows, 0.4 s.
 - KNOWN FUTURE TASK, with a data-migration problem inside it: shipping a
   TestFlight or App Store release requires deploying the CloudKit schema
   to Production first (CLAUDE.md rule 7d). Development DATA does not

@@ -70,6 +70,25 @@ enum ProductionMove {
     static let pendingKey = "productionMove.pending"
     static let reportKey = "productionMove.report"
 
+    /// The request and the report are FILES beside the store (15 Nov 2026):
+    /// the first version kept the request in UserDefaults and quit at once,
+    /// and on the coach's iPhone the write never reached disk — the next
+    /// launch found nothing to do. A file written atomically is on disk
+    /// before the app closes.
+    static var pendingFileURL: URL {
+        developmentStoreURL.deletingLastPathComponent().appendingPathComponent("production-move.pending")
+    }
+    static var reportFileURL: URL {
+        developmentStoreURL.deletingLastPathComponent().appendingPathComponent("production-move.report.json")
+    }
+
+    /// Asked for from Profile: written to disk now; the move runs at the next
+    /// launch, before the store opens.
+    static func requestMove() {
+        try? Data("pending".utf8).write(to: pendingFileURL, options: .atomic)
+        UserDefaults.standard.set(true, forKey: pendingKey)
+    }
+
     /// A release build offers the move when a Development copy is here and
     /// it has not been brought over yet.
     static var isOffered: Bool {
@@ -83,7 +102,8 @@ enum ProductionMove {
     }
 
     static var lastReport: Report? {
-        guard let data = UserDefaults.standard.data(forKey: reportKey) else { return nil }
+        let data = (try? Data(contentsOf: reportFileURL)) ?? UserDefaults.standard.data(forKey: reportKey)
+        guard let data else { return nil }
         return try? JSONDecoder().decode(Report.self, from: data)
     }
 
@@ -100,6 +120,10 @@ enum ProductionMove {
         var mismatches: Int
         var mismatchSamples: [String]
         var replacedSeeded: Int
+        /// Photos and other large values kept beside the store (external
+        /// storage): how many came across, and their size.
+        var blobs: Int = 0
+        var blobBytes: Int = 0
         var error: String?
         var date: Date
 
@@ -117,6 +141,7 @@ enum ProductionMove {
             out.append("mismatched rows: \(mismatches)")
             out.append(contentsOf: mismatchSamples)
             out.append("seeded rows replaced: \(replacedSeeded)")
+            out.append("photos and other stored files: \(blobs) (\(blobBytes / 1_000_000) MB)")
             return out.joined(separator: "\n")
         }
     }
@@ -125,10 +150,13 @@ enum ProductionMove {
 
     /// Release builds: run a move the coach asked for at the last launch.
     static func runPendingIfNeeded() {
-        guard UserDefaults.standard.bool(forKey: pendingKey) else { return }
+        let fileAsked = FileManager.default.fileExists(atPath: pendingFileURL.path)
+        guard fileAsked || UserDefaults.standard.bool(forKey: pendingKey) else { return }
+        try? FileManager.default.removeItem(at: pendingFileURL)
         UserDefaults.standard.set(false, forKey: pendingKey)
         let report = move(from: developmentStoreURL, to: productionStoreURL)
         if let data = try? JSONEncoder().encode(report) {
+            try? data.write(to: reportFileURL, options: .atomic)
             UserDefaults.standard.set(data, forKey: reportKey)
         }
         Logger(subsystem: "hoopwise.mac", category: "move").log("\(report.text, privacy: .public)")
@@ -186,8 +214,9 @@ enum ProductionMove {
             ? developmentStoreURL
             : developmentStoreURL.deletingLastPathComponent().appendingPathComponent("screenshots.store")
         let target = FileManager.default.temporaryDirectory.appendingPathComponent("rehearsal-\(UUID().uuidString).store")
+        let started = Date()
         let report = move(from: source, to: target)
-        var text = "Rehearsal (\(mode)) from \(source.lastPathComponent)\n" + report.text
+        var text = "Rehearsal (\(mode)) from \(source.lastPathComponent) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s\n" + report.text
         // The copy must open as the app opens it, links intact.
         do {
             let container = try ModelContainer(for: SwiftDataManager.schema,
@@ -273,6 +302,14 @@ enum ProductionMove {
         for suffix in ["", "-wal", "-shm"] where FileManager.default.fileExists(atPath: source.path + suffix) {
             try FileManager.default.copyItem(atPath: source.path + suffix, toPath: sourceCopy.path + suffix)
         }
+        // Photos (and every revision snapshot) are EXTERNAL storage: files in
+        // the hidden ".<store>_SUPPORT" folder beside the store. Without them
+        // the copy reads those values as empty — the first version did.
+        let supportName = ".\(source.deletingPathExtension().lastPathComponent)_SUPPORT"
+        let support = source.deletingLastPathComponent().appendingPathComponent(supportName, isDirectory: true)
+        if FileManager.default.fileExists(atPath: support.path) {
+            try FileManager.default.copyItem(at: support, to: temp.appendingPathComponent(".source_SUPPORT", isDirectory: true))
+        }
 
         let from = try loadStore(at: sourceCopy, model: model, name: "MoveSource")
         let to = try loadStore(at: destination, model: model, name: "MoveDestination")
@@ -285,6 +322,8 @@ enum ProductionMove {
         var mismatches = 0
         var samples: [String] = []
         var replaced = 0
+        var blobs = 0
+        var blobBytes = 0
 
         try dst.performAndWait {
             try src.performAndWait {
@@ -354,6 +393,12 @@ enum ProductionMove {
                     lines[index].copied = try dst.count(for: request)
                 }
                 for (row, copy) in pairs {
+                    for (name, description) in row.entity.attributesByName where description.allowsExternalBinaryDataStorage {
+                        if let data = copy.value(forKey: name) as? Data, !data.isEmpty {
+                            blobs += 1
+                            blobBytes += data.count
+                        }
+                    }
                     for attribute in row.entity.attributesByName.keys {
                         let a = row.value(forKey: attribute) as? NSObject
                         let b = copy.value(forKey: attribute) as? NSObject
@@ -370,6 +415,6 @@ enum ProductionMove {
         // Counts compare the destination with the source; a destination that
         // kept rows of its own (seeded with no twin) shows more than the source.
         return Report(lines: lines, mismatches: mismatches, mismatchSamples: samples,
-                      replacedSeeded: replaced, error: nil, date: Date())
+                      replacedSeeded: replaced, blobs: blobs, blobBytes: blobBytes, error: nil, date: Date())
     }
 }

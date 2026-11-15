@@ -728,8 +728,7 @@ struct FlightyCoachProfileView: View {
             .confirmationDialog(isChinese ? "把开发版的数据迁入这个版本？" : "Bring over the data from the development version?",
                                 isPresented: $confirmingProductionMove, titleVisibility: .visible) {
                 Button(isChinese ? "迁入并关闭 Hoopwise" : "Bring It Over and Close Hoopwise") {
-                    UserDefaults.standard.set(true, forKey: ProductionMove.pendingKey)
-                    UserDefaults.standard.synchronize()
+                    ProductionMove.requestMove()
                     exit(0)
                 }
                 Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
