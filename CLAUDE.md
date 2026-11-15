@@ -580,6 +580,14 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   not take — both sides read empty, so the check passed. The copy now takes
   the support folder and the report counts them: real Mac rehearsal 795
   files (23 MB), 0 mismatched rows, 0.4 s.
+  DONE 16 November 2026: build 31's move ran on the iPhone and the data
+  reached Production — Luther confirmed it on the iPhone and iPad. FROM NOW
+  ON the TestFlight build is the REAL app on his devices. A debug install to
+  his iPhone or iPad REPLACES it (same bundle id) and points that device back
+  at the stale Development copy — never install a debug build on his devices
+  unless he asks; ship changes as TestFlight builds. The Mac still runs a
+  debug Catalyst build (Development): real edits made there no longer reach
+  the phone until a Mac TestFlight build replaces it.
 - KNOWN FUTURE TASK, with a data-migration problem inside it: shipping a
   TestFlight or App Store release requires deploying the CloudKit schema
   to Production first (CLAUDE.md rule 7d). Development DATA does not
