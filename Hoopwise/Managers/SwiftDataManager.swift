@@ -517,6 +517,7 @@ class SwiftDataManager: ObservableObject {
         #if DEBUG
         ProductionMove.markDevelopmentStore()
         ProductionMove.rehearseIfAsked()
+        ProductionMove.initializeCloudKitSchemaIfAsked()
         #else
         ProductionMove.runPendingIfNeeded()
         #endif

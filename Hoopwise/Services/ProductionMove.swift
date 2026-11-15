@@ -135,6 +135,41 @@ enum ProductionMove {
     }
 
     #if DEBUG
+    /// HOOPWISE_INIT_CLOUDKIT_SCHEMA=1 (debug, so CloudKit DEVELOPMENT):
+    /// Core Data's initializeCloudKitSchema over the full model — every record
+    /// type with EVERY field, uploaded as samples and deleted again. CloudKit
+    /// adds a field only when a record carrying it is uploaded, so a field
+    /// that was always empty may be missing from Development and therefore
+    /// from the Production deploy. Run once before deploying. Quits after.
+    static func initializeCloudKitSchemaIfAsked() {
+        guard ProcessInfo.processInfo.environment["HOOPWISE_INIT_CLOUDKIT_SCHEMA"] == "1" else { return }
+        let log = Logger(subsystem: "hoopwise.mac", category: "move")
+        guard let model = NSManagedObjectModel.makeManagedObjectModel(for: SwiftDataManager.modelTypes) else {
+            log.log("schema: no model"); exit(1)
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("schema-init-\(UUID().uuidString).store")
+        let description = NSPersistentStoreDescription(url: url)
+        description.shouldAddStoreAsynchronously = false
+        description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+        description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+        description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: "iCloud.com.hoopwise.Hoopwise")
+        let container = NSPersistentCloudKitContainer(name: "SchemaInit", managedObjectModel: model)
+        container.persistentStoreDescriptions = [description]
+        var loadError: Error?
+        container.loadPersistentStores { _, error in loadError = error }
+        if let loadError {
+            log.log("schema: store failed \(String(describing: loadError), privacy: .public)"); exit(1)
+        }
+        do {
+            try container.initializeCloudKitSchema(options: [])
+            log.log("schema: initialized in Development — \(model.entities.count, privacy: .public) record types")
+        } catch {
+            log.log("schema: FAILED \(String(describing: error), privacy: .public)")
+        }
+        for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + suffix) }
+        exit(0)
+    }
+
     /// HOOPWISE_MOVE_REHEARSAL=demo|real: copy into a temporary store, check,
     /// report, quit.
     static func rehearseIfAsked() {

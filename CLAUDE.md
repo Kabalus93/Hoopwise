@@ -555,7 +555,13 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   instance with `open -n --env …`). Rehearsed 15 Nov 2026 on the REAL Mac
   Development copy: 22 entity types, 171 athletes, 406 sessions, 216
   contracts (191 charged sessions), 23 plays / 40 parts / 99 steps, 0
-  mismatched rows. CUT-OVER: (1) Luther deploys the schema Dev→Production in
+  mismatched rows. SCHEMA COMPLETENESS: CloudKit adds a field only when a
+  record carrying it is uploaded, so DEBUG HOOPWISE_INIT_CLOUDKIT_SCHEMA=1
+  runs Core Data's initializeCloudKitSchema over the full model (samples of
+  every type and field to DEVELOPMENT, then deleted; quits after). Ran 15
+  Nov 2026 on the Mac: "initialized in Development — 27 record types" (the
+  first try timed out at 30 s; the second passed). Run it again before any
+  future deploy that adds fields. CUT-OVER: (1) Luther deploys the schema Dev→Production in
   CloudKit Console; (2) archive + upload a TestFlight build; (3) on the Mac
   (most complete copy) install TestFlight, Profile → Bring over your data,
   reopen, check the report; (4) wait for the upload; (5) TestFlight on the
