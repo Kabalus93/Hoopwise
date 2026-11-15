@@ -531,6 +531,36 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   builds onto Production is PERMANENTLY DECLINED. It would mix
   development experiments with real student data. Do not propose it
   again.
+- THE MOVE TO PRODUCTION (built 15 November 2026, Luther: TestFlight on the
+  iPad showed none of his data). Services/ProductionMove.swift. RELEASE
+  BUILDS NOW KEEP THEIR STORE IN `production.store`; debug builds keep
+  `default.store` (both in the App Group's Application Support, which debug
+  and TestFlight builds share on a device — before this a TestFlight build
+  installed over a debug build would have opened the Development copy with
+  the Production database). Every debug build writes `default.store.
+  development` beside its store. A release build that finds that marker
+  offers Profile → Sync → "Bring over your data": it sets a flag and quits;
+  at the next launch, BEFORE SwiftData opens, a Core Data copy brings every
+  attribute and relationship of every entity (SwiftDataManager.modelTypes →
+  NSManagedObjectModel.makeManagedObjectModel) from a temporary copy of
+  default.store into production.store, with persistent history on so the
+  mirroring uploads it to Production. Rows with the same `id` replace what
+  the release build seeded first; SDCoach / SDAppSettings are replaced
+  outright; then every row is compared attribute by attribute and the
+  report shows in Profile (counts, "every field checked"). The source is
+  never written. DEBUG rehearsal: HOOPWISE_MOVE_REHEARSAL=demo|real|paths
+  (copies into a temp store, checks, opens it with SwiftData — plays' parts
+  and steps attached, contracts' charges and payments — logs hoopwise.mac /
+  move, quits before any store opens; on the Mac run it as a second
+  instance with `open -n --env …`). Rehearsed 15 Nov 2026 on the REAL Mac
+  Development copy: 22 entity types, 171 athletes, 406 sessions, 216
+  contracts (191 charged sessions), 23 plays / 40 parts / 99 steps, 0
+  mismatched rows. CUT-OVER: (1) Luther deploys the schema Dev→Production in
+  CloudKit Console; (2) archive + upload a TestFlight build; (3) on the Mac
+  (most complete copy) install TestFlight, Profile → Bring over your data,
+  reopen, check the report; (4) wait for the upload; (5) TestFlight on the
+  iPhone and iPad. The store holds TWO SDCoach and TWO SDAppSettings rows
+  (made on two devices) — carried over as they are; worth a clean-up.
 - KNOWN FUTURE TASK, with a data-migration problem inside it: shipping a
   TestFlight or App Store release requires deploying the CloudKit schema
   to Production first (CLAUDE.md rule 7d). Development DATA does not

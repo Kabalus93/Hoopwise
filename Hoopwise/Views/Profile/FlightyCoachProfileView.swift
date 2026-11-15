@@ -23,6 +23,7 @@ struct FlightyCoachProfileView: View {
     @State private var iCloudStatus: CKAccountStatus = .couldNotDetermine
     @State private var isRefreshing = false
     @State private var showingRefreshSuccess = false
+    @State private var confirmingProductionMove = false
     @State private var notificationPermissionDenied = false
     @State private var showingImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
@@ -686,6 +687,8 @@ struct FlightyCoachProfileView: View {
                 }
             }
             .disabled(isRefreshing)
+
+            productionMoveRows
         } header: {
             Text(isChinese ? "同步" : "Sync")
         } footer: {
@@ -693,6 +696,68 @@ struct FlightyCoachProfileView: View {
                  ? "数据通过 iCloud 自动同步，无需手动触发。「重新载入数据」仅刷新本设备上已有的数据。"
                  : "Data syncs with iCloud automatically; there is nothing to trigger by hand. Reload Data only refreshes what is already on this device.")
         }
+    }
+
+    // MARK: - Bring the data over to Production (15 Nov 2026)
+
+    /// Release builds only: the Development copy on this device can be
+    /// brought into this build's iCloud (Production) once; afterwards the
+    /// report says what came across. See ProductionMove.
+    @ViewBuilder
+    private var productionMoveRows: some View {
+        if let report = ProductionMove.lastReport {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(report.ok
+                      ? (isChinese ? "数据已迁入" : "Your data was brought over")
+                      : (isChinese ? "迁移有问题" : "The move reported a problem"),
+                      systemImage: report.ok ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(report.ok ? Color.green : Color.orange)
+                Text(productionMoveSummary(report))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityIdentifier("profile.moveReport")
+        } else if productionMoveOffered {
+            Button {
+                confirmingProductionMove = true
+            } label: {
+                Label(isChinese ? "迁入你的数据" : "Bring over your data", systemImage: "square.and.arrow.down.on.square")
+            }
+            .accessibilityIdentifier("profile.moveData")
+            .confirmationDialog(isChinese ? "把开发版的数据迁入这个版本？" : "Bring over the data from the development version?",
+                                isPresented: $confirmingProductionMove, titleVisibility: .visible) {
+                Button(isChinese ? "迁入并关闭 Hoopwise" : "Bring It Over and Close Hoopwise") {
+                    UserDefaults.standard.set(true, forKey: ProductionMove.pendingKey)
+                    UserDefaults.standard.synchronize()
+                    exit(0)
+                }
+                Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
+            } message: {
+                Text(isChinese
+                     ? "这台设备上开发版的全部数据（学员、课程、合同和付款、战术、训练……）会复制到这个版本的 iCloud，然后同步到你的其他设备。只做一次，并在数据最完整的设备上做。Hoopwise 会关闭——再次打开即开始。"
+                     : "Everything the development version holds on this device — athletes, sessions, contracts and payments, plays, drills — is copied into this version's iCloud and then syncs to your other devices. Do it once, on the device whose copy is most complete. Hoopwise will close; open it again to start.")
+            }
+        }
+    }
+
+    private var productionMoveOffered: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["HOOPWISE_MOVE_OFFER"] == "1" { return true }
+        #endif
+        return ProductionMove.isOffered
+    }
+
+    private func productionMoveSummary(_ report: ProductionMove.Report) -> String {
+        if let error = report.error { return error }
+        func count(_ entity: String) -> Int { report.lines.first { $0.entity == entity }?.copied ?? 0 }
+        let parts = isChinese
+            ? ["\(count("SDStudent")) 名学员", "\(count("SDSessionEvent")) 节课", "\(count("SDContract")) 份合同", "\(count("JournalPlay")) 个战术"]
+            : ["\(count("SDStudent")) athletes", "\(count("SDSessionEvent")) sessions", "\(count("SDContract")) contracts", "\(count("JournalPlay")) plays"]
+        let tail = report.ok
+            ? (isChinese ? "，每个字段都核对无误。正在上传到 iCloud。" : ", every field checked. Uploading to iCloud.")
+            : (isChinese ? "。\(report.mismatches) 行不一致。" : ". \(report.mismatches) rows differ.")
+        return parts.joined(separator: " · ") + tail
     }
 
     // MARK: - About Section

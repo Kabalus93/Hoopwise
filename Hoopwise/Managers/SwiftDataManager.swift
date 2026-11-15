@@ -220,7 +220,9 @@ class SwiftDataManager: ObservableObject {
     /// The registered record types. Extracted from `init` so tests can build
     /// an isolated container over the SAME schema the app ships — a test
     /// running against a hand-written subset would not catch a model change.
-    static let schema: Schema = Schema([
+    /// Every model type, in one list: the schema and the Core Data copy that
+    /// moves a store to Production (ProductionMove) both read it.
+    static let modelTypes: [any PersistentModel.Type] = [
             SDStudent.self,
             SDPlayer.self,
             SDContract.self,
@@ -258,7 +260,9 @@ class SwiftDataManager: ObservableObject {
             JournalPlay.self,
             JournalPlayPart.self,
             JournalPlayStep.self
-    ])
+    ]
+
+    static let schema: Schema = Schema(modelTypes)
 
     #if DEBUG
     /// The raw stored title, bypassing derivation. Tests assert that a
@@ -508,9 +512,18 @@ class SwiftDataManager: ObservableObject {
         // user's devices automatically. SwiftData manages the schema in CloudKit.
         let cloudKitContainerID = "iCloud.com.hoopwise.Hoopwise"
         debugLog("☁️ Using CloudKit private DB: \(cloudKitContainerID)")
+        // Debug builds (CloudKit Development) keep default.store; release
+        // builds (Production) keep production.store — see ProductionMove.
+        #if DEBUG
+        ProductionMove.markDevelopmentStore()
+        ProductionMove.rehearseIfAsked()
+        #else
+        ProductionMove.runPendingIfNeeded()
+        #endif
+        let storeURL = ProductionMove.liveStoreURL
         modelConfiguration = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: false,
+            url: storeURL,
             allowsSave: true,
             cloudKitDatabase: .private(cloudKitContainerID)
         )
@@ -526,7 +539,7 @@ class SwiftDataManager: ObservableObject {
         } catch {
             debugLog("❌ CloudKit-backed ModelContainer failed: \(error)")
             let localOnly = ModelConfiguration(schema: schema,
-                                               isStoredInMemoryOnly: false,
+                                               url: storeURL,
                                                allowsSave: true)
             if let fallback = try? ModelContainer(for: schema, configurations: [localOnly]) {
                 modelContainer = fallback
