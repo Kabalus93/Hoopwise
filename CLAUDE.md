@@ -1093,6 +1093,27 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   scroll views around it pan with fingers only (`PlayInkCanvas`), so the
   Pencil draws instead of paging and a finger still swipes steps
   (PlaysUITests.testFingerSwipeStillPagesUnderTheInkLayer).
+  SCRIBBLE (16 Nov 2026, Luther: "the iPad would interpret what has been
+  drawn … and have the player involved move or pass"; decided: move after
+  the Pencil rests 2 s, SWAP the ink for the clean line, dribbles too).
+  iPad only (not the Mac): a "Scribble" switch at the court's top left. The
+  court shows the step's formation (its own lines hidden); 2 s after the
+  last stroke the new strokes go through Models/JournalPlays/
+  JournalPlayScribble.swift (pure, court metres, drawing order): a line
+  must START ON A PLAYER (`lineStart`, 1.4 m) or it stays red ink; ≥ 3
+  short collinear strokes = dashes = PASS to the teammate nearest the end;
+  a zigzag (≥ 4 swings over 0.12 m around its running average) = DRIBBLE
+  along the middle; a short stroke ACROSS the end = SCREEN; a V (separate
+  strokes, or the line doubling back at its tip — trimmed) or nothing =
+  CUT. Actions are built with the editor's `adding` (curved), so they play
+  exactly like drawn ones. Each reading is a BATCH starting where the last
+  left everyone (`startOfNextStep`); the read strokes leave the ink, the
+  clean lines show 0.6 s, then the players move. ▶ replays every batch;
+  "Reset ink" clears ink and batches. Never saved. DEBUG
+  HOOPWISE_PLAYS_SCRIBBLE=1 | ink | demo (draws a cut + a dashed pass as
+  Pencil strokes; demo reads them) with HOOPWISE_SHOT=plays
+  HOOPWISE_PLAYS_OPEN=play. Tests: JournalPlayScribbleTests. Real Pencil
+  handwriting needs the iPad — thresholds may want tuning.
   Verified on the iPad Air 13 simulator: a finger-drawn cut, two-finger
   undo; PlayEditorWorkspaceUITests, PlaysUITests, PlayDefenseUITests pass.
   Pencil touches, hover, double-tap and squeeze cannot be simulated — they

@@ -89,5 +89,10 @@ nonisolated enum JournalPlayStringsAdded {
                   enOne: nil, zh: "Apple Pencil 和手指都使用当前工具。轻点两下或捏一下笔可切换橡皮、上一个工具或打开工具栏。两指轻点撤销，三指轻点重做。"),
         // Marking up a play with the Pencil (16 Nov 2026).
         "Clear ink": .init(en: "Clear ink", enOne: nil, zh: "清除笔迹"),
+        "Reset ink": .init(en: "Reset ink", enOne: nil, zh: "重置笔迹"),
+        "Scribble": .init(en: "Scribble", enOne: nil, zh: "手绘战术"),
+        "Draw from a player: arrow = cut, dashes = pass, bar = screen, zigzag = dribble":
+            .init(en: "Draw from a player: arrow = cut, dashes = pass, bar = screen, zigzag = dribble",
+                  enOne: nil, zh: "从球员画起：箭头 = 空切，虚线 = 传球，横杠 = 掩护，折线 = 运球"),
     ]
 }
