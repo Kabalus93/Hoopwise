@@ -24,6 +24,10 @@ struct StudentIntelligenceListView: View {
     @State private var sortOption: SortOption = .riskScore
     @State private var groupOption: GroupOption = .none
     @State private var selectedStudent: Student?
+    /// The list stays beside the profile in portrait too (16 Nov 2026,
+    /// Luther: upright, the page opened empty and the list hid behind the
+    /// sidebar button).
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var sheetStudent: Student?
     @State private var showingAddStudent = false
     @FocusState private var searchFocused: Bool
@@ -255,7 +259,7 @@ struct StudentIntelligenceListView: View {
     var body: some View {
         Group {
             if shouldUseSplitView {
-                NavigationSplitView {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
                     NavigationStack {
                         mainContent
                     }
@@ -272,10 +276,26 @@ struct StudentIntelligenceListView: View {
                     } else {
                         ZStack {
                             Color(.systemGroupedBackground).ignoresSafeArea()
-                            Text(LocalizationManager.shared.currentLanguage == .chinese ? "请选择学员" : "Select a student")
-                                .foregroundStyle(.tertiary)
+                            VStack(spacing: 10) {
+                                Image(systemName: "person.crop.circle")
+                                    .font(.system(size: 44, weight: .light))
+                                    .foregroundStyle(.tertiary)
+                                Text(LocalizationManager.shared.currentLanguage == .chinese ? "选择一名学员" : "Choose an athlete")
+                                    .font(.headline)
+                                    .foregroundStyle(.secondary)
+                                Text(LocalizationManager.shared.currentLanguage == .chinese
+                                     ? "共 \(dataManager.students.count) 名学员"
+                                     : dataManager.students.count == 1 ? "1 athlete in the list" : "\(dataManager.students.count) athletes in the list")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     }
+                }
+                .navigationSplitViewStyle(.balanced)
+                .onChange(of: selectedStudent == nil) { _, isEmpty in
+                    // Nothing open (an athlete was deleted): bring the list back.
+                    if isEmpty { columnVisibility = .all }
                 }
             } else {
                 mainContent
@@ -709,6 +729,7 @@ struct StudentIntelligenceListView: View {
                                 contactsRow(student: student, selected: selected)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("athletes.row")
                             .athleteMacMenu(student)
                             .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                             .listRowBackground(

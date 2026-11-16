@@ -1,4 +1,5 @@
 import SwiftUI
+import PencilKit
 
 /// A part played step by step: the caption and "Step 1 of 3", the diagram
 /// (swipe between steps), ‹ ▶ › under it, and the step's text in a card
@@ -41,6 +42,8 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     /// The index playback last moved to, to tell its own moves from the host's.
     @State private var playedIndex: Int?
     @State private var frozen: Double?
+    /// Pencil ink per step, while the page is open (PlayInkLayer).
+    @State private var ink: [Int: PKDrawing] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var current: Step? { steps.indices.contains(index) ? steps[index] : nil }
@@ -99,6 +102,7 @@ struct JournalPlayStepPlayer<Leading: View>: View {
             ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                 diagram(step, isCurrent: i == index)
                     .padding(JSpacing.xs)
+                    .overlay { PlayInkLayer(drawing: inkBinding(i)) }
                     .tag(i)
             }
         }
@@ -107,7 +111,8 @@ struct JournalPlayStepPlayer<Leading: View>: View {
         .frame(maxWidth: maxCourtWidth)
         .frame(maxWidth: .infinity)
         .background(JPalette.background, in: .rect(cornerRadius: JRadius.tile))
-        .accessibilityElement()
+        .overlay(alignment: .topTrailing) { clearInkButton }
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(verbatim: current?.caption ?? ""))
         .accessibilityValue(JText("Step \(index + 1) of \(steps.count)"))
         .accessibilityAdjustableAction { direction in
@@ -116,6 +121,28 @@ struct JournalPlayStepPlayer<Leading: View>: View {
             case .decrement: go(to: index - 1)
             @unknown default: break
             }
+        }
+    }
+
+    private func inkBinding(_ i: Int) -> Binding<PKDrawing> {
+        Binding(get: { ink[i] ?? PKDrawing() }, set: { ink[i] = $0 })
+    }
+
+    /// Shown once the Pencil has marked up this step.
+    @ViewBuilder
+    private var clearInkButton: some View {
+        if let drawing = ink[index], !drawing.strokes.isEmpty {
+            Button {
+                withAnimation(JMotion.expand) { ink[index] = nil }
+            } label: {
+                Label { JText("Clear ink") } icon: { Image(systemName: "eraser") }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, JSpacing.s)
+                    .frame(minHeight: 36)
+            }
+            .buttonStyle(.glass)
+            .padding(JSpacing.s)
+            .accessibilityIdentifier("plays.player.clearInk")
         }
     }
 

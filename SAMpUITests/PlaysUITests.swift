@@ -58,6 +58,40 @@ final class PlaysUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Pause"].firstMatch.exists, "the wrinkle did not start playing")
     }
 
+    /// A finger still swipes between steps across the court: the Pencil ink
+    /// layer over it (PlayInkLayer, 16 Nov 2026) draws with the Pencil only.
+    func testFingerSwipeStillPagesUnderTheInkLayer() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        app.launchArguments += ["-app_language", "en"]
+        app.launch()
+        let hub = app.buttons["Hub"].firstMatch
+        XCTAssertTrue(hub.waitForExistence(timeout: 30))
+        hub.tap()
+        app.buttons["hub.plays"].firstMatch.tap()
+        let addStarters = app.buttons["Add the starter plays"].firstMatch
+        if addStarters.waitForExistence(timeout: 3) {
+            addStarters.tap()
+            app.buttons["OK"].firstMatch.tap()
+        }
+        let horns = app.buttons["plays.row.horns"].firstMatch
+        XCTAssertTrue(horns.waitForExistence(timeout: 10))
+        horns.tap()
+        let step = app.staticTexts["Step 1 of 3"].firstMatch
+        XCTAssertTrue(step.waitForExistence(timeout: 10))
+        // The court sits under the "Step 1 of 3" line.
+        let window = app.windows.firstMatch
+        let below = step.frame.maxY + 160
+        let start = window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: window.frame.width * 0.8, dy: below))
+        let end = window.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: window.frame.width * 0.2, dy: below))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(app.staticTexts["Step 2 of 3"].firstMatch.waitForExistence(timeout: 5),
+                      "a finger swipe across the court no longer pages")
+    }
+
     /// The other Hub cards open too: a glassEffect inside each card's label
     /// swallowed every tap (League, Coach and Organization never opened).
     func testHubCardsOpen() {

@@ -198,6 +198,11 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   secondaryNameLine under it, the format dot — and the open athlete's row in a
   solid accent highlight with white text; title "Athletes"/学员 inline. The
   profile (StudentDetailView) already had Contacts' shape and is unchanged.
+  UPRIGHT TOO (16 Nov 2026, Luther: in portrait the page opened on "Select a
+  student" with the list hidden behind the sidebar button): the split view
+  is `.balanced` with columnVisibility `.all`, so the list stays beside the
+  profile in portrait; nothing open = "Choose an athlete · N athletes".
+  Rows are `athletes.row`. Pinned by AthletesPortraitUITests (iPad).
   iPhone keeps the inset-grouped Student Intelligence list. On the Mac the
   list hides the iOS 26 scroll-edge effect (`scrollEdgeEffectHidden`): the
   soft edge blur got stuck over the rows after scrolling, sometimes resizing.
@@ -1071,6 +1076,15 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   · Two-finger tap = undo, three-finger tap = redo (a second finger cancels
     the first finger's gesture first, so a tap tool adds nothing).
   Mouse / trackpad on the Mac arrive as ordinary touches — unchanged.
+  MARK-UP ON THE PLAY PAGE (16 Nov 2026, Luther: "using the Apple Pencil
+  here should annotate"): JournalPlayStepPlayer (play page, step screen,
+  drill drawings) lays Views/Plays/PlayInkLayer.swift over each step — a
+  PencilKit canvas, `.pencilOnly`, red pen, Pencil double-tap / squeeze =
+  eraser. A telestrator: ink belongs to its step while the page is open,
+  NEVER saved; "Clear ink" appears on the court once a step has ink. The
+  scroll views around it pan with fingers only (`PlayInkCanvas`), so the
+  Pencil draws instead of paging and a finger still swipes steps
+  (PlaysUITests.testFingerSwipeStillPagesUnderTheInkLayer).
   Verified on the iPad Air 13 simulator: a finger-drawn cut, two-finger
   undo; PlayEditorWorkspaceUITests, PlaysUITests, PlayDefenseUITests pass.
   Pencil touches, hover, double-tap and squeeze cannot be simulated — they
