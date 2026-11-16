@@ -27,7 +27,8 @@ struct FlightyActionableDashboard: View {
     // Home search (pull down to open; HomeSearchView).
     @State private var showingSearch = false
     @State private var searchPull: CGFloat = 0
-    @State private var searchArmed = false
+    /// The finger is on the page (the search follows it only then).
+    @State private var homeDragging = false
     @State private var searchStudent: Student?
     @State private var searchContract: Contract?
     @State private var searchCoach: StaffCoach?
@@ -289,12 +290,17 @@ struct FlightyActionableDashboard: View {
     var body: some View {
         homeStack
             .overlay {
-                if showingSearch {
-                    HomeSearchView(onClose: closeSearch, onOpen: openSearchResult)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+                // Like the iPhone's own home screen: the search comes down
+                // WITH the finger (field sliding in, Home blurring), and
+                // letting go after a short pull opens it.
+                if showingSearch || searchReveal > 0 {
+                    HomeSearchView(live: showingSearch, reveal: showingSearch ? 1 : searchReveal,
+                                   onClose: closeSearch, onOpen: openSearchResult)
+                        .allowsHitTesting(showingSearch)
+                        .transition(.opacity)
                 }
             }
-            .animation(.snappy(duration: 0.28), value: showingSearch)
+            .animation(.snappy(duration: 0.25), value: showingSearch)
             .background {
                 // ⌘K opens it from a keyboard (iPad keyboards, the Mac — a
                 // mouse does not pull a page down).
@@ -328,12 +334,19 @@ struct FlightyActionableDashboard: View {
                     }
                 }
                 .padding(.bottom, 120)
-                .background(alignment: .top) { pullToSearchHint }
             }
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, offset in
-                trackSearchPull(offset)
+                let pull = max(0, -offset)
+                if pull != searchPull { searchPull = pull }
+            }
+            .onScrollPhaseChange { old, new in
+                homeDragging = new == .interacting
+                // Let go after a short pull: open.
+                if old == .interacting, new != .interacting, searchPull >= HomeSearch.commitDistance, !showingSearch {
+                    showingSearch = true
+                }
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollContentBackground(.hidden)
@@ -441,41 +454,10 @@ struct FlightyActionableDashboard: View {
 
     // MARK: - Pull to search
 
-    /// "Pull to search" / "Release to search", above the cards while Home is
-    /// pulled down.
-    private var pullToSearchHint: some View {
-        let progress = min(1, searchPull / HomeSearch.pullDistance)
-        return Label(searchArmed ? (isChineseUI ? "松开即可搜索" : "Release to search")
-                                 : (isChineseUI ? "下拉搜索" : "Pull to search"),
-                     systemImage: "magnifyingglass")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(searchArmed ? Color.accentColor : .secondary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
-            .scaleEffect(0.85 + 0.15 * progress)
-            .opacity(progress)
-            .offset(y: -min(searchPull, HomeSearch.pullDistance) / 2 - 22)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-
-    private var isChineseUI: Bool { LocalizationManager.shared.currentLanguage == .chinese }
-
-    /// Arms at `pullDistance`; letting go (the page springs back) opens.
-    private func trackSearchPull(_ offset: CGFloat) {
-        let pull = max(0, -offset)
-
-        if pull != searchPull { searchPull = pull }
-        if pull >= HomeSearch.pullDistance, !searchArmed {
-            searchArmed = true
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-        } else if searchArmed, pull < HomeSearch.pullDistance * 0.5 {
-            searchArmed = false
-            if !showingSearch { showingSearch = true }
-        }
+    /// How far the search has come down with the finger (0…1).
+    private var searchReveal: CGFloat {
+        guard homeDragging, !showingSearch else { return 0 }
+        return min(1, searchPull / HomeSearch.revealDistance)
     }
 
     private func closeSearch() {

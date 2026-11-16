@@ -16,11 +16,8 @@ final class HomeSearchUITests: XCTestCase {
         home.tap()
         sleep(2)
 
-        // Pull the page down and let go.
-        let window = app.windows.firstMatch
-        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
-        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
+        // A short pull and let go, as on the iPhone's home screen.
+        pull(app)
 
         let field = app.textFields["home.search.field"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), "pulling Home down did not open the search")
@@ -48,17 +45,19 @@ final class HomeSearchUITests: XCTestCase {
         XCTAssertTrue(home.waitForExistence(timeout: 30))
         home.tap()
         sleep(2)
-        let window = app.windows.firstMatch
-        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-            .press(forDuration: 0.1, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)),
-                   withVelocity: .slow, thenHoldForDuration: 0.3)
-        sleep(1)
-        add(XCTAttachment(screenshot: app.screenshot()).keepingAlways)
+        pull(app)
         let field = app.textFields["home.search.field"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         app.buttons["home.search.cancel"].firstMatch.tap()
         XCTAssertTrue(field.waitForNonExistence(timeout: 5))
     }
+}
+
+/// A thumb's short pull down Home (15 % of the screen, normal speed).
+private func pull(_ app: XCUIApplication) {
+    let window = app.windows.firstMatch
+    window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
 }
 
 private extension XCTAttachment {

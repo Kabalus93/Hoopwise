@@ -217,9 +217,12 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   In its place the navigation bar (title + search field) has a fixed `.bar`
   material (toolbarBackgroundVisibility .visible), so rows blur only under
   the header — without it rows ran visibly under the title and search.
-- Test on the iPad Air 13-inch simulator with HOOPWISE_SCREENSHOT_STORE=1
-  and `-hasOnboarded YES`; its screenshots.store was seeded from the Pro Max
-  simulator's (demo data only).
+- TEST iPAD WORK ON THE iPAD MINI SIMULATOR (Luther, 16 Nov 2026: "for
+  testing on ipad use an ipad mini simulator") — iPad mini (A17 Pro),
+  54392A20-DA69-46EB-901D-97CB56B19FFF, with HOOPWISE_SCREENSHOT_STORE=1 and
+  `-hasOnboarded YES`; its screenshots.store holds the full demo data. The
+  mini is the iPad he uses and the narrowest regular width. The iPad Air 13
+  M4 sim's demo store is nearly empty — data-dependent tests fail there.
 
 ## The Mac app IS the iPad app — Mac Catalyst (6 November 2026, Luther)
 "Make this a Mac app: everything as it is for the iPad — views, aesthetic,
@@ -1485,8 +1488,8 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   DEBUG: HOOPWISE_SHOT=gameDashboard; HOOPWISE_GALLERY_FULL=1 shows any shot
   full screen (an iPad page at regular width — a form sheet is compact);
   HOOPWISE_SESSION_TAB=<0–3> on sessionPage / pastSession. Tests:
-  GameChemistryTests, SessionWideLayoutUITests (iPad Air 13 — the iPad mini
-  demo store has lost its sessions).
+  GameChemistryTests, SessionWideLayoutUITests (iPad mini — its demo store
+  was re-seeded with sessions on 14 Nov 2026).
 - GAME RECAP REDESIGNED (14 November 2026, Luther: "another page that's a
   weak point of our design. make it match the vision", all platforms — his
   request, so a sanctioned iPhone change). Views/Coaching/GameRecapView.swift
@@ -1512,7 +1515,7 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   1100 pt the switch goes and both show side by side — Reminders on the
   left (≤ 560 pt, 40 %), the notebook column on the right; narrower keeps
   the switch in an ≤ 860 pt column. DEBUG HOOPWISE_NOTES_WIDE_AT=<pt> moves
-  the threshold (check on the iPad Air 13 in portrait with 900).
+  the threshold (check on the iPad mini in landscape with 900).
   NOTES: the session's notes in a ruled card (Views/Components/
   RuledNotebookEditor.swift — rules at the body line height + 8 pt spacing
   from the text view's 8 pt inset, a programme-colour margin line; the
@@ -1607,8 +1610,13 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   only appears on the home screen upon dragging down the page … students,
   drills, plays, lexicon, private students, coaches, sessions, programs and
   teams", all platforms — his request, so a sanctioned iPhone change).
-  Pull Home down ≥ `HomeSearch.pullDistance` (80 pt; "Pull to search" →
-  "Release to search" capsule above the cards, a light haptic) and let go:
+  Pulling Home down brings the search in WITH THE FINGER, as on the
+  iPhone's home screen (Luther, same day: the first version — pull 80 pt,
+  "Release to search", open after the bounce — was "awkwardly slow"): while
+  the scroll phase is `.interacting` the overlay's field slides down and the
+  blur fades in by `searchPull / revealDistance` (70 pt); letting go
+  (`onScrollPhaseChange` leaving .interacting) past `commitDistance` (28 pt
+  of overscroll) opens it — no hint capsule, no haptic.
   Views/Dashboard/HomeSearchView.swift opens OVER Home (material, field
   focused, Cancel / Esc). ⌘K toggles it (iPad keyboard, Mac). Groups in
   order Athletes (NameIndex), Private clients (active private contract of a

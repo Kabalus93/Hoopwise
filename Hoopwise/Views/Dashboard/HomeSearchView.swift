@@ -4,8 +4,10 @@ import SwiftData
 // HOME SEARCH (16 November 2026, Luther: "a Spotlight-like search bar that
 // only appears on the home screen upon dragging down the page … results like
 // students, drills, plays, lexicon, private students, coaches, sessions,
-// programs and teams"). Pull Home down past `HomeSearch.pullDistance` and let
-// go: this opens over Home with the field focused. Results are grouped by
+// programs and teams"). Pulling Home down brings it in WITH the finger, like
+// the iPhone's home screen (16 Nov 2026, Luther: the first version — pull far,
+// "Release to search", open after the bounce — was "awkwardly slow"); letting
+// go past `HomeSearch.commitDistance` opens it with the field focused. Results are grouped by
 // kind, a few each, best first; a tap closes the search and opens the item
 // where the app already opens it (Home routes the target).
 
@@ -23,8 +25,10 @@ enum HomeSearchTarget {
 }
 
 enum HomeSearch {
-    /// How far Home is pulled down before letting go opens the search.
-    static let pullDistance: CGFloat = 80
+    /// The pull (points of overscroll) at which the search is fully in.
+    static let revealDistance: CGFloat = 70
+    /// Letting go past this pull opens the search.
+    static let commitDistance: CGFloat = 28
     /// Results shown per kind.
     static let perGroup = 5
 
@@ -91,6 +95,10 @@ enum HomeSearch {
 struct HomeSearchView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.modelContext) private var modelContext
+    /// Opened (false while it follows the finger in).
+    var live = true
+    /// How far it has come in, 0…1.
+    var reveal: CGFloat = 1
     let onClose: () -> Void
     let onOpen: (HomeSearchTarget) -> Void
 
@@ -105,6 +113,7 @@ struct HomeSearchView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchField
+                .offset(y: -70 * (1 - reveal))
             ScrollView {
                 VStack(spacing: 16) {
                     let trimmed = query.trimmingCharacters(in: .whitespaces)
@@ -126,12 +135,16 @@ struct HomeSearchView: View {
                 .padding(.bottom, 140)
             }
             .scrollDismissesKeyboard(.interactively)
+            .opacity(reveal)
         }
-        .background(.ultraThinMaterial)
-        .background(Color(.systemGroupedBackground).opacity(0.55))
+        .background(.ultraThinMaterial.opacity(reveal))
+        .background(Color(.systemGroupedBackground).opacity(0.55 * reveal))
         .onAppear {
             plays = (try? modelContext.fetch(FetchDescriptor<JournalPlay>(sortBy: [SortDescriptor(\.name)]))) ?? []
-            DispatchQueue.main.async { focused = true }
+            if live { DispatchQueue.main.async { focused = true } }
+        }
+        .onChange(of: live) { _, isLive in
+            if isLive { focused = true }
         }
     }
 
