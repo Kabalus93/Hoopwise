@@ -33,11 +33,8 @@ struct StudentQuickPeepView: View {
     @State private var isEditingSkills = false
     @State private var editedSkills = SkillsEvaluation()
 
-    @State private var showingParentReport = false
-    @State private var showingCardShare = false
-    @State private var sharedCardURL: URL?
-    @State private var isExportingCard = false
-    @State private var cardShareError: String?
+    /// The player card (AthleteCardShareSheet).
+    @State private var showingCard = false
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     
@@ -408,23 +405,10 @@ struct StudentQuickPeepView: View {
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button(action: { shareCardPDF() }) {
-                            Label(
-                                isChinese ? "分享球员卡 (PDF)" : "Share Card (PDF)",
-                                systemImage: "doc.richtext"
-                            )
-                        }
-                        Button(action: { showingParentReport = true }) {
-                            Label(
-                                isChinese ? "家长预览" : "Parent Preview",
-                                systemImage: "eye"
-                            )
-                        }
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
+                    Button { showingCard = true } label: {
+                        Label(isChinese ? "球员卡" : "Player card", systemImage: "square.and.arrow.up")
                     }
-                    .disabled(isExportingCard)
+                    .accessibilityIdentifier("peep.shareCard")
                 }
             }
             #if targetEnvironment(macCatalyst)
@@ -437,40 +421,9 @@ struct StudentQuickPeepView: View {
             .sheet(isPresented: $showingEditStudent) {
                 EditStudentView(student: student, player: player)
             }
-            .sheet(isPresented: $showingParentReport) {
-                ParentReportSheet(
-                    student: student,
-                    player: player,
-                    contract: contract,
-                    programName: enrolledProgram?.displayName,
-                    coachName: dataManager.coach.name
-                )
-            }
-            .sheet(isPresented: $showingCardShare) {
-                if let url = sharedCardURL {
-                    ShareSheet(items: [url])
-                }
-            }
-            .alert(
-                isChinese ? "分享失败" : "Share Failed",
-                isPresented: Binding(get: { cardShareError != nil }, set: { if !$0 { cardShareError = nil } })
-            ) {
-                Button("OK", role: .cancel) { cardShareError = nil }
-            } message: {
-                Text(cardShareError ?? "")
-            }
-            .overlay {
-                if isExportingCard {
-                    ZStack {
-                        Color.black.opacity(0.4).ignoresSafeArea()
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .tint(.white)
-                            .padding(20)
-                            .background(Color.black.opacity(0.7))
-                            .cornerRadius(12)
-                    }
-                }
+            .sheet(isPresented: $showingCard) {
+                AthleteCardShareSheet(student: student)
+                    .environmentObject(dataManager)
             }
         }
     }
@@ -992,65 +945,6 @@ struct StudentQuickPeepView: View {
         updatedPlayer.skills = editedSkills
         updatedPlayer.updatedAt = Date()
         dataManager.updatePlayer(updatedPlayer)
-    }
-
-    @MainActor
-    private func shareCardPDF() {
-        isExportingCard = true
-        Task { @MainActor in
-            defer { isExportingCard = false }
-
-            let monthRange = PlayerCardPDFExporter.currentMonthRange()
-            let lifetime = trainingStats
-            let monthly = TrainingSessionStats.calculate(
-                for: student.id,
-                from: dataManager.sessionEvents,
-                in: monthRange
-            )
-            // Resolve the profile image from the student record (raw data
-            // ride-along) so the exported card shows the actual face
-            // instead of falling back to initials.
-            let profileImg: UIImage? = {
-                if let data = student.profileImageData { return UIImage(data: data) }
-                return nil
-            }()
-
-            let initialCard = PlayerCardPDFExporter.CardData(
-                student: student,
-                player: player,
-                contract: contract,
-                trainingStats: lifetime,
-                monthlyStats: monthly.hasStats ? monthly : nil,
-                programContext: programContext,
-                profileImage: profileImg,
-                headerBackgroundImage: nil
-            )
-
-            // Pre-fetch the basketball header background — without this, the
-            // PDF snapshot lands before AsyncImage can resolve the network
-            // URL and the card prints with a flat gradient.
-            let prefetched = await PlayerCardPDFExporter.prefetchHeaderImages(for: [initialCard])
-            let cardData = prefetched.first ?? initialCard
-
-            let monthLbl = PlayerCardPDFExporter.monthLabel(chinese: isChinese)
-            guard let pdfData = PlayerCardPDFExporter.generateSingleCardPDF(
-                card: cardData,
-                dataManager: dataManager
-            ) else {
-                cardShareError = isChinese ? "生成 PDF 失败" : "Failed to generate PDF"
-                return
-            }
-            let safeName = student.name.replacingOccurrences(of: "/", with: "-")
-            let filename = "\(safeName) - Card \(monthLbl).pdf"
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-            do {
-                try pdfData.write(to: url, options: .atomic)
-                sharedCardURL = url
-                showingCardShare = true
-            } catch {
-                cardShareError = error.localizedDescription
-            }
-        }
     }
 
     // MARK: - Attendance Section

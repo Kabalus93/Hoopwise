@@ -619,6 +619,30 @@ enum SheetGalleryDebug {
                 showSelectionCounter: false
             ) { _ in }
 
+        case "athleteCard", "athleteCardExport":
+            // The player card share sheet for an enrolled demo athlete with a
+            // photo. =athleteCardExport also writes, 2 s later, the share image
+            // (athlete-card.png) and the A3 sheet over that program's roster
+            // (athlete-cards-a3.pdf) to the App Group Library/Caches.
+            if let program = dm.programs.first(where: { !$0.enrolledStudentIds.isEmpty }),
+               let student = dm.students.filter({ program.enrolledStudentIds.contains($0.id) })
+                .max(by: { ($0.profileImageData?.count ?? 0) < ($1.profileImageData?.count ?? 0) }) {
+                AthleteCardShareSheet(student: student)
+                    .task {
+                        guard shot == "athleteCardExport",
+                              let caches = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.OKTO.SAMp")?
+                                .appendingPathComponent("Library/Caches") else { return }
+                        try? await Task.sleep(for: .seconds(2))
+                        let card = dm.athleteCard(for: student, coachLine: "Big step forward with passing this month!")
+                        try? AthleteCardRenderer.shareImage(card)?.pngData()?.write(to: caches.appendingPathComponent("athlete-card.png"))
+                        try? AthleteCardRenderer.printSheet(dm.athleteCards(forProgram: program))?
+                            .write(to: caches.appendingPathComponent("athlete-cards-a3.pdf"))
+                        print("athleteCardExport: wrote \(caches.path)")
+                    }
+            } else {
+                missing("athleteCard: no enrolled student")
+            }
+
         case "quickPeep":
             // The quick peep as a session opens it, with its Edit button.
             // HOOPWISE_PEEP=photo: a student with a profile photo, from any

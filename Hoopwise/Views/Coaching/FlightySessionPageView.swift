@@ -248,11 +248,11 @@ struct FlightySessionPageView: View {
 
                         Button(action: { exportPlayerCards() }) {
                             Label(
-                                LocalizationManager.shared.currentLanguage == .chinese ? "导出球员卡（A3打印）" : "Export Player Cards (A3)",
+                                LocalizationManager.shared.currentLanguage == .chinese ? "打印球员卡（A3）" : "Print Player Cards (A3)",
                                 systemImage: "rectangle.stack.badge.person.crop"
                             )
                         }
-                        .disabled(isExportingCards || session.attendeeIds.isEmpty)
+                        .disabled(isExportingCards)
 
                         if session.status == .scheduled {
                             // No "Start Session": sessions start on their own at
@@ -506,45 +506,27 @@ struct FlightySessionPageView: View {
         session.updatedAt = fresh.updatedAt
     }
 
+    /// The A3 print sheet of player cards (AthleteCardRenderer) for the
+    /// session's roster — who it expects plus anyone marked; its stored roster
+    /// is often empty, so it used to export nobody.
     @MainActor
     private func exportPlayerCards() {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        let studentIds = session.attendeeIds
-        guard !studentIds.isEmpty else { return }
-
         isExportingCards = true
         Task { @MainActor in
             defer { isExportingCards = false }
-
-            let initialCards = PlayerCardPDFExporter.buildCards(
-                for: studentIds,
-                students: dataManager.students,
-                players: dataManager.players,
-                contracts: dataManager.contracts,
-                sessions: dataManager.sessionEvents
-            )
-
-            guard !initialCards.isEmpty else {
+            let cards = dataManager.athleteCards(forSession: session)
+            guard !cards.isEmpty else {
                 cardExportError = isChinese ? "没有可导出的球员" : "No players to export"
                 return
             }
-
-            // Pre-fetch the header backgrounds so the snapshot writer
-            // doesn't race the network. Cache hits make repeat exports fast.
-            let cards = await PlayerCardPDFExporter.prefetchHeaderImages(for: initialCards)
-
-            let monthLbl = PlayerCardPDFExporter.monthLabel(chinese: isChinese)
-            guard let pdfData = PlayerCardPDFExporter.generateSheetPDF(
-                cards: cards,
-                dataManager: dataManager
-            ) else {
+            guard let pdfData = AthleteCardRenderer.printSheet(cards) else {
                 cardExportError = isChinese ? "生成 PDF 失败" : "Failed to generate PDF"
                 return
             }
-
+            let month = AthleteCardMonth.label(Date(), chinese: isChinese)
             let safeName = session.title.replacingOccurrences(of: "/", with: "-")
-            let filename = "\(safeName) - Cards \(monthLbl).pdf"
-            let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(safeName) - Player cards \(month) - A3.pdf")
             do {
                 try pdfData.write(to: url, options: .atomic)
                 exportedCardsURL = url
@@ -554,7 +536,7 @@ struct FlightySessionPageView: View {
             }
         }
     }
-    
+
     private func drillIdsBinding(for section: CurriculumSection) -> Binding<[UUID]> {
         switch section {
         case .warmup: return $session.curriculum.warmupDrillIds

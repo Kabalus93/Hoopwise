@@ -809,7 +809,7 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   GameStatsUITests.
 - SEVENTEENTH sanctioned exception (October 2026, Luther's request): the
   athlete profile (StudentDetailView — the screen the Athletes list, widgets,
-  dashboard and program roster open; StudentIntelligenceProfileView is never
+  dashboard and program roster open; StudentIntelligenceProfileView was never
   constructed) has NO measurements and NO league stats; the quick-stats Height
   became Games. Training Stats (Components/StudentLeagueStatsView.swift —
   the league views in it were deleted) is the one stats section and reads
@@ -1606,6 +1606,53 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   contracts / player / student in one save. `.hoopwiseStudentDeleted`
   (object: id) closes the profile and clears the Athletes selection.
   Tests: DeleteStudentTests.
+- THE PLAYER CARD (16 November 2026, Luther: the shareable student cards
+  were "too much to take on so far … finish this once and for all"; decided:
+  ONE collectible card for the child and parents, any time, labelled with the
+  month; WeChat image AND A3 print sheets; the back shows what their classes
+  trained; all platforms — his request, so a sanctioned iPhone change).
+  BEFORE: four overlapping systems (~7,000 lines) — the Quick Peep flip card
+  snapshotted into a 2-page PDF (imperial height, a default "HAND R", an
+  empty grade, EFRT, a radar with +2.0 added to coach ratings, front and back
+  of different heights), a Parent Preview that previewed one design and
+  shared another (and said "Basketball Academy"), an unreachable monthly
+  collectible system, UnifiedStudentCard and StudentIntelligenceProfileView
+  (never constructed); the session's A3 export read `attendeeIds` (empty on
+  real classes → "No players to export"). NOW:
+  · Services/AthleteCardFacts.swift (pure, `AthleteCardFacts.make`): names
+    (primaryDisplayName / secondaryNameLine), photo, program (+ age group
+    only when the name lacks it), jersey ONLY when set, accent = program
+    colour else age category; THIS MONTH: classes where attendance was TAKEN
+    (present / excused / absent — unmarked is not absent) and present at,
+    games this month; per game (PTS REB AST STL BLK) over every game
+    (GameStatsReport); the OCTAGON = PlanCoverage of the plans of classes
+    they ATTENDED this month, else every class attended, else none (never a
+    guess); a coach's line typed when sharing (never stored); coach name and
+    ProgramGuideStore.academyName.
+  · Views/Components/AthleteCardViews.swift: AthleteCardFront / Back (360 ×
+    504 pt, 5 : 7, always light), AthleteCardSpread (side by side = the
+    WeChat image), AthleteCardRenderer (SwiftUI ImageRenderer — the old path
+    hosted a view in an off-screen UIHostingController): `shareImage`, and
+    `printSheet` = A3 landscape, 2.5 × 3.5 in cards, fronts page then backs
+    page mirrored for long-edge duplex, crop marks.
+  · AthleteCardShareSheet (Views/Components/): the spread as it will be
+    sent, "A word from the coach", Share image (PNG) / A3 print sheet (PDF).
+    Opened from the athlete profile's toolbar (`athlete.shareCard` — it had
+    no share at all) and the Quick Peep (`peep.shareCard`, replacing "Share
+    Card (PDF)" + "Parent Preview"). Session ⋯ and program ⋯ "Print Player
+    Cards (A3)" use `athleteCards(forSession:)` (AttendanceMath.expectedIds +
+    anyone marked) / `athleteCards(forProgram:)`.
+  · DELETED: PlayerCardPDFExporter, MonthlyStudentCardExportService,
+    MonthlyStudentCardPrintViews, UnifiedStudentCard, StudentParentReportView
+    / ParentReportSheet / StudentReportImageGenerator / ReportLocalization /
+    the old radar views, StudentIntelligenceProfileView and the sheets only it
+    opened (≈ 5,500 lines). StudentParentReport.swift keeps
+    ProgramStatsContext, PerformanceRadarMetrics (the in-app flip card) and
+    ShareSheet. The Quick Peep's flip card is unchanged — the coach's view.
+  DEBUG HOOPWISE_SHOT=athleteCard (the sheet) / athleteCardExport (writes
+  athlete-card.png + athlete-cards-a3.pdf to the App Group Library/Caches).
+  Tests: AthleteCardFactsTests (incl. both sides the same size, 2-page A3),
+  AthleteCardUITests (profile and peep).
 - HOME SEARCH (16 November 2026, Luther: "a Spotlight-like search bar that
   only appears on the home screen upon dragging down the page … students,
   drills, plays, lexicon, private students, coaches, sessions, programs and

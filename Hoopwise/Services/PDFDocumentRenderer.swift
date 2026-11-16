@@ -8,8 +8,8 @@ import CoreText
 // AppKit — so it runs identically on both platforms.
 //
 // This exists because every previous PDF path in the project used
-// UIGraphicsPDFRenderer, which is iOS-only. MonthlyStudentCardExportService is
-// wrapped end to end in #if os(iOS) and produces nothing on Mac.
+// UIGraphicsPDFRenderer, which is iOS-only (the old monthly card exporter,
+// deleted in November 2026, produced nothing on Mac).
 //
 // It is deliberately built against text and tables first. The hard problems
 // here — CJK font cascading, A4 pagination, measuring wrapped text before

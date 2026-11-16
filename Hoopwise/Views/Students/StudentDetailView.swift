@@ -5,6 +5,8 @@ struct StudentDetailView: View {
     @Environment(\.dismiss) private var dismissProfile
     let student: Student
     @State private var showingEditSheet = false
+    /// The player card (AthleteCardShareSheet): share image or A3 sheet.
+    @State private var showingCard = false
     @State private var contractEdit: ContractEdit?
 
     // Section expansion states
@@ -94,11 +96,21 @@ struct StudentDetailView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
+                Button { showingCard = true } label: {
+                    Label(isChinese ? "球员卡" : "Player card", systemImage: "square.and.arrow.up")
+                }
+                .accessibilityIdentifier("athlete.shareCard")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button(isChinese ? "编辑" : "Edit") {
                     showingEditSheet = true
                 }
                 .fontWeight(.semibold)
             }
+        }
+        .sheet(isPresented: $showingCard) {
+            AthleteCardShareSheet(student: student)
+                .environmentObject(dataManager)
         }
         .sheet(isPresented: $showingEditSheet) {
             EditStudentView(student: student, player: player)
