@@ -28,6 +28,8 @@ struct StudentIntelligenceListView: View {
     /// Luther: upright, the page opened empty and the list hid behind the
     /// sidebar button).
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    /// The tab's width, to pick the hand-laid panes on a narrow iPad.
+    @State private var splitWidth: CGFloat = 1200
     @State private var sheetStudent: Student?
     @State private var showingAddStudent = false
     @FocusState private var searchFocused: Bool
@@ -258,7 +260,21 @@ struct StudentIntelligenceListView: View {
     
     var body: some View {
         Group {
-            if shouldUseSplitView {
+            if shouldUseSplitView, splitWidth < Self.tiledSplitMinWidth {
+                // Narrow iPads upright (the mini, 744 pt): iPadOS slides the
+                // split view's list over the profile however its visibility
+                // is set, so the two panes are laid out here (16 Nov 2026,
+                // Luther: the mini still opened empty).
+                HStack(spacing: 0) {
+                    NavigationStack {
+                        mainContent
+                    }
+                    .frame(width: min(340, splitWidth * 0.44))
+                    Divider().ignoresSafeArea()
+                    athleteDetail
+                        .frame(maxWidth: .infinity)
+                }
+            } else if shouldUseSplitView {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     NavigationStack {
                         mainContent
@@ -267,30 +283,7 @@ struct StudentIntelligenceListView: View {
                     // enough to read, the profile beside it.
                     .navigationSplitViewColumnWidth(min: 340, ideal: 420, max: 560)
                 } detail: {
-                    if let student = selectedStudent {
-                        // Unified profile — same view used everywhere else
-                        // (program detail, dashboard, attendance lists).
-                        NavigationStack {
-                            StudentDetailView(student: student)
-                        }
-                    } else {
-                        ZStack {
-                            Color(.systemGroupedBackground).ignoresSafeArea()
-                            VStack(spacing: 10) {
-                                Image(systemName: "person.crop.circle")
-                                    .font(.system(size: 44, weight: .light))
-                                    .foregroundStyle(.tertiary)
-                                Text(LocalizationManager.shared.currentLanguage == .chinese ? "选择一名学员" : "Choose an athlete")
-                                    .font(.headline)
-                                    .foregroundStyle(.secondary)
-                                Text(LocalizationManager.shared.currentLanguage == .chinese
-                                     ? "共 \(dataManager.students.count) 名学员"
-                                     : dataManager.students.count == 1 ? "1 athlete in the list" : "\(dataManager.students.count) athletes in the list")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                    }
+                    athleteDetail
                 }
                 .navigationSplitViewStyle(.balanced)
                 .onChange(of: selectedStudent == nil) { _, isEmpty in
@@ -298,7 +291,44 @@ struct StudentIntelligenceListView: View {
                     if isEmpty { columnVisibility = .all }
                 }
             } else {
-                mainContent
+                NavigationStack {
+                    mainContent
+                }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { splitWidth = $0 }
+    }
+
+    /// Below this width the system split view will not keep its list on
+    /// screen (iPad mini upright), so the panes are laid out by hand.
+    private static let tiledSplitMinWidth: CGFloat = 900
+
+    /// The open athlete, or the empty state.
+    @ViewBuilder
+    private var athleteDetail: some View {
+        if let student = selectedStudent {
+            // Unified profile — same view used everywhere else
+            // (program detail, dashboard, attendance lists).
+            NavigationStack {
+                StudentDetailView(student: student)
+            }
+            .id(student.id)
+        } else {
+            ZStack {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+                VStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 44, weight: .light))
+                        .foregroundStyle(.tertiary)
+                    Text(LocalizationManager.shared.currentLanguage == .chinese ? "选择一名学员" : "Choose an athlete")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Text(LocalizationManager.shared.currentLanguage == .chinese
+                         ? "共 \(dataManager.students.count) 名学员"
+                         : dataManager.students.count == 1 ? "1 athlete in the list" : "\(dataManager.students.count) athletes in the list")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
     }

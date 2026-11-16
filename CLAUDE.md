@@ -202,7 +202,15 @@ bundle consuming sessions is an open money decision (see RESTRUCTURE.md).
   student" with the list hidden behind the sidebar button): the split view
   is `.balanced` with columnVisibility `.all`, so the list stays beside the
   profile in portrait; nothing open = "Choose an athlete · N athletes".
-  Rows are `athletes.row`. Pinned by AthletesPortraitUITests (iPad).
+  THE iPAD MINI UPRIGHT (744 pt) still slid the list away — iPadOS overlays
+  a split view's sidebar at that width whatever its visibility — so below
+  900 pt the page lays the two panes out ITSELF (list ≤ 340 pt | profile,
+  `tiledSplitMinWidth`). For that the Athletes tab no longer wraps the page
+  in a NavigationStack (it merged both panes' bars into one); the page owns
+  its stacks — the phone branch wraps `mainContent` in one. Rows are
+  `athletes.row`. Pinned by AthletesPortraitUITests (iPad Air AND mini; on
+  the mini the first launch sometimes comes up without the demo store —
+  "0 athletes" — rerun).
   iPhone keeps the inset-grouped Student Intelligence list. On the Mac the
   list hides the iOS 26 scroll-edge effect (`scrollEdgeEffectHidden`): the
   soft edge blur got stuck over the rows after scrolling, sometimes resizing.

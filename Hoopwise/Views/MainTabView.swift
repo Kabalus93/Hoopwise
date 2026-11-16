@@ -61,10 +61,10 @@ struct MainTabView: View {
                 }
 
                 Tab(isChinese ? "学员" : "Athletes", systemImage: "person.2.fill", value: 2) {
-                    NavigationStack {
-                        StudentIntelligenceListView()
-                    }
-                    .environment(\.horizontalSizeClass, contentSizeClass)
+                    // The page owns its navigation: a stack on the phone, two
+                    // panes on the iPad (a stack here merged both panes' bars).
+                    StudentIntelligenceListView()
+                        .environment(\.horizontalSizeClass, contentSizeClass)
                 }
 
                 Tab(isChinese ? "中心" : "Hub", systemImage: "square.grid.2x2.fill", value: 3) {

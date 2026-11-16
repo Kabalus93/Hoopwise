@@ -18,6 +18,9 @@ final class AthletesPortraitUITests: XCTestCase {
         XCTAssertTrue(tab.waitForExistence(timeout: 30))
         tab.tap()
 
+        let atOpen = XCTAttachment(screenshot: app.screenshot())
+        atOpen.lifetime = .keepAlways
+        add(atOpen)
         XCTAssertTrue(app.staticTexts["Choose an athlete"].firstMatch.waitForExistence(timeout: 10))
         let firstRow = app.buttons["athletes.row"].firstMatch
         XCTAssertTrue(firstRow.waitForExistence(timeout: 10), "no athlete rows on screen")
