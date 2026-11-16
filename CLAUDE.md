@@ -1119,6 +1119,26 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Pencil touches, hover, double-tap and squeeze cannot be simulated — they
   need a real iPad. (DrillVisualUITests.testNewDrillCanBeDrawnWith…
   fails before the editor: it never finds "newDrill.draw" — unrelated.)
+- DRILLS PAGE FILTERS REDONE (16 November 2026, Luther: "I still need to
+  know which are ball handling, passing or shooting … then optionally if I
+  need to go by age group"; age must be removable; "a way to order drills by
+  different criteria"; all platforms). DrillsLibraryView: SKILL CHIPS first
+  (All skills + the octagon's eight DrillAttributes; a skill keeps drills
+  scoring ≥ 2 — worked/main — with ●●○ dots on each row); then a row of
+  removable FILTER PILLS (menu + ✕): Age (`library.ageFilter`, "" = any —
+  the old required `library.age` is no longer read), Block, Type (types left
+  by the other filters, with counts; Rule options), Source (All / Library /
+  Personal — "Personal" is no longer an age chip; personal drills have no age
+  or block so those filters drop them), and SORT (`DrillSort`: Suggested =
+  library order or, with a skill, strongest first · Name · Age (sections per
+  age when no age is set) · Duration); "Clear all". The page opens on every
+  drill. The plan picker keeps its own keys (`planPicker.age/.skill/.sort`),
+  starts on the program's age and the section's block (both removable), and
+  "Find drills" for a neglected axis now just selects that skill (any block)
+  — strongOnSection is gone. TRAP for UI tests: a `-key value` launch
+  argument PINS that default (the argument domain wins over the app's
+  writes) — testSkillFilterWithOptionalAge relaunches without them. Tests:
+  ActivityLibraryUITests.
 - DRILL VISUALS ARE DRAWN IN THE PLAYS EDITOR (9 November 2026, Luther's
   request: "the same editor that's in plays … remove the popup"). The drill
   page's "Add a visual" (and the carousel's + tile) opens
@@ -1164,6 +1184,10 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   (DrillDrawingSheet: drill name, player, Done) and the full-screen viewer
   pages photos/videos only (`DrillDrawingMedia.viewerMedia`); drawing
   thumbnails are drawn LIVE from the drawing so they follow dark mode.
+  BIGGER CONTROLS (16 Nov 2026, Luther: "these buttons are way too small and
+  not easy to find"): + Add, Reorder and each drawing's Edit are glass
+  capsules, body text, ≥ 44 pt (`visualControlLabel()`, DrillDrawingMedia.
+  swift); the drawing's ⋯ is a 44 pt glass circle.
   HOOPWISE_SHOT=drillDrawing / drillDetail. Tests:
   DrillDrawingTests, DrillVisualUITests (demo store, cleans up after itself).
 - DRAW WHILE CREATING + PHONE STEPS BAR (9 November 2026, Luther's
@@ -1579,6 +1603,25 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   contracts / player / student in one save. `.hoopwiseStudentDeleted`
   (object: id) closes the profile and clears the Athletes selection.
   Tests: DeleteStudentTests.
+- HOME SEARCH (16 November 2026, Luther: "a Spotlight-like search bar that
+  only appears on the home screen upon dragging down the page … students,
+  drills, plays, lexicon, private students, coaches, sessions, programs and
+  teams", all platforms — his request, so a sanctioned iPhone change).
+  Pull Home down ≥ `HomeSearch.pullDistance` (80 pt; "Pull to search" →
+  "Release to search" capsule above the cards, a light haptic) and let go:
+  Views/Dashboard/HomeSearchView.swift opens OVER Home (material, field
+  focused, Cancel / Esc). ⌘K toggles it (iPad keyboard, Mac). Groups in
+  order Athletes (NameIndex), Private clients (active private contract of a
+  matching athlete), Sessions (name, program, venue; upcoming soonest, then
+  latest), Programs, Teams, Coaches (NameIndex), Plays (name, concept,
+  situation — fetched once on open, NOT a @Query: see the Home redraw trap),
+  Drills (name first), Lexicon (`Lexicon.search`); 5 each, "+N more"
+  expands; Return opens the top hit. A tap closes the search and Home routes
+  the target: athlete → profile sheet, private client → contract card,
+  coach → profile, drill / lexicon / session / program / team / play →
+  pushed. The pull is read with onScrollGeometryChange (offset + top inset).
+  TRAP: an accessibilityIdentifier on the search's container overrode the
+  field's own. Tests: HomeSearchUITests (iPhone and iPad).
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

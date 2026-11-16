@@ -24,6 +24,15 @@ struct FlightyActionableDashboard: View {
     @State private var pinTick = 0
     @State private var openTeamId: UUID?
     @State private var openPlay: JournalPlay?
+    // Home search (pull down to open; HomeSearchView).
+    @State private var showingSearch = false
+    @State private var searchPull: CGFloat = 0
+    @State private var searchArmed = false
+    @State private var searchStudent: Student?
+    @State private var searchContract: Contract?
+    @State private var searchCoach: StaffCoach?
+    @State private var searchDrillId: UUID?
+    @State private var searchLexicon: Lexicon.Located?
     @State private var playActivityTick = 0
     
     let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -278,6 +287,25 @@ struct FlightyActionableDashboard: View {
     }
 
     var body: some View {
+        homeStack
+            .overlay {
+                if showingSearch {
+                    HomeSearchView(onClose: closeSearch, onOpen: openSearchResult)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy(duration: 0.28), value: showingSearch)
+            .background {
+                // ⌘K opens it from a keyboard (iPad keyboards, the Mac — a
+                // mouse does not pull a page down).
+                Button("") { showingSearch.toggle() }
+                    .keyboardShortcut("k", modifiers: .command)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+    }
+
+    private var homeStack: some View {
         NavigationStack {
             ScrollView {
                 GlassEffectContainer(spacing: 16) {
@@ -300,6 +328,12 @@ struct FlightyActionableDashboard: View {
                     }
                 }
                 .padding(.bottom, 120)
+                .background(alignment: .top) { pullToSearchHint }
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, offset in
+                trackSearchPull(offset)
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollContentBackground(.hidden)
@@ -336,6 +370,25 @@ struct FlightyActionableDashboard: View {
             }
             .navigationDestination(item: $openPlay) { play in
                 JournalPlayScreen(play: play)
+            }
+            .navigationDestination(item: $searchDrillId) { id in
+                if let drill = dataManager.drills.first(where: { $0.id == id }) {
+                    DrillDetailView(drill: drill)
+                }
+            }
+            .navigationDestination(item: $searchLexicon) { item in
+                LexiconEntryView(item: item)
+            }
+            .sheet(item: $searchStudent) { picked in
+                NavigationStack {
+                    StudentDetailView(student: dataManager.students.first { $0.id == picked.id } ?? picked)
+                }
+            }
+            .sheet(item: $searchContract) { contract in
+                PrivateClientDetailSheet(contract: contract)
+            }
+            .sheet(item: $searchCoach) { coach in
+                CoachProfileDetailView(coach: coach)
             }
             .onReceive(NotificationCenter.default.publisher(for: .hoopwisePlayActivity)) { _ in
                 playActivityTick += 1
@@ -385,6 +438,64 @@ struct FlightyActionableDashboard: View {
     }
     
     // MARK: - Navigation Chrome (iOS 26 native)
+
+    // MARK: - Pull to search
+
+    /// "Pull to search" / "Release to search", above the cards while Home is
+    /// pulled down.
+    private var pullToSearchHint: some View {
+        let progress = min(1, searchPull / HomeSearch.pullDistance)
+        return Label(searchArmed ? (isChineseUI ? "松开即可搜索" : "Release to search")
+                                 : (isChineseUI ? "下拉搜索" : "Pull to search"),
+                     systemImage: "magnifyingglass")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(searchArmed ? Color.accentColor : .secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .glassEffect(.regular, in: .capsule)
+            .scaleEffect(0.85 + 0.15 * progress)
+            .opacity(progress)
+            .offset(y: -min(searchPull, HomeSearch.pullDistance) / 2 - 22)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private var isChineseUI: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    /// Arms at `pullDistance`; letting go (the page springs back) opens.
+    private func trackSearchPull(_ offset: CGFloat) {
+        let pull = max(0, -offset)
+
+        if pull != searchPull { searchPull = pull }
+        if pull >= HomeSearch.pullDistance, !searchArmed {
+            searchArmed = true
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            #endif
+        } else if searchArmed, pull < HomeSearch.pullDistance * 0.5 {
+            searchArmed = false
+            if !showingSearch { showingSearch = true }
+        }
+    }
+
+    private func closeSearch() {
+        showingSearch = false
+    }
+
+    private func openSearchResult(_ target: HomeSearchTarget) {
+        showingSearch = false
+        switch target {
+        case .athlete(let student): searchStudent = student
+        case .privateClient(let contract): searchContract = contract
+        case .session(let session): selectedSession = session
+        case .program(let program): selectedProgram = program
+        case .team(let id): openTeamId = id
+        case .coach(let coach): searchCoach = coach
+        case .play(let play): openPlay = play
+        case .drill(let drill): searchDrillId = drill.id
+        case .lexicon(let item): searchLexicon = item
+        }
+    }
 
     private var navTitle: String {
         let first = dataManager.coach.name.components(separatedBy: " ").first ?? "Coach"

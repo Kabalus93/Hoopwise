@@ -1,7 +1,8 @@
 import XCTest
 
-/// The drills page built on the activity library: age → block → type,
-/// "include earlier ages", and rule options under Game (not drills).
+/// The drills page built on the activity library: skill chips, then Age,
+/// Block, Type and Source as removable filters (16 Nov 2026), "include
+/// earlier ages", and rule options under Game (not drills).
 final class ActivityLibraryUITests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -11,7 +12,8 @@ final class ActivityLibraryUITests: XCTestCase {
         app = XCUIApplication()
         app.launchEnvironment["HOOPWISE_SHOT"] = "drillsLibrary"
         app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"   // never the synced store
-        app.launchArguments += ["-app_language", "en", "-library.age", "U8"]
+        app.launchArguments += ["-app_language", "en", "-library.ageFilter", "U8", "-library.skill", "",
+                                "-library.sort", "suggested"]   // pinned for these tests
         app.launch()
     }
 
@@ -20,8 +22,16 @@ final class ActivityLibraryUITests: XCTestCase {
     /// U8 alone has 22 routine activities; with U6 and U7 included, 51. The
     /// switch lives in the ⓘ guidance sheet and is remembered, so start from
     /// whichever state it is in.
+    private func choose(_ filter: String, _ value: String) {
+        app.buttons[filter].firstMatch.tap()
+        let item = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", value)).firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "\(filter) offers \(value)")
+        item.tap()
+    }
+
     func testAgeBlockAndEarlierAges() {
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        choose("library.filter.block", "Routine")
         let alone = app.staticTexts["Routine · 22"], together = app.staticTexts["Routine · 51"]
         XCTAssertTrue(alone.exists || together.exists, "U8 routine: 22 alone, 51 with earlier ages")
         let wasAlone = alone.exists
@@ -38,10 +48,8 @@ final class ActivityLibraryUITests: XCTestCase {
 
     func testRuleOptionsLiveUnderGame() {
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
-        app.buttons["Game"].tap()
-        let chip = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Rule options'")).firstMatch
-        XCTAssertTrue(chip.waitForExistence(timeout: 5), "Game offers a Rule options chip")
-        chip.tap()
+        choose("library.filter.block", "Game")
+        choose("library.filter.type", "Rule options")
         let rule = app.descendants(matching: .any).matching(identifier: "library.rule").firstMatch
         XCTAssertTrue(rule.waitForExistence(timeout: 5), "rule options are listed under Game")
         rule.tap()
@@ -65,6 +73,35 @@ final class ActivityLibraryUITests: XCTestCase {
         field.typeText("off keeping")
         XCTAssertTrue(app.staticTexts["20 Passes, Keeping Off"].waitForExistence(timeout: 5),
                       "a U7 small game is found from U8 · Routine")
-        XCTAssertFalse(app.buttons["Routine"].exists, "the filters step aside while searching")
+        XCTAssertFalse(app.buttons["library.filter.block"].exists, "the filters step aside while searching")
+    }
+
+    /// Skill first (Luther: "which are ball handling, passing or shooting"),
+    /// age optional: Passing lists drills strong on it; removing the age keeps
+    /// the skill and widens the list; Clear all removes both. Launched without
+    /// the age argument — a launch argument pins a setting the app cannot
+    /// change.
+    func testSkillFilterWithOptionalAge() {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchEnvironment["HOOPWISE_SHOT"] = "drillsLibrary"
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        app.launchArguments += ["-app_language", "en"]
+        app.launch()
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        let clear = app.buttons["library.filter.clear"].firstMatch
+        if clear.exists { clear.tap() }
+        choose("library.filter.age", "U8")
+
+        app.buttons["library.skill.passing"].firstMatch.tap()
+        let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Strong on passing · '")).firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5), "Passing lists the drills strong on it")
+        let atU8 = header.label
+        app.buttons["library.filter.age.clear"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Strong on passing · ' AND label != %@", atU8))
+            .firstMatch.waitForExistence(timeout: 5), "every age has more passing drills than U8 alone")
+        app.buttons["library.filter.clear"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Drills · '")).firstMatch
+            .waitForExistence(timeout: 5), "Clear all shows every drill")
     }
 }

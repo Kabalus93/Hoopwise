@@ -142,8 +142,9 @@ struct DrillDrawingCard: View {
                 Spacer()
                 Button(action: onEdit) {
                     Label(isChinese ? "编辑" : "Edit", systemImage: "pencil")
-                        .font(.subheadline.weight(.semibold))
+                        .visualControlLabel()
                 }
+                .buttonStyle(.glass)
                 .accessibilityIdentifier("drill.drawing.edit")
                 Menu {
                     if onRename != nil {
@@ -158,9 +159,14 @@ struct DrillDrawingCard: View {
                         Label(isChinese ? "删除图示" : "Delete Drawing", systemImage: "trash")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.body)
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .accessibilityLabel(isChinese ? "更多" : "More")
                 .accessibilityIdentifier("drill.drawing.more")
             }
             DrillDrawingPlayer(drawing: drawing)
@@ -289,5 +295,17 @@ struct DrillDrawingSheet: View {
                 }
             }
         }
+    }
+}
+
+/// The drill page's visual controls — Add, Reorder, Edit (16 November 2026,
+/// Luther: "these buttons are way too small and not easy to find"): body
+/// text in a glass capsule at least 44 pt tall.
+extension View {
+    func visualControlLabel() -> some View {
+        self.font(.body.weight(.semibold))
+            .padding(.horizontal, 6)
+            .frame(minHeight: 44)
+            .contentShape(Capsule())
     }
 }

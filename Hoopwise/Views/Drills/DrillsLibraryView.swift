@@ -27,19 +27,33 @@ struct DrillsLibraryView: View {
     @EnvironmentObject var dataManager: DataManager
     @State private var searchText = ""
     @State private var showingAddDrill = false
-    /// "U8" … or "mine". The picker remembers its own age apart from the page.
+    // FILTERS (16 November 2026, Luther: "I still need to know which are ball
+    // handling, passing or shooting … then optionally if I need to go by age
+    // group then I can"; age "should be a filter that can be removed", and "a
+    // way to order drills by different criteria"). SKILL first — the octagon's
+    // eight axes; then Age, Block, Type and Source as removable filters; then
+    // the order. Nothing is required: the page opens on every drill.
+
+    /// "" = every age, else an ActivityAge raw value. The picker remembers its
+    /// own apart from the page.
     @AppStorage private var ageChoice: String
+    /// "" = every skill, else a DrillAttribute raw value.
+    @AppStorage private var skillChoice: String
+    @AppStorage private var sortChoice: String
 
     init(pick: Pick? = nil) {
         self.pick = pick
-        _ageChoice = AppStorage(wrappedValue: ActivityAge.u8.rawValue, pick == nil ? "library.age" : "planPicker.age")
+        let prefix = pick == nil ? "library" : "planPicker"
+        _ageChoice = AppStorage(wrappedValue: "", pick == nil ? "library.ageFilter" : "planPicker.age")
+        _skillChoice = AppStorage(wrappedValue: "", "\(prefix).skill")
+        _sortChoice = AppStorage(wrappedValue: DrillSort.suggested.rawValue, "\(prefix).sort")
     }
     @AppStorage("library.includeEarlier") private var includeEarlier = false
-    @State private var block: ActivityBlock = .routine
+    @State private var block: ActivityBlock?
     @State private var type: ActivityType?
+    @State private var source: DrillOrigin = .all
     @State private var showGuidance = false
     @State private var openRule: LibraryActivity?
-    @State private var mineCategory: DrillCategory?
     /// Mac: Return in the search bar asks Claude for the closest drills in
     /// the whole library (DrillFinder); they show above the list.
     @State private var claudeQuery: String?
@@ -50,8 +64,12 @@ struct DrillsLibraryView: View {
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private var currentCoachId: UUID { dataManager.loggedInCoachId ?? dataManager.coach.id }
     private var age: ActivityAge? { ActivityAge(rawValue: ageChoice) }
+    private var skill: DrillAttribute? { DrillAttribute(rawValue: skillChoice) }
+    private var sort: DrillSort { DrillSort(rawValue: sortChoice) ?? .suggested }
+    /// The ages shown: the chosen one (with the earlier ones when that is
+    /// switched on), else all.
     private var ages: [ActivityAge] {
-        guard let age else { return [] }
+        guard let age else { return ActivityAge.allCases }
         return includeEarlier ? age.upToHere : [age]
     }
 
@@ -70,51 +88,83 @@ struct DrillsLibraryView: View {
     private var query: String { searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var isSearching: Bool { !query.isEmpty }
 
-    /// Library drills for the chosen ages and block (all types), library order.
-    private var blockPairs: [(activity: LibraryActivity, drill: DrillItem)] {
+    /// One drill in the list: a library activity, or a personal drill.
+    private struct Entry: Identifiable {
+        let drill: DrillItem
+        let activity: LibraryActivity?
+        /// Library order (age, block, then the library's own order).
+        let order: Int
+        var id: UUID { drill.id }
+    }
+
+    /// Library activities passing age, block and type — before skill.
+    private var libraryPairs: [Entry] {
+        guard source != .personal else { return [] }
         let byId = Dictionary(visibleDrills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return ActivityLibrary.shared.plannable.compactMap { activity in
-            guard ages.contains(activity.age), activity.block == block,
+        return ActivityLibrary.shared.plannable.enumerated().compactMap { index, activity in
+            guard ages.contains(activity.age), block == nil || activity.block == block,
                   let drill = byId[activity.id] else { return nil }
-            return (activity, drill)
+            return Entry(drill: drill, activity: activity, order: index)
         }
     }
 
-    private var shownPairs: [(activity: LibraryActivity, drill: DrillItem)] {
-        guard let type else { return blockPairs }
-        return blockPairs.filter { $0.activity.type == type }
+    /// Personal drills have no age or block, so those filters leave them out.
+    private var personalEntries: [Entry] {
+        guard source != .library, age == nil, block == nil, type == nil else { return [] }
+        return visibleDrills.filter { !$0.isLibraryDrill }.map { Entry(drill: $0, activity: nil, order: -1) }
     }
 
-    /// Rule options for the chosen ages (Game block only).
+    /// The list: every filter, then the order.
+    private var entries: [Entry] {
+        var out = libraryPairs.filter { type == nil || $0.activity?.type == type } + personalEntries
+        if let skill { out = out.filter { $0.drill.attributes[skill] >= 2 } }
+        let name: (Entry) -> String = { $0.activity?.displayName ?? $0.drill.localizedName }
+        switch sort {
+        case .suggested:
+            if let skill {
+                out.sort { ($0.drill.attributes[skill], -$0.order) > ($1.drill.attributes[skill], -$1.order) }
+            } else {
+                out.sort { $0.order < $1.order }
+            }
+        case .name:
+            out.sort { name($0).localizedCaseInsensitiveCompare(name($1)) == .orderedAscending }
+        case .age:
+            let rank: (Entry) -> Int = { e in e.activity.flatMap { ActivityAge.allCases.firstIndex(of: $0.age) } ?? 99 }
+            out.sort { (rank($0), $0.order) < (rank($1), $1.order) }
+        case .duration:
+            out.sort { ($0.drill.durationMinutes, $0.order) < ($1.drill.durationMinutes, $1.order) }
+        }
+        return out
+    }
+
+    /// Rule options (not drills): under Game, or when chosen as the type.
     private var rules: [LibraryActivity] {
-        guard block == .game, type == nil || type == .rules else { return [] }
-        return ActivityLibrary.shared.items.filter {
-            $0.isRule && ages.contains($0.age)
-        }
+        guard skill == nil, source != .personal,
+              type == .rules || (type == nil && block == .game) else { return [] }
+        return ActivityLibrary.shared.items.filter { $0.isRule && ages.contains($0.age) }
     }
 
+    /// The types among the drills the other filters leave, with counts.
     private var typeCounts: [(ActivityType, Int)] {
         var counts: [ActivityType: Int] = [:]
-        for pair in blockPairs { counts[pair.activity.type, default: 0] += 1 }
-        if block == .game {
+        for entry in libraryPairs {
+            if let t = entry.activity?.type { counts[t, default: 0] += 1 }
+        }
+        if source != .personal, block == nil || block == .game {
             let ruleCount = ActivityLibrary.shared.items.filter { $0.isRule && ages.contains($0.age) }.count
             if ruleCount > 0 { counts[.rules] = ruleCount }
         }
         return ActivityType.allCases.compactMap { t in counts[t].map { (t, $0) } }
     }
 
-    private func blockCount(_ b: ActivityBlock) -> Int {
-        let ids = Set(visibleDrills.map(\.id))
-        return ActivityLibrary.shared.plannable.filter {
-            ages.contains($0.age) && $0.block == b && ids.contains($0.id)
-        }.count
-    }
+    private var hasFilters: Bool { age != nil || block != nil || type != nil || source != .all || skill != nil }
 
-    /// Drills a coach created (not from the library).
-    private var mine: [DrillItem] {
-        visibleDrills.filter { !$0.isLibraryDrill }
-            .filter { mineCategory == nil || $0.category == mineCategory }
-            .sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
+    private func clearFilters() {
+        ageChoice = ""
+        skillChoice = ""
+        block = nil
+        type = nil
+        source = .all
     }
 
     // MARK: Search — the WHOLE library, whatever age/block/type is chosen
@@ -199,31 +249,6 @@ struct DrillsLibraryView: View {
         }
     }
 
-    /// The picker opened for a neglected axis: drills of the chosen age(s),
-    /// any block, scoring 2–3 on it, strongest first; personal ones too.
-    @ViewBuilder
-    private func strongOnSection(_ axis: DrillAttribute) -> some View {
-        let byId = Dictionary(visibleDrills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let library: [(LibraryActivity, DrillItem)] = ActivityLibrary.shared.plannable.compactMap { activity in
-            guard ages.isEmpty || ages.contains(activity.age), let drill = byId[activity.id] else { return nil }
-            return drill.attributes[axis] >= 2 ? (activity, drill) : nil
-        }
-        let ranked = library.sorted { $0.1.attributes[axis] > $1.1.attributes[axis] }.prefix(30)
-        let personal = visibleDrills.filter { !$0.isLibraryDrill && $0.attributes[axis] >= 2 }
-        Section {
-            ForEach(personal) { drill in drillLink(drill) { DrillRow(drill: drill) } }
-            ForEach(Array(ranked), id: \.0.key) { pair in
-                drillLink(pair.1) { LibraryRow(activity: pair.0, drill: pair.1, showAge: ages.count > 1, showBlock: true) }
-            }
-        } header: {
-            Label(isChinese ? "擅长\(axis.title)的训练" : "Strong on \(axis.title.lowercased())", systemImage: axis.icon)
-        } footer: {
-            if personal.isEmpty && ranked.isEmpty {
-                Text(isChinese ? "这个年龄段没有找到，可以换个年龄。" : "None at this age — try another age.")
-            }
-        }
-    }
-
     /// A drill row: opens the drill; in the plan picker, an add button
     /// beside it (a check once it is in the section).
     @ViewBuilder
@@ -249,34 +274,210 @@ struct DrillsLibraryView: View {
         }
     }
 
-    // MARK: Filters — one compact block: age, then block, then type
+    // MARK: Filters — skill first, then removable filters and the order
 
     private var filterSection: some View {
         Section {
-            VStack(spacing: 10) {
-                ageChips
+            VStack(alignment: .leading, spacing: 10) {
+                skillChips
+                filterPills
                 // The switch lives in the ⓘ sheet; while it is on, say so here
                 // so the list is never filtered by something out of sight.
                 if includeEarlier, let age, age != .u6 {
                     earlierAgesNote(age).padding(.horizontal, 20)
-                }
-                if age != nil {
-                    Picker(isChinese ? "环节" : "Block", selection: $block) {
-                        ForEach(ActivityBlock.allCases) { b in
-                            Text(b.title).tag(b)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 20)
-                    if typeCounts.count > 1 {
-                        typeChips
-                    }
                 }
             }
             .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
+    }
+
+    /// All skills, then the octagon's eight.
+    private var skillChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                chip(isChinese ? "全部技能" : "All skills", selected: skill == nil) { skillChoice = "" }
+                    .accessibilityIdentifier("library.skill.all")
+                ForEach(DrillAttribute.allCases) { axis in
+                    chip(axis.title, selected: skill == axis, icon: axis.icon) {
+                        skillChoice = skill == axis ? "" : axis.rawValue
+                    }
+                    .accessibilityIdentifier("library.skill.\(axis.rawValue)")
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .sensoryFeedback(.selection, trigger: skillChoice)
+    }
+
+    private var filterPills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                pill(age?.title ?? (isChinese ? "年龄" : "Age"), active: age != nil,
+                     clear: { ageChoice = "" }, id: "library.filter.age") {
+                    Picker(isChinese ? "年龄" : "Age", selection: $ageChoice) {
+                        Text(isChinese ? "所有年龄" : "Any age").tag("")
+                        ForEach(ActivityAge.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                }
+                pill(block?.title ?? (isChinese ? "环节" : "Block"), active: block != nil,
+                     clear: { block = nil }, id: "library.filter.block") {
+                    Picker(isChinese ? "环节" : "Block", selection: $block) {
+                        Text(isChinese ? "所有环节" : "Any block").tag(ActivityBlock?.none)
+                        ForEach(ActivityBlock.allCases) { Text($0.title).tag(ActivityBlock?.some($0)) }
+                    }
+                }
+                if typeCounts.count > 1 || type != nil {
+                    pill(type?.title ?? (isChinese ? "类型" : "Type"), active: type != nil,
+                         clear: { type = nil }, id: "library.filter.type") {
+                        Picker(isChinese ? "类型" : "Type", selection: $type) {
+                            Text(isChinese ? "所有类型" : "Any type").tag(ActivityType?.none)
+                            ForEach(typeCounts, id: \.0) { t, count in
+                                Text("\(t.title) · \(count)").tag(ActivityType?.some(t))
+                            }
+                        }
+                    }
+                }
+                pill(source == .all ? (isChinese ? "来源" : "Source") : source.title(isChinese), active: source != .all,
+                     clear: { source = .all }, id: "library.filter.source") {
+                    Picker(isChinese ? "来源" : "Source", selection: $source) {
+                        ForEach(DrillOrigin.allCases, id: \.self) { Text($0.title(isChinese)).tag($0) }
+                    }
+                }
+                pill((isChinese ? "排序：" : "Sort: ") + sort.title(isChinese, skill: skill), active: false,
+                     clear: nil, id: "library.sort") {
+                    Picker(isChinese ? "排序" : "Sort", selection: $sortChoice) {
+                        ForEach(DrillSort.allCases, id: \.self) { Text($0.title(isChinese, skill: skill)).tag($0.rawValue) }
+                    }
+                }
+                if hasFilters {
+                    Button(isChinese ? "全部清除" : "Clear all") { withAnimation(.snappy) { clearFilters() } }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .accessibilityIdentifier("library.filter.clear")
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    /// A filter: its value in a capsule that opens its menu, filled when set,
+    /// with an ✕ that removes it.
+    private func pill<Choices: View>(_ title: String, active: Bool, clear: (() -> Void)?, id: String,
+                                     @ViewBuilder choices: () -> Choices) -> some View {
+        HStack(spacing: 6) {
+            Menu {
+                choices()
+            } label: {
+                HStack(spacing: 4) {
+                    Text(title)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
+                }
+                .frame(minHeight: 34)
+                .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier(id)
+            if active, let clear {
+                Button(action: { withAnimation(.snappy) { clear() } }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .frame(minHeight: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isChinese ? "移除 \(title)" : "Remove \(title)")
+                .accessibilityIdentifier("\(id).clear")
+            }
+        }
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(active ? Color.white : Color.primary)
+        .padding(.horizontal, 12)
+        .background(Capsule().fill(active ? Color.accentColor : Color(.secondarySystemGroupedBackground)))
+    }
+
+    // MARK: The list
+
+    @ViewBuilder
+    private var drillList: some View {
+        let list = entries
+        if list.isEmpty && rules.isEmpty {
+            Section {
+                VStack(spacing: 10) {
+                    Text(isChinese ? "没有符合这些筛选条件的训练" : "No drills match these filters")
+                        .foregroundStyle(.secondary)
+                    if hasFilters {
+                        Button(isChinese ? "清除筛选" : "Clear filters") { clearFilters() }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+            }
+        }
+        if sort == .age, age == nil, !list.isEmpty {
+            ForEach(ActivityAge.allCases) { a in
+                let rows = list.filter { $0.activity?.age == a }
+                if !rows.isEmpty {
+                    Section { ForEach(rows) { entryRow($0) } } header: { Text("\(a.title) · \(rows.count)") }
+                }
+            }
+            let personal = list.filter { $0.activity == nil }
+            if !personal.isEmpty {
+                Section { ForEach(personal) { entryRow($0) } } header: {
+                    Text(isChinese ? "个人 · \(personal.count)" : "Personal · \(personal.count)")
+                }
+            }
+        } else if !list.isEmpty {
+            Section {
+                ForEach(list) { entryRow($0) }
+            } header: {
+                Text(listTitle(list.count))
+            } footer: {
+                if skill != nil {
+                    Text(isChinese ? "●●● 主要练习 · ●●○ 有练到" : "●●● main focus · ●●○ worked")
+                }
+            }
+        }
+        if !rules.isEmpty {
+            Section {
+                ForEach(rules) { rule in
+                    Button { openRule = rule } label: {
+                        LibraryRuleRow(rule: rule, showAge: age == nil || includeEarlier)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text(ActivityType.rules.title)
+            } footer: {
+                Text(isChinese ? "规则选项不是训练，不会出现在课程计划中。"
+                               : "Rule options are not drills and don't appear in session planning.")
+            }
+        }
+    }
+
+    private func listTitle(_ count: Int) -> String {
+        if let skill {
+            return isChinese ? "擅长\(skill.title) · \(count)" : "Strong on \(skill.title.lowercased()) · \(count)"
+        }
+        if let type { return "\(type.title) · \(count)" }
+        if let block { return "\(block.title) · \(count)" }
+        return isChinese ? "训练 · \(count)" : "Drills · \(count)"
+    }
+
+    private func entryRow(_ entry: Entry) -> some View {
+        drillLink(entry.drill) {
+            HStack(spacing: 8) {
+                if let activity = entry.activity {
+                    LibraryRow(activity: activity, drill: entry.drill,
+                               showAge: age == nil || includeEarlier, showBlock: block == nil)
+                } else {
+                    DrillRow(drill: entry.drill)
+                }
+                if let skill {
+                    SkillDots(score: entry.drill.attributes[skill])
+                }
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(entry.drill) }
     }
 
     var body: some View {
@@ -287,13 +488,8 @@ struct DrillsLibraryView: View {
             if isSearching {
                 searchResults
             } else {
-                if let axis = pick?.attribute { strongOnSection(axis) }
                 filterSection
-                if let age {
-                    libraryContent(age)
-                } else {
-                    mineContent
-                }
+                drillList
             }
         }
         .listStyle(.insetGrouped)
@@ -312,7 +508,13 @@ struct DrillsLibraryView: View {
         .onAppear {
             guard let pick else { return }
             if let age = pick.initialAge { ageChoice = age.rawValue }
-            block = pick.initialBlock
+            if let axis = pick.attribute {
+                // "Find drills" for a neglected axis: strong on it, any block.
+                skillChoice = axis.rawValue
+                block = nil
+            } else {
+                block = pick.initialBlock
+            }
         }
         #if DEBUG
         // HOOPWISE_LIBRARY_SEARCH=<text>: open with that search typed.
@@ -449,23 +651,6 @@ struct DrillsLibraryView: View {
     }
     #endif
 
-    // MARK: Age chips
-
-    private var ageChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ActivityAge.allCases) { a in
-                    chip(a.title, selected: ageChoice == a.rawValue) { ageChoice = a.rawValue }
-                }
-                chip(isChinese ? "个人" : "Personal", selected: age == nil, icon: "person.crop.circle") {
-                    ageChoice = "mine"
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-        .sensoryFeedback(.selection, trigger: ageChoice)
-    }
-
     private func chip(_ title: String, selected: Bool, icon: String? = nil,
                       action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -480,63 +665,6 @@ struct DrillsLibraryView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    // MARK: Library
-
-    @ViewBuilder
-    private func libraryContent(_ age: ActivityAge) -> some View {
-        if shownPairs.isEmpty && rules.isEmpty {
-            Section {
-                Text(isChinese ? "这个环节暂无内容" : "Nothing in this block for this age")
-                    .foregroundStyle(.secondary)
-            }
-        }
-
-        if !shownPairs.isEmpty && type != .rules {
-            Section {
-                ForEach(shownPairs, id: \.activity.key) { pair in
-                    drillLink(pair.drill) {
-                        LibraryRow(activity: pair.activity, drill: pair.drill,
-                                   showAge: includeEarlier)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(pair.drill) }
-                }
-            } header: {
-                Text("\(type?.title ?? block.title) · \(shownPairs.count)")
-            }
-        }
-
-        if !rules.isEmpty {
-            Section {
-                ForEach(rules) { rule in
-                    Button { openRule = rule } label: {
-                        LibraryRuleRow(rule: rule, showAge: includeEarlier)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text(ActivityType.rules.title)
-            } footer: {
-                Text(isChinese ? "规则选项不是训练，不会出现在课程计划中。"
-                               : "Rule options are not drills and don't appear in session planning.")
-            }
-        }
-    }
-
-    private var typeChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                CategoryChip(title: DrillLocalization.L("All"),
-                             count: typeCounts.reduce(0) { $0 + $1.1 },
-                             color: .accentColor, isSelected: type == nil) { type = nil }
-                ForEach(typeCounts, id: \.0) { t, count in
-                    CategoryChip(title: t.title, count: count, color: .accentColor,
-                                 isSelected: type == t) { type = t }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
     }
 
     private func earlierAgesNote(_ age: ActivityAge) -> some View {
@@ -562,40 +690,48 @@ struct DrillsLibraryView: View {
         }
         .tint(.pink)
     }
+}
 
-    // MARK: Personal (the "mine" choice)
+/// Where drills come from.
+enum DrillOrigin: String, CaseIterable {
+    case all, library, personal
 
-    @ViewBuilder
-    private var mineContent: some View {
-        if mine.isEmpty && mineCategory == nil {
-            Section {
-                VStack(spacing: 12) {
-                    Image(systemName: "figure.basketball")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(.tertiary)
-                    Text(isChinese ? "还没有个人训练" : "No personal drills yet")
-                        .font(.headline)
-                    Text(isChinese ? "你或 Claude 创建的训练会出现在这里。" : "Drills you or Claude create appear here.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Button(DrillLocalization.L("Add Drill")) { showingAddDrill = true }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, 4)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 32)
-                .listRowBackground(Color.clear)
-            }
-        } else {
-            Section {
-                ForEach(mine) { drill in
-                    drillLink(drill) { DrillRow(drill: drill) }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(drill) }
-                }
-            } header: {
-                Text(isChinese ? "个人训练" : "Personal drills")
+    func title(_ zh: Bool) -> String {
+        switch self {
+        case .all: zh ? "全部" : "All drills"
+        case .library: zh ? "训练库" : "Library"
+        case .personal: zh ? "个人" : "Personal"
+        }
+    }
+}
+
+/// How the drills page orders its list.
+enum DrillSort: String, CaseIterable {
+    /// Library order; with a skill chosen, strongest on it first.
+    case suggested, name, age, duration
+
+    func title(_ zh: Bool, skill: DrillAttribute?) -> String {
+        switch self {
+        case .suggested: skill == nil ? (zh ? "推荐" : "Suggested") : (zh ? "最擅长" : "Strongest")
+        case .name: zh ? "名称" : "Name"
+        case .age: zh ? "年龄" : "Age"
+        case .duration: zh ? "时长" : "Duration"
+        }
+    }
+}
+
+/// How much a drill works the chosen skill: ●●○ worked, ●●● main.
+private struct SkillDots: View {
+    let score: Int
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(i < score ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .frame(width: 6, height: 6)
             }
         }
+        .accessibilityLabel("\(score) of 3")
     }
 }
 
@@ -1215,8 +1351,9 @@ struct DrillDetailView: View {
                             drawNew()
                         } label: {
                             Label(isChinese ? "添加" : "Add", systemImage: "plus")
-                                .font(.caption.weight(.semibold))
+                                .visualControlLabel()
                         }
+                        .buttonStyle(.glass)
                         .accessibilityIdentifier("drill.visual.add")
                     }
                     // Order, captions and deleting, for two or more visuals;
@@ -1227,8 +1364,9 @@ struct DrillDetailView: View {
                             showingMediaEditor = true
                         } label: {
                             Label(isChinese ? "排序" : "Reorder", systemImage: "arrow.up.arrow.down")
-                                .font(.caption.weight(.semibold))
+                                .visualControlLabel()
                         }
+                        .buttonStyle(.glass)
                         .accessibilityIdentifier("drill.visual.reorder")
                     }
                 }
