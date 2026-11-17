@@ -2030,7 +2030,13 @@ and the game stats can work together." Decided: keep 1–10, START FRESH.
   Game IQ and Footwork have no stat; rebounds claim no skill.
 - PLAN BALANCE FIX: `PlanCoverage.minutes` no longer counts the Game block —
   the Plan tab shows no Game section, so the dashboard's minutes exceeded
-  the visible plan. The TARGET now adds the GROUP'S WEAK SKILLS
+  the visible plan. SECOND HALF (18 Nov 2026, Luther: "still got wrong
+  numbers here" — "Ball handling ~50 min" on blocks reading 24 + 10 min):
+  each drill now counts for ITS OWN durationMinutes, the very numbers each
+  block's header adds up (`sectionDuration`); the stored warmupMinutes /
+  skillsMinutes (set at generation, never shown) are no longer shared out.
+  No axis can exceed the visible plan (+ 10 per play). Test:
+  SkillIntegrationTests.testMinutesNeverExceedWhatThePlanShows. The TARGET now adds the GROUP'S WEAK SKILLS
   (`groupRatings` = per-skill average of the expected athletes who were
   rated; average ≤ 5 → target 0.6 + (5 − avg) × 0.08, `groupWeakness`); the
   dashboard says "Group's weakest: Shooting (avg 4.1)" (`plan.groupWeakest`).

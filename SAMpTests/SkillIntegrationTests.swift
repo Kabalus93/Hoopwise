@@ -56,7 +56,19 @@ final class SkillIntegrationTests: XCTestCase {
         plan.gameMinutes = 30
         let minutes = PlanCoverage.minutes(of: plan, drills: [skills, game])
         XCTAssertEqual(minutes[.defense] ?? 0, 0, "the Plan tab shows no Game section, so its drills don't weigh")
-        XCTAssertLessThanOrEqual(minutes.values.max() ?? 0, 20, "no axis can exceed the visible minutes")
+        XCTAssertLessThanOrEqual(minutes.values.max() ?? 0, 10, "no axis can exceed the visible minutes (the drill's own 10)")
+    }
+
+    /// The screenshot's case: blocks stored at 40 + 30 minutes, drills of
+    /// 8 + 8 + 8 and 10 — the balance may not say more than 34 minutes.
+    func testMinutesNeverExceedWhatThePlanShows() {
+        let warm = (0..<3).map { _ in drill([.ballHandling: 3, .gameIQ: 2]) }.map { var d = $0; d.durationMinutes = 8; return d }
+        var skill = drill([.ballHandling: 3, .passing: 3]); skill.durationMinutes = 10
+        var plan = SessionCurriculum()
+        plan.warmupDrillIds = warm.map(\.id); plan.warmupMinutes = 40
+        plan.skillDrillIds = [skill.id]; plan.skillsMinutes = 30
+        let minutes = PlanCoverage.minutes(of: plan, drills: warm + [skill])
+        XCTAssertEqual(minutes[.ballHandling] ?? 0, 34, accuracy: 0.01, "24 + 10, as the block headers say")
     }
 
     func testTheGroupsWeakSkillsJoinTheTarget() {

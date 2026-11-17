@@ -7,10 +7,9 @@ import Foundation
 // coverage and Generate Plan all read it.
 
 enum PlanCoverage {
-    /// Axis → weighted minutes. Each drill's 0–3 scores count in proportion to
-    /// its share of its block's minutes (a block with no minutes falls back to
-    /// the drills' own durations); a play counts like a ten-minute drill
-    /// shaped by its skills.
+    /// Axis → weighted minutes. Each drill's 0–3 scores count over the drill's
+    /// own minutes (what the Plan tab shows); a play counts like a ten-minute
+    /// drill shaped by its skills.
     static func minutes(of curriculum: SessionCurriculum, drills: [DrillItem],
                         playProfile: (SessionPlayRef) -> AttributeProfile = { _ in defaultPlayProfile }) -> [DrillAttribute: Double] {
         let byId = Dictionary(drills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -18,14 +17,18 @@ enum PlanCoverage {
         func add(_ profile: AttributeProfile, minutes: Double) {
             for axis in DrillAttribute.allCases { total[axis, default: 0] += minutes * Double(profile[axis]) / 3 }
         }
-        func block(_ ids: [UUID], minutes: Int) {
-            let found = ids.compactMap { byId[$0] }
-            guard !found.isEmpty else { return }
-            let share = minutes > 0 ? Double(minutes) / Double(found.count) : nil
-            for drill in found { add(drill.attributes, minutes: share ?? Double(max(drill.durationMinutes, 5))) }
+        // Each drill counts for ITS OWN minutes — the same numbers the Plan
+        // tab adds up in each block's header (18 Nov 2026, Luther: "still
+        // got wrong numbers here" — "Ball handling ~50 min" on a plan whose
+        // blocks read 24 + 10 min: the stored block length, set when the plan
+        // was generated and never shown, was shared out instead).
+        func block(_ ids: [UUID]) {
+            for drill in ids.compactMap({ byId[$0] }) {
+                add(drill.attributes, minutes: Double(drill.durationMinutes))
+            }
         }
-        block(curriculum.warmupDrillIds, minutes: curriculum.warmupMinutes)
-        block(curriculum.skillDrillIds, minutes: curriculum.skillsMinutes)
+        block(curriculum.warmupDrillIds)
+        block(curriculum.skillDrillIds)
         // The Game block is NOT counted (17 Nov 2026, Luther: "where do these
         // numbers come from? Make sure they reflect the plan"): the Plan tab
         // shows Warm-up and Skills only, and a 34-minute visible plan

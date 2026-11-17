@@ -45,8 +45,10 @@ final class DrillAttributesTests: XCTestCase {
     }
 
     func testMinutesWeighTheDrillsAndNeglectFollowsTheTarget() {
-        let passing = drill([.passing: 3, .gameIQ: 1])
-        let dribbling = drill([.ballHandling: 3])
+        // Each drill counts for its own minutes (what the Plan tab shows),
+        // not the stored block length.
+        let passing = drill([.passing: 3, .gameIQ: 1], minutes: 30)
+        let dribbling = drill([.ballHandling: 3], minutes: 10)
         var plan = SessionCurriculum()
         plan.warmupDrillIds = [dribbling.id]
         plan.warmupMinutes = 10
