@@ -2200,7 +2200,17 @@ own language.
   never doubled — a drill already in either block is left alone). Writes
   re-read the STORED session and go through updateSessionEvent
   (keepLiveFields). Tests: PhaseDrillEditingTests, EditPhaseUITests.
-  testARecurringDrillGoesInAndComesOut. NEXT (approved): drill SERIES —
+  testARecurringDrillGoesInAndComesOut.
+  EDIT PHASE LAYOUT REVISITED (18 Nov 2026, Luther: "the UI for edit phase is
+  worth revisiting"): a page-sized sheet (`presentationSizing(.page)`), in
+  order: HEADER (PHASE N pill, "dates · N wks · N upcoming", the name as a
+  large field, the summary under it, the dates note as footer) → DRILLS IN
+  THIS PHASE (each row: name, a Warm-up/Skills tag, a DOT STRIP — one dot
+  per upcoming session, filled where the drill is planned — and "4/6", the
+  red minus; "+ Add a recurring drill" in bold) → FOCUS as toggle CHIPS in a
+  FlowLayout (accent when on; `phase.focus.<raw>`) — eight full rows were
+  most of the form → OBJECTIVES numbered in accent circles.
+  NEXT (approved): drill SERIES —
   levels as separate drills, a series stored as one personal drill tagged
   `kind:series` holding the ordered levels; spread over a phase easiest
   first (even pacing, previous level as a short review, never more than one

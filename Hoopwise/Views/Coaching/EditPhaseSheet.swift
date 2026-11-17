@@ -36,59 +36,10 @@ struct EditPhaseSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField(isChinese ? "阶段名称" : "Phase name", text: $title)
-                        .font(.headline)
-                        .accessibilityIdentifier("phase.edit.title")
-                    TextField(isChinese ? "这一阶段练什么" : "What this phase is about", text: $summary, axis: .vertical)
-                        .lineLimit(2...6)
-                } header: {
-                    Text(isChinese ? "第\(phase.phaseNumber)阶段" : "Phase \(phase.phaseNumber)")
-                } footer: {
-                    if let start = phase.startDate, let end = phase.endDate {
-                        Text((isChinese ? "日期：" : "Dates: ")
-                             + "\(start.formatted(date: .abbreviated, time: .omitted)) – \(end.formatted(date: .abbreviated, time: .omitted)) · "
-                             + (isChinese ? "在“管理阶段”中拖动可调整顺序和日期。" : "Drag in Manage Phases to change the order and dates."))
-                    }
-                }
-
+                headerSection
                 drillsSection
-
-                Section {
-                    ForEach(TrainingFocus.allCases, id: \.self) { item in
-                        Button {
-                            if focus.contains(item) { focus.remove(item) } else { focus.insert(item) }
-                        } label: {
-                            HStack {
-                                Label(item.displayName, systemImage: item.icon)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if focus.contains(item) {
-                                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                                }
-                            }
-                        }
-                        .tint(.primary)
-                    }
-                } header: {
-                    Text(isChinese ? "重点" : "Focus")
-                } footer: {
-                    Text(isChinese ? "生成课程计划和阶段平衡都会参考这些重点。" : "Generate Plan and the phase balance read these.")
-                }
-
-                Section {
-                    ForEach(objectives.indices, id: \.self) { i in
-                        TextField(isChinese ? "目标" : "Objective", text: $objectives[i], axis: .vertical)
-                    }
-                    .onDelete { objectives.remove(atOffsets: $0) }
-                    Button {
-                        objectives.append("")
-                    } label: {
-                        Label(isChinese ? "添加目标" : "Add objective", systemImage: "plus")
-                    }
-                } header: {
-                    Text(isChinese ? "目标" : "Objectives")
-                }
+                focusSection
+                objectivesSection
             }
             .sheet(isPresented: $pickingDrill) { recurringPicker }
             .sheet(item: $choosing) { mode in
@@ -110,6 +61,112 @@ struct EditPhaseSheet: View {
                 }
             }
         }
+        .presentationSizing(.page)
+    }
+
+    // MARK: - Header
+
+    /// The phase at a glance (18 Nov 2026, Luther: "the UI for edit phase is
+    /// worth revisiting"): its number and when it runs, then its words.
+    private var headerSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text(isChinese ? "第\(phase.phaseNumber)阶段" : "PHASE \(phase.phaseNumber)")
+                        .font(.caption.weight(.bold))
+                        .tracking(0.6)
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.14), in: Capsule())
+                    Text(metaLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                TextField(isChinese ? "阶段名称" : "Phase name", text: $title, axis: .vertical)
+                    .font(.title2.weight(.semibold))
+                    .accessibilityIdentifier("phase.edit.title")
+                TextField(isChinese ? "这一阶段练什么" : "What this phase is about", text: $summary, axis: .vertical)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2...6)
+            }
+            .padding(.vertical, 6)
+        } footer: {
+            Text(isChinese ? "日期跟随阶段顺序：在“管理阶段”中拖动可调整。" : "Dates follow the phase order — drag in Manage Phases to change them.")
+        }
+    }
+
+    /// "Nov 4 – Dec 1 · 4 wks · 6 upcoming".
+    private var metaLine: String {
+        var parts: [String] = []
+        if let start = phase.startDate, let end = phase.endDate {
+            parts.append("\(start.formatted(.dateTime.month(.abbreviated).day())) – \(end.formatted(.dateTime.month(.abbreviated).day()))")
+        }
+        parts.append(isChinese ? "\(phase.durationWeeks) 周" : "\(phase.durationWeeks) wk\(phase.durationWeeks == 1 ? "" : "s")")
+        let count = upcoming.count
+        parts.append(isChinese ? "\(count) 节待上" : "\(count) upcoming")
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Focus
+
+    /// Focus as toggle chips — eight full rows were most of the form.
+    private var focusSection: some View {
+        Section {
+            FlowLayout(spacing: 8) {
+                ForEach(TrainingFocus.allCases, id: \.self) { item in
+                    let on = focus.contains(item)
+                    Button {
+                        if on { focus.remove(item) } else { focus.insert(item) }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: item.icon).font(.caption.weight(.semibold))
+                            Text(item.displayName).font(.subheadline.weight(.medium))
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .foregroundStyle(on ? Color.white : Color.primary)
+                        .background(on ? Color.accentColor : Color.primary.opacity(0.07), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(on ? 0 : 0.10), lineWidth: 0.5))
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .accessibilityIdentifier("phase.focus.\(item.rawValue)")
+                }
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text(isChinese ? "重点" : "Focus")
+        } footer: {
+            Text(isChinese ? "生成课程计划和阶段平衡都会参考这些重点。" : "Generate Plan and the phase balance read these.")
+        }
+    }
+
+    // MARK: - Objectives
+
+    private var objectivesSection: some View {
+        Section {
+            ForEach(objectives.indices, id: \.self) { i in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("\(i + 1)")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 20, height: 20)
+                        .background(Color.accentColor.opacity(0.14), in: Circle())
+                    TextField(isChinese ? "目标" : "Objective", text: $objectives[i], axis: .vertical)
+                }
+            }
+            .onDelete { objectives.remove(atOffsets: $0) }
+            Button {
+                objectives.append("")
+            } label: {
+                Label(isChinese ? "添加目标" : "Add objective", systemImage: "plus")
+            }
+        } header: {
+            Text(isChinese ? "目标" : "Objectives")
+        }
     }
 
     // MARK: - Drills in this phase
@@ -121,6 +178,8 @@ struct EditPhaseSheet: View {
 
     private func drill(_ id: UUID) -> DrillItem? { dataManager.drills.first { $0.id == id } }
 
+    /// Each drill: its name, its block, and a dot per upcoming session —
+    /// filled where it is planned — so "which sessions" reads at a glance.
     private var drillsSection: some View {
         let sessions = upcoming
         let usage = PhaseDrillEditing.usage(in: sessions)
@@ -133,19 +192,7 @@ struct EditPhaseSheet: View {
                     Button {
                         if let d = drill(use.drillId) { choosing = .remove(d) }
                     } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(drill(use.drillId)?.localizedName ?? (isChinese ? "已删除的训练" : "Deleted drill"))
-                                    .foregroundStyle(.primary)
-                                Text(isChinese ? "在 \(use.sessionIds.count)/\(sessions.count) 节待上课程中"
-                                               : "In \(use.sessionIds.count) of \(sessions.count) upcoming sessions")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "minus.circle")
-                                .foregroundStyle(.red)
-                        }
+                        drillRow(use, sessions: sessions)
                     }
                     .tint(.primary)
                     .accessibilityIdentifier("phase.drill.remove")
@@ -153,21 +200,68 @@ struct EditPhaseSheet: View {
                 Button {
                     pickingDrill = true
                 } label: {
-                    Label(isChinese ? "添加固定训练" : "Add a recurring drill", systemImage: "plus")
+                    Label(isChinese ? "添加固定训练" : "Add a recurring drill", systemImage: "plus.circle.fill")
+                        .font(.body.weight(.semibold))
                 }
                 .accessibilityIdentifier("phase.drill.add")
             }
         } header: {
-            Text(isChinese ? "这个阶段的训练" : "Drills in this phase")
+            HStack {
+                Text(isChinese ? "这个阶段的训练" : "Drills in this phase")
+                Spacer()
+                if !sessions.isEmpty {
+                    Text(isChinese ? "\(sessions.count) 节待上" : "\(sessions.count) upcoming")
+                        .font(.caption)
+                }
+            }
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 if let drillsNote {
                     Label(drillsNote, systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 }
-                Text(isChinese ? "点一个训练可从全部或部分课程中移除。只改动待上的课程，已上的课保留原计划。改动立即生效。"
-                               : "Tap a drill to remove it from all or some sessions. Only upcoming sessions change — past ones keep their plan. Changes apply at once.")
+                Text(isChinese ? "点一个训练可从全部或部分课程中移除。只改动待上的课程，改动立即生效。"
+                               : "Tap a drill to take it out of all or some sessions. Only upcoming sessions change, at once.")
             }
         }
+    }
+
+    private func drillRow(_ use: PhaseDrillEditing.Usage, sessions: [SessionEvent]) -> some View {
+        let warmup = sessions.contains { $0.curriculum.warmupDrillIds.contains(use.drillId) }
+        let item = drill(use.drillId)
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(item?.localizedName ?? (isChinese ? "已删除的训练" : "Deleted drill"))
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(warmup ? (isChinese ? "热身" : "Warm-up") : (isChinese ? "技能" : "Skills"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.07), in: Capsule())
+                }
+                HStack(spacing: 4) {
+                    ForEach(sessions) { session in
+                        Circle()
+                            .fill(use.sessionIds.contains(session.id) ? Color.accentColor : Color.primary.opacity(0.12))
+                            .frame(width: 8, height: 8)
+                    }
+                    Text("\(use.sessionIds.count)/\(sessions.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(isChinese ? "在 \(use.sessionIds.count)/\(sessions.count) 节待上课程中"
+                                              : "In \(use.sessionIds.count) of \(sessions.count) upcoming sessions")
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "minus.circle")
+                .font(.title3)
+                .foregroundStyle(.red)
+        }
+        .padding(.vertical, 2)
     }
 
     private var recurringPicker: some View {
