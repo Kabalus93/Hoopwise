@@ -604,6 +604,10 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   unless he asks; ship changes as TestFlight builds. The Mac still runs a
   debug Catalyst build (Development): real edits made there no longer reach
   the phone until a Mac TestFlight build replaces it.
+  FIRST MAC TESTFLIGHT BUILD: 2.1 (39), 17 Nov 2026 (archive with
+  `-destination 'generic/platform=macOS,variant=Mac Catalyst'`, same
+  export.plist upload; one build-number counter for both platforms). Once
+  the coach runs it, the Mac reads Production like the phone.
   OFFER SWITCHED OFF (17 Nov 2026, before the first Mac TestFlight build):
   `ProductionMove.isOffered` is now always false — the Mac's debug builds left
   a Development copy and its marker, and "Bring over your data" there would
