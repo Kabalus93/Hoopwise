@@ -26,9 +26,11 @@ struct FlightyActionableDashboard: View {
     @State private var openPlay: JournalPlay?
     // Home search (pull down to open; HomeSearchView).
     @State private var showingSearch = false
-    @State private var searchPull: CGFloat = 0
+    /// The pull, outside Home's own state (18 Nov 2026, Luther: the search
+    /// "stutters a bit"): only the search overlay reads it, so Home's cards
+    /// are not redrawn on every frame of the drag.
+    @State private var pull = HomePull()
     /// The finger is on the page (the search follows it only then).
-    @State private var homeDragging = false
     @State private var searchStudent: Student?
     @State private var searchContract: Contract?
     @State private var searchCoach: StaffCoach?
@@ -293,12 +295,8 @@ struct FlightyActionableDashboard: View {
                 // Like the iPhone's own home screen: the search comes down
                 // WITH the finger (field sliding in, Home blurring), and
                 // letting go after a short pull opens it.
-                if showingSearch || searchReveal > 0 {
-                    HomeSearchView(live: showingSearch, reveal: showingSearch ? 1 : searchReveal,
-                                   onClose: closeSearch, onOpen: openSearchResult)
-                        .allowsHitTesting(showingSearch)
-                        .transition(.opacity)
-                }
+                HomeSearchOverlay(pull: pull, showing: showingSearch,
+                                  onClose: closeSearch, onOpen: openSearchResult)
             }
             .animation(.snappy(duration: 0.25), value: showingSearch)
             .background {
@@ -338,13 +336,13 @@ struct FlightyActionableDashboard: View {
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, offset in
-                let pull = max(0, -offset)
-                if pull != searchPull { searchPull = pull }
+                let distance = max(0, -offset)
+                if distance != pull.distance { pull.distance = distance }
             }
             .onScrollPhaseChange { old, new in
-                homeDragging = new == .interacting
+                pull.dragging = new == .interacting
                 // Let go after a short pull: open.
-                if old == .interacting, new != .interacting, searchPull >= HomeSearch.commitDistance, !showingSearch {
+                if old == .interacting, new != .interacting, pull.distance >= HomeSearch.commitDistance, !showingSearch {
                     showingSearch = true
                 }
             }
@@ -454,11 +452,6 @@ struct FlightyActionableDashboard: View {
 
     // MARK: - Pull to search
 
-    /// How far the search has come down with the finger (0…1).
-    private var searchReveal: CGFloat {
-        guard homeDragging, !showingSearch else { return 0 }
-        return min(1, searchPull / HomeSearch.revealDistance)
-    }
 
     private func closeSearch() {
         showingSearch = false

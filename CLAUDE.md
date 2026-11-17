@@ -1732,6 +1732,16 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   pushed. The pull is read with onScrollGeometryChange (offset + top inset).
   TRAP: an accessibilityIdentifier on the search's container overrode the
   field's own. Tests: HomeSearchUITests (iPhone and iPad).
+  SMOOTHNESS (18 Nov 2026, Luther: "somewhat slow and stutters a bit
+  compared to the one on Apple's home screen"): the pull lived in Home's own
+  @State, so every frame of the drag redrew every Home card. It is now
+  `HomePull` (@Observable: distance, dragging), written by the scroll
+  callbacks and read ONLY by `HomeSearchOverlay` — Home's body never reads
+  it. Searching no longer re-folds every session, drill and play per
+  keystroke: `HomeSearchIndex` folds them once when the search is OPEN
+  (after the field is in, `.task(id: live)` — the plays fetch used to run at
+  the first pixel of the drag, a hitch), and a keystroke checks prepared
+  text. Athletes/coaches still match through NameIndex (cached).
 - HUB → LEXICON (11 November 2026, Luther: "a lexicon in the Hub for
   basketball terms — names of plays and their definitions, actions, rules,
   defenses", from his researched Claude Docs "Basketball Lexicon",

@@ -92,6 +92,65 @@ enum HomeSearch {
     }
 }
 
+/// The pull as the finger moves — read by the overlay alone, so the drag
+/// redraws the search field and its blur, not Home.
+@Observable final class HomePull {
+    var distance: CGFloat = 0
+    var dragging = false
+}
+
+/// Home's search layer: follows the pull, then stays open.
+struct HomeSearchOverlay: View {
+    let pull: HomePull
+    let showing: Bool
+    let onClose: () -> Void
+    let onOpen: (HomeSearchTarget) -> Void
+
+    private var reveal: CGFloat {
+        guard pull.dragging, !showing else { return 0 }
+        return min(1, pull.distance / HomeSearch.revealDistance)
+    }
+
+    var body: some View {
+        if showing || reveal > 0 {
+            HomeSearchView(live: showing, reveal: showing ? 1 : reveal, onClose: onClose, onOpen: onOpen)
+                .allowsHitTesting(showing)
+                .transition(.opacity)
+        }
+    }
+}
+
+/// Everything searchable, folded once when the search opens: a keystroke
+/// checks prepared lowercase text instead of re-folding every session, drill
+/// and play.
+struct HomeSearchIndex {
+    struct Item<Value> {
+        let value: Value
+        /// Folded searchable text (every field).
+        let text: String
+        /// Folded name alone (ranking).
+        let name: String
+    }
+    var sessions: [Item<SessionEvent>] = []
+    var programs: [Item<Program>] = []
+    var teams: [Item<Team>] = []
+    var plays: [Item<JournalPlay>] = []
+    var drills: [Item<DrillItem>] = []
+
+    static func fold(_ s: String) -> String {
+        s.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: nil)
+    }
+
+    /// Every word of the query somewhere in `text`.
+    static func matches(_ words: [String], _ text: String) -> Bool {
+        words.allSatisfy { text.contains($0) }
+    }
+
+    static func words(_ query: String) -> [String] {
+        fold(query).split(whereSeparator: \.isWhitespace).map(String.init)
+    }
+}
+
 struct HomeSearchView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.modelContext) private var modelContext
@@ -103,7 +162,7 @@ struct HomeSearchView: View {
     let onOpen: (HomeSearchTarget) -> Void
 
     @State private var query = ""
-    @State private var plays: [JournalPlay] = []
+    @State private var index: HomeSearchIndex?
     /// Groups opened past their first few ("+N more").
     @State private var expanded: Set<HomeSearch.Kind> = []
     @FocusState private var focused: Bool
@@ -140,11 +199,17 @@ struct HomeSearchView: View {
         .background(.ultraThinMaterial.opacity(reveal))
         .background(Color(.systemGroupedBackground).opacity(0.55 * reveal))
         .onAppear {
-            plays = (try? modelContext.fetch(FetchDescriptor<JournalPlay>(sortBy: [SortDescriptor(\.name)]))) ?? []
             if live { DispatchQueue.main.async { focused = true } }
         }
         .onChange(of: live) { _, isLive in
             if isLive { focused = true }
+        }
+        // The index is built once it is OPEN, after the field has come in —
+        // never during the drag (a fetch there was a hitch).
+        .task(id: live) {
+            guard live, index == nil else { return }
+            await Task.yield()
+            index = buildIndex()
         }
     }
 
@@ -286,6 +351,31 @@ struct HomeSearchView: View {
 
     // MARK: - Results
 
+    /// Fold everything once (on open).
+    private func buildIndex() -> HomeSearchIndex {
+        let fold = HomeSearchIndex.fold
+        let programNames = Dictionary(dataManager.programs.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        var index = HomeSearchIndex()
+        index.sessions = dataManager.cachedSessionEvents.map { session in
+            let program = session.programId.flatMap { programNames[$0] } ?? ""
+            return .init(value: session, text: fold([session.title, program, session.location ?? ""].joined(separator: " ")),
+                         name: fold(session.title))
+        }
+        index.programs = dataManager.programs.map { .init(value: $0, text: fold($0.name), name: fold($0.name)) }
+        index.teams = dataManager.teams.map { team in
+            .init(value: team, text: fold([team.name, team.shortName].joined(separator: " ")), name: fold(team.name))
+        }
+        let plays = (try? modelContext.fetch(FetchDescriptor<JournalPlay>(sortBy: [SortDescriptor(\.name)]))) ?? []
+        index.plays = plays.map { play in
+            .init(value: play, text: fold([play.name, play.concept, play.situation].joined(separator: " ")), name: fold(play.name))
+        }
+        index.drills = dataManager.drills.map { drill in
+            let name = fold([drill.name, drill.localizedName].joined(separator: " "))
+            return .init(value: drill, text: name + " " + fold(drill.description), name: name)
+        }
+        return index
+    }
+
     private func results(for q: String) -> [HomeSearch.Group] {
         var groups: [HomeSearch.Group] = []
         func add(_ kind: HomeSearch.Kind, _ hits: [HomeSearch.Hit]) {
@@ -328,11 +418,14 @@ struct HomeSearchView: View {
                                   student: student, target: .privateClient(contract))
         })
 
+        let words = HomeSearchIndex.words(q)
+        let folded = HomeSearchIndex.fold(q)
+        let idx = index ?? HomeSearchIndex()
+
         // Sessions: name, program, venue — upcoming soonest first, then the
         // most recent.
         let now = Date()
-        let sessions = dataManager.cachedSessionEvents
-            .filter { HomeSearch.matches(q, [$0.title, programName($0.programId), $0.location]) }
+        let sessions = idx.sessions.filter { HomeSearchIndex.matches(words, $0.text) }.map(\.value)
             .sorted { a, b in
                 let au = a.startTime >= now, bu = b.startTime >= now
                 if au != bu { return au }
@@ -345,9 +438,10 @@ struct HomeSearchView: View {
                                   target: .session(session))
         })
 
-        add(.programs, dataManager.programs
-            .filter { HomeSearch.matches(q, [$0.name]) }
-            .sorted { (HomeSearch.startsWith(q, $0.name) ? 0 : 1, $0.name) < (HomeSearch.startsWith(q, $1.name) ? 0 : 1, $1.name) }
+        add(.programs, idx.programs
+            .filter { HomeSearchIndex.matches(words, $0.text) }
+            .sorted { ($0.name.hasPrefix(folded) ? 0 : 1, $0.name) < ($1.name.hasPrefix(folded) ? 0 : 1, $1.name) }
+            .map(\.value)
             .map { program in
                 let count = program.enrolledStudentIds.count
                 return HomeSearch.Hit(id: "p\(program.id)", title: program.name,
@@ -355,8 +449,9 @@ struct HomeSearchView: View {
                                       target: .program(program))
             })
 
-        add(.teams, dataManager.teams
-            .filter { HomeSearch.matches(q, [$0.name, $0.shortName]) }
+        add(.teams, idx.teams
+            .filter { HomeSearchIndex.matches(words, $0.text) }
+            .map(\.value)
             .map { team in
                 HomeSearch.Hit(id: "t\(team.id)", title: team.name,
                                subtitle: isChinese ? "\(team.playerIds.count) 名球员" : "\(team.playerIds.count) players",
@@ -371,21 +466,24 @@ struct HomeSearchView: View {
                                       target: .coach(coach))
             })
 
-        add(.plays, plays
-            .filter { HomeSearch.matches(q, [$0.name, $0.concept, $0.situation]) }
-            .sorted { (HomeSearch.startsWith(q, $0.name) ? 0 : 1) < (HomeSearch.startsWith(q, $1.name) ? 0 : 1) }
+        add(.plays, idx.plays
+            .filter { HomeSearchIndex.matches(words, $0.text) }
+            .sorted { ($0.name.hasPrefix(folded) ? 0 : 1) < ($1.name.hasPrefix(folded) ? 0 : 1) }
+            .map(\.value)
             .map { play in
                 HomeSearch.Hit(id: "y\(play.persistentModelID.hashValue)", title: play.name,
                                subtitle: jp(play.category.label), target: .play(play))
             })
 
-        let drills = dataManager.drills
-            .filter { HomeSearch.matches(q, [$0.name, $0.localizedName, $0.description]) }
+        // Drills: name matches first.
+        let drills = idx.drills
+            .filter { HomeSearchIndex.matches(words, $0.text) }
+            .map { ($0, HomeSearchIndex.matches(words, $0.name)) }
             .sorted { a, b in
-                let an = HomeSearch.matches(q, [a.name, a.localizedName]), bn = HomeSearch.matches(q, [b.name, b.localizedName])
-                if an != bn { return an }
-                return a.localizedName < b.localizedName
+                if a.1 != b.1 { return a.1 }
+                return a.0.value.localizedName < b.0.value.localizedName
             }
+            .map(\.0.value)
         add(.drills, drills.map { drill in
             HomeSearch.Hit(id: "d\(drill.id)", title: drill.localizedName,
                            subtitle: drill.description.replacingOccurrences(of: "\n", with: " "),
