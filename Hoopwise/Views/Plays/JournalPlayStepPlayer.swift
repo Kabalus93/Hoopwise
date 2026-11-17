@@ -33,6 +33,15 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     /// enough that it, its caption and ‹ ▶ › fit without scrolling (Luther,
     /// November 2026: in a wide Mac window the half court ran off the bottom).
     var viewportHeight: CGFloat?
+    /// The Coach board plays IN PLACE (17 Nov 2026, Luther: "should not open
+    /// a new popup window for replay but play right there"): `bare` draws the
+    /// court alone — no card, caption, ‹ ▶ › or step text; the board's own
+    /// bar drives it through `scribbling`, `playToken` (each change toggles
+    /// play / stop) and hears back through `onPlayingChange`.
+    var bare = false
+    var scribbling: Bool? = nil
+    var playToken = 0
+    var onPlayingChange: ((Bool) -> Void)? = nil
     /// Shown before the caption (the play page puts "Concept" there).
     @ViewBuilder var leading: () -> Leading
 
@@ -60,18 +69,28 @@ struct JournalPlayStepPlayer<Leading: View>: View {
     private var current: Step? { steps.indices.contains(index) ? steps[index] : nil }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: JSpacing.m) {
-            JCard(verticalPadding: JSpacing.s) {
-                VStack(alignment: .leading, spacing: JSpacing.s) {
-                    header
-                    pager
-                    controls
+        SwiftUI.Group {
+            if bare {
+                pager
+            } else {
+                VStack(alignment: .leading, spacing: JSpacing.m) {
+                    JCard(verticalPadding: JSpacing.s) {
+                        VStack(alignment: .leading, spacing: JSpacing.s) {
+                            header
+                            pager
+                            controls
+                        }
+                    }
+                    stepText
                 }
             }
-            stepText
         }
+        .onChange(of: playToken) { _, _ in if playing { stop() } else { play() } }
+        .onChange(of: playing) { _, now in onPlayingChange?(now) }
+        .onChange(of: scribbling) { _, on in if let on, on != scribbleOn { setScribble(on) } }
         .onAppear {
             frozen = frozenT
+            if let scribbling, scribbling != scribbleOn { setScribble(scribbling) }
             if autoplay, frozen == nil, steps.count > 0 { play() }
             #if DEBUG
             scribbleDemo()
@@ -184,7 +203,7 @@ struct JournalPlayStepPlayer<Leading: View>: View {
 
     @ViewBuilder
     private var scribbleButton: some View {
-        if offersScribble {
+        if offersScribble && !bare {
             Button {
                 withAnimation(JMotion.expand) { setScribble(!scribbleOn) }
             } label: {

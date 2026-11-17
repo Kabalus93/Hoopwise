@@ -2044,17 +2044,39 @@ onChange:board:onSave:)`, `BoardActions`): tool rail | court, no inspector;
 a glass "Step N of M ⌃" button at the bottom left opens a popover with the
 steps strip, this step's words, defense, the tool's options and the
 selection. Top bar: Court (Half/Full — converts the steps and rebuilds the
-editor), Watch (BoardWatchSheet — the step player: ▶, Pencil ink, Scribble
-on an iPad), Clear (asks; `board.confirmClear`), Save ▾ — Save as Play
+editor), Clear (asks; `board.confirmClear`), Save ▾ — Save as Play
 (JournalNewPlaySheet(drawing:) → the concept's steps, cones dropped —
 `JournalPlay.fill`) / Save as Drill (AddDrillView(drawing:) — the drawing is
 the new drill's first visual); Done closes. No Cancel: `onChange` reports
 every change and Views/Hub/CoachBoardScreen.swift saves it at once to a
 DEVICE-LOCAL file (Application Support/CoachBoard/board.json,
 `CoachBoardStore`) — a scratchpad; syncing would need a schema field.
-Saving leaves the board as it is. HOOPWISE_SHOT=coachBoard. Tests:
-CoachBoardUITests (opens in the editor, draw, steps button, relaunch → still
-there, Save → Play/Drill, Clear), SkillIntegrationTests.
+Saving leaves the board as it is. BOTTOM RIGHT (same night, Luther: "remove
+the play button … a bar in the lower right corner with previous step, play
+and next step … play right there", "add the scribble functionality too"):
+a glass bar — Scribble (iPad only) · ‹ · ▶/❚❚ · › (`board.scribble`,
+`board.previous`, `board.play`, `board.next`). ▶ swaps the editable court
+for the step player IN PLACE (`boardStage` — JournalPlayStepPlayer `bare`:
+court only, driven by `scribbling` / `playToken`, reporting
+`onPlayingChange`), playing from this step on; when it ends the court is
+editable again. Scribble keeps the player on with Scribble on (ink, reading,
+Reset ink) until switched off or a tool is picked; never saved, as on the
+play page. ‹ › move between steps. The Watch button and its popup are gone.
+HOOPWISE_SHOT=coachBoard. Tests: CoachBoardUITests (opens in the editor,
+draw, steps button, relaunch → still there, Save → Play/Drill, Clear; full
+court upright; ball rule + play in place), SkillIntegrationTests.
+
+## The ball rule (17 Nov 2026, Luther)
+"A pass can only be drawn from a player with a ball, otherwise nothing is
+drawn; a dribble same." In the step editor (every play and drill, not only
+the board) a PASS, DRIBBLE, SHOT or HAND-OFF starts only from a player who
+holds a ball at that point of the step — at the start or after the passes
+already drawn (`JournalPlayMath.ballsAfter`); `JournalPlayStepEditor.
+mayStart` is the test, checked when the stroke begins (and for the hover
+ring). Cuts and screens need none. Scribble applies it to passes and
+dribbles (the strokes stay ink). The connector's authoring is unchanged (a
+pass without a ball still saves with a warning there). Tests:
+JournalPlayScribbleTests.onlyAPlayerWithTheBallPassesOrDribbles.
 THE STEPS PANEL REDESIGNED (same night, Luther: "the steps bottom tab is not
 so well designed"): one header line — "STEPS  2 of 3", then move (menu) and
 delete as one small capsule (shown with two or more steps;

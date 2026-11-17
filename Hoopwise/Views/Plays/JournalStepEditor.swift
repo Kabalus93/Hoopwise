@@ -46,7 +46,13 @@ struct JournalPlayStepEditor: View {
     }
     private let board: BoardActions?
     @State private var boardStepsOpen = false
-    @State private var watching = false
+    /// The board's court plays in place: the step player replaces the
+    /// editable court while it plays or while Scribble is on.
+    @State private var boardPlayer = false
+    @State private var boardAutoplay = false
+    @State private var boardPlaying = false
+    @State private var boardScribble = false
+    @State private var boardPlayToken = 0
 
     /// Every step, in order, as values: the one on screen is `current`, and
     /// `diagram`, `caption`, `text` and the undo stacks are its working copy;
@@ -560,6 +566,11 @@ struct JournalPlayStepEditor: View {
             .onChange(of: tool) { old, _ in
                 previousTool = old
                 paletteAt = nil
+                // On the board, picking a tool goes back to drawing.
+                if board != nil, boardPlayer {
+                    boardScribble = false
+                    boardPlayer = false
+                }
             }
             // Auto defense: defenders follow every change to the offense.
             .onChange(of: diagram) { _, new in
@@ -617,7 +628,6 @@ struct JournalPlayStepEditor: View {
                         .help(jp("Done") + " (⌘↩)")
                 }
             }
-            .sheet(isPresented: $watching) { BoardWatchSheet(drawing: drawingNow) }
             .confirmationDialog(JText("Delete this step?"), isPresented: $confirmingDeleteStep, titleVisibility: .visible) {
                 Button(role: .destructive, action: deleteStep) { JText("Delete step") }
             } message: {
@@ -681,11 +691,14 @@ struct JournalPlayStepEditor: View {
             toolRail
             Divider()
             if board != nil {
-                canvas
+                SwiftUI.Group {
+                    if boardPlayer { boardStage } else { canvas }
+                }
                     .padding(JSpacing.m)
                     .padding(.bottom, 52)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .bottomLeading) { boardStepsButton.padding(JSpacing.m) }
+                    .overlay(alignment: .bottomTrailing) { boardTransport.padding(JSpacing.m) }
             } else if inspectorBelow {
                 VStack(spacing: 0) {
                     canvas
@@ -905,7 +918,97 @@ struct JournalPlayStepEditor: View {
         }
     }
 
-    /// Court, Watch (▶ and Scribble), Clear and Save — the board's top bar.
+    /// The board's court while it plays or scribbles: the play page's step
+    /// player, court only, on the board's steps as they stand.
+    private var boardStage: some View {
+        JournalPlayStepPlayer(
+            steps: drawingNow.steps.map { .init(diagram: $0.diagram, caption: $0.caption, text: $0.text) },
+            court: court,
+            index: Binding(get: { currentIndex }, set: { i in
+                if pages.indices.contains(i) { show(pages[i].id) }
+            }),
+            autoplay: boardAutoplay,
+            bare: true,
+            scribbling: boardScribble,
+            playToken: boardPlayToken,
+            onPlayingChange: { now in
+                boardPlaying = now
+                // Back to drawing once the playback ends (Scribble stays).
+                if !now, !boardScribble { boardPlayer = false }
+            }
+        ) { EmptyView() }
+    }
+
+    /// Bottom right: Scribble (iPad), ‹ ▶ › — playing right on the court.
+    private var boardTransport: some View {
+        HStack(spacing: 2) {
+            if offersScribble {
+                Button {
+                    boardScribble.toggle()
+                    boardAutoplay = false
+                    boardPlayer = boardScribble || boardPlaying
+                } label: {
+                    Label { JText("Scribble") } icon: { Image(systemName: "scribble.variable") }
+                        .labelStyle(.iconOnly)
+                        .frame(width: 48, height: 44)
+                        .foregroundStyle(boardScribble ? Color.accentColor : JPalette.ink)
+                }
+                .accessibilityIdentifier("board.scribble")
+                .accessibilityAddTraits(boardScribble ? .isSelected : [])
+                Divider().frame(height: 22)
+            }
+            Button { boardStep(by: -1) } label: {
+                Label { JText("Previous step") } icon: { Image(systemName: "backward.end.fill") }
+                    .labelStyle(.iconOnly).frame(width: 48, height: 44)
+            }
+            .disabled(number <= 1)
+            .accessibilityIdentifier("board.previous")
+            Button(action: boardPlayPause) {
+                Label { boardPlaying ? JText("Pause") : JText("Play") } icon: {
+                    Image(systemName: boardPlaying ? "pause.fill" : "play.fill")
+                }
+                .labelStyle(.iconOnly).font(.title3).frame(width: 56, height: 44)
+            }
+            .accessibilityIdentifier("board.play")
+            Button { boardStep(by: 1) } label: {
+                Label { JText("Next step") } icon: { Image(systemName: "forward.end.fill") }
+                    .labelStyle(.iconOnly).frame(width: 48, height: 44)
+            }
+            .disabled(number >= pages.count)
+            .accessibilityIdentifier("board.next")
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(JPalette.ink)
+        .padding(.horizontal, 6)
+        .glassEffect(.regular.interactive(), in: Capsule())
+    }
+
+    private var offersScribble: Bool {
+        #if targetEnvironment(macCatalyst)
+        return false
+        #else
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #endif
+    }
+
+    private func boardPlayPause() {
+        stash()
+        selection = nil
+        if boardPlayer {
+            boardPlayToken += 1
+        } else {
+            boardAutoplay = true
+            boardPlayer = true
+        }
+    }
+
+    /// ‹ ›: the step before or after, on the court at once (playing stops).
+    private func boardStep(by offset: Int) {
+        if boardPlayer && !boardScribble { boardPlayer = false }
+        go(by: offset)
+    }
+
+    /// Court, Clear and Save — the board's top bar.
     @ViewBuilder
     private func boardControls(_ board: BoardActions) -> some View {
         Menu {
@@ -923,10 +1026,6 @@ struct JournalPlayStepEditor: View {
                 .labelStyle(.titleAndIcon)
         }
         .accessibilityIdentifier("board.court")
-        Button { stash(); watching = true } label: {
-            Label { JText("Watch") } icon: { Image(systemName: "play.circle") }
-        }
-        .accessibilityIdentifier("board.watch")
         Button(role: .destructive, action: board.clear) {
             Label { JText("Clear") } icon: { Image(systemName: "eraser") }
         }
@@ -1455,8 +1554,10 @@ struct JournalPlayStepEditor: View {
 
     private func hoverTarget(_ point: JournalCourtPoint, size: CGSize) -> JournalCourtPoint? {
         let radius = hitRadius(size: size, precise: true)
-        if tool.lineKind != nil {
-            return JournalPlayMath.lineStart(at: point, in: diagram, radius: radius)?.from
+        if let kind = tool.lineKind {
+            guard let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius),
+                  Self.mayStart(kind, by: start.player, in: diagram) else { return nil }
+            return start.from
         }
         guard tool == .move || tool == .erase || tool == .ball || tool == .defender else { return nil }
         switch JournalPlayMath.hit(point, in: diagram, radius: radius) {
@@ -1518,10 +1619,21 @@ struct JournalPlayStepEditor: View {
             default: return .tap
             }
         }
-        if activeTool.lineKind != nil, let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius) {
+        if let kind = activeTool.lineKind, let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius),
+           Self.mayStart(kind, by: start.player, in: diagram) {
             return .line(player: start.player, points: [start.from])
         }
         return .tap
+    }
+
+    /// THE BALL RULE (17 Nov 2026, Luther: "a pass can only be drawn from a
+    /// player with a ball, otherwise nothing is drawn; a dribble same"): a
+    /// pass, dribble, shot or hand-off starts only from a player who holds a
+    /// ball at that point of the step — at the start, or after the passes
+    /// already drawn (`ballsAfter`). Cuts and screens need none.
+    static func mayStart(_ kind: JournalPlayDiagram.ActionKind, by player: Int, in diagram: JournalPlayDiagram) -> Bool {
+        let needsBall = kind.throwsBall || kind == .dribble || kind == .handoff
+        return !needsBall || JournalPlayMath.ballsAfter(diagram).contains(player)
     }
 
     private func update(to point: JournalCourtPoint) {
@@ -1759,27 +1871,3 @@ struct JournalPlayStepEditor: View {
     }
 }
 
-/// The Coach board's Watch: the board played step by step (▶), with Pencil
-/// mark-up and Scribble on an iPad — the play page's player.
-struct BoardWatchSheet: View {
-    let drawing: DrillDrawing
-    @State private var index = 0
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                JournalPlayStepPlayer(drawing: drawing, index: $index)
-                    .padding(JSpacing.m)
-            }
-            .background(JPalette.background)
-            .navigationTitle(JText("Coach board"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { dismiss() } label: { JText("Done") }
-                }
-            }
-        }
-    }
-}

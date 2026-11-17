@@ -8,7 +8,7 @@ nonisolated enum JournalPlayStringsAdded {
 
     static let table: [String: Entry] = [
         "Coach board": .init(en: "Coach board", enOne: nil, zh: "战术板"),
-        "Watch": .init(en: "Watch", enOne: nil, zh: "播放"),
+        "Pause": .init(en: "Pause", enOne: nil, zh: "暂停"),
         "Clear": .init(en: "Clear", enOne: nil, zh: "清空"),
         "Save": .init(en: "Save", enOne: nil, zh: "保存"),
         "Save as Play": .init(en: "Save as Play", enOne: nil, zh: "存为战术"),

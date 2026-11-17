@@ -79,6 +79,30 @@ struct JournalPlayScribbleTests {
         #expect(dribble.path.allSatisfy { abs($0.x - 7.5) < 0.3 }, "the dribble runs down the middle of the zigzag")
     }
 
+    /// The ball rule (17 Nov 2026, Luther): only a player holding a ball
+    /// passes or dribbles; from anyone else the strokes stay ink.
+    @Test func onlyAPlayerWithTheBallPassesOrDribbles() throws {
+        // 2 has no ball: dashes from 2 to 4 stay ink.
+        let pass = JournalPlayScribble.read(Self.dashes(P(12.6, 6.4), P(13.8, 1.5), count: 4), on: Self.five)
+        #expect(pass.diagram.actions.isEmpty)
+        #expect(pass.used.isEmpty)
+        // 3 zigzags without a ball: ink.
+        let zigzag = (0...24).map { k in P(2.4 + (k.isMultiple(of: 2) ? 0.35 : -0.35), 6.4 - Double(k) * 0.2) }
+        #expect(JournalPlayScribble.read([zigzag], on: Self.five).diagram.actions.isEmpty)
+        // Once 1 has passed to 2, 2 may pass on.
+        let first = JournalPlayScribble.read(Self.dashes(P(7.8, 9.4), P(12.4, 6.7), count: 5), on: Self.five)
+        let onward = JournalPlayScribble.read(Self.dashes(P(12.6, 6.4), P(13.8, 1.5), count: 4), on: first.diagram)
+        #expect(onward.diagram.actions.last?.kind == .pass)
+        #expect(onward.diagram.actions.last?.player == 2)
+        // The editor's own rule agrees.
+        #expect(JournalPlayStepEditor.mayStart(.pass, by: 1, in: Self.five))
+        #expect(!JournalPlayStepEditor.mayStart(.pass, by: 2, in: Self.five))
+        #expect(!JournalPlayStepEditor.mayStart(.dribble, by: 3, in: Self.five))
+        #expect(JournalPlayStepEditor.mayStart(.cut, by: 3, in: Self.five), "cuts need no ball")
+        #expect(JournalPlayStepEditor.mayStart(.pass, by: 2, in: first.diagram), "2 caught it")
+        #expect(!JournalPlayStepEditor.mayStart(.pass, by: 1, in: first.diagram), "1 let it go")
+    }
+
     @Test func aCurvedCutIsNotMistakenForAZigzag() throws {
         let curve = (0...30).map { k -> P in
             let t = Double(k) / 30

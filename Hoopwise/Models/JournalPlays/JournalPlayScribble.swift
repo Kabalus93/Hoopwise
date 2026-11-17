@@ -136,6 +136,11 @@ nonisolated enum JournalPlayScribble {
             } else {
                 kind = ending == .bar ? .screen : .cut
             }
+            // The ball rule (17 Nov 2026, Luther): a pass or a dribble only
+            // from a player holding a ball at this point; otherwise the
+            // stroke stays ink.
+            if kind == .pass || kind == .dribble,
+               !JournalPlayMath.ballsAfter(diagram).contains(start.player) { continue }
             let radius = kind == .pass ? receiverReach : startReach
             guard let added = JournalPlayMath.adding(kind, by: start.player, along: along, to: diagram,
                                                      radius: radius, shape: .curved, court: court) else { continue }

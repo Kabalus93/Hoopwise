@@ -98,6 +98,47 @@ extension CoachBoardUITests {
     }
 }
 
+extension CoachBoardUITests {
+    /// The ball rule and playing in place (17 Nov 2026, Luther): a pass from
+    /// a player without the ball draws nothing; from the ball handler it
+    /// draws; ▶ plays on the board itself, no popup.
+    func testBallRuleAndPlayInPlace() {
+        continueAfterFailure = false
+        app = launch()
+        XCTAssertTrue(element("plays.editor.tool.pass").waitForExistence(timeout: 30))
+        if element("board.clear").isEnabled {
+            element("board.clear").tap()
+            element("board.confirmClear").tap()
+        }
+        XCTAssertFalse(element("board.clear").waitForEnabled(false, timeout: 5).isEnabled)
+        let court = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Drawing of step 1'")).firstMatch
+        func at(_ x: Double, _ y: Double) -> XCUICoordinate {   // court metres on the half court
+            court.coordinate(withNormalizedOffset: CGVector(dx: (x + 1.3) / 17.6, dy: (y + 1.3) / 16.6))
+        }
+        element("plays.editor.tool.pass").tap()
+        // 2 has no ball: nothing is drawn.
+        at(12.6, 6.6).press(forDuration: 0.1, thenDragTo: at(13.9, 1.2))
+        XCTAssertFalse(element("board.clear").waitForEnabled(true, timeout: 2).isEnabled, "a pass needs the ball")
+        // 1 has it: the pass is drawn.
+        at(7.5, 9.6).press(forDuration: 0.1, thenDragTo: at(12.6, 6.6))
+        XCTAssertTrue(element("board.clear").waitForEnabled(true, timeout: 4).isEnabled, "the ball handler passes")
+        attach("pass from the ball handler")
+
+        // ▶ plays right there: the bar stays, no sheet comes up.
+        XCTAssertTrue(element("board.play").exists)
+        XCTAssertTrue(element("board.previous").exists && element("board.next").exists)
+        element("board.play").tap()
+        sleep(1)
+        attach("playing in place")
+        XCTAssertTrue(element("board.play").exists, "still the board")
+        XCTAssertTrue(element("plays.editor.steps").exists, "still the board")
+        XCTAssertEqual(app.navigationBars.count, 1, "no popup")
+
+        element("board.clear").tap()
+        element("board.confirmClear").tap()
+    }
+}
+
 private extension XCUIElement {
     @discardableResult
     func waitForEnabled(_ enabled: Bool, timeout: TimeInterval) -> XCUIElement {
