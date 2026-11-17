@@ -151,7 +151,9 @@ struct PhasesListView: View {
         // visual list — they're recomputed from the same source.
         List(selection: $selectedPhases) {
             ForEach(filteredPhases) { phase in
-                NavigationLink(destination: MicroCycleDetailView(microCycle: phase, program: program)) {
+                // The program page's own phase page (with Edit Phase) — it opened a
+                // read-only stub (18 Nov 2026).
+                NavigationLink(destination: FlightyMicroCycleDetailView(microCycle: phase, program: program)) {
                     PhaseRowView(phase: phase, accentColor: Color(hex: program.colorHex))
                 }
                 .tag(phase.id)

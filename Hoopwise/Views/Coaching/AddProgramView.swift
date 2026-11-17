@@ -499,32 +499,6 @@ struct EditProgramView: View {
 }
 
 // MARK: - MicroCycle Detail View
-struct MicroCycleDetailView: View {
-    let microCycle: MicroCycle
-    let program: Program
-    
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(microCycle.title)
-                    .font(.title)
-                Text(microCycle.description ?? "")
-                    .foregroundColor(.secondary)
-                
-                if let startDate = microCycle.startDate, let endDate = microCycle.endDate {
-                    HStack {
-                        Text("Duration:")
-                            .foregroundColor(.secondary)
-                        Text("\(startDate.formatted(date: .abbreviated, time: .omitted)) - \(endDate.formatted(date: .abbreviated, time: .omitted))")
-                    }
-                }
-            }
-            .padding()
-        }
-        .navigationTitle(microCycle.title)
-    }
-}
-
 // MARK: - Flow Layout
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8

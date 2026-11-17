@@ -995,10 +995,22 @@ extension FlightyProgramDetailView {
 // MARK: - Flighty MicroCycle Detail View (Phase Detail)
 struct FlightyMicroCycleDetailView: View {
     @EnvironmentObject var dataManager: DataManager
-    let microCycle: MicroCycle
+    /// The phase as opened; the page reads the STORED one (`microCycle`), so
+    /// an edit shows at once.
+    let initialCycle: MicroCycle
     let program: Program?
-    
+
+    init(microCycle: MicroCycle, program: Program?) {
+        self.initialCycle = microCycle
+        self.program = program
+    }
+
+    var microCycle: MicroCycle {
+        dataManager.microCycles.first { $0.id == initialCycle.id } ?? initialCycle
+    }
+
     @State private var showingAddSession = false
+    @State private var showingEditPhase = false
     
     var phaseSessions: [SessionEvent] {
         dataManager.sessionEvents
@@ -1042,13 +1054,24 @@ struct FlightyMicroCycleDetailView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarTitleDisplayModeCompat(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailingCompat) {
+            ToolbarItemGroup(placement: .navigationBarTrailingCompat) {
+                Button {
+                    showingEditPhase = true
+                } label: {
+                    Label(LocalizationManager.shared.currentLanguage == .chinese ? "编辑阶段" : "Edit Phase",
+                          systemImage: "pencil")
+                }
+                .accessibilityIdentifier("phase.edit")
                 Button {
                     showingAddSession = true
                 } label: {
                     Image(systemName: "plus")
                 }
             }
+        }
+        .sheet(isPresented: $showingEditPhase) {
+            EditPhaseSheet(phase: microCycle)
+                .environmentObject(dataManager)
         }
         .sheet(isPresented: $showingAddSession) {
             FlightyCreateSessionView(

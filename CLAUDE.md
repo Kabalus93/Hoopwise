@@ -2160,6 +2160,16 @@ own language.
   stopped at six behind "View all"). The drill page's Tags hide the skill
   ratings (`attr:…`, `attr:by:coach`) and `by:` — bookkeeping shown as
   "Attr:Passing=3" chips; the ratings live on the octagon card.
+- EDIT PHASE (18 Nov 2026, Luther: tapping a phase in Manage Phases showed
+  "nothing to be modified" — it opened a read-only stub, MicroCycleDetailView,
+  now DELETED). Manage Phases' rows open the program page's own phase page
+  (FlightyMicroCycleDetailView, which now reads the STORED phase so edits show
+  at once) and its toolbar has Edit Phase (`phase.edit`) → EditPhaseSheet
+  (Views/Coaching/): name, what it is about, focus areas (Generate Plan and
+  the phase balance read them), objectives; saved on a COPY through
+  updateMicroCycle (the 2.7 words guard). Dates stay with the chain — Manage
+  Phases' drag re-anchors them and moves the sessions inside. Tests:
+  EditPhaseUITests.
 
 ## Cycle planner (October 2026, Luther)
 - "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,
