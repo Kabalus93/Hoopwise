@@ -111,4 +111,23 @@ final class AthleteCardFactsTests: XCTestCase {
         let document = try XCTUnwrap(CGPDFDocument(CGDataProvider(data: pdf as CFData)!))
         XCTAssertEqual(document.numberOfPages, 2, "fronts, then backs")
     }
+
+    /// The header runs out to the colour behind the child in their photo: the
+    /// corners of the photo, not its middle.
+    func testTheHeaderColourIsThePhotoBackground() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 120))
+        let photo = renderer.jpegData(withCompressionQuality: 0.95) { ctx in
+            UIColor(red: 0.2, green: 0.6, blue: 0.3, alpha: 1).setFill()       // the swatch
+            ctx.fill(CGRect(x: 0, y: 0, width: 120, height: 120))
+            UIColor.orange.setFill()                                             // the child
+            ctx.cgContext.fillEllipse(in: CGRect(x: 20, y: 20, width: 80, height: 80))
+        }
+        let hex = try XCTUnwrap(AthleteCardFacts.backgroundHex(ofPhoto: photo))
+        let value = try XCTUnwrap(UInt32(hex.dropFirst(), radix: 16))
+        XCTAssertEqual(Double((value >> 16) & 0xFF) / 255, 0.2, accuracy: 0.05)
+        XCTAssertEqual(Double((value >> 8) & 0xFF) / 255, 0.6, accuracy: 0.05)
+        XCTAssertEqual(Double(value & 0xFF) / 255, 0.3, accuracy: 0.05)
+        XCTAssertGreaterThan(AthleteCardFacts.luminance(ofHex: "#F5F0E6"), 0.72, "cream takes dark type")
+        XCTAssertLessThan(AthleteCardFacts.luminance(ofHex: hex), 0.72, "green keeps white type")
+    }
 }

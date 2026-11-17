@@ -42,6 +42,10 @@ final class AthleteCardUITests: XCTestCase {
         let app = launch("quickPeep")
         let share = app.buttons["peep.shareCard"].firstMatch
         XCTAssertTrue(share.waitForExistence(timeout: 30), "the quick peep has a player card button")
+        // The peep's own card IS the exported card, and flips.
+        let card = app.descendants(matching: .any)["athleteCard.flip"].firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "the quick peep shows the player card")
+        card.tap()
         share.tap()
         checkTheShareSheet(app)
     }

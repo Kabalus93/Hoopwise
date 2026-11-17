@@ -1648,7 +1648,31 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
     the old radar views, StudentIntelligenceProfileView and the sheets only it
     opened (≈ 5,500 lines). StudentParentReport.swift keeps
     ProgramStatsContext, PerformanceRadarMetrics (the in-app flip card) and
-    ShareSheet. The Quick Peep's flip card is unchanged — the coach's view.
+    ShareSheet. (The Quick Peep's old flip card went the next day — see
+    below.)
+  THE ORIGINAL LOOK, AND ONE CARD IN THE APP TOO (17 Nov 2026, Luther: "not
+  entirely satisfied … make improvements based on the card I had originally
+  … make the in app card match what is going to be exported"). The two
+  sides are drawn in the ORIGINAL card's style (`AthleteCardStyle`): cream
+  stock, saddle-brown frame, the name in CAPITALS over the court header,
+  the photo overlapping the header's edge, a DIAMOND (now the program's age
+  group — it was a coach-facing A/B/C grade), the school GRADE only (AGE,
+  HT and HAND removed — Luther, same day), the MONTH pill (was "SINCE
+  <year>"), the header a RADIAL gradient centred on the photo: clear at the
+  photo → at the far corners the PHOTO'S OWN BACKGROUND colour
+  (`AthleteCardFacts.backgroundHex(ofPhoto:)` — the average of the photo's
+  four corners on a 32 px thumbnail, i.e. the background-removal swatch),
+  else the program colour; court lines over it; a pale colour (luminance
+  > 0.72) takes dark name type and no shade,
+  and the six-cell grid PPG APG RPG / STL BLK GAMES (GAMES replaces EFRT).
+  Back (Luther's markup, same day): "<MONTH>" over the name, centred
+  "WHAT WE WORKED ON" (no icon, no scope suffix) over the octagon, centred
+  "THIS MONTH" (classes taken, games), the coach's line, and the ACADEMY
+  alone at the foot — no coach name, no HoopWise credit. The Quick Peep shows
+  `AthleteCardFlip` — these same two sides, tap to flip, scaled to the
+  column — so the in-app card IS the exported one. StudentProfileCardView
+  and StudentProfileHeaderView are DELETED; CardCourtBackground moved to
+  Components/CardCourtBackground.swift.
   DEBUG HOOPWISE_SHOT=athleteCard (the sheet) / athleteCardExport (writes
   athlete-card.png + athlete-cards-a3.pdf to the App Group Library/Caches).
   Tests: AthleteCardFactsTests (incl. both sides the same size, 2-page A3),

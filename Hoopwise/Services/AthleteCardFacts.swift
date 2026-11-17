@@ -1,4 +1,6 @@
 import Foundation
+import CoreGraphics
+import ImageIO
 
 // THE ATHLETE CARD (16 November 2026, Luther: "the student sharable cards …
 // finish this once and for all"; decided: ONE collectible card for the child
@@ -18,8 +20,17 @@ struct AthleteCardFacts: Equatable {
     let photo: Data?
     let program: String?
     let ageGroup: String?
+    /// The program's age group ("U8"), for the card's diamond.
+    let ageBadge: String?
     /// Only when one was given.
     let jersey: Int?
+    /// School grade as the app shows it (age and height are not on the card
+    /// — Luther, 17 Nov 2026).
+    let schoolGrade: String?
+    /// The colour behind the child in their profile photo (its corners — the
+    /// background-removal swatch, or whatever was behind them): the header's
+    /// gradient runs out to it. nil without a photo.
+    let photoBackgroundHex: String?
     /// The program's colour (else the age category's).
     let accentHex: String
     /// The month on the card (its first day).
@@ -114,7 +125,10 @@ struct AthleteCardFacts: Equatable {
                 let age = p.ageGroup.rawValue
                 return p.name.localizedCaseInsensitiveContains(age) ? nil : age
             },
+            ageBadge: program?.ageGroup.rawValue,
             jersey: player?.jerseyNumber,
+            schoolGrade: student.currentSchoolGrade(asOf: now)?.rawValue,
+            photoBackgroundHex: student.profileImageData.flatMap(Self.backgroundHex(ofPhoto:)),
             accentHex: program?.colorHex ?? categoryHex,
             month: month.lowerBound,
             classesAttended: attendedThisMonth.count,
@@ -128,5 +142,47 @@ struct AthleteCardFacts: Equatable {
             coachLine: coachLine.trimmingCharacters(in: .whitespacesAndNewlines),
             coach: coach,
             academy: academy)
+    }
+
+    /// The average colour of a photo's four corners ("#RRGGBB"), read from a
+    /// 32-pixel thumbnail.
+    static func backgroundHex(ofPhoto data: Data) -> String? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 32,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+              ] as CFDictionary) else { return nil }
+        let w = image.width, h = image.height
+        guard w >= 8, h >= 8 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        guard let context = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var r = 0, g = 0, b = 0, n = 0
+        let patch = 3
+        for (x0, y0) in [(0, 0), (w - patch, 0), (0, h - patch), (w - patch, h - patch)] {
+            for y in y0..<(y0 + patch) {
+                for x in x0..<(x0 + patch) {
+                    let i = (y * w + x) * 4
+                    guard pixels[i + 3] > 0 else { continue }
+                    r += Int(pixels[i]); g += Int(pixels[i + 1]); b += Int(pixels[i + 2]); n += 1
+                }
+            }
+        }
+        guard n > 0 else { return nil }
+        return String(format: "#%02X%02X%02X", r / n, g / n, b / n)
+    }
+
+    /// Relative luminance (0 black … 1 white) of "#RRGGBB"; 0 when unreadable.
+    static func luminance(ofHex hex: String) -> Double {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return 0 }
+        func channel(_ shift: UInt32) -> Double {
+            let c = Double((value >> shift) & 0xFF) / 255
+            return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
     }
 }

@@ -12,7 +12,7 @@ import UIKit
 enum AthleteCardLayout {
     /// The card in points (5 : 7). Printed at 2.5 × 3.5 inches.
     static let size = CGSize(width: 360, height: 504)
-    static let corner: CGFloat = 22
+    static let corner: CGFloat = 14
 }
 
 private struct AthleteCardWords {
@@ -26,79 +26,148 @@ private struct AthleteCardWords {
     }
 }
 
+/// The original card's colours (17 Nov 2026, Luther: "make improvements
+/// based on the card I had originally"): cream stock, a saddle-brown frame,
+/// the name in capitals over the court, the photo overlapping the header, a
+/// diamond, the member-since pill and the six-cell stats grid.
+private enum AthleteCardStyle {
+    static let stock = AppTheme.cream
+    static let frame = AppTheme.saddleBrown
+    static let label = AppTheme.neutral600
+    static let rule = Color.gray.opacity(0.3)
+    static let frameWidth: CGFloat = 5
+}
+
 struct AthleteCardFront: View {
+    static let headerHeight: CGFloat = 206
     let card: AthleteCardFacts
     private let w = AthleteCardWords()
 
     private var accent: Color { Color(hex: card.accentHex) }
+    /// The gradient's outer colour: the photo's background, else the program's.
+    private var headerColor: Color { Color(hex: card.photoBackgroundHex ?? card.accentHex) }
+    /// A pale background (white, cream, light grey swatches) takes dark type.
+    private var headerIsLight: Bool { AthleteCardFacts.luminance(ofHex: card.photoBackgroundHex ?? card.accentHex) > 0.72 }
+    private var headerInk: Color { headerIsLight ? Color.black.opacity(0.8) : .white }
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .top) {
-                CardCourtBackground(color: accent, style: .halfCourt)
-                HStack(alignment: .top) {
-                    Text((card.academy.isEmpty ? card.coach : card.academy).uppercased())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(1.6)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                    Spacer()
-                    if let jersey = card.jersey {
-                        Text("\(jersey)")
-                            .font(.system(size: 22, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                            .frame(width: 46, height: 46)
-                            .overlay(Circle().stroke(.white, lineWidth: 2.5))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                photo
-                    .padding(.top, 62)
-            }
-            .frame(height: 300)
-            .clipped()
-
-            VStack(spacing: 6) {
-                Text(card.name)
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.black)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                if let second = card.secondName {
-                    Text(second)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.black.opacity(0.55))
-                        .lineLimit(1)
-                }
-                if let program = card.program {
-                    Text([program, card.ageGroup].compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(accent.opacity(0.12), in: Capsule())
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                monthStrip
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
-            .padding(.bottom, 18)
-            .frame(maxHeight: .infinity)
-            .background(Color.white)
+            header
+            middle
+            monthPill
+            statsGrid
         }
-        .frame(width: AthleteCardLayout.size.width, height: AthleteCardLayout.size.height)
+        .frame(width: AthleteCardLayout.size.width, height: AthleteCardLayout.size.height, alignment: .top)
+        .background(AthleteCardStyle.stock)
         .clipShape(RoundedRectangle(cornerRadius: AthleteCardLayout.corner, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: AthleteCardLayout.corner, style: .continuous)
-            .strokeBorder(accent, lineWidth: 5))
+            .strokeBorder(AthleteCardStyle.frame, lineWidth: AthleteCardStyle.frameWidth))
         .environment(\.colorScheme, .light)
+    }
+
+    // The court in the program's colour, the name over it, the number.
+    private var header: some View {
+        ZStack(alignment: .top) {
+            // A radial gradient from the photo (17 Nov 2026, Luther): clear
+            // at the photo, the PHOTO'S OWN BACKGROUND colour at the edges
+            // (else the program's), the court over it.
+            // The photo's centre sits on the header's bottom edge, mid-width;
+            // the gradient reaches the far corners.
+            RadialGradient(stops: [.init(color: headerColor.opacity(0), location: 0),
+                                   .init(color: headerColor.opacity(0), location: 0.2),
+                                   .init(color: headerColor, location: 1)],
+                           center: UnitPoint(x: 0.5, y: 1), startRadius: 0,
+                           endRadius: (pow(AthleteCardLayout.size.width / 2, 2) + pow(Self.headerHeight, 2)).squareRoot())
+            CourtArtwork(style: .halfCourt)
+            // A light shade under the name so white type reads (none behind
+            // dark type on a pale background).
+            if !headerIsLight {
+                LinearGradient(colors: [.black.opacity(0.22), .clear], startPoint: .top, endPoint: .center)
+            }
+            VStack(spacing: 4) {
+                Text(card.name.uppercased())
+                    .font(.system(size: 24, weight: .heavy))
+                    .tracking(1)
+                    .foregroundStyle(headerInk)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                if let second = card.secondName {
+                    Text(second)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(headerInk.opacity(0.88))
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 66)
+            .padding(.top, 34)
+            if let jersey = card.jersey {
+                Text("\(jersey)")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(headerInk)
+                    .frame(width: 44, height: 44)
+                    .overlay(Circle().stroke(headerInk, lineWidth: 2))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 18)
+                    .padding(.top, 18)
+            }
+        }
+        .frame(height: Self.headerHeight)
+        .clipped()
+    }
+
+    // The diamond | the photo over the header's edge | age, grade, height.
+    private var middle: some View {
+        ZStack(alignment: .top) {
+            photo.offset(y: -58)
+            HStack(alignment: .center, spacing: 0) {
+                diamond
+                    .frame(width: 96, alignment: .leading)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 5) {
+                    if let grade = card.schoolGrade { factRow(w.zh ? "年级" : "GRADE", grade) }
+                }
+                .frame(width: 96, alignment: .trailing)
+            }
+            .padding(.horizontal, 20)
+            .frame(maxHeight: .infinity)
+        }
+        .frame(height: 82)
+    }
+
+    @ViewBuilder
+    private var diamond: some View {
+        if let badge = card.ageBadge {
+            ZStack {
+                Rectangle()
+                    .fill(.white)
+                    .frame(width: 50, height: 50)
+                    .overlay(Rectangle().stroke(AthleteCardStyle.rule, lineWidth: 1))
+                    .rotationEffect(.degrees(45))
+                Text(badge)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.black)
+            }
+            .frame(width: 72, height: 72)
+        }
+    }
+
+    private func factRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AthleteCardStyle.label)
+            Text(value)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.black)
+                .frame(minWidth: 30, alignment: .leading)
+                .lineLimit(1)
+        }
     }
 
     @ViewBuilder
     private var photo: some View {
-        let size: CGFloat = 176
+        let size: CGFloat = 116
         Group {
             #if canImport(UIKit)
             if let data = card.photo, let image = UIImage(data: data) {
@@ -112,46 +181,74 @@ struct AthleteCardFront: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(.white, lineWidth: 6))
-        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+        .overlay(Circle().stroke(AthleteCardStyle.frame, lineWidth: 3))
+        .background(Circle().fill(.white).frame(width: size + 8, height: size + 8))
     }
 
     private var monogram: some View {
         ZStack {
             accent.opacity(0.85)
             Text(String(card.name.prefix(1)))
-                .font(.system(size: 72, weight: .bold, design: .rounded))
+                .font(.system(size: 50, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
     }
 
-    private var monthStrip: some View {
-        VStack(spacing: 8) {
-            Text(w.month(card.month).uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .tracking(1.4)
-                .foregroundStyle(.black.opacity(0.45))
-            HStack(spacing: 0) {
-                figure(card.classesExpected > 0 ? "\(card.classesAttended)/\(card.classesExpected)" : "—",
-                       w.zh ? "到课" : "Classes")
-                Rectangle().fill(.black.opacity(0.1)).frame(width: 1, height: 34)
-                figure("\(card.gamesThisMonth)", w.zh ? "比赛" : "Games")
-            }
-        }
+    /// The card's month (17 Nov 2026, Luther: the month, not "SINCE 2026").
+    private var monthPill: some View {
+        Text(w.month(card.month).uppercased())
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(accent))
+            .frame(height: 44)
     }
 
-    private func figure(_ value: String, _ label: String) -> some View {
-        VStack(spacing: 2) {
+    // PPG APG RPG / STL BLK GAMES — averages over every game.
+    private var statsGrid: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(AthleteCardStyle.rule).frame(height: 1)
+            HStack(spacing: 0) {
+                statCell(average(.points), w.zh ? "得分" : "PPG")
+                divider
+                statCell(average(.assists), w.zh ? "助攻" : "APG")
+                divider
+                statCell(average(.rebounds), w.zh ? "篮板" : "RPG")
+            }
+            Rectangle().fill(AthleteCardStyle.rule).frame(height: 1)
+            HStack(spacing: 0) {
+                statCell(average(.steals), w.zh ? "抢断" : "STL")
+                divider
+                statCell(average(.blocks), w.zh ? "盖帽" : "BLK")
+                divider
+                statCell("\(card.gamesPlayed)", w.zh ? "比赛" : "GAMES")
+            }
+        }
+        .frame(maxHeight: .infinity)
+        .padding(.bottom, AthleteCardStyle.frameWidth)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(AthleteCardStyle.rule).frame(width: 1)
+    }
+
+    private func average(_ metric: GameStatsReport.Metric) -> String {
+        guard card.gamesPlayed > 0, let value = card.perGame[metric] else { return "—" }
+        return String(format: "%.1f", value)
+    }
+
+    private func statCell(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.black)
                 .monospacedDigit()
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(1)
-                .foregroundStyle(.black.opacity(0.5))
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AthleteCardStyle.label)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -162,110 +259,98 @@ struct AthleteCardBack: View {
     private var accent: Color { Color(hex: card.accentHex) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
+        VStack(spacing: 12) {
+            VStack(spacing: 2) {
+                Text(w.month(card.month).uppercased())
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1)
+                    .foregroundStyle(AthleteCardStyle.label)
                 Text(card.name)
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
+                    .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(.black)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Spacer(minLength: 8)
-                Text(w.month(card.month))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.black.opacity(0.5))
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                header(trainedTitle)
+            VStack(spacing: 2) {
+                sectionHeader(w.zh ? "训练内容" : "What we worked on")
                 if card.trained.isEmpty {
                     Text(w.zh ? "参加有计划的课程后，这里会显示练了什么。" : "Shows what classes worked on once they attend planned classes.")
                         .font(.system(size: 12))
-                        .foregroundStyle(.black.opacity(0.5))
-                        .frame(maxWidth: .infinity, minHeight: 150)
+                        .foregroundStyle(AthleteCardStyle.label)
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 150)
                 } else {
                     AttributeOctagon(values: card.trained, tint: accent)
-                        .frame(height: 186)
+                        .frame(height: 178)
                         .frame(maxWidth: .infinity)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                header(card.gamesPlayed > 0
-                       ? (w.zh ? "场均 · \(card.gamesPlayed) 场比赛" : "Per game · \(card.gamesPlayed) game\(card.gamesPlayed == 1 ? "" : "s")")
-                       : (w.zh ? "比赛" : "Games"))
-                if card.gamesPlayed > 0 {
-                    HStack(spacing: 0) {
-                        stat(.points, w.zh ? "得分" : "PTS")
-                        stat(.rebounds, w.zh ? "篮板" : "REB")
-                        stat(.assists, w.zh ? "助攻" : "AST")
-                        stat(.steals, w.zh ? "抢断" : "STL")
-                        stat(.blocks, w.zh ? "盖帽" : "BLK")
-                    }
-                } else {
-                    Text(w.zh ? "还没有比赛记录" : "No games recorded yet")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.black.opacity(0.5))
+            VStack(spacing: 6) {
+                sectionHeader(w.zh ? "本月" : "This month")
+                HStack(spacing: 0) {
+                    figure(card.classesExpected > 0 ? "\(card.classesAttended)/\(card.classesExpected)" : "—",
+                           w.zh ? "到课" : "CLASSES")
+                    Rectangle().fill(AthleteCardStyle.rule).frame(width: 1, height: 34)
+                    figure("\(card.gamesThisMonth)", w.zh ? "比赛" : "GAMES")
                 }
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
             if !card.coachLine.isEmpty {
                 Text("“\(card.coachLine)”")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .italic()
                     .foregroundStyle(.black.opacity(0.8))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(12)
+                    .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Color.white.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
             Spacer(minLength: 0)
 
-            HStack {
-                Text([w.zh ? "\(card.coach)教练" : "Coach \(card.coach)",
-                      card.academy.isEmpty ? nil : card.academy].compactMap { $0 }.joined(separator: " · "))
+            // The academy alone (17 Nov 2026, Luther: no coach name, no
+            // HoopWise credit).
+            if !card.academy.isEmpty {
+                Text(card.academy)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AthleteCardStyle.label)
                     .lineLimit(1)
-                Spacer()
-                Text("HoopWise")
+                    .frame(maxWidth: .infinity)
             }
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(.black.opacity(0.4))
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
         .frame(width: AthleteCardLayout.size.width, height: AthleteCardLayout.size.height)
-        .background(Color.white)
+        .background(AthleteCardStyle.stock)
         .clipShape(RoundedRectangle(cornerRadius: AthleteCardLayout.corner, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: AthleteCardLayout.corner, style: .continuous)
-            .strokeBorder(accent, lineWidth: 5))
+            .strokeBorder(AthleteCardStyle.frame, lineWidth: AthleteCardStyle.frameWidth))
         .environment(\.colorScheme, .light)
     }
 
-    private var trainedTitle: String {
-        switch card.trainedScope {
-        case .month: w.zh ? "本月训练内容 · \(card.trainedClasses) 节课" : "What we worked on · \(card.trainedClasses) class\(card.trainedClasses == 1 ? "" : "es")"
-        case .allTime: w.zh ? "训练内容 · 全部课程" : "What we worked on · all classes"
-        case .none: w.zh ? "训练内容" : "What we worked on"
-        }
+    /// A centred caps header (no icon).
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .foregroundStyle(AthleteCardStyle.label)
+            .frame(maxWidth: .infinity)
     }
 
-    private func header(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .bold))
-            .tracking(1.2)
-            .foregroundStyle(.black.opacity(0.5))
-    }
-
-    private func stat(_ metric: GameStatsReport.Metric, _ label: String) -> some View {
+    private func figure(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
-            Text(String(format: "%.1f", card.perGame[metric] ?? 0))
-                .font(.system(size: 20, weight: .heavy, design: .rounded))
+            Text(value)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(.black)
                 .monospacedDigit()
             Text(label)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.black.opacity(0.5))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AthleteCardStyle.label)
         }
         .frame(maxWidth: .infinity)
     }
@@ -284,6 +369,48 @@ struct AthleteCardSpread: View {
         .padding(Self.gap)
         .background(Color(red: 0.94, green: 0.94, blue: 0.95))
         .environment(\.colorScheme, .light)
+    }
+}
+
+/// The card IN the app (the quick peep): the very two sides that are shared
+/// and printed, tap to flip (17 Nov 2026, Luther: "make the in app card match
+/// what is going to be exported"). Scaled down when the space is narrower
+/// than the card.
+struct AthleteCardFlip: View {
+    @EnvironmentObject var dataManager: DataManager
+    let student: Student
+
+    @State private var flipped = false
+    @State private var degrees = 0.0
+    @State private var available: CGFloat = AthleteCardLayout.size.width
+
+    var body: some View {
+        let card = dataManager.athleteCard(for: student)
+        let scale = min(1, available / AthleteCardLayout.size.width)
+        ZStack {
+            AthleteCardFront(card: card)
+                .opacity(flipped ? 0 : 1)
+                .rotation3DEffect(.degrees(degrees), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+            AthleteCardBack(card: card)
+                .opacity(flipped ? 1 : 0)
+                .rotation3DEffect(.degrees(degrees + 180), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
+        }
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+        .scaleEffect(scale)
+        .frame(width: AthleteCardLayout.size.width * scale, height: AthleteCardLayout.size.height * scale)
+        .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = max(120, $0) }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                flipped.toggle()
+                degrees += 180
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(LocalizationManager.shared.currentLanguage == .chinese ? "球员卡，轻点翻面" : "Player card, tap to flip")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("athleteCard.flip")
     }
 }
 

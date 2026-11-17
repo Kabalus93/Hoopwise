@@ -432,15 +432,8 @@ struct StudentQuickPeepView: View {
     private var ipadContent: some View {
         HStack(alignment: .top, spacing: 20) {
             // Left column: Profile card
-            StudentProfileCardView(
-                student: student,
-                player: player,
-                trainingStats: trainingStats,
-                contract: contract,
-                churnRisk: churnRisk,
-                attendanceRate: attendanceRate,
-                sessionCount: trainingStats.gamesPlayed
-            )
+            // The card that is shared and printed (AthleteCardFlip).
+            AthleteCardFlip(student: student)
             .frame(maxWidth: .infinity)
             
             // Right column: Skills + Notes + Insights + Contract
@@ -471,15 +464,8 @@ struct StudentQuickPeepView: View {
     private var iphoneContent: some View {
         VStack(spacing: 16) {
             // Flippable profile card (same as Intelligence Profile)
-            StudentProfileCardView(
-                student: student,
-                player: player,
-                trainingStats: trainingStats,
-                contract: contract,
-                churnRisk: churnRisk,
-                attendanceRate: attendanceRate,
-                sessionCount: trainingStats.gamesPlayed
-            )
+            // The card that is shared and printed (AthleteCardFlip).
+            AthleteCardFlip(student: student)
             
             // Skills evaluation with editable sliders
             skillsSection
