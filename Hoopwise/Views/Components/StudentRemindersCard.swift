@@ -8,8 +8,8 @@ import SwiftUI
 struct StudentRemindersCard: View {
     @EnvironmentObject var dataManager: DataManager
     let student: Student
-    /// The peep hides the card when there is nothing to show; the profile
-    /// always offers the add line.
+    /// Both the profile and the quick peep show it always, with its add line
+    /// (Luther, 17 Nov 2026: add a reminder from the peep).
     var showWhenEmpty = true
 
     @State private var newTitle = ""

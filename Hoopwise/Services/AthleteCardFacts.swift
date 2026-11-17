@@ -53,6 +53,10 @@ struct AthleteCardFacts: Equatable {
     /// Whose plans `trained` reads: this month's classes, else every class.
     let trainedScope: TrainedScope
     let trainedClasses: Int
+    /// The coach's evaluation on the eight skills as 0…1 (rating ÷ 10) — the
+    /// card's second octagon line, "where they stand" (17 Nov 2026). Empty
+    /// until evaluated; unrated skills are absent.
+    let evaluation: [DrillAttribute: Double]
 
     /// A line from the coach, typed when sharing (never stored).
     let coachLine: String
@@ -70,7 +74,8 @@ struct AthleteCardFacts: Equatable {
 
     static func make(student: Student, players: [Player], programs: [Program], sessions: [SessionEvent],
                      drills: [DrillItem], categoryHex: String, coach: String, academy: String,
-                     coachLine: String = "", now: Date = Date(), calendar: Calendar = .current) -> AthleteCardFacts {
+                     coachLine: String = "", now: Date = Date(), calendar: Calendar = .current,
+                     chinese: Bool = AreaLanguage.isChinese(.playerCard)) -> AthleteCardFacts {
         let month = monthRange(containing: now, calendar: calendar)
         let player = players.first { $0.studentId == student.id }
         let program = student.programId.flatMap { id in programs.first { $0.id == id } }
@@ -116,8 +121,8 @@ struct AthleteCardFacts: Equatable {
 
         return AthleteCardFacts(
             studentId: student.id,
-            name: student.primaryDisplayName,
-            secondName: student.secondaryNameLine,
+            name: student.primaryName(chinese: chinese),
+            secondName: student.secondaryName(chinese: chinese),
             photo: student.profileImageData,
             program: program.map { $0.name.isEmpty ? $0.resolvedDisplayName(in: programs) : $0.name },
             // Not repeated when the program's name already says it ("Elite U8").
@@ -139,6 +144,7 @@ struct AthleteCardFacts: Equatable {
             trained: trained.values,
             trainedScope: scope,
             trainedClasses: trained.count,
+            evaluation: player?.skills.axisShares ?? [:],
             coachLine: coachLine.trimmingCharacters(in: .whitespacesAndNewlines),
             coach: coach,
             academy: academy)

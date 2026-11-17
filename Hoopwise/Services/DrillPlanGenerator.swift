@@ -117,7 +117,9 @@ struct DrillPlanGenerator {
     /// (both 0…1 by axis); empty with no target.
     static func phaseGaps(_ ctx: Context) -> [DrillAttribute: Double] {
         guard let target = PlanCoverage.target(phaseFocus: ctx.phase?.focus ?? [],
-                                               skillTargets: ctx.program?.skillTargets) else { return [:] }
+                                               skillTargets: ctx.program?.skillTargets,
+                                               groupRatings: groupRatings(students: ctx.enrolledStudents,
+                                                                          players: ctx.players)) else { return [:] }
         let phaseSessions = ctx.programHistory.filter { session in
             session.id != ctx.session.id && !SessionLifecycle.didNotHappen(session)
                 && (ctx.phase == nil || session.microCycleId == ctx.phase?.id)
@@ -159,12 +161,12 @@ struct DrillPlanGenerator {
     }
 
     /// What the evaluations say, or nil when too few players are rated to
-    /// trust it. A player counts as rated once any skill differs from the
-    /// untouched default of 5 across the board.
+    /// trust it. A player counts as rated once they have an eight-skill
+    /// evaluation (17 Nov 2026 — the old six-skill one is no longer read).
     static func suggestedLevel(students: [Student], players: [Player])
         -> (level: Int, rated: Int, average: Double)? {
         let byStudent = Dictionary(players.map { ($0.studentId, $0) }, uniquingKeysWith: { a, _ in a })
-        let ratings = students.compactMap { byStudent[$0.id] }.filter(isRated).map(\.skills.overallRating)
+        let ratings = students.compactMap { byStudent[$0.id] }.compactMap(\.skills.axisAverage)
         guard !students.isEmpty, ratings.count * 2 >= students.count else { return nil }
         let average = ratings.reduce(0, +) / Double(ratings.count)
         let level: Int
@@ -178,9 +180,24 @@ struct DrillPlanGenerator {
         return (level, ratings.count, average)
     }
 
-    private static func isRated(_ player: Player) -> Bool {
-        let s = player.skills
-        return [s.scoring, s.playmaking, s.rebounding, s.defense, s.athleticism, s.intangibles] != [5, 5, 5, 5, 5, 5]
+    private static func isRated(_ player: Player) -> Bool { player.skills.isEvaluated }
+
+    /// The group's average rating per skill, over the players who rated it
+    /// (an unrated skill is unknown, not 0). Empty without evaluations.
+    static func groupRatings(students: [Student], players: [Player]) -> [DrillAttribute: Double] {
+        let byStudent = Dictionary(players.map { ($0.studentId, $0) }, uniquingKeysWith: { a, _ in a })
+        let rated = students.compactMap { byStudent[$0.id] }.filter(isRated)
+        var out: [DrillAttribute: Double] = [:]
+        for axis in DrillAttribute.allCases {
+            let values = rated.compactMap { $0.skills.rating(axis) }
+            if !values.isEmpty { out[axis] = Double(values.reduce(0, +)) / Double(values.count) }
+        }
+        return out
+    }
+
+    /// The library activity types that work a skill (weight ≥ 0.6).
+    static func activityTypes(for axis: DrillAttribute) -> [ActivityType] {
+        ActivityType.allCases.filter { (AttributeProfile.weights(forSkill: $0.rawValue)[axis] ?? 0) >= 0.6 }
     }
 
     /// Which library ages a plan may draw from, with a weight each.
@@ -213,31 +230,24 @@ struct DrillPlanGenerator {
         var notes: [String] = []
         for f in phase?.focus ?? [] { types += map(f) }
 
-        // The roster's weakest evaluated area, when evaluations exist and
-        // actually differ between areas.
-        let byStudent = Dictionary(players.map { ($0.studentId, $0) }, uniquingKeysWith: { a, _ in a })
-        let rated = students.compactMap { byStudent[$0.id] }.filter(isRated)
-        if !rated.isEmpty {
-            func avg(_ k: KeyPath<SkillsEvaluation, Int>) -> Double {
-                Double(rated.map { $0.skills[keyPath: k] }.reduce(0, +)) / Double(rated.count)
-            }
-            let areas: [(String, Double, [ActivityType])] = [
-                ("scoring", avg(\.scoring), [.shooting, .layups]),
-                ("playmaking", avg(\.playmaking), [.dribbling, .passing]),
-                ("rebounding", avg(\.rebounding), [.rebounding]),
-                ("defense", avg(\.defense), [.defence, .oneOnOne]),
-                ("athleticism", avg(\.athleticism), [.warmup, .ballMovement]),
-                ("intangibles", avg(\.intangibles), [.teamPlay, .games])]
-            let sorted = areas.sorted { $0.1 < $1.1 }
-            if let low = sorted.first, let high = sorted.last, high.1 - low.1 >= 1 {
-                types += low.2
-                notes.append("weakest:\(low.0)")
-            }
+        // The roster's weakest evaluated skill (the eight octagon skills, 1–10),
+        // when evaluations exist and actually differ between skills.
+        let group = groupRatings(students: students, players: players)
+        if let low = group.min(by: { $0.value < $1.value }),
+           let high = group.max(by: { $0.value < $1.value }), high.value - low.value >= 1 {
+            types += activityTypes(for: low.key)
+            notes.append("weakest:\(low.key.rawValue)")
         }
         // Performance: with at least 3 recorded games, few assists per basket
         // means the ball sticks — push passing and team play.
         if let signal = passingSignal(games: games, roster: Set(students.map(\.id))) {
             types += [.passing, .teamPlay]
+            notes.append(signal)
+        }
+        // Few steals and blocks per player per game: nobody is pressuring the
+        // ball or protecting the rim — push defence.
+        if let signal = defenseSignal(games: games, roster: Set(students.map(\.id))) {
+            types += [.defence, .oneOnOne]
             notes.append(signal)
         }
 
@@ -262,6 +272,18 @@ struct DrillPlanGenerator {
         guard baskets >= 10 else { return nil }
         let ratio = Double(assists) / baskets
         return ratio < 0.2 ? "assists:\(String(format: "%.2f", ratio))" : nil
+    }
+
+    /// "stocks:<per player-game>" when the roster's games show under one
+    /// steal or block per three player-games; nil without enough games.
+    static func defenseSignal(games: [SessionGame], roster: Set<UUID>) -> String? {
+        let played = games.filter { g in g.playerStats.contains { roster.contains($0.playerId) } }
+        guard played.count >= 3 else { return nil }
+        let stats = played.flatMap(\.playerStats).filter { roster.contains($0.playerId) }
+        guard stats.count >= 15 else { return nil }
+        let stocks = stats.reduce(0) { $0 + $1.steals + $1.blocks }
+        let rate = Double(stocks) / Double(stats.count)
+        return rate < 0.34 ? "stocks:\(String(format: "%.2f", rate))" : nil
     }
 
     private static func map(_ f: TrainingFocus) -> [ActivityType] {
@@ -457,6 +479,24 @@ extension DrillPlanGenerator.PlanRationale {
         if !focus.isEmpty {
             parts.append((zh ? "重点：" : "focus: ") + focus.prefix(3).map(\.title).joined(separator: ", "))
         }
+        parts += notes.compactMap { Self.readable($0, zh: zh) }
         return parts.joined(separator: " · ")
+    }
+
+    /// What a focus note means, in words; nil for a note with nothing to say.
+    static func readable(_ note: String, zh: Bool) -> String? {
+        let parts = note.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return note }
+        switch parts[0] {
+        case "weakest":
+            guard let axis = DrillAttribute(rawValue: parts[1]) else { return nil }
+            return zh ? "评估最弱：\(axis.title)" : "weakest evaluated: \(axis.title)"
+        case "assists":
+            return zh ? "比赛中助攻偏少（每球 \(parts[1])）" : "few assists in games (\(parts[1]) per basket)"
+        case "stocks":
+            return zh ? "比赛中抢断盖帽偏少（人均每场 \(parts[1])）" : "few steals and blocks in games (\(parts[1]) per player-game)"
+        default:
+            return note
+        }
     }
 }

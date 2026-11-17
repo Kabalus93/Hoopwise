@@ -30,6 +30,10 @@ struct JournalPlayStepEditor: View {
     /// one) and cones; a play keeps its five.
     private let onSaveDrill: ((DrillDrawing) -> Void)?
     private var isDrill: Bool { onSaveDrill != nil }
+    /// The Coach board keeps every change as it happens (Luther, 17 Nov 2026:
+    /// "I'd like to find it as is when I come back"), so leaving the editor
+    /// any way — Cancel included, or the app going away — loses nothing.
+    private let onDrawingChange: ((DrillDrawing) -> Void)?
 
     /// Every step, in order, as values: the one on screen is `current`, and
     /// `diagram`, `caption`, `text` and the undo stacks are its working copy;
@@ -249,6 +253,7 @@ struct JournalPlayStepEditor: View {
         self.court = court
         part = step.part
         onSaveDrill = nil
+        onDrawingChange = nil
         let models = step.part?.sortedSteps ?? [step]
         let pages = models.map { model in
             Page(model: model, saved: Content(diagram: model.diagram, caption: model.caption, text: model.text),
@@ -263,10 +268,12 @@ struct JournalPlayStepEditor: View {
     }
 
     /// A drill's drawing, opened on its first step; Done hands it back.
-    init(drawing: DrillDrawing, onSave: @escaping (DrillDrawing) -> Void) {
+    init(drawing: DrillDrawing, onChange: ((DrillDrawing) -> Void)? = nil,
+         onSave: @escaping (DrillDrawing) -> Void) {
         court = drawing.court
         part = nil
         onSaveDrill = onSave
+        onDrawingChange = onChange
         let steps = drawing.steps.isEmpty ? DrillDrawing.new(court: drawing.court).steps : drawing.steps
         let pages = steps.map { step in
             Page(saved: Content(diagram: step.diagram, caption: step.caption, text: step.text),
@@ -593,6 +600,10 @@ struct JournalPlayStepEditor: View {
                 #endif
                 if placed != new { diagram = placed }
             }
+            .onChange(of: diagram) { _, _ in reportDrawing() }
+            .onChange(of: caption) { _, _ in reportDrawing() }
+            .onChange(of: text) { _, _ in reportDrawing() }
+            .onChange(of: pages.map(\.id)) { _, _ in reportDrawing() }
             // The phone's steps bar says which step; the title would repeat it.
             .navigationTitle(isWorkspace ? JText("Step \(number)") : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
@@ -600,9 +611,13 @@ struct JournalPlayStepEditor: View {
                 if isWorkspace {
                     ToolbarItem(placement: .principal) { stepMenu }
                 }
-                ToolbarItem(placement: .cancellationAction) {
-                    // Esc deselects first, then cancels (`shortcutKeys`).
-                    Button { changed ? confirmingDiscard = true : dismiss() } label: { JText("Cancel") }
+                // The Coach board keeps every change as it is made, so there
+                // is nothing to cancel there: Done alone closes it.
+                if onDrawingChange == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        // Esc deselects first, then cancels (`shortcutKeys`).
+                        Button { changed ? confirmingDiscard = true : dismiss() } label: { JText("Cancel") }
+                    }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button(action: undo) {
@@ -634,7 +649,7 @@ struct JournalPlayStepEditor: View {
                 Button(role: .destructive, action: discard) { JText("Discard changes") }
             }
         }
-        .interactiveDismissDisabled(changed)
+        .interactiveDismissDisabled(changed && onDrawingChange == nil)
     }
 
     /// The Journal's phone layout, unchanged: caption, court, tools, notes.
@@ -1033,7 +1048,7 @@ struct JournalPlayStepEditor: View {
             switch key {
             case .delete: deleteSelection()
             case .escape:
-                if selection != nil { selection = nil } else if changed { confirmingDiscard = true } else { dismiss() }
+                if selection != nil { selection = nil } else if changed && onDrawingChange == nil { confirmingDiscard = true } else { dismiss() }
             case .left: nudge(-step, 0)
             case .right: nudge(step, 0)
             case .up: nudge(0, -step)
@@ -1502,6 +1517,18 @@ struct JournalPlayStepEditor: View {
         undoStack.append(diagram)
         diagram = next
         validateSelection()
+    }
+
+    /// Every step as it stands, the one on screen included (no state written).
+    private var drawingNow: DrillDrawing {
+        DrillDrawing(court: court, steps: pages.map { page in
+            let draft = page.id == current ? Draft(diagram: diagram, caption: caption, text: text) : page.draft
+            return DrillDrawing.Step(diagram: draft.diagram, caption: draft.caption, text: draft.text)
+        })
+    }
+
+    private func reportDrawing() {
+        onDrawingChange?(drawingNow)
     }
 
     /// Every step's draft is written, then saved once.

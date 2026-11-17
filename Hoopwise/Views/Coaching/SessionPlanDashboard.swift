@@ -14,6 +14,9 @@ struct SessionPlanDashboard: View {
     let phaseFocus: [TrainingFocus]
     let skillTargets: ProgramSkillTargets?
     var teamSkills: [String] = []
+    /// The expected athletes' average rating per skill (their evaluations):
+    /// weak skills join the target (17 Nov 2026).
+    var groupRatings: [DrillAttribute: Double] = [:]
     var canEdit = true
     var onFind: (DrillAttribute) -> Void
 
@@ -23,9 +26,12 @@ struct SessionPlanDashboard: View {
         let minutes = PlanCoverage.minutes(of: curriculum, drills: drills,
                                            playProfile: { PlanCoverage.playProfile($0, teams: teams) })
         let plan = PlanCoverage.normalized(minutes)
-        let target = PlanCoverage.target(phaseFocus: phaseFocus, skillTargets: skillTargets, teamSkills: teamSkills)
+        let target = PlanCoverage.target(phaseFocus: phaseFocus, skillTargets: skillTargets, teamSkills: teamSkills,
+                                         groupRatings: groupRatings)
         let neglected = PlanCoverage.neglected(plan: minutes, target: target)
         let leans = PlanCoverage.emphasis(minutes).prefix(3)
+        let weak = PlanCoverage.groupWeakness(groupRatings).keys
+            .sorted { (groupRatings[$0] ?? 0) < (groupRatings[$1] ?? 0) }
         let empty = plan.isEmpty
 
         VStack(alignment: .leading, spacing: 12) {
@@ -99,6 +105,15 @@ struct SessionPlanDashboard: View {
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                if !weak.isEmpty {
+                    // Where the evaluation part of the target comes from.
+                    Text((isChinese ? "本组较弱：" : "Group's weakest: ")
+                         + weak.prefix(3).map { "\($0.title) (\(isChinese ? "平均" : "avg") \(String(format: "%.1f", groupRatings[$0] ?? 0)))" }
+                            .joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("plan.groupWeakest")
+                }
             }
         }
         .padding(16)

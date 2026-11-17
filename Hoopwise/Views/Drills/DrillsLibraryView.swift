@@ -2235,8 +2235,11 @@ struct AddDrillView: View {
     @State private var keyPoints: [String]
     @State private var minPlayers: Int
 
-    init(editing: DrillItem? = nil) {
+    /// `drawing`: a new drill that starts from a drawing (the Coach board's
+    /// Save as Drill) — it shows in the Visual section and is saved on Create.
+    init(editing: DrillItem? = nil, drawing: DrillDrawing? = nil) {
         self.editing = editing
+        _drawing = State(initialValue: drawing)
         _name = State(initialValue: editing?.name ?? "")
         _category = State(initialValue: editing?.category ?? .skills)
         _difficulty = State(initialValue: editing?.difficulty ?? .beginner)

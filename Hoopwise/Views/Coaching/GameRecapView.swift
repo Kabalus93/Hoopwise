@@ -15,7 +15,7 @@ struct GameRecapView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) private var scheme
 
-    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+    private var isChinese: Bool { AreaLanguage.isChinese(.gameRecap) }
 
     // MARK: - Awards
 
@@ -115,7 +115,7 @@ struct GameRecapView: View {
     }
 
     private func student(_ id: UUID) -> Student? { students.first { $0.id == id } }
-    private func name(_ id: UUID) -> String { student(id)?.primaryDisplayName ?? (isChinese ? "队员" : "Player") }
+    private func name(_ id: UUID) -> String { student(id)?.primaryName(chinese: isChinese) ?? (isChinese ? "队员" : "Player") }
 
     // MARK: - Body
 

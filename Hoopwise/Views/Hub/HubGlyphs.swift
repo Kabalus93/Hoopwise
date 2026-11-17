@@ -5,7 +5,7 @@ import SwiftUI
 /// Teams' symbol overflowed its bubble). Drawn in a unit square so each fits
 /// its tile: a play diagram, a jersey, an open book, a cone, an org chart.
 struct HubGlyph: View {
-    enum Kind { case plays, teams, lexicon, drills, organization }
+    enum Kind { case plays, teams, lexicon, drills, organization, board }
 
     let kind: Kind
     var tint: Color = .accentColor
@@ -116,6 +116,27 @@ struct HubGlyph: View {
                                 cornerRadius: 0.04 * s)
                 context.fill(slab, with: GraphicsContext.Shading.color(tint.opacity(0.25)))
                 context.stroke(slab, with: shade, style: line)
+
+            case .board:
+                // A coach's board: the frame, the clip, an O and an X with a
+                // dashed pass between them.
+                let frame = Path(roundedRect: CGRect(origin: p(0.12, 0.14), size: CGSize(width: 0.76 * s, height: 0.78 * s)),
+                                 cornerRadius: 0.10 * s)
+                context.fill(frame, with: GraphicsContext.Shading.color(tint.opacity(0.10)))
+                context.stroke(frame, with: shade, style: line)
+                let clip = Path(roundedRect: CGRect(origin: p(0.36, 0.06), size: CGSize(width: 0.28 * s, height: 0.14 * s)),
+                                cornerRadius: 0.05 * s)
+                context.fill(clip, with: shade)
+                context.stroke(Path(ellipseIn: CGRect(origin: p(0.24, 0.36), size: CGSize(width: 0.18 * s, height: 0.18 * s))),
+                               with: shade, style: line)
+                var x = Path()
+                x.move(to: p(0.58, 0.62)); x.addLine(to: p(0.76, 0.80))
+                x.move(to: p(0.76, 0.62)); x.addLine(to: p(0.58, 0.80))
+                context.stroke(x, with: shade, style: line)
+                var pass = Path()
+                pass.move(to: p(0.42, 0.52)); pass.addLine(to: p(0.58, 0.64))
+                context.stroke(pass, with: shade,
+                               style: StrokeStyle(lineWidth: line.lineWidth * 0.8, lineCap: .round, dash: [0.04 * s, 0.06 * s]))
 
             case .organization:
                 // An org chart: one node over two.

@@ -38,7 +38,8 @@ final class PlanGeneratorTests: XCTestCase {
     func testEvaluationsSuggestALevelOnlyWithHalfTheRosterRated() {
         let kids = (0..<4).map { _ in Student(name: "Kid") }
         var strong = Player(studentId: kids[0].id)
-        strong.skills = SkillsEvaluation(scoring: 9, playmaking: 8, rebounding: 8, defense: 8, athleticism: 9, intangibles: 8)
+        // The eight octagon skills (17 Nov 2026); the old six fields no longer count.
+        for axis in DrillAttribute.allCases { strong.skills.setRating(axis == .shooting ? 9 : 8, for: axis) }
         XCTAssertNil(DrillPlanGenerator.suggestedLevel(students: kids, players: [strong]), "1 of 4 rated is too few")
         var second = Player(studentId: kids[1].id)
         second.skills = strong.skills

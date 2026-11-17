@@ -7,6 +7,8 @@ nonisolated enum JournalPlayStringsAdded {
     typealias Entry = JournalPlayStrings.Entry
 
     static let table: [String: Entry] = [
+        "It keeps the board's %lld steps.": .init(en: "It keeps the board's %lld steps.", enOne: "It keeps the board's one step.",
+                                                 zh: "保留战术板上的 %lld 个步骤。"),
         "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line.":
             .init(en: "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line.",
                   enOne: nil, zh: "点击选中球员、防守人或线条；拖动可移动它，或拖动线的终点和弯折点。"),

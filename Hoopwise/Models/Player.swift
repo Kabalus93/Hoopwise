@@ -838,6 +838,33 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     
     var lastEvaluatedDate: Date?
     var notes: String?
+
+    /// THE EVALUATION (17 November 2026, Luther: "make sure it reflects what
+    /// the engine uses … keep 1–10 … start fresh"): the coach's 1–10 on the
+    /// eight octagon skills (DrillAttribute raw value → rating), the same
+    /// axes as drills, plans and the player card. Empty = not evaluated yet;
+    /// a skill missing from it is UNKNOWN, never 0. The six fields above are
+    /// the retired evaluation, still decoded so old data round-trips, no
+    /// longer shown or used by the planner.
+    var axes: [String: Int] = [:]
+
+    func rating(_ axis: DrillAttribute) -> Int? { axes[axis.rawValue] }
+    mutating func setRating(_ value: Int, for axis: DrillAttribute) {
+        axes[axis.rawValue] = min(10, max(1, value))
+    }
+    /// Evaluated on the eight skills at least once.
+    var isEvaluated: Bool { !axes.isEmpty }
+    /// The average of the rated skills (nil when none).
+    var axisAverage: Double? {
+        let values = DrillAttribute.allCases.compactMap { rating($0) }
+        return values.isEmpty ? nil : Double(values.reduce(0, +)) / Double(values.count)
+    }
+    /// Each rated skill as 0…1 (rating ÷ 10) — the octagon's scale.
+    var axisShares: [DrillAttribute: Double] {
+        var out: [DrillAttribute: Double] = [:]
+        for axis in DrillAttribute.allCases { if let r = rating(axis) { out[axis] = Double(r) / 10 } }
+        return out
+    }
     
     // MARK: - Legacy properties (computed for backward compatibility)
     var shooting: Int { scoring }
@@ -888,6 +915,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         athleticism = try container.decodeIfPresent(Int.self, forKey: .athleticism) ?? 5
         lastEvaluatedDate = try container.decodeIfPresent(Date.self, forKey: .lastEvaluatedDate)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        axes = try container.decodeIfPresent([String: Int].self, forKey: .axes) ?? [:]
     }
     
     private enum CodingKeys: String, CodingKey {
@@ -897,6 +925,8 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         case shooting, ballHandling, basketballIQ, teamwork, coachability
         // Common
         case lastEvaluatedDate, notes
+        // The eight-skill evaluation (17 Nov 2026)
+        case axes
     }
     
     func encode(to encoder: Encoder) throws {
@@ -909,6 +939,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         try container.encode(intangibles, forKey: .intangibles)
         try container.encodeIfPresent(lastEvaluatedDate, forKey: .lastEvaluatedDate)
         try container.encodeIfPresent(notes, forKey: .notes)
+        if !axes.isEmpty { try container.encode(axes, forKey: .axes) }
     }
     
     var overallRating: Double {

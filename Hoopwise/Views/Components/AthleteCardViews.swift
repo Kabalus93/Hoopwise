@@ -16,7 +16,7 @@ enum AthleteCardLayout {
 }
 
 private struct AthleteCardWords {
-    let zh = LocalizationManager.shared.currentLanguage == .chinese
+    let zh = AreaLanguage.isChinese(.playerCard)
 
     func month(_ date: Date) -> String {
         let f = DateFormatter()
@@ -274,16 +274,31 @@ struct AthleteCardBack: View {
 
             VStack(spacing: 2) {
                 sectionHeader(w.zh ? "训练内容" : "What we worked on")
-                if card.trained.isEmpty {
+                if card.trained.isEmpty && card.evaluation.isEmpty {
                     Text(w.zh ? "参加有计划的课程后，这里会显示练了什么。" : "Shows what classes worked on once they attend planned classes.")
                         .font(.system(size: 12))
                         .foregroundStyle(AthleteCardStyle.label)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, minHeight: 150)
                 } else {
-                    AttributeOctagon(values: card.trained, tint: accent)
-                        .frame(height: 178)
+                    AttributeOctagon(values: card.trained, tint: accent,
+                                     standing: card.evaluation.isEmpty ? nil : card.evaluation,
+                                     standingColor: Color.black.opacity(0.75),
+                                     chineseLabels: w.zh)
+                        .frame(height: card.evaluation.isEmpty ? 178 : 160)
                         .frame(maxWidth: .infinity)
+                    if !card.evaluation.isEmpty {
+                        // Two shapes, no numbers (Luther, 17 Nov 2026).
+                        HStack(spacing: 14) {
+                            legendItem(swatch: AnyView(RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.35))
+                                .overlay(RoundedRectangle(cornerRadius: 2).stroke(accent, lineWidth: 1.2))),
+                                       w.zh ? "训练内容" : "Worked on")
+                            legendItem(swatch: AnyView(Capsule().stroke(Color.black.opacity(0.75),
+                                style: StrokeStyle(lineWidth: 1.6, dash: [4, 2])).frame(height: 2)),
+                                       w.zh ? "目前水平" : "Where they stand")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
                 }
             }
 
@@ -332,6 +347,15 @@ struct AthleteCardBack: View {
         .overlay(RoundedRectangle(cornerRadius: AthleteCardLayout.corner, style: .continuous)
             .strokeBorder(AthleteCardStyle.frame, lineWidth: AthleteCardStyle.frameWidth))
         .environment(\.colorScheme, .light)
+    }
+
+    private func legendItem(swatch: AnyView, _ label: String) -> some View {
+        HStack(spacing: 5) {
+            swatch.frame(width: 14, height: 9)
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(AthleteCardStyle.label)
+        }
     }
 
     /// A centred caps header (no icon).

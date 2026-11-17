@@ -26,7 +26,11 @@ enum PlanCoverage {
         }
         block(curriculum.warmupDrillIds, minutes: curriculum.warmupMinutes)
         block(curriculum.skillDrillIds, minutes: curriculum.skillsMinutes)
-        block(curriculum.gameDrillIds, minutes: curriculum.gameMinutes)
+        // The Game block is NOT counted (17 Nov 2026, Luther: "where do these
+        // numbers come from? Make sure they reflect the plan"): the Plan tab
+        // shows Warm-up and Skills only, and a 34-minute visible plan
+        // reported ~57 minutes of ball handling because the hidden game
+        // block's drills and minutes were added in.
         for ref in curriculum.plays { add(playProfile(ref), minutes: 10) }
         return total
     }
@@ -60,7 +64,8 @@ enum PlanCoverage {
     /// the phase focus and the program's skill targets (team practices: the
     /// team's focus plays' skills). Nil when nothing says.
     static func target(phaseFocus: [TrainingFocus], skillTargets: ProgramSkillTargets?,
-                       teamSkills: [String] = []) -> [DrillAttribute: Double]? {
+                       teamSkills: [String] = [],
+                       groupRatings: [DrillAttribute: Double] = [:]) -> [DrillAttribute: Double]? {
         var w: [DrillAttribute: Double] = [:]
         for focus in phaseFocus {
             for (axis, v) in AttributeProfile.weights(for: focus) { w[axis, default: 0] += v }
@@ -78,8 +83,19 @@ enum PlanCoverage {
         for skill in teamSkills {
             for (axis, v) in AttributeProfile.weights(forSkill: skill) { w[axis, default: 0] += v }
         }
-        let n = normalized(w)
+        var n = normalized(w)
+        // The GROUP's weakest rated skills (17 Nov 2026 — the evaluation feeds
+        // the plan): a skill the expected athletes average 5 or less on asks
+        // for 0.6 (at 5) up to ~0.92 (at 1), whatever the phase says.
+        for (axis, value) in groupWeakness(groupRatings) { n[axis] = max(n[axis] ?? 0, value) }
         return n.isEmpty ? nil : n
+    }
+
+    /// The group's weak skills as target values (average ≤ 5 → 0.6…0.92).
+    static func groupWeakness(_ groupRatings: [DrillAttribute: Double]) -> [DrillAttribute: Double] {
+        var out: [DrillAttribute: Double] = [:]
+        for (axis, avg) in groupRatings where avg <= 5 { out[axis] = min(1, 0.6 + (5 - avg) * 0.08) }
+        return out
     }
 
     /// Axes the target really asks for (≥ 0.6 — a focus's secondary axes,

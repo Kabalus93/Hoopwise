@@ -431,11 +431,18 @@ struct Student: Identifiable, Codable, Hashable {
     }
 
     /// Primary name for display (Chinese name when in Chinese mode, English otherwise)
-    var primaryDisplayName: String {
-        if LocalizationManager.shared.currentLanguage == .chinese, let c = distinctChineseName {
-            return c
-        }
+    var primaryDisplayName: String { primaryName(chinese: LocalizationManager.shared.currentLanguage == .chinese) }
+
+    /// The big name line in a given language (a page with its own language,
+    /// such as the player card — AreaLanguage).
+    func primaryName(chinese: Bool) -> String {
+        if chinese, let c = distinctChineseName { return c }
         return name
+    }
+
+    func secondaryName(chinese: Bool) -> String? {
+        if chinese, distinctChineseName != nil { return name }
+        return distinctChineseName
     }
 
     /// Secondary name for display (English name when in Chinese mode with Chinese name available)

@@ -628,6 +628,13 @@ struct FlightyCoachProfileView: View {
                 Label(isChinese ? "语言" : "Language", systemImage: "globe")
             }
 
+            NavigationLink {
+                AreaLanguageSettingsView()
+            } label: {
+                Label(isChinese ? "分区语言" : "Languages by Area", systemImage: "character.bubble")
+            }
+            .accessibilityIdentifier("profile.areaLanguages")
+
             Picker(selection: $localSettings.currency) {
                 ForEach(CurrencyType.allCases, id: \.self) { currency in
                     Text(currency.displayName).tag(currency)

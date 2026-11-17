@@ -530,6 +530,11 @@ enum SheetGalleryDebug {
                 }
                 .padding(12)
             }
+        case "coachBoard":
+            // Hub → Coach board, as it was left on this device.
+            NavigationStack {
+                CoachBoardScreen()
+            }
         case "lexicon":
             // Hub → Lexicon; HOOPWISE_LEXICON_TERM=<term> opens that entry.
             NavigationStack {

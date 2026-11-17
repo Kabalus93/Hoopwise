@@ -448,7 +448,7 @@ struct StudentQuickPeepView: View {
                     insightsSection
                 }
 
-                StudentRemindersCard(student: student, showWhenEmpty: false)
+                StudentRemindersCard(student: student)
 
                 contractInfoSection
 
@@ -480,7 +480,7 @@ struct StudentQuickPeepView: View {
                 insightsSection
             }
 
-            StudentRemindersCard(student: student, showWhenEmpty: false)
+            StudentRemindersCard(student: student)
             
             // Contract info section (same as Intelligence Profile)
             contractInfoSection
@@ -775,37 +775,45 @@ struct StudentQuickPeepView: View {
         .cornerRadius(10)
     }
     
-    // MARK: - Skills Section with Radar Diagram
-    
+    // MARK: - Skills Evaluation — the eight octagon skills, 1–10
+    // (17 Nov 2026, Luther: "make sure it reflects what the engine uses …
+    // keep 1–10 … start fresh"). Unrated skills say so; under each skill, the
+    // game evidence that speaks for it (SkillEvidence) against program-mates.
+
+    private var skillEvidence: [DrillAttribute: SkillEvidence.Line] {
+        SkillEvidence.lines(for: student.id, peers: enrolledProgram?.enrolledStudentIds ?? [],
+                            sessions: dataManager.sessionEvents)
+    }
+
     private var skillsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with edit button
+        let evidence = skillEvidence
+        return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(isChinese ? "技能评估" : "Skills Evaluation")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.primary)
-                
                 Spacer()
-                
-                // Overall rating
-                Text(String(format: "%.1f", skills.overallRating))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundColor(skillRatingColor(skills.overallRating))
-                Text("/ 10")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                
+                if let average = skills.axisAverage {
+                    Text(String(format: "%.1f", average))
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(skillRatingColor(average))
+                    Text("/ 10")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                }
                 Button(action: {
                     if isEditingSkills {
                         saveSkills()
                     } else {
                         editedSkills = skills
+                        for axis in DrillAttribute.allCases where editedSkills.rating(axis) == nil {
+                            editedSkills.setRating(5, for: axis)
+                        }
                     }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isEditingSkills.toggle()
-                    }
+                    withAnimation(.easeInOut(duration: 0.2)) { isEditingSkills.toggle() }
                 }) {
-                    Text(isChinese ? (isEditingSkills ? "保存" : "编辑") : (isEditingSkills ? "Save" : "Edit"))
+                    Text(isEditingSkills ? (isChinese ? "保存" : "Save")
+                         : (skills.isEvaluated ? (isChinese ? "编辑" : "Edit") : (isChinese ? "评估" : "Evaluate")))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(isEditingSkills ? .green : .blue)
                         .padding(.horizontal, 8)
@@ -813,20 +821,28 @@ struct StudentQuickPeepView: View {
                         .background((isEditingSkills ? Color.green : Color.blue).opacity(0.12))
                         .cornerRadius(6)
                 }
+                .accessibilityIdentifier("peep.evaluate")
             }
-            
-            // Skills with sliders or bars (radar removed - available on card flip)
-            if isEditingSkills {
-                VStack(spacing: 10) {
-                    editableSkillRow(label: isChinese ? "得分" : "Scoring", value: $editedSkills.scoring, color: .orange, icon: "scope")
-                    editableSkillRow(label: isChinese ? "组织" : "Playmaking", value: $editedSkills.playmaking, color: .blue, icon: "arrow.triangle.branch")
-                    editableSkillRow(label: isChinese ? "篮板" : "Rebounding", value: $editedSkills.rebounding, color: .purple, icon: "arrow.up.arrow.down")
-                    editableSkillRow(label: isChinese ? "防守" : "Defense", value: $editedSkills.defense, color: .red, icon: "shield.fill")
-                    editableSkillRow(label: isChinese ? "运动能力" : "Athleticism", value: $editedSkills.athleticism, color: .green, icon: "figure.run")
-                    editableSkillRow(label: isChinese ? "投入" : "Effort", value: $editedSkills.intangibles, color: .teal, icon: "star.fill")
+
+            VStack(spacing: 10) {
+                ForEach(DrillAttribute.allCases, id: \.self) { axis in
+                    VStack(alignment: .leading, spacing: 3) {
+                        if isEditingSkills {
+                            editableSkillRow(axis: axis)
+                        } else {
+                            skillBar(axis: axis)
+                        }
+                        if let line = evidence[axis] {
+                            Text(SkillEvidence.text(line, chinese: isChinese))
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 24)
+                        }
+                    }
                 }
-                
-                // Cancel button
+            }
+
+            if isEditingSkills {
                 Button(action: { withAnimation { isEditingSkills = false } }) {
                     Text(isChinese ? "取消" : "Cancel")
                         .font(.system(size: 12, weight: .medium))
@@ -836,23 +852,20 @@ struct StudentQuickPeepView: View {
                         .background(Color.secondary.opacity(0.1))
                         .cornerRadius(6)
                 }
-            } else {
-                VStack(spacing: 8) {
-                    skillBar(label: isChinese ? "得分" : "Scoring", value: skills.scoring, color: .orange, icon: "scope")
-                    skillBar(label: isChinese ? "组织" : "Playmaking", value: skills.playmaking, color: .blue, icon: "arrow.triangle.branch")
-                    skillBar(label: isChinese ? "篮板" : "Rebounding", value: skills.rebounding, color: .purple, icon: "arrow.up.arrow.down")
-                    skillBar(label: isChinese ? "防守" : "Defense", value: skills.defense, color: .red, icon: "shield.fill")
-                    skillBar(label: isChinese ? "运动能力" : "Athleticism", value: skills.athleticism, color: .green, icon: "figure.run")
-                    skillBar(label: isChinese ? "投入" : "Effort", value: skills.intangibles, color: .teal, icon: "star.fill")
-                }
+            } else if !skills.isEvaluated {
+                Text(isChinese ? "还没有评估。点击「评估」给八项技能打 1–10 分；比赛数据会显示在每项下面作参考。"
+                               : "Not evaluated yet. Tap Evaluate to rate the eight skills 1–10; game stats show under each as a reference.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            
-            // Last evaluated
-            if let lastDate = skills.lastEvaluatedDate {
+
+            if skills.isEvaluated, let lastDate = skills.lastEvaluatedDate {
                 HStack {
-                    Image(systemName: "clock")
-                        .font(.system(size: 9))
-                    Text(isChinese ? "最近评估: \(lastDate.formatted(date: .abbreviated, time: .omitted))" : "Last evaluated: \(lastDate.formatted(date: .abbreviated, time: .omitted))")
+                    Image(systemName: "clock").font(.system(size: 9))
+                    Text(isChinese ? "最近评估: \(lastDate.formatted(date: .abbreviated, time: .omitted))"
+                                   : "Last evaluated: \(lastDate.formatted(date: .abbreviated, time: .omitted))")
                         .font(.system(size: 10))
                 }
                 .foregroundColor(.secondary)
@@ -862,63 +875,61 @@ struct StudentQuickPeepView: View {
         .background(AppTheme.cardBackground)
         .cornerRadius(16)
     }
-    
-    private func skillBar(label: String, value: Int, color: Color, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
+
+    private func skillBar(axis: DrillAttribute) -> some View {
+        let value = skills.rating(axis)
+        return HStack(spacing: 8) {
+            Image(systemName: axis.icon)
                 .font(.system(size: 10))
-                .foregroundColor(color)
+                .foregroundColor(.accentColor)
                 .frame(width: 16)
-            
-            Text(label)
+            Text(axis.title)
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
-                .frame(width: 70, alignment: .leading)
-            
+                .frame(width: 112, alignment: .leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.gray.opacity(0.15))
-                    
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(color)
-                        .frame(width: geo.size.width * CGFloat(value) / 10.0)
+                    RoundedRectangle(cornerRadius: 3).fill(Color.gray.opacity(0.15))
+                    if let value {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.accentColor)
+                            .frame(width: geo.size.width * CGFloat(value) / 10.0)
+                    }
                 }
             }
             .frame(height: 6)
-            
-            Text("\(value)")
+            Text(value.map { "\($0)" } ?? "—")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(color)
+                .foregroundColor(value == nil ? .secondary : .accentColor)
                 .frame(width: 20, alignment: .trailing)
         }
     }
-    
-    private func editableSkillRow(label: String, value: Binding<Int>, color: Color, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
+
+    private func editableSkillRow(axis: DrillAttribute) -> some View {
+        let binding = Binding<Double>(
+            get: { Double(editedSkills.rating(axis) ?? 5) },
+            set: { editedSkills.setRating(Int($0.rounded()), for: axis) })
+        return HStack(spacing: 8) {
+            Image(systemName: axis.icon)
                 .font(.system(size: 10))
-                .foregroundColor(color)
+                .foregroundColor(.accentColor)
                 .frame(width: 16)
-            
-            Text(label)
+            Text(axis.title)
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
-                .frame(width: 60, alignment: .leading)
-            
-            Slider(value: Binding(
-                get: { Double(value.wrappedValue) },
-                set: { value.wrappedValue = Int($0) }
-            ), in: 1...10, step: 1)
-            .tint(color)
-            
-            Text("\(value.wrappedValue)")
+                .frame(width: 112, alignment: .leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+            Slider(value: binding, in: 1...10, step: 1)
+            Text("\(editedSkills.rating(axis) ?? 5)")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundColor(color)
+                .foregroundColor(.accentColor)
                 .frame(width: 20)
         }
     }
-    
+
     private func skillRatingColor(_ rating: Double) -> Color {
         if rating >= 8 { return .green }
         if rating >= 6 { return .orange }
@@ -1263,7 +1274,7 @@ struct StudentInsightEngine {
         }
         
         // MARK: - Improvement Trajectory
-        if let lastEval = skills.lastEvaluatedDate {
+        if skills.isEvaluated, let lastEval = skills.lastEvaluatedDate {
             let daysSinceEval = Calendar.current.dateComponents([.day], from: lastEval, to: Date()).day ?? 0
             if daysSinceEval > 30 {
                 insights.append(StudentInsight(
@@ -1276,8 +1287,8 @@ struct StudentInsightEngine {
         } else {
             insights.append(StudentInsight(
                 title: "Initial Evaluation Needed", titleChinese: "需要初次评估",
-                description: "No skill evaluation on record. Tap Edit to assess this player.",
-                descriptionChinese: "暂无技能评估记录。点击编辑进行评估。",
+                description: "No skill evaluation on record. Tap Evaluate to rate the eight skills.",
+                descriptionChinese: "暂无技能评估记录。点击「评估」给八项技能打分。",
                 icon: "plus.circle.fill", color: .blue, priority: 8
             ))
         }

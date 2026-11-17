@@ -20,8 +20,9 @@ enum DrillAttribute: String, CaseIterable, Codable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
-        let zh = LocalizationManager.shared.currentLanguage == .chinese
+    var title: String { title(chinese: LocalizationManager.shared.currentLanguage == .chinese) }
+
+    func title(chinese zh: Bool) -> String {
         switch self {
         case .ballHandling: return zh ? "控球" : "Ball handling"
         case .passing: return zh ? "传球" : "Passing"
@@ -35,8 +36,9 @@ enum DrillAttribute: String, CaseIterable, Codable, Identifiable {
     }
 
     /// Short label for the octagon's corners.
-    var short: String {
-        let zh = LocalizationManager.shared.currentLanguage == .chinese
+    var short: String { short(chinese: LocalizationManager.shared.currentLanguage == .chinese) }
+
+    func short(chinese zh: Bool) -> String {
         switch self {
         case .ballHandling: return zh ? "控球" : "Handle"
         case .passing: return zh ? "传球" : "Pass"

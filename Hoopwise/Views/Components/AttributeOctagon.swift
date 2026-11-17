@@ -18,6 +18,15 @@ struct AttributeOctagon: View {
     var showLabels = true
     /// Axes flagged as neglected get an orange corner label.
     var flagged: Set<DrillAttribute> = []
+    /// A SECOND LINE over the shape (17 Nov 2026, Luther: the player card
+    /// shows "where the athlete stands compared to what we worked on"): the
+    /// coach's ratings as 0…1. Only rated skills get a point; neighbours that
+    /// are both rated are joined, so all eight make a closed outline.
+    var standing: [DrillAttribute: Double]? = nil
+    var standingColor: Color = .primary
+    /// Corner labels in a set language (the player card's own — AreaLanguage);
+    /// nil follows the app.
+    var chineseLabels: Bool? = nil
 
     private let axes = DrillAttribute.allCases
     /// A zero sits on this ring, not at the centre.
@@ -49,6 +58,10 @@ struct AttributeOctagon: View {
                                 .position(point(i, shown(values[axis] ?? 0), centre: centre, radius: radius))
                         }
                     }
+                }
+
+                if let standing, !standing.isEmpty {
+                    standingLine(standing, centre: centre, radius: radius)
                 }
 
                 // The target: a tick across each spoke it asks for, at the
@@ -97,6 +110,30 @@ struct AttributeOctagon: View {
         }
     }
 
+    /// The ratings as an outline: rated neighbours joined, a dot on each.
+    private func standingLine(_ standing: [DrillAttribute: Double], centre: CGPoint, radius: CGFloat) -> some View {
+        let count = axes.count
+        return ZStack {
+            Path { path in
+                for i in axes.indices {
+                    let next = (i + 1) % count
+                    guard let a = standing[axes[i]], let b = standing[axes[next]] else { continue }
+                    path.move(to: point(i, shown(a), centre: centre, radius: radius))
+                    path.addLine(to: point(next, shown(b), centre: centre, radius: radius))
+                }
+            }
+            .stroke(standingColor, style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round, dash: [5, 3]))
+            ForEach(Array(axes.enumerated()), id: \.offset) { i, axis in
+                if let value = standing[axis] {
+                    Circle()
+                        .fill(standingColor)
+                        .frame(width: 5, height: 5)
+                        .position(point(i, shown(value), centre: centre, radius: radius))
+                }
+            }
+        }
+    }
+
     /// A short rounded bar across spoke `i` at `value`.
     private func targetTick(_ i: Int, _ value: Double, centre: CGPoint, radius: CGFloat, colour: Color) -> some View {
         let angle = -Double.pi / 2 + Double(i) * 2 * Double.pi / Double(axes.count)
@@ -118,7 +155,7 @@ struct AttributeOctagon: View {
         let c = cos(angle), sn = sin(angle)
         let alignment: Alignment = abs(c) < 0.2 ? (sn < 0 ? .bottom : .top) : (c > 0 ? .leading : .trailing)
         let isFlagged = flagged.contains(axis)
-        return Text(axis.short)
+        return Text(chineseLabels.map { axis.short(chinese: $0) } ?? axis.short)
             .font(.caption2.weight(isFlagged ? .semibold : .medium))
             .foregroundStyle(isFlagged ? Color.orange : Color.secondary)
             .fixedSize()

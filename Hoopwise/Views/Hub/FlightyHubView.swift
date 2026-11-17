@@ -351,13 +351,36 @@ struct FlightyHubView: View {
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
                     .accessibilityIdentifier("hub.organization")
 
-                    // Keeps People's tiles the width of Library's on a wide screen.
-                    if wide { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+                    // The Coach board takes the third slot on a wide screen.
+                    if wide { boardLink(wide: true) }
                 }
+                if !wide { boardLink(wide: false) }
             }
         }
         .frame(maxWidth: 1100, alignment: .leading)
         .frame(maxWidth: .infinity)
+    }
+
+    /// The Coach board (17 Nov 2026, Luther): a court that keeps what is drawn
+    /// until Clear, saved as a play or a drill when it is worth keeping.
+    @ViewBuilder
+    private func boardLink(wide: Bool) -> some View {
+        let title = isChinese ? "战术板" : "Coach board"
+        let detail = CoachBoardStore.load() == nil
+            ? (isChinese ? "空白" : "Empty")
+            : (isChinese ? "有未保存的画板" : "Drawing in progress")
+        NavigationLink(destination: CoachBoardScreen()) {
+            if wide {
+                hubTile(.board, title: title, count: detail, unit: "")
+            } else {
+                hubWideTile(.board, title: title,
+                            detail: isChinese ? "\(detail) · 画战术，存为战术或训练"
+                                              : "\(detail) · draw it out, save it as a play or a drill")
+            }
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .accessibilityIdentifier("hub.board")
     }
 
     private func playsLink(_ count: Int) -> some View {

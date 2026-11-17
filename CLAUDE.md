@@ -1997,6 +1997,81 @@ Claude's ratings without review, target = BOTH phase focus and program goals.
   → back; program phase balance — it launches twice: the first launch of a
   UI test run has come up without its environment on the iPad mini sim).
 
+## Evaluation · plan balance · games — one system (17 Nov 2026, Luther)
+"Make sure the student oct evaluation, the session's oct planning balance,
+and the game stats can work together." Decided: keep 1–10, START FRESH.
+- THE EVALUATION IS THE EIGHT OCTAGON SKILLS: `SkillsEvaluation.axes`
+  ([DrillAttribute.rawValue: 1–10] inside the existing skillsData JSON — no
+  schema change); `rating` / `setRating` (clamped) / `isEvaluated` /
+  `axisAverage` / `axisShares`. The old six fields (scoring…intangibles)
+  still decode and round-trip but NOTHING reads them — an old evaluation
+  reads as "not evaluated". Quick Peep's Skills Evaluation = 8 rows, "—"
+  unrated, Evaluate / Edit (unrated start at 5) / Save (`peep.evaluate`).
+- GAME EVIDENCE beside each skill (Services/SkillEvidence.swift, pure):
+  games never SET a rating. ≥ 3 games; shooting = PTS/game, finishing =
+  share of own baskets off a pass, playmaking = assists per own basket (both
+  need ≥ 5 logged baskets), passing = AST/game, defense = STL+BLK/game,
+  ranked among program-mates ("1.4 AST/game · 2nd of 12"). Ball handling,
+  Game IQ and Footwork have no stat; rebounds claim no skill.
+- PLAN BALANCE FIX: `PlanCoverage.minutes` no longer counts the Game block —
+  the Plan tab shows no Game section, so the dashboard's minutes exceeded
+  the visible plan. The TARGET now adds the GROUP'S WEAK SKILLS
+  (`groupRatings` = per-skill average of the expected athletes who were
+  rated; average ≤ 5 → target 0.6 + (5 − avg) × 0.08, `groupWeakness`); the
+  dashboard says "Group's weakest: Shooting (avg 4.1)" (`plan.groupWeakest`).
+- PLAN ENGINE: the level suggestion and the weakest-area focus read the
+  eight skills (`groupRatings`, `activityTypes(for:)`); `phaseGaps` uses the
+  same target; a DEFENSE signal joins passing — under one steal/block per
+  three player-games over ≥ 3 games and ≥ 15 lines (`defenseSignal`). The
+  rationale line now SHOWS its notes (`PlanRationale.readable` — before,
+  notes, including "fills the phase's gaps", were computed and never shown).
+- THE CARD'S SECOND LINE: the player card's back octagon draws the
+  evaluation (`AthleteCardFacts.evaluation` = axisShares) as a dashed black
+  line over "what we worked on", legend "Worked on / Where they stand"; only
+  rated skills. In the app, the shared image and the A3 sheets alike.
+  (Asked Luther whether parents should see it; shown until he says.)
+Tests: SkillIntegrationTests, PlanGeneratorTests.
+
+## Coach board (17 Nov 2026, Luther)
+"Half or full court … the full play editor with every feature, including
+Scribble. Not cleared when I leave … save as play or skill in the corner …
+I hit Clear myself." Hub → Coach board (the third PEOPLE tile on a wide
+screen, a wide tile on the phone; glyph `.board`). Views/Hub/
+CoachBoardScreen.swift: the board is a DrillDrawing in a DEVICE-LOCAL file
+(Application Support/CoachBoard/board.json, `CoachBoardStore`) — a
+scratchpad, and syncing it would need a schema field. The page: Half | Full
+(converts the steps), the step player (▶, Pencil ink, Scribble on an iPad),
+"Draw on the board" → the full step editor in drawing mode (players, cones,
+every tool) as a full-screen cover. The editor's new `onChange` reports
+every change and the board saves it at once, so there is NO Cancel there
+(Done only, Esc closes, swipe-down allowed). Toolbar: Clear (asks;
+`board.confirmClear`) and Save ▾ — Save as Play (JournalNewPlaySheet
+(drawing:) → the concept's steps, cones dropped — `JournalPlay.fill`) / Save
+as Drill (AddDrillView(drawing:) — the drawing is the new drill's first
+visual). Saving leaves the board as it is. HOOPWISE_SHOT=coachBoard. Tests:
+CoachBoardUITests (draw → Done → relaunch → still there → Save → Clear),
+SkillIntegrationTests.
+
+## Languages by area (17 Nov 2026, Luther)
+Profile → Preferences → Languages by Area (AreaLanguageSettingsView):
+Exported PDFs (the Parent Guide PDF and long image), Player card (app,
+image, A3 — names, words, octagon labels), Game recap, Roll-call photo —
+each Same as app / English / 中文 (Models/AreaLanguage.swift, UserDefaults
+`language.area.<area>`, nonisolated — it reads `app_language` directly).
+The roll-call photo DEFAULTS TO CHINESE (it always was — WeChat groups);
+in English it reads "Coach X", "present", English names. Statement and
+agreement PDFs are bilingual by design and unchanged.
+`Student.primaryName(chinese:)` / `secondaryName(chinese:)`,
+`DrillAttribute.title(chinese:)` / `short(chinese:)` serve a page with its
+own language.
+
+## Small moves (17 Nov 2026, Luther)
+- "ALL PRESENT" left the roster: it is in the session page's ⋯ menu
+  (`session.more` → `attendance.allPresent`), same confirmation, attached to
+  the page so it opens from any tab.
+- The Quick Peep always shows its REMINDERS card with the add line (it hid
+  when empty), so a reminder can be added from the peep.
+
 ## Cycle planner (October 2026, Luther)
 - "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,
   Services/CyclePlanner, both targets): the coach gives START, DELIVER-BY

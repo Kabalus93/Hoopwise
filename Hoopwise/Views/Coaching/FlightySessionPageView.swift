@@ -246,6 +246,8 @@ struct FlightySessionPageView: View {
                             }
                         }
 
+                        allPresentMenuItem
+
                         Button(action: { exportPlayerCards() }) {
                             Label(
                                 LocalizationManager.shared.currentLanguage == .chinese ? "打印球员卡（A3）" : "Print Player Cards (A3)",
@@ -320,6 +322,7 @@ struct FlightySessionPageView: View {
                             }
                             .glassEffect(.regular.interactive(), in: Circle())
                     }
+                    .accessibilityIdentifier("session.more")
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, floatingButtonsTop)
@@ -330,6 +333,7 @@ struct FlightySessionPageView: View {
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background { allPresentConfirmation(Color.clear) }
         // The REAL top inset (status bar / Dynamic Island): the GeometryReader
         // above sits inside ignoresSafeArea and always reads 0, which put Back
         // and ⋯ in the status bar on a pushed page. A sheet reads 0 here.
@@ -912,6 +916,10 @@ struct FlightySessionPageView: View {
                     phaseFocus: parentPhase?.focus ?? [],
                     skillTargets: parentProgram?.skillTargets,
                     teamSkills: teamFocusSkills,
+                    groupRatings: DrillPlanGenerator.groupRatings(
+                        students: AttendanceMath.expectedIds(of: session, programs: dataManager.programs)
+                            .compactMap { id in dataManager.students.first { $0.id == id } },
+                        players: dataManager.players),
                     canEdit: accessMode.canEdit,
                     onFind: { axis in
                         drillPickerSection = .main
@@ -2056,7 +2064,6 @@ struct FlightySessionPageView: View {
         Group {
             #if os(iOS)
             VStack(spacing: 8) {
-                markAllPresentBar
                 attendanceRoster
                 coachesOnRoster
 
@@ -2516,11 +2523,11 @@ struct FlightySessionPageView: View {
     }
 
     #if os(iOS)
-    /// Composes the attendance photo with a Chinese watermark of coach name,
-    /// timestamp, location, present-count and the Chinese names of present
-    /// students, then saves the result to the user's Photos library. Watermark
-    /// text is always Chinese — these photos are shared with Chinese-reading
-    /// managers in WeChat groups regardless of the coach's app language.
+    /// Composes the attendance photo with a watermark of coach name,
+    /// timestamp, location, present-count and the names of present students,
+    /// then saves the result to the user's Photos library. The band is in the
+    /// roll-call language (AreaLanguage .rollCall) — Chinese unless the coach
+    /// changed it, since these photos go to Chinese-reading WeChat groups.
     private func exportSessionPhotoToLibrary() {
         guard !isExportingSessionPhoto,
               let path = session.attendancePhotoPath,
@@ -2530,22 +2537,25 @@ struct FlightySessionPageView: View {
         HapticFeedback.impact(.light)
 
         let presentStudents = dataManager.students.filter { session.actualAttendeeIds.contains($0.id) }
+        // The band's language is the coach's choice (AreaLanguage .rollCall,
+        // Chinese unless changed — these photos go to WeChat groups).
+        let zh = AreaLanguage.isChinese(.rollCall)
         let names: [String] = presentStudents.compactMap { student in
-            if let chinese = student.chineseName?.trimmingCharacters(in: .whitespacesAndNewlines), !chinese.isEmpty {
+            if zh, let chinese = student.chineseName?.trimmingCharacters(in: .whitespacesAndNewlines), !chinese.isEmpty {
                 return chinese
             }
             let english = student.name.trimmingCharacters(in: .whitespacesAndNewlines)
             return english.isEmpty ? nil : english
         }
-        let nameList = names.joined(separator: "、")
+        let nameList = names.joined(separator: zh ? "、" : ", ")
 
         // Prefer the coach's Chinese name on the watermark — these photos
         // go to WeChat groups where Chinese-reading managers see them.
         // Falls back to the English name when no Chinese name is set.
         let coachName: String = {
             let coach = dataManager.coach
-            if let zh = coach.chineseName?.trimmingCharacters(in: .whitespacesAndNewlines), !zh.isEmpty {
-                return zh
+            if zh, let chinese = coach.chineseName?.trimmingCharacters(in: .whitespacesAndNewlines), !chinese.isEmpty {
+                return chinese
             }
             return coach.name.trimmingCharacters(in: .whitespacesAndNewlines)
         }()
@@ -2563,15 +2573,15 @@ struct FlightySessionPageView: View {
                              of: day) ?? session.startTime
 
         let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "zh_CN")
-        dateFormatter.dateFormat = "yyyy年M月d日 HH:mm"
+        dateFormatter.locale = Locale(identifier: zh ? "zh_CN" : "en_US")
+        dateFormatter.dateFormat = zh ? "yyyy年M月d日 HH:mm" : "d MMM yyyy HH:mm"
         let dateText = dateFormatter.string(from: stamp)
 
         // Day-of-week chunk, rendered as its own emphasized line in the
         // watermark so a quick glance shows e.g. "星期日 / 2026年5月18日".
         let weekdayFormatter = DateFormatter()
-        weekdayFormatter.locale = Locale(identifier: "zh_CN")
-        weekdayFormatter.dateFormat = "EEEE"  // → "星期日" etc.
+        weekdayFormatter.locale = Locale(identifier: zh ? "zh_CN" : "en_US")
+        weekdayFormatter.dateFormat = "EEEE"  // → "星期日" / "Sunday"
         let weekdayText = weekdayFormatter.string(from: stamp)
 
         let composed = renderWatermarkedAttendancePhoto(
@@ -2582,7 +2592,8 @@ struct FlightySessionPageView: View {
             location: session.location,
             presentCount: presentStudents.count,
             expectedCount: AttendanceMath.expectedIds(of: session, programs: dataManager.programs).count,
-            nameList: nameList
+            nameList: nameList,
+            chinese: zh
         ) ?? basePhoto
 
         PhotoCaptureManager.shared.saveImageToPhotoLibrary(composed) { result in
@@ -2622,7 +2633,8 @@ struct FlightySessionPageView: View {
         location: String?,
         presentCount: Int,
         expectedCount: Int,
-        nameList: String
+        nameList: String,
+        chinese: Bool
     ) -> UIImage? {
         let pointSize = photo.size
         guard pointSize.width > 0, pointSize.height > 0 else { return nil }
@@ -2635,7 +2647,8 @@ struct FlightySessionPageView: View {
             location: location,
             presentCount: presentCount,
             expectedCount: expectedCount,
-            nameList: nameList
+            nameList: nameList,
+            chinese: chinese
         )
 
         let renderer = ImageRenderer(content: overlay)
@@ -2863,36 +2876,35 @@ struct FlightySessionPageView: View {
         HapticFeedback.notification(.success)
     }
 
+    /// "All present" lives in the page's ⋯ menu (Luther, 17 Nov 2026 — it
+    /// was a button above the roster). Shown when attendance can be taken.
     @ViewBuilder
-    private var markAllPresentBar: some View {
-        let remaining = studentsToMarkPresent.count
+    private var allPresentMenuItem: some View {
         if accessMode.canTakeAttendance, !enrolledStudents.isEmpty {
-            HStack {
-                Spacer()
-                Button {
-                    confirmingAllPresent = true
-                } label: {
-                    Label(isChinese ? "全部到场" : "All present", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .tint(.green)
-                .disabled(remaining == 0)
-                .accessibilityIdentifier("attendance.allPresent")
+            Button {
+                confirmingAllPresent = true
+            } label: {
+                Label(isChinese ? "全部到场" : "Mark All Present", systemImage: "checkmark.circle.fill")
             }
-            .padding(.horizontal, 16)
-            .confirmationDialog(
-                isChinese ? "将 \(remaining) 名学员标记为到场？" : "Mark \(remaining) present?",
-                isPresented: $confirmingAllPresent,
-                titleVisibility: .visible
-            ) {
-                Button(isChinese ? "全部到场" : "Mark all present") { markAllPresent() }
-            } message: {
-                Text(isChinese
-                     ? "每位到场学员扣除 1 课时（如有课时包）。请假的学员不变。"
-                     : "Each present student uses 1 session from their balance, if they have one. Excused students stay excused.")
-            }
+            .disabled(studentsToMarkPresent.isEmpty)
+            .accessibilityIdentifier("attendance.allPresent")
+        }
+    }
+
+    /// Its confirmation states the money consequence; attached to the page
+    /// so it opens from any tab.
+    private func allPresentConfirmation<V: View>(_ content: V) -> some View {
+        let remaining = studentsToMarkPresent.count
+        return content.confirmationDialog(
+            isChinese ? "将 \(remaining) 名学员标记为到场？" : "Mark \(remaining) present?",
+            isPresented: $confirmingAllPresent,
+            titleVisibility: .visible
+        ) {
+            Button(isChinese ? "全部到场" : "Mark all present") { markAllPresent() }
+        } message: {
+            Text(isChinese
+                 ? "每位到场学员扣除 1 课时（如有课时包）。请假的学员不变。"
+                 : "Each present student uses 1 session from their balance, if they have one. Excused students stay excused.")
         }
     }
 
@@ -7085,6 +7097,8 @@ struct AttendanceWatermarkOverlay: View {
     /// The session's roster. 0 = unknown, and the count stands alone.
     var expectedCount: Int = 0
     let nameList: String
+    /// The band's language (AreaLanguage .rollCall); Chinese by default.
+    var chinese: Bool = true
 
     /// Sizes are tuned for a 1024-wide photo (PhotoCaptureManager's max) and
     /// scale with it, clamped so WeChat thumbnails stay legible.
@@ -7107,7 +7121,7 @@ struct AttendanceWatermarkOverlay: View {
 
     private var whoWhereLine: String {
         var parts: [String] = []
-        if !coachName.isEmpty { parts.append("\(coachName)教练") }
+        if !coachName.isEmpty { parts.append(chinese ? "\(coachName)教练" : "Coach \(coachName)") }
         if let location, !location.isEmpty { parts.append(location) }
         return parts.joined(separator: " · ")
     }
@@ -7179,7 +7193,7 @@ struct AttendanceWatermarkOverlay: View {
                         .foregroundStyle(.white.opacity(0.7))
                 }
             }
-            Text("到场")
+            Text(chinese ? "到场" : "present")
                 .font(.system(size: 26 * s, weight: .bold))
                 .foregroundStyle(Color(red: 0.62, green: 0.88, blue: 0.80))
         }

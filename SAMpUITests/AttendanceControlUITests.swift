@@ -46,7 +46,9 @@ final class AttendanceControlUITests: XCTestCase {
         last.tap()
         XCTAssertTrue(becomesSelected(last))
 
-        // All present: confirm, then every row is present.
+        // All present (in the page's ⋯ menu): confirm, then every row is present.
+        app.buttons["session.more"].tap()
+        XCTAssertTrue(app.buttons["attendance.allPresent"].waitForExistence(timeout: 5))
         app.buttons["attendance.allPresent"].tap()
         let confirm = app.buttons["Mark all present"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))

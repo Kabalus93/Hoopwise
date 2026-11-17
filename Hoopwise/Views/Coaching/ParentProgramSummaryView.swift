@@ -174,7 +174,7 @@ struct ParentProgramSummaryView: View {
                                        dataManager: dataManager,
                                        notes: notes,
                                        academyName: academyName,
-                                       isChinese: isChinese)
+                                       isChinese: AreaLanguage.isChinese(.exports))
     }
 
     private func regenerate() {

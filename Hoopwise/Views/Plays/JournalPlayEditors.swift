@@ -4,6 +4,9 @@ import SwiftUI
 /// A new play: its name, when it's run and on which court. It starts with
 /// five players in the default alignment, ready to draw.
 struct JournalNewPlaySheet: View {
+    /// A play that starts from a drawing (the Coach board's Save as Play):
+    /// its steps become the concept's, on the drawing's court.
+    var drawing: DrillDrawing? = nil
     let created: (JournalPlay) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -25,9 +28,13 @@ struct JournalNewPlaySheet: View {
                 }
                 Section {
                     JournalPlayCategoryPicker(selection: $category)
-                    JournalPlayCourtPicker(selection: $court)
+                    if drawing == nil { JournalPlayCourtPicker(selection: $court) }
                 } footer: {
-                    JText("It starts five out, ready for you to draw the first step.")
+                    if let drawing {
+                        JText("It keeps the board's \(drawing.steps.count) steps.")
+                    } else {
+                        JText("It starts five out, ready for you to draw the first step.")
+                    }
                 }
             }
             .navigationTitle(JText("New play"))
@@ -38,7 +45,11 @@ struct JournalNewPlaySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
-                        let play = JournalPlay.create(name: trimmed, category: category, court: court, in: context)
+                        let play = JournalPlay.create(name: trimmed, category: category,
+                                                      court: drawing?.court ?? court, in: context)
+                        if let drawing, let concept = play.conceptPart {
+                            play.fill(concept, with: drawing, in: context)
+                        }
                         try? context.save()
                         dismiss()
                         created(play)

@@ -20,6 +20,20 @@ extension JournalPlay {
         return play
     }
 
+    /// `part`'s steps become `drawing`'s, in order (the Coach board's Save as
+    /// Play). Cones are a drill's; a play has none.
+    func fill(_ part: JournalPlayPart, with drawing: DrillDrawing, in context: ModelContext) {
+        for old in part.steps ?? [] { context.delete(old) }
+        part.steps = []
+        for (order, value) in drawing.steps.enumerated() {
+            var diagram = value.diagram
+            diagram.cones = []
+            let step = JournalPlayStep(order: order, caption: value.caption, text: value.text, diagram: diagram)
+            context.insert(step)
+            part.steps?.append(step)
+        }
+    }
+
     /// A wrinkle or variation at the end of its kind. Its first step starts
     /// from the concept's set, without the concept's lines.
     @discardableResult
