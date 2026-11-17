@@ -1,6 +1,15 @@
 # HoopWise — Project Context
 
 ## Start here
+- THE VISION IS ACHIEVED (17 November 2026, Luther: "I'm happy with the
+  current state of the app, page design and functioning … consider this as
+  having achieved my vision … edits will be building"). Git tag
+  `vision-achieved` marks that state. It is the REFERENCE: page designs and
+  behaviour as they are there are settled. New work BUILDS ON it — extend,
+  refine, fix — and does not redesign a page or replace a working flow
+  unless Luther asks for that page by name. When unsure whether a change
+  alters a settled page, compare with the tag (`git diff vision-achieved`)
+  and ask.
 - `RESTRUCTURE.md` — the Phase 2 restructure's end-state and its OPEN LEDGER.
   Read the ledger before touching sessions, programs, phases or contracts.
 - "THE SESSION LAYER — canonical" below is the rule for new code in that area.
@@ -1679,7 +1688,12 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   "THIS MONTH" (classes taken, games), the coach's line, and the ACADEMY
   alone at the foot — no coach name, no HoopWise credit. The Quick Peep shows
   `AthleteCardFlip` — these same two sides, tap to flip, scaled to the
-  column — so the in-app card IS the exported one. StudentProfileCardView
+  column — so the in-app card IS the exported one. THE ATHLETE PROFILE too (same day, Luther:
+  "change this to the player card"): StudentDetailView opens on
+  AthleteCardFlip (≤ 420 pt) in place of its identity header (avatar, names,
+  format tag, program schedule pills), and its Training Stats section is
+  GONE ("already in the card") — CollapsibleTrainingStatsSection survives
+  only in the gallery. StudentProfileCardView
   and StudentProfileHeaderView are DELETED; CardCourtBackground moved to
   Components/CardCourtBackground.swift.
   DEBUG HOOPWISE_SHOT=athleteCard (the sheet) / athleteCardExport (writes

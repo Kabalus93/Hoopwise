@@ -46,8 +46,13 @@ struct StudentDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Clean header
-                cleanHeader
+                // The player card — the same two sides that are shared and
+                // printed, tap to flip (17 Nov 2026, Luther: "change this to
+                // the player card").
+                AthleteCardFlip(student: student)
+                    .frame(maxWidth: 420)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                 
                 // Quick stats row
                 quickStatsRow
@@ -65,11 +70,9 @@ struct StudentDetailView: View {
                     // this athlete plays in a team's play breakdowns.
                     TeamWorkoutProfileSection(memberId: student.id)
                     
-                    // Training Stats — the profile's one stats section.
-                    // Measurements and league stats were removed (October
-                    // 2026, Luther).
-                    CollapsibleTrainingStatsSection(studentId: student.id)
-                    
+                    // No Training Stats section: the card carries the game
+                    // stats (17 Nov 2026, Luther: "already in the card").
+
                     // Notes
                     if let player = player, let notes = player.coachNotes, !notes.isEmpty {
                         notesSection(notes)
@@ -125,107 +128,6 @@ struct StudentDetailView: View {
         }
     }
     
-    // MARK: - Identity Card (the "collectible card")
-    /// Rounded card pinned to the top: avatar, names, program schedule pills.
-    /// Same shape regardless of how the profile was reached.
-    private var cleanHeader: some View {
-        VStack(spacing: 14) {
-            StudentAvatarView(student: student, size: 96)
-                .overlay(
-                    Circle().strokeBorder(Color(.systemBackground), lineWidth: 4)
-                )
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
-
-            VStack(spacing: 2) {
-                if student.secondaryDisplayName != nil {
-                    Text(student.primaryDisplayName)
-                        .font(.title2.bold())
-                        .foregroundStyle(.primary)
-                    Text(student.name)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(student.name)
-                        .font(.title2.bold())
-                        .foregroundStyle(.primary)
-                    if let chinese = student.secondaryNameLine {
-                        Text(chinese)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            FormatBadge(format: dataManager.studentFormat(student), size: .full)
-
-            if !enrolledPrograms.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(enrolledPrograms.prefix(3)) { program in
-                        programPill(program)
-                    }
-                }
-                .padding(.horizontal, 12)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 28)
-        .padding(.bottom, 22)
-        .padding(.horizontal, 16)
-        .background(
-            // Soft card-like backdrop with a subtle gradient — keeps the card
-            // feel but stays inside the iOS 26 / Apple aesthetic.
-            ZStack {
-                Color(.secondarySystemGroupedBackground)
-                LinearGradient(
-                    colors: [Color.accentColor.opacity(0.05), .clear],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-
-    /// Compact pill that summarises the student's spot in a program. Uses the
-    /// AgeBadge instead of mascot icons (mascots were retired earlier).
-    private func programPill(_ program: Program) -> some View {
-        let scheduleText: String? = programScheduleText(for: program)
-        return HStack(spacing: 6) {
-            AgeBadge(shortName: program.ageGroup.rawValue, tint: .accentColor, size: .xsmall)
-            if let scheduleText {
-                Text(scheduleText)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.accentColor)
-                    .lineLimit(1)
-            }
-            if let location = program.locationName, !location.isEmpty {
-                Text(location)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(Color.accentColor)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(Color.accentColor.opacity(0.12), in: Capsule())
-    }
-
-    /// "Sunday 9:30 AM" formatted from the program's recurring days + time.
-    private func programScheduleText(for program: Program) -> String? {
-        guard let firstDay = program.recurringDays.first else { return nil }
-        let dayName = firstDay.displayName
-        guard let time = program.defaultSessionTime else { return dayName }
-        let f = DateFormatter()
-        f.dateFormat = "h:mma"
-        return "\(dayName) \(f.string(from: time))"
-    }
-
     // MARK: - Quick Stats Row
     private var quickStatsRow: some View {
         HStack(spacing: 0) {
