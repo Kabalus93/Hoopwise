@@ -367,7 +367,7 @@ extension JournalPlayStepPlayer {
                   let cutter = base.offense.last(where: { $0.number != holder && $0.number != receiver.number }),
                   let rim = court.baskets.first else { return }
             let scale = JournalPlayCourt.scale(court, width: inkSize.width)
-            func view(_ p: JournalCourtPoint) -> CGPoint { JournalPlayCourt.point(p, scale: scale) }
+            func view(_ p: JournalCourtPoint) -> CGPoint { JournalPlayCourt.point(p, scale: scale, court: court) }
             var strokes: [[JournalCourtPoint]] = []
             // The cut: toward the rim, stopping 1.5 m short, with a V.
             let goal = JournalCourtPoint(rim.x + (cutter.at.x - rim.x) * 0.25, rim.y + 1.5)
@@ -500,7 +500,7 @@ extension JournalPlayStepPlayer {
         let points: [[JournalCourtPoint]] = fresh.map { item in
             item.element.path.interpolatedPoints(by: .distance(3)).map { point in
                 let p = point.location.applying(item.element.transform)
-                return JournalCourtPoint(p.x / scale - JournalPlayCourt.margin, p.y / scale - JournalPlayCourt.margin)
+                return JournalPlayCourt.courtPoint(p, scale: scale, court: court)
             }
         }
         let base = run.batches.last.map { JournalPlayMath.startOfNextStep(after: $0, court: court) }

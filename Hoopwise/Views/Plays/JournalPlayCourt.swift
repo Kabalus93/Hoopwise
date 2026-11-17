@@ -5,9 +5,28 @@ import SwiftUI
 enum JournalPlayCourt {
     static let margin = 1.3
 
+    /// THE FULL COURT IS DRAWN UPRIGHT (17 Nov 2026, Luther: "full court
+    /// should be vertical"): attacking UP, the basket we attack at the top
+    /// like the half court's. Only the drawing turns — the stored metres keep
+    /// x along the floor (0…28) and y across (0…15), so saved plays, the
+    /// Claude connector's format, defense and playback are unchanged. Every
+    /// court ↔ screen conversion goes through `point` / `courtPoint`.
+    static func isUpright(_ kind: JournalCourtKind) -> Bool { kind == .full }
+
+    /// The court's drawn size in metres (turned for an upright court).
+    static func drawnSize(_ kind: JournalCourtKind) -> CGSize {
+        let size = kind.size
+        return isUpright(kind) ? CGSize(width: size.height, height: size.width) : CGSize(width: size.width, height: size.height)
+    }
+
+    /// Court metres → drawn metres (no margin): upright, x' = y, y' = 28 − x.
+    static func turn(_ kind: JournalCourtKind) -> CGAffineTransform {
+        isUpright(kind) ? CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: kind.size.width) : .identity
+    }
+
     /// The drawing's size in metres, margins included.
     static func canvas(_ kind: JournalCourtKind) -> CGSize {
-        let size = kind.size
+        let size = drawnSize(kind)
         return CGSize(width: size.width + 2 * margin, height: size.height + 2 * margin)
     }
 
@@ -19,8 +38,16 @@ enum JournalPlayCourt {
     /// Metres to points for a drawing `width` points wide.
     static func scale(_ kind: JournalCourtKind, width: CGFloat) -> CGFloat { width / canvas(kind).width }
 
-    static func point(_ p: JournalCourtPoint, scale: CGFloat) -> CGPoint {
-        CGPoint(x: (p.x + margin) * scale, y: (p.y + margin) * scale)
+    /// Court metres → points in a drawing at `scale`.
+    static func point(_ p: JournalCourtPoint, scale: CGFloat, court: JournalCourtKind) -> CGPoint {
+        let d = CGPoint(x: p.x, y: p.y).applying(turn(court))
+        return CGPoint(x: (d.x + margin) * scale, y: (d.y + margin) * scale)
+    }
+
+    /// Points in a drawing at `scale` → court metres (the inverse of `point`).
+    static func courtPoint(_ v: CGPoint, scale: CGFloat, court: JournalCourtKind) -> JournalCourtPoint {
+        let d = CGPoint(x: v.x / scale - margin, y: v.y / scale - margin).applying(turn(court).inverted())
+        return JournalCourtPoint(d.x, d.y)
     }
 
     // Sizes in metres, from the game plan's diagrams (20 units a metre).
@@ -51,7 +78,8 @@ struct JournalPlayCourtLines: Shape {
         case .full: full(&p)
         }
         let s = rect.width / JournalPlayCourt.canvas(kind).width
-        return p.applying(CGAffineTransform(translationX: JournalPlayCourt.margin, y: JournalPlayCourt.margin)
+        return p.applying(JournalPlayCourt.turn(kind)
+            .concatenating(CGAffineTransform(translationX: JournalPlayCourt.margin, y: JournalPlayCourt.margin))
             .concatenating(CGAffineTransform(scaleX: s, y: s))
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY)))
     }
@@ -147,7 +175,7 @@ struct JournalPlayDiagramView: View {
 
         // Cones on the floor, under everything that moves.
         for cone in diagram.cones {
-            let c = JournalPlayCourt.point(cone, scale: s)
+            let c = JournalPlayCourt.point(cone, scale: s, court: court)
             let h = JournalPlayCourt.coneSize * s * (compact ? 1.6 : k)
             var tri = Path()
             tri.move(to: CGPoint(x: c.x, y: c.y - h * 1.15))
@@ -174,7 +202,7 @@ struct JournalPlayDiagramView: View {
             let dot = max(4, r * 0.32)
             for action in diagram.actions {
                 for bend in action.path.dropFirst().dropLast() {
-                    let c = JournalPlayCourt.point(bend, scale: s)
+                    let c = JournalPlayCourt.point(bend, scale: s, court: court)
                     let circle = Path(ellipseIn: CGRect(x: c.x - dot, y: c.y - dot, width: 2 * dot, height: 2 * dot))
                     context.fill(circle, with: .color(JPalette.background))
                     context.stroke(circle, with: .color(JPalette.play), lineWidth: max(1, width))
@@ -185,7 +213,7 @@ struct JournalPlayDiagramView: View {
         // Where players end up.
         if frame == nil {
             for spot in JournalPlayMath.endSpots(diagram) {
-                let c = JournalPlayCourt.point(spot.at, scale: s)
+                let c = JournalPlayCourt.point(spot.at, scale: s, court: court)
                 let ring = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
                 context.stroke(ring, with: .color(JPalette.play),
                                style: StrokeStyle(lineWidth: max(compact ? 0.7 : 1, width * 0.85),
@@ -200,7 +228,7 @@ struct JournalPlayDiagramView: View {
         // Defenders.
         for (i, defender) in diagram.defense.enumerated() {
             let at = frame.flatMap { i < $0.defense.count ? $0.defense[i] : nil } ?? defender.at
-            let c = JournalPlayCourt.point(at, scale: s)
+            let c = JournalPlayCourt.point(at, scale: s, court: court)
             let size = JournalPlayCourt.defenderSize * s * (compact ? 1.4 : k)
             let tint = defender.isRead ? JPalette.read : Color.secondary
             context.draw(Text(verbatim: "X").font(.system(size: size, weight: .semibold)).foregroundStyle(tint), at: c)
@@ -214,7 +242,7 @@ struct JournalPlayDiagramView: View {
         // Players and the ball.
         for player in diagram.offense {
             let at = frame?.players[player.number] ?? player.at
-            let c = JournalPlayCourt.point(at, scale: s)
+            let c = JournalPlayCourt.point(at, scale: s, court: court)
             let circle = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
             if compact {
                 context.fill(circle, with: .color(JPalette.play))
@@ -229,8 +257,8 @@ struct JournalPlayDiagramView: View {
         // Every ball beside its holder (a second ball on the same player on
         // the other shoulder), or in flight.
         let ballsAt: [CGPoint] = {
-            if let frame { return frame.balls.map { JournalPlayCourt.point($0.at, scale: s) } }
-            return diagram.balls.compactMap { diagram.player($0) }.map { JournalPlayCourt.point($0.at, scale: s) }
+            if let frame { return frame.balls.map { JournalPlayCourt.point($0.at, scale: s, court: court) } }
+            return diagram.balls.compactMap { diagram.player($0) }.map { JournalPlayCourt.point($0.at, scale: s, court: court) }
         }()
         var drawnAt: [CGPoint] = []
         for ball in ballsAt {
@@ -247,11 +275,11 @@ struct JournalPlayDiagramView: View {
         // The selected player or defender: a ring around it.
         let ringAt: CGPoint? = {
             switch highlight {
-            case .player(let n)?: return diagram.player(n).map { JournalPlayCourt.point($0.at, scale: s) }
+            case .player(let n)?: return diagram.player(n).map { JournalPlayCourt.point($0.at, scale: s, court: court) }
             case .defender(let i)? where diagram.defense.indices.contains(i):
-                return JournalPlayCourt.point(diagram.defense[i].at, scale: s)
+                return JournalPlayCourt.point(diagram.defense[i].at, scale: s, court: court)
             case .cone(let i)? where diagram.cones.indices.contains(i):
-                return JournalPlayCourt.point(diagram.cones[i], scale: s)
+                return JournalPlayCourt.point(diagram.cones[i], scale: s, court: court)
             default: return nil
             }
         }()
@@ -267,7 +295,7 @@ struct JournalPlayDiagramView: View {
             context.draw(Text(verbatim: note.text)
                 .font(.system(size: (mark ? JournalPlayCourt.defenderSize : JournalPlayCourt.noteSize) * s * k,
                               weight: mark ? .semibold : .regular))
-                .foregroundStyle(mark ? JPalette.ink : Color.secondary), at: JournalPlayCourt.point(note.at, scale: s))
+                .foregroundStyle(mark ? JPalette.ink : Color.secondary), at: JournalPlayCourt.point(note.at, scale: s, court: court))
         }
     }
 
@@ -280,7 +308,7 @@ struct JournalPlayDiagramView: View {
     private func drawAction(_ action: JournalPlayDiagram.Action, in context: inout GraphicsContext, scale s: CGFloat,
                             k: CGFloat, shading: GraphicsContext.Shading, width: CGFloat, radius r: CGFloat,
                             keepsColor: Bool = false) {
-        var points = action.path.map { JournalPlayCourt.point($0, scale: s) }
+        var points = action.path.map { JournalPlayCourt.point($0, scale: s, court: court) }
         guard points.count >= 2 else { return }
         // Leave the player's circle, and stop short of where it lands.
         points[0] = Self.moved(points[0], toward: points[1], by: r)
@@ -315,7 +343,7 @@ struct JournalPlayDiagramView: View {
             // The hand-off mark — two bars struck through (Luther's reference) —
             // midway between the two circles, with a line from the giver
             // when they stand further apart.
-            let raw = action.path.map { JournalPlayCourt.point($0, scale: s) }
+            let raw = action.path.map { JournalPlayCourt.point($0, scale: s, court: court) }
             let a = raw[0], b = raw[raw.count - 1]
             let dx = b.x - a.x, dy = b.y - a.y
             let len = max((dx * dx + dy * dy).squareRoot(), 0.001)

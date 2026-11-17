@@ -10,6 +10,7 @@ final class CoachBoardUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["HOOPWISE_SHOT"] = "coachBoard"
         app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"   // never the synced store
+        app.launchEnvironment["HOOPWISE_GALLERY_FULL"] = "1"       // full screen, as the Hub opens it
         app.launchArguments += ["-app_language", "en", "-hasOnboarded", "YES"]
         app.launch()
         return app
@@ -73,6 +74,27 @@ final class CoachBoardUITests: XCTestCase {
         XCTAssertTrue(element("board.confirmClear").waitForExistence(timeout: 5))
         element("board.confirmClear").tap()
         XCTAssertFalse(element("board.clear").waitForEnabled(false, timeout: 5).isEnabled)
+    }
+}
+
+extension CoachBoardUITests {
+    /// "Full court should be vertical" (Luther, 17 Nov 2026): attacking up,
+    /// taller than wide. Puts the board back on the half court after.
+    func testTheFullCourtStandsUpright() {
+        continueAfterFailure = false
+        app = launch()
+        XCTAssertTrue(element("plays.editor.tool.player").waitForExistence(timeout: 30))
+        element("board.court").tap()
+        let full = app.buttons["Full court"].firstMatch
+        XCTAssertTrue(full.waitForExistence(timeout: 5))
+        full.tap()
+        let court = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Drawing of step 1'")).firstMatch
+        XCTAssertTrue(court.waitForExistence(timeout: 8))
+        sleep(1)
+        attach("full court upright")
+        XCTAssertGreaterThan(court.frame.height, court.frame.width * 1.4, "the full court is drawn upright")
+        element("board.court").tap()
+        app.buttons["Half court"].firstMatch.tap()
     }
 }
 

@@ -1231,10 +1231,10 @@ struct JournalPlayStepEditor: View {
             case .delete: deleteSelection()
             case .escape:
                 if selection != nil { selection = nil } else if changed && onDrawingChange == nil { confirmingDiscard = true } else { dismiss() }
-            case .left: nudge(-step, 0)
-            case .right: nudge(step, 0)
-            case .up: nudge(0, -step)
-            case .down: nudge(0, step)
+            case .left: nudgeOnScreen(-step, 0)
+            case .right: nudgeOnScreen(step, 0)
+            case .up: nudgeOnScreen(0, -step)
+            case .down: nudgeOnScreen(0, step)
             }
         }
         .frame(width: 1, height: 1)
@@ -1268,6 +1268,12 @@ struct JournalPlayStepEditor: View {
     }
 
     /// Arrow keys move the selected player or defender a little (metres).
+    /// An arrow key moves the selection the way it points on screen (the
+    /// full court is drawn turned: screen right = court y, screen up = court x).
+    private func nudgeOnScreen(_ dx: Double, _ dy: Double) {
+        if JournalPlayCourt.isUpright(court) { nudge(-dy, dx) } else { nudge(dx, dy) }
+    }
+
     private func nudge(_ dx: Double, _ dy: Double) {
         switch selection {
         case .player(let n)?:
@@ -1357,13 +1363,11 @@ struct JournalPlayStepEditor: View {
     }
 
     private func metres(_ p: CGPoint, size: CGSize) -> JournalCourtPoint {
-        let s = JournalPlayCourt.scale(court, width: size.width)
-        return JournalCourtPoint(p.x / s - JournalPlayCourt.margin, p.y / s - JournalPlayCourt.margin)
+        JournalPlayCourt.courtPoint(p, scale: JournalPlayCourt.scale(court, width: size.width), court: court)
     }
 
     private func viewPoint(_ m: JournalCourtPoint, size: CGSize) -> CGPoint {
-        let s = JournalPlayCourt.scale(court, width: size.width)
-        return CGPoint(x: (m.x + JournalPlayCourt.margin) * s, y: (m.y + JournalPlayCourt.margin) * s)
+        JournalPlayCourt.point(m, scale: JournalPlayCourt.scale(court, width: size.width), court: court)
     }
 
     /// A finger's reach: a player's circle, at least 22 pt; a pointer or the

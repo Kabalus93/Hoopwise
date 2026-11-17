@@ -2067,6 +2067,19 @@ still step through (hidden buttons, `stepKeys`). Used under the court
 same header and a dashed "+ Add a step" row. The phone's steps bar is
 unchanged.
 
+## The full court is drawn UPRIGHT (17 Nov 2026, Luther: "full court should be vertical")
+Attacking UP, the attacked basket at the top like the half court's baseline,
+everywhere a play is drawn (editor, board, play page, study, thumbnails,
+drill drawings). ONLY THE DRAWING TURNS: stored metres keep x along the floor
+(0…28, attacking +x) and y across (0…15), so saved plays, the connector's
+format and guide, defense, playback and Scribble's reading are unchanged.
+`JournalPlayCourt.isUpright` / `turn` (x' = y, y' = 28 − x) / `drawnSize`;
+every court ↔ screen conversion is `JournalPlayCourt.point(_:scale:court:)`
+and `courtPoint(_:scale:court:)` (the editor's `metres`/`viewPoint`, the ink
+layer and Scribble all use them) — never add a raw `(p.x + margin) * s`.
+Arrow keys move the selection the way they point on screen
+(`nudgeOnScreen`). Pinned by CoachBoardUITests.testTheFullCourtStandsUpright.
+
 ## Languages by area (17 Nov 2026, Luther)
 Profile → Preferences → Languages by Area (AreaLanguageSettingsView):
 Exported PDFs (the Parent Guide PDF and long image), Player card (app,
