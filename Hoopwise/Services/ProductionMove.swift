@@ -89,17 +89,13 @@ enum ProductionMove {
         UserDefaults.standard.set(true, forKey: pendingKey)
     }
 
-    /// A release build offers the move when a Development copy is here and
-    /// it has not been brought over yet.
-    static var isOffered: Bool {
-        #if DEBUG
-        return false
-        #else
-        return FileManager.default.fileExists(atPath: developmentMarkerURL.path)
-            && FileManager.default.fileExists(atPath: developmentStoreURL.path)
-            && lastReport == nil
-        #endif
-    }
+    /// The move is DONE (16 November 2026 — the iPhone brought the data to
+    /// Production), so no build offers it any more (17 Nov 2026, before the
+    /// first Mac TestFlight build): the Mac's debug builds left a Development
+    /// copy and its marker, and bringing that stale copy over would replace
+    /// rows edited on the iPhone and iPad since. The copy itself stays for
+    /// DEBUG rehearsals.
+    static var isOffered: Bool { false }
 
     static var lastReport: Report? {
         let data = (try? Data(contentsOf: reportFileURL)) ?? UserDefaults.standard.data(forKey: reportKey)

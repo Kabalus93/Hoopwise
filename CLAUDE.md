@@ -604,6 +604,11 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   unless he asks; ship changes as TestFlight builds. The Mac still runs a
   debug Catalyst build (Development): real edits made there no longer reach
   the phone until a Mac TestFlight build replaces it.
+  OFFER SWITCHED OFF (17 Nov 2026, before the first Mac TestFlight build):
+  `ProductionMove.isOffered` is now always false — the Mac's debug builds left
+  a Development copy and its marker, and "Bring over your data" there would
+  have replaced rows edited on the phone since with stale ones. The copy code
+  and the DEBUG rehearsal stay.
 - KNOWN FUTURE TASK, with a data-migration problem inside it: shipping a
   TestFlight or App Store release requires deploying the CloudKit schema
   to Production first (CLAUDE.md rule 7d). Development DATA does not
