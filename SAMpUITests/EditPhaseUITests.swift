@@ -42,4 +42,62 @@ final class EditPhaseUITests: XCTestCase {
         field.typeText(original)
         app.buttons["phase.edit.save"].tap()
     }
+
+    /// Edit Phase → Add a recurring drill → pick one → every upcoming session
+    /// → Add; then the drill is listed and Remove takes it out again.
+    func testARecurringDrillGoesInAndComesOut() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        app.launchEnvironment["HOOPWISE_SHOT"] = "programDetail"
+        app.launchEnvironment["HOOPWISE_GALLERY_FULL"] = "1"
+        app.launchArguments += ["-app_language", "en", "-hasOnboarded", "YES"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["program.managePhases"].waitForExistence(timeout: 30))
+        app.buttons["program.managePhases"].tap()
+        // Find a phase that still has upcoming sessions.
+        let phases = app.cells
+        XCTAssertTrue(phases.firstMatch.waitForExistence(timeout: 8))
+        let add = app.buttons["phase.drill.add"]
+        var found = false
+        for i in 0..<phases.count {
+            phases.element(boundBy: i).tap()
+            XCTAssertTrue(app.buttons["phase.edit"].waitForExistence(timeout: 8))
+            app.buttons["phase.edit"].tap()
+            // The section sits under Focus: scroll the form to it.
+            for _ in 0..<4 where !add.exists { app.swipeUp() }
+            if add.waitForExistence(timeout: 2) { found = true; break }
+            app.buttons["Cancel"].firstMatch.tap()
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(phases.firstMatch.waitForExistence(timeout: 8))
+        }
+        guard found else { throw XCTSkip("No phase has upcoming sessions in the demo store") }
+        let before = app.buttons.matching(identifier: "phase.drill.remove").count
+        add.tap()
+        let pickAdd = app.buttons["drillPicker.add"].firstMatch
+        XCTAssertTrue(pickAdd.waitForExistence(timeout: 10), "the drill library opens to pick from")
+        pickAdd.tap()
+        let apply = app.buttons["phase.chooser.apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 8), "the session chooser opens")
+        apply.tap()
+        let rows = app.buttons.matching(identifier: "phase.drill.remove")
+        let deadline = Date().addingTimeInterval(6)
+        while rows.count <= before, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
+        XCTAssertGreaterThan(rows.count, before, "the recurring drill is listed")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "drills in this phase"
+        shot.lifetime = .keepAlways
+        self.add(shot)
+
+        // Take it out again: it was added at the end of the plans, so it is
+        // in every upcoming session — the first row now.
+        if !rows.firstMatch.isHittable { app.swipeDown() }
+        rows.firstMatch.tap()
+        XCTAssertTrue(apply.waitForExistence(timeout: 8))
+        apply.tap()
+        let back = Date().addingTimeInterval(6)
+        while rows.count > before, Date() < back { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
+        XCTAssertEqual(rows.count, before, "removed from every session again")
+    }
 }

@@ -2186,6 +2186,26 @@ own language.
   updateMicroCycle (the 2.7 words guard). Dates stay with the chain — Manage
   Phases' drag re-anchors them and moves the sessions inside. Tests:
   EditPhaseUITests.
+- DRILLS IN THIS PHASE (18 Nov 2026, Luther: "remove planned drills from all
+  sessions or some within the phase, add a recurring exercise to all or a
+  select number of sessions"). Edit Phase's second section lists every drill
+  in the phase's UPCOMING sessions with "In N of M upcoming sessions"; a tap
+  → PhaseDrillChooser (Remove: the sessions holding it, all preselected); "+
+  Add a recurring drill" → the library picker → the chooser (Warm-up |
+  Skills, the sessions without it, all preselected). Applies AT ONCE (the
+  name/focus/objectives still wait for Save). Services/PhaseDrillEditing.
+  swift (pure): `editableSessions` (this phase, .scheduled, not didNotHappen,
+  start in the future — completed/live/skipped keep their plan as the
+  record), `usage`, `removing` (both blocks), `adding` (end of the block;
+  never doubled — a drill already in either block is left alone). Writes
+  re-read the STORED session and go through updateSessionEvent
+  (keepLiveFields). Tests: PhaseDrillEditingTests, EditPhaseUITests.
+  testARecurringDrillGoesInAndComesOut. NEXT (approved): drill SERIES —
+  levels as separate drills, a series stored as one personal drill tagged
+  `kind:series` holding the ordered levels; spread over a phase easiest
+  first (even pacing, previous level as a short review, never more than one
+  level per session, a skipped class holds the level); the series sets its
+  block (Warm-up default); the connector creates real series.
 
 ## Cycle planner (October 2026, Luther)
 - "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,
