@@ -139,6 +139,31 @@ extension CoachBoardUITests {
     }
 }
 
+extension CoachBoardUITests {
+    /// "A plus button beside the next button to add a new step quick"
+    /// (Luther, 18 Nov 2026): it adds a step after this one and shows it.
+    func testPlusAddsAStepAtOnce() {
+        continueAfterFailure = false
+        app = launch()
+        let steps = element("plays.editor.steps")
+        XCTAssertTrue(steps.waitForExistence(timeout: 30))
+        let before = steps.label
+        element("board.addStep").tap()
+        let predicate = NSPredicate(format: "label != %@", before)
+        XCTAssertEqual(XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: steps)], timeout: 5),
+                       .completed, "the step count moved: \(steps.label)")
+        attach("after plus")
+        // Put the board back as it was: delete the step just added.
+        steps.tap()
+        let delete = element("plays.editor.deleteStep")
+        if delete.waitForExistence(timeout: 4) {
+            delete.tap()
+            let confirm = app.buttons.matching(NSPredicate(format: "label == 'Delete step' AND identifier != 'plays.editor.deleteStep'")).firstMatch
+            if confirm.waitForExistence(timeout: 4) { confirm.tap() }
+        }
+    }
+}
+
 private extension XCUIElement {
     @discardableResult
     func waitForEnabled(_ enabled: Bool, timeout: TimeInterval) -> XCUIElement {

@@ -2062,6 +2062,9 @@ court only, driven by `scribbling` / `playToken`, reporting
 editable again. Scribble keeps the player on with Scribble on (ink, reading,
 Reset ink) until switched off or a tool is picked; never saved, as on the
 play page. ‹ › move between steps. The Watch button and its popup are gone.
+A + at the bar's end (18 Nov 2026, Luther: "a plus button besides the next
+button to add a new step quick") adds a step after this one and shows it
+(`board.addStep`); its words go in the bottom-left steps panel.
 HOOPWISE_SHOT=coachBoard. Tests: CoachBoardUITests (opens in the editor,
 draw, steps button, relaunch → still there, Save → Play/Drill, Clear; full
 court upright; ball rule + play in place), SkillIntegrationTests.
@@ -2088,6 +2091,19 @@ still step through (hidden buttons, `stepKeys`). Used under the court
 (upright) and in the board's popover; the side column keeps rows with the
 same header and a dashed "+ Add a step" row. The phone's steps bar is
 unchanged.
+
+## Editor tools redrawn (18 Nov 2026, Luther: "revamp how the tools look … the same quality as a modern design software … simple but precise")
+Views/Plays/EditorToolGlyph.swift draws every tool icon — rail, phone grid
+and Pencil palette (`icon(_:)` is the one entry): one unit grid, one stroke
+(1/12 of the side, ≥ 1.5 pt), round caps, ONE filled dart arrowhead for
+every line tool, every line on the same diagonal; monochrome (pointer,
+cut, dribble zigzag, dashed pass, hand-off bars, shot into a rim, screen T,
+player ring with 1, defender X, seamed ball, banded cone, eraser). The RAIL:
+56 pt, 40 pt tiles corner 10 (continuous) on 4 pt spacing, the tool in use
+an ACCENT tile with a white glyph and a soft accent shadow, hover a faint
+fill, hairline group dividers and a hairline rail edge; the hover tooltip
+shows the name AND its key (a small keycap). Identifiers unchanged
+(`plays.editor.tool.<tool>`).
 
 ## The full court is drawn UPRIGHT (17 Nov 2026, Luther: "full court should be vertical")
 Attacking UP, the attacked basket at the top like the half court's baseline,

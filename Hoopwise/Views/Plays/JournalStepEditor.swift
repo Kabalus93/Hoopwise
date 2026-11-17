@@ -976,6 +976,14 @@ struct JournalPlayStepEditor: View {
             }
             .disabled(number >= pages.count)
             .accessibilityIdentifier("board.next")
+            Divider().frame(height: 22)
+            // A new step after this one, at once; its words go in the steps
+            // panel at the bottom left if the coach wants them.
+            Button(action: boardAddStep) {
+                Label { JText("Add a step") } icon: { Image(systemName: "plus") }
+                    .labelStyle(.iconOnly).font(.body.weight(.semibold)).frame(width: 48, height: 44)
+            }
+            .accessibilityIdentifier("board.addStep")
         }
         .buttonStyle(.plain)
         .foregroundStyle(JPalette.ink)
@@ -1000,6 +1008,11 @@ struct JournalPlayStepEditor: View {
             boardAutoplay = true
             boardPlayer = true
         }
+    }
+
+    private func boardAddStep() {
+        if boardPlayer && !boardScribble { boardPlayer = false }
+        addStep()
     }
 
     /// ‹ ›: the step before or after, on the court at once (playing stops).
@@ -1048,65 +1061,90 @@ struct JournalPlayStepEditor: View {
 
     /// One column of tools, grouped like a graphics app's: select, the four
     /// lines, the marks, erase. Each says its name and key on hover.
+    /// One column of tools, grouped like a graphics app's: select, the
+    /// lines, the marks, erase (18 Nov 2026, Luther: "the same quality as a
+    /// modern design software"). 40 pt tiles on an 8 pt rhythm; the tool in
+    /// use is an accent tile with a white glyph, a hovered one a faint fill;
+    /// hairline group dividers; the rail's edge a hairline too.
     private var toolRail: some View {
-        VStack(spacing: JSpacing.xs) {
+        VStack(spacing: 4) {
             ForEach(Array(Tool.railGroups(drill: isDrill).enumerated()), id: \.offset) { i, group in
                 if i > 0 {
-                    Divider().frame(width: 28)
+                    Rectangle()
+                        .fill(JPalette.ink.opacity(0.12))
+                        .frame(width: 24, height: 0.5)
+                        .padding(.vertical, 6)
                 }
                 ForEach(group) { item in railButton(item) }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, JSpacing.s)
-        .frame(width: 60)
+        .padding(.vertical, 12)
+        .frame(width: 56)
         .background(JPalette.card)
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(JPalette.ink.opacity(0.10)).frame(width: 0.5)
+        }
         // The hover labels reach over the court.
         .zIndex(1)
     }
 
     private func railButton(_ item: Tool) -> some View {
-        Button {
+        let on = tool == item
+        let hovered = hoveredTool == item
+        return Button {
             select(tool: item)
         } label: {
-            SwiftUI.Group {
-                // The pointer, as in graphics apps; the phone keeps its hand.
-                if item == .move { Image(systemName: "cursorarrow").font(.body) } else { icon(item) }
-            }
-                .frame(width: 24, height: 20)
-                .foregroundStyle(.primary)
+            icon(item)
+                .foregroundStyle(on ? Color.white : JPalette.ink.opacity(hovered ? 1 : 0.82))
                 .frame(width: 40, height: 40)
-                .background(tool == item ? JPalette.fill : .clear, in: .rect(cornerRadius: 8))
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(on ? Color.accentColor : JPalette.ink.opacity(hovered ? 0.08 : 0))
+                }
                 .overlay {
-                    if tool == item {
-                        RoundedRectangle(cornerRadius: 8).strokeBorder(JPalette.ink, lineWidth: 1)
+                    if on {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
                     }
                 }
+                .shadow(color: on ? Color.accentColor.opacity(0.35) : .clear, radius: 4, y: 1)
                 .contentShape(.rect)
+                .animation(.easeOut(duration: 0.12), value: on)
+                .animation(.easeOut(duration: 0.12), value: hovered)
         }
         .buttonStyle(.plain)
         .keyboardShortcut(keysActive ? KeyboardShortcut(KeyEquivalent(item.key), modifiers: []) : nil)
-        // The tool's name, at once, beside the rail (a system tooltip waits
-        // and sits under the pointer).
+        // The tool's name and key, at once, beside the rail (a system
+        // tooltip waits and sits under the pointer).
         .onHover { inside in
             if inside { hoveredTool = item } else if hoveredTool == item { hoveredTool = nil }
         }
         .overlay(alignment: .leading) {
-            if hoveredTool == item {
-                JText(item.label)
-                    .font(.callout.weight(.medium))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.regularMaterial, in: .capsule)
-                    .overlay(Capsule().strokeBorder(JPalette.courtLine, lineWidth: 0.5))
-                    .fixedSize()
-                    .offset(x: 50)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
+            if hovered {
+                HStack(spacing: 8) {
+                    JText(item.label)
+                        .font(.callout.weight(.medium))
+                    Text(verbatim: String(item.key).uppercased())
+                        .font(.caption.weight(.semibold).monospaced())
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(JPalette.ink.opacity(0.08), in: .rect(cornerRadius: 4, style: .continuous))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.regularMaterial, in: .rect(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(JPalette.ink.opacity(0.10), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
+                .fixedSize()
+                .offset(x: 50)
+                .allowsHitTesting(false)
+                .transition(.opacity)
             }
         }
         .accessibilityLabel(JText(item.label))
-        .accessibilityAddTraits(tool == item ? .isSelected : [])
+        .accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier("plays.editor.tool.\(item.rawValue)")
     }
 
@@ -1774,26 +1812,10 @@ struct JournalPlayStepEditor: View {
         }
     }
 
-    private static let iconLine = [JournalCourtPoint(-0.8, 1), JournalCourtPoint(2.8, 1)]
-
-    @ViewBuilder
+    /// Every tool's icon, everywhere (rail, phone grid, Pencil palette):
+    /// one drawn family — EditorToolGlyph.
     private func icon(_ tool: Tool) -> some View {
-        let line = Self.iconLine
-        switch tool {
-        case .move: Image(systemName: "hand.point.up.left").font(.body)
-        case .cut: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .cut, player: 0, path: line)]))
-        case .dribble: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .dribble, player: 0, path: line)]))
-        case .pass: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .pass, player: 0, path: line)]))
-        case .handoff: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .handoff, player: 0, path: line)]))
-        case .shot: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .shot, player: 0, path: line)]))
-        // Upright, so the screen's bar reads as a T.
-        case .screen: JournalPlayMark(diagram: JournalPlayDiagram(actions: [.init(kind: .screen, player: 0, path: [JournalCourtPoint(1, 2.4), JournalCourtPoint(1, 0.15)])]))
-        case .player: JournalPlayMark(diagram: JournalPlayDiagram(offense: [.init(number: 1, at: JournalCourtPoint(1, 1))]))
-        case .defender: JournalPlayMark(diagram: JournalPlayDiagram(defense: [.init(at: JournalCourtPoint(1, 1))]))
-        case .ball: Image(systemName: "basketball").font(.body).foregroundStyle(JCategory.court.iconColor)
-        case .cone: JournalPlayMark(diagram: JournalPlayDiagram(cones: [JournalCourtPoint(1, 1.1)]))
-        case .erase: Image(systemName: "eraser").font(.body)
-        }
+        EditorToolGlyph(tool: tool, size: 20)
     }
 
     // MARK: - Undo
