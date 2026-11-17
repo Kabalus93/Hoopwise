@@ -2210,12 +2210,41 @@ own language.
   red minus; "+ Add a recurring drill" in bold) → FOCUS as toggle CHIPS in a
   FlowLayout (accent when on; `phase.focus.<raw>`) — eight full rows were
   most of the form → OBJECTIVES numbered in accent circles.
-  NEXT (approved): drill SERIES —
-  levels as separate drills, a series stored as one personal drill tagged
-  `kind:series` holding the ordered levels; spread over a phase easiest
-  first (even pacing, previous level as a short review, never more than one
-  level per session, a skipped class holds the level); the series sets its
-  block (Warm-up default); the connector creates real series.
+- DRILL SERIES (18 Nov 2026, Luther: "series or evolutions of drills …
+  increasing level of difficulty … when planning a phase … spread the
+  exercises per session with progression from easy to hard"). Models/
+  DrillSeries.swift: a series = an ORDERED LIST OF DRILLS (each level a whole
+  drill — drawing, minutes, ratings; library drills allowed), stored with NO
+  SCHEMA CHANGE as one personal SDDrill tagged `kind:series`, levels in tags
+  `series.level:<n>=<drill id>`, block `series.block:warmup|skills`. The
+  levels' own records are never touched (library drills are re-seeded).
+  `DrillItem.isSeries` keeps a series OUT of the drills list and pickers
+  (visibleDrills), the plan generator's candidates, Home search and
+  list_drills. SCREENS (Views/Drills/DrillSeriesViews.swift): drills page
+  "Series · N" row (`library.series`, not in pick mode) → DrillSeriesListView
+  (+ New Series) → DrillSeriesView (name, summary, Warm-up | Skills, numbered
+  levels — Edit to drag, swipe to take out, + Add a level from the library
+  picker, Delete Series keeps the drills; every change written at once);
+  DrillSeriesCard on a drill's page ("Dribbling · Level 3 of 7", Previous /
+  Next); New / Edit Drill's "Series" section joins one as its next level or
+  starts "New series…". SPREADING: Edit Phase → "Add a series"
+  (`phase.series.add` → a sheet of series) → SeriesSpreadSheet: block,
+  overflow choice when levels > sessions (stop where the phase ends | two
+  levels in some sessions), "N sessions, up to level K of M", and a
+  session-by-session preview (review line + level badges); Apply writes each
+  upcoming session. `SeriesSpread.plan` (pure): EVEN PACING, early levels
+  take the extra sessions; never more than one new level a session (unless
+  doubleUp, which pairs from the END so level 1 keeps its own); the first
+  session of each level from the second on opens with the previous level as
+  a REVIEW; `applying` removes every level of the series first, so a
+  re-spread never doubles. A skipped class holds the level through the
+  existing plan shift (SessionPlanShift). CONNECTOR: list_drill_series,
+  create_drill_series (levels = existing drill refs, easiest first; `by:
+  claude`); create_drill now says progressions are a SERIES of separate
+  drills (it used to say one drill with one instruction per progression).
+  Tests: DrillSeriesTests, DrillSeriesUITests (A create, B spread + clean
+  up, C delete). LATER (agreed): moving up a level by MASTERY (the group's
+  evaluation on that skill) instead of by calendar.
 
 ## Cycle planner (October 2026, Luther)
 - "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,

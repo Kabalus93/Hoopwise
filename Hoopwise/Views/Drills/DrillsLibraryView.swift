@@ -75,6 +75,8 @@ struct DrillsLibraryView: View {
 
     private var visibleDrills: [DrillItem] {
         dataManager.drills.filter { drill in
+            // A series is a ladder of drills, not one to list or pick.
+            guard !drill.isSeries else { return false }
             let visibilityTag = drill.tags.first(where: { $0.hasPrefix("visibility:") })
             let ownerTag = drill.tags.first(where: { $0.hasPrefix("owner:") })
             if visibilityTag == "visibility:private" {
@@ -275,6 +277,26 @@ struct DrillsLibraryView: View {
     }
 
     // MARK: Filters — skill first, then removable filters and the order
+
+    /// Series (18 Nov 2026): ladders of drills, easiest first — their own
+    /// page; they are not listed as drills.
+    private var seriesEntry: some View {
+        let count = DrillSeries.all(in: dataManager.drills).count
+        return Section {
+            NavigationLink(destination: DrillSeriesListView()) {
+                Label {
+                    HStack {
+                        Text(isChinese ? "训练系列" : "Series")
+                        Spacer()
+                        Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+                    }
+                } icon: {
+                    Image(systemName: "stairs").foregroundStyle(Color.accentColor)
+                }
+            }
+            .accessibilityIdentifier("library.series")
+        }
+    }
 
     private var filterSection: some View {
         Section {
@@ -489,6 +511,7 @@ struct DrillsLibraryView: View {
                 searchResults
             } else {
                 filterSection
+                if pick == nil { seriesEntry }
                 drillList
             }
         }
@@ -1186,6 +1209,9 @@ struct DrillDetailView: View {
 
                         // What it develops: the eight-axis octagon (November
                         // 2026); the coach's Adjust wins over Claude's rating.
+                        // The series this drill is a level of (18 Nov 2026).
+                        DrillSeriesCard(drillId: currentDrill.id)
+
                         DrillAttributesCard(drill: currentDrill, onSave: { profile in
                             var updated = currentDrill
                             updated.tags = profile.replacing(in: updated.tags, byCoach: true)
@@ -2257,6 +2283,10 @@ struct AddDrillView: View {
     /// 2026): saved as the drill's first visual on Create.
     @State private var drawing: DrillDrawing?
     @State private var drawingOpen = false
+    /// "Part of a series" (18 Nov 2026, Luther): the series this drill joins
+    /// as its next level — "" none, "new" a new series named `newSeriesName`.
+    @State private var seriesChoice = ""
+    @State private var newSeriesName = ""
     /// Return in the description asks Claude for the steps and key points
     /// (DrillWriter); the spinner beside "Description" is the only sign.
     @State private var writing = false
@@ -2326,6 +2356,8 @@ struct AddDrillView: View {
                     }
                 }
 
+                seriesSection(isChinese: isChinese)
+
                 // A drill's visuals are managed on its page once it exists.
                 if editing == nil {
                     visualSection(isChinese: isChinese)
@@ -2368,6 +2400,54 @@ struct AddDrillView: View {
     }
     
     @ViewBuilder
+    /// Join a series as its next level, or start one with this drill as
+    /// level 1. Leaving a series happens on the series page.
+    private func seriesSection(isChinese: Bool) -> some View {
+        let all = DrillSeries.all(in: dataManager.drills)
+        let joined = editing.map { DrillSeries.containing($0.id, in: dataManager.drills) } ?? []
+        return Section {
+            ForEach(joined, id: \.series.id) { item in
+                Label(isChinese ? "\(item.series.name) · 第 \(item.level)/\(item.series.levels.count) 级"
+                                : "\(item.series.name) · Level \(item.level) of \(item.series.levels.count)",
+                      systemImage: "stairs")
+                    .foregroundStyle(.secondary)
+            }
+            Picker(isChinese ? "加入系列" : "Add to a series", selection: $seriesChoice) {
+                Text(isChinese ? "不加入" : "None").tag("")
+                ForEach(all.filter { s in !joined.contains { $0.series.id == s.id } }) { series in
+                    Text(isChinese ? "\(series.name)（第 \(series.levels.count + 1) 级）"
+                                   : "\(series.name) (as level \(series.levels.count + 1))").tag(series.id.uuidString)
+                }
+                Text(isChinese ? "新系列…" : "New series…").tag("new")
+            }
+            .accessibilityIdentifier("newDrill.series")
+            if seriesChoice == "new" {
+                TextField(isChinese ? "系列名称，如“运球进阶”" : "Series name, like “Dribbling ladder”", text: $newSeriesName)
+                    .accessibilityIdentifier("newDrill.seriesName")
+            }
+        } header: {
+            Text(isChinese ? "系列" : "Series")
+        } footer: {
+            Text(isChinese ? "系列是从易到难的一组训练。规划阶段时可以把整个系列按课程逐级排开。"
+                           : "A series is a ladder of drills, easiest first. A phase can spread a whole series over its sessions, level by level.")
+        }
+    }
+
+    /// Adds `drillId` as the next level of the chosen series (or a new one).
+    private func joinSeries(_ drillId: UUID) {
+        if seriesChoice == "new" {
+            let name = newSeriesName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return }
+            let series = DrillSeries(name: name, levels: [drillId])
+            dataManager.addDrill(series.applied(to: DrillItem(id: series.id, name: name, category: .skills)))
+        } else if let id = UUID(uuidString: seriesChoice),
+                  let record = dataManager.drills.first(where: { $0.id == id }),
+                  var series = DrillSeries(drill: record), !series.levels.contains(drillId) {
+            series.levels.append(drillId)
+            dataManager.updateDrill(series.applied(to: record))
+        }
+    }
+
     private func visualSection(isChinese: Bool) -> some View {
         Section {
             if let drawing {
@@ -2440,6 +2520,7 @@ struct AddDrillView: View {
         }
         updated.updatedAt = Date()
         dataManager.updateDrill(updated)
+        joinSeries(updated.id)
         dismiss()
     }
 
@@ -2463,6 +2544,7 @@ struct AddDrillView: View {
         )
         if let writtenAttributes { drill.tags = writtenAttributes.replacing(in: drill.tags, byCoach: false) }
         dataManager.addDrill(drill)
+        joinSeries(id)
         dismiss()
     }
 }

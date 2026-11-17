@@ -369,7 +369,7 @@ struct HomeSearchView: View {
         index.plays = plays.map { play in
             .init(value: play, text: fold([play.name, play.concept, play.situation].joined(separator: " ")), name: fold(play.name))
         }
-        index.drills = dataManager.drills.map { drill in
+        index.drills = dataManager.drills.filter { !$0.isSeries }.map { drill in
             let name = fold([drill.name, drill.localizedName].joined(separator: " "))
             return .init(value: drill, text: name + " " + fold(drill.description), name: name)
         }

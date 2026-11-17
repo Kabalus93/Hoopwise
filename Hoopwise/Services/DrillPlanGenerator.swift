@@ -352,6 +352,7 @@ struct DrillPlanGenerator {
 
     private static func candidates(drills: [DrillItem], window: [ActivityAge: Double], age: ActivityAge) -> [Candidate] {
         drills.compactMap { drill in
+            guard !drill.isSeries else { return nil }
             if let a = drill.libraryActivity {
                 guard !a.isRule, let w = window[a.age] else { return nil }
                 return Candidate(id: drill.id, minutes: drill.durationMinutes, block: a.block, type: a.type,

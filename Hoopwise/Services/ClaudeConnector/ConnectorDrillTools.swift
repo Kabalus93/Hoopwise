@@ -130,6 +130,7 @@ extension ConnectorToolRegistry {
                     let all = (args["scope"] as? String) == "all"
                     let query = (args["query"] as? String ?? "").trimmingCharacters(in: .whitespaces)
                     let drills = dataManager.drills
+                        .filter { !$0.isSeries }
                         .filter { all || !$0.isLibraryDrill }
                         .filter { query.isEmpty || [$0.name, $0.localizedName, $0.description].contains { $0.localizedCaseInsensitiveContains(query) } }
                         .sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
@@ -153,10 +154,10 @@ extension ConnectorToolRegistry {
                 description: """
                 Save a NEW drill in the coach's PERSONAL drills (Drills → Personal), e.g. from a session he describes \
                 or a concept he shares. Give a clear name, a short description (what and why), instructions as \
-                ordered steps or progressions (one per item — a series of variations of one drill is one drill \
-                with one instruction per progression), key points, duration and category. It can then go in \
-                session plans (add_drill_to_session). Check list_drills first so you do not make a duplicate — \
-                update_drill an existing one instead.
+                ordered steps (one per item), key points, duration and category. It can then go in session plans \
+                (add_drill_to_session). PROGRESSIONS of one skill (stationary dribble → moving → two balls) are a \
+                SERIES: create each level as its own drill here, then create_drill_series with them easiest first. \
+                Check list_drills first so you do not make a duplicate — update_drill an existing one instead.
                 """,
                 schema: drillSchema(drillFields, ["name"]),
                 category: .sessionWrite,
@@ -252,6 +253,62 @@ extension ConnectorToolRegistry {
                     dataManager.updateSessionEvent(session, keepLiveFields: true)
                     return ConnectorToolResult(payload: Self.encode(["removed": drill.localizedName, "session": session.title]),
                                                summary: "removed \(drill.localizedName) from \(session.title)")
+                }),
+
+            // SERIES (18 Nov 2026, Luther): progressions as real series — each
+            // level its own drill, the series one ordered list (DrillSeries).
+            ConnectorTool(
+                name: "list_drill_series",
+                description: "The coach's drill SERIES (Drills → Series): ladders of drills, easiest first, with their levels.",
+                schema: drillSchema([:], []),
+                category: .read,
+                run: { [self] _ in
+                    let all = DrillSeries.all(in: dataManager.drills)
+                    let rows: [[String: Any]] = all.map { series in
+                        ["series_id": Self.ref(series.id), "name": series.name, "block": series.block.rawValue,
+                         "levels": series.levels.enumerated().map { i, id in
+                             ["level": i + 1, "drill_id": Self.ref(id),
+                              "name": dataManager.drills.first { $0.id == id }?.localizedName ?? "(deleted)"] as [String: Any]
+                         }]
+                    }
+                    return ConnectorToolResult(payload: Self.encode(["count": all.count, "series": rows]),
+                                               summary: "listed series · \(all.count)")
+                }),
+
+            ConnectorTool(
+                name: "create_drill_series",
+                description: "Save a drill SERIES — a progression of one skill, easiest first (e.g. stationary dribble → dribble while moving → running with the ball → two balls → between the legs → combos). Each level must already be a drill (create_drill the personal ones first; library drills work too). A phase can then spread the series over its sessions level by level (Edit Phase → Add a series). block: warmup (default) or skills — where its levels go in a session plan.",
+                schema: drillSchema([
+                    "name": ["type": "string"],
+                    "summary": ["type": "string", "description": "What it builds and how it climbs — one sentence"],
+                    "levels": ["type": "array", "items": ["type": "string"],
+                               "description": "drill_ids (or exact names), EASIEST FIRST"],
+                    "block": ["type": "string", "enum": ["warmup", "skills"]],
+                ], ["name", "levels"]),
+                category: .sessionWrite,
+                run: { [self] args in
+                    let name = (args["name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty else { throw ConnectorToolError.badArguments("name is required") }
+                    let refs = strings(args["levels"]) ?? []
+                    guard refs.count >= 2 else { throw ConnectorToolError.badArguments("levels: at least two drills, easiest first") }
+                    let levels = try refs.map { try findDrill($0, personalOnly: false) }
+                    guard Set(levels.map(\.id)).count == levels.count else {
+                        throw ConnectorToolError.badArguments("levels: a drill appears twice")
+                    }
+                    if let twin = DrillSeries.all(in: dataManager.drills).first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                        throw ConnectorToolError.ruleViolation("A series is already called \"\(name)\" [\(Self.ref(twin.id))].")
+                    }
+                    let block = PhaseDrillEditing.Block(rawValue: (args["block"] as? String) ?? "warmup") ?? .warmup
+                    let series = DrillSeries(name: name, summary: (args["summary"] as? String) ?? "",
+                                             levels: levels.map(\.id), block: block)
+                    var record = series.applied(to: DrillItem(id: series.id, name: name, category: .skills))
+                    record.tags.append("by:claude")
+                    dataManager.addDrill(record)
+                    return ConnectorToolResult(
+                        payload: Self.encode(["series_id": Self.ref(series.id), "name": name, "block": block.rawValue,
+                                              "levels": levels.enumerated().map { "\($0.offset + 1). \($0.element.localizedName)" },
+                                              "saved_in": "Drills → Series"]),
+                        summary: "created series \(name)")
                 }),
         ]
     }

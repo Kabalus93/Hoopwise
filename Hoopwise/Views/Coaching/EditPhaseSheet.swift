@@ -20,6 +20,9 @@ struct EditPhaseSheet: View {
     @State private var pickingDrill = false
     @State private var choosing: PhaseDrillChooser.Mode?
     @State private var drillsNote: String?
+    /// Spreading a drill series over the phase (DrillSeries / SeriesSpread).
+    @State private var spreading: DrillSeries?
+    @State private var pickingSeries = false
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
@@ -47,6 +50,11 @@ struct EditPhaseSheet: View {
                     drillsNote = note
                 }
                 .environmentObject(dataManager)
+            }
+            .sheet(isPresented: $pickingSeries) { seriesPicker }
+            .sheet(item: $spreading) { series in
+                SeriesSpreadSheet(series: series, sessions: upcoming) { note in drillsNote = note }
+                    .environmentObject(dataManager)
             }
             .navigationTitle(isChinese ? "编辑阶段" : "Edit Phase")
             .navigationBarTitleDisplayMode(.inline)
@@ -204,6 +212,15 @@ struct EditPhaseSheet: View {
                         .font(.body.weight(.semibold))
                 }
                 .accessibilityIdentifier("phase.drill.add")
+                if DrillSeries.all(in: dataManager.drills).contains(where: { !$0.levels.isEmpty }) {
+                    Button {
+                        pickingSeries = true
+                    } label: {
+                        Label(isChinese ? "排入一个系列" : "Add a series", systemImage: "stairs")
+                            .font(.body.weight(.semibold))
+                    }
+                    .accessibilityIdentifier("phase.series.add")
+                }
             }
         } header: {
             HStack {
@@ -262,6 +279,40 @@ struct EditPhaseSheet: View {
                 .foregroundStyle(.red)
         }
         .padding(.vertical, 2)
+    }
+
+    /// Which series to spread over the phase.
+    private var seriesPicker: some View {
+        NavigationStack {
+            List(DrillSeries.all(in: dataManager.drills).filter { !$0.levels.isEmpty }) { series in
+                Button {
+                    pickingSeries = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { spreading = series }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "stairs")
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 32, height: 32)
+                            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(series.name).foregroundStyle(.primary)
+                            Text(isChinese ? "\(series.levels.count) 级 · \(upcoming.count) 节待上"
+                                           : "\(series.levels.count) levels · over \(upcoming.count) upcoming sessions")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("phase.series.choice")
+            }
+            .navigationTitle(isChinese ? "排入一个系列" : "Add a series")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isChinese ? "取消" : "Cancel") { pickingSeries = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private var recurringPicker: some View {
@@ -430,6 +481,124 @@ struct PhaseDrillChooser: View {
         done(mode.isAdd
              ? (isChinese ? "已把「\(name)」加入 \(changed) 节课" : "Added “\(name)” to \(changed) session\(changed == 1 ? "" : "s")")
              : (isChinese ? "已从 \(changed) 节课移除「\(name)」" : "Removed “\(name)” from \(changed) session\(changed == 1 ? "" : "s")"))
+        dismiss()
+    }
+}
+
+
+/// A series laid over the phase's upcoming sessions, easiest first: the
+/// preview says which level each session teaches (and reviews), then Apply
+/// writes every session (SeriesSpread.applying — re-spreading never doubles).
+struct SeriesSpreadSheet: View {
+    @EnvironmentObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    let series: DrillSeries
+    let sessions: [SessionEvent]
+    let done: (String) -> Void
+
+    @State private var block: PhaseDrillEditing.Block
+    @State private var overflow: SeriesSpread.Overflow = .stop
+
+    init(series: DrillSeries, sessions: [SessionEvent], done: @escaping (String) -> Void) {
+        self.series = series
+        self.sessions = sessions
+        self.done = done
+        _block = State(initialValue: series.block)
+    }
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+    private var plan: [SeriesSpread.Slot] { SeriesSpread.plan(levels: series.levels, sessions: sessions.count, overflow: overflow) }
+    private func name(_ id: UUID) -> String {
+        dataManager.drills.first { $0.id == id }?.localizedName ?? (isChinese ? "已删除的训练" : "Deleted drill")
+    }
+    private func level(_ id: UUID) -> Int { series.level(of: id) ?? 0 }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Picker(isChinese ? "排进" : "Put it in", selection: $block) {
+                        Text(isChinese ? "热身" : "Warm-up").tag(PhaseDrillEditing.Block.warmup)
+                        Text(isChinese ? "技能" : "Skills").tag(PhaseDrillEditing.Block.skills)
+                    }
+                    .pickerStyle(.segmented)
+                    if series.levels.count > sessions.count {
+                        Picker(isChinese ? "级数多于课程" : "More levels than sessions", selection: $overflow) {
+                            Text(isChinese ? "到能到的那一级为止" : "Stop where the phase ends").tag(SeriesSpread.Overflow.stop)
+                            Text(isChinese ? "有的课教两级" : "Two levels in some sessions").tag(SeriesSpread.Overflow.doubleUp)
+                        }
+                        .accessibilityIdentifier("series.overflow")
+                    }
+                } footer: {
+                    let reached = SeriesSpread.reached(plan, levels: series.levels)
+                    Text(isChinese ? "\(sessions.count) 节课，到第 \(reached)/\(series.levels.count) 级。每级的第一节课先用上一级热身复习。"
+                                   : "\(sessions.count) sessions, up to level \(reached) of \(series.levels.count). The first session of each level opens with the one before as a short review.")
+                }
+
+                Section {
+                    ForEach(Array(zip(sessions, plan).enumerated()), id: \.offset) { _, pair in
+                        let (session, slot) = pair
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.startTime.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                                    .font(.subheadline.weight(.medium))
+                                Text(session.startTime.formatted(date: .omitted, time: .shortened))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .frame(width: 92, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 4) {
+                                if let review = slot.review {
+                                    Label(isChinese ? "复习 \(level(review)) · \(name(review))" : "Review \(level(review)) · \(name(review))",
+                                          systemImage: "arrow.counterclockwise")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                ForEach(slot.teach, id: \.self) { id in
+                                    HStack(spacing: 8) {
+                                        Text("\(level(id))")
+                                            .font(.caption.weight(.bold).monospacedDigit())
+                                            .foregroundStyle(Color.accentColor)
+                                            .frame(width: 22, height: 22)
+                                            .background(Color.accentColor.opacity(0.14), in: Circle())
+                                        Text(name(id)).font(.subheadline)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text(isChinese ? "每节课" : "Session by session")
+                }
+            }
+            .navigationTitle(series.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isChinese ? "取消" : "Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isChinese ? "排入" : "Apply", action: apply)
+                        .disabled(sessions.isEmpty)
+                        .accessibilityIdentifier("series.apply")
+                }
+            }
+        }
+    }
+
+    private func apply() {
+        var laid = series
+        laid.block = block
+        var changed = 0
+        for (session, slot) in zip(sessions, plan) {
+            guard var stored = dataManager.sessionEvents.first(where: { $0.id == session.id }) else { continue }
+            let before = stored.curriculum
+            stored.curriculum = SeriesSpread.applying(slot, series: laid, to: before)
+            guard stored.curriculum != before else { continue }
+            dataManager.updateSessionEvent(stored, keepLiveFields: true)
+            changed += 1
+        }
+        HapticFeedback.notification(.success)
+        done(isChinese ? "「\(series.name)」已排入 \(changed) 节课" : "Spread “\(series.name)” over \(changed) session\(changed == 1 ? "" : "s")")
         dismiss()
     }
 }
