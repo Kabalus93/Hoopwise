@@ -73,6 +73,14 @@ final class ConnectorServer {
         }
     }
 
+    /// Stops listening (Profile → Claude Desktop switched off).
+    func stop() {
+        listener?.cancel()
+        listener = nil
+        registry = nil
+        isListening = false
+    }
+
     /// The access key, generated once per Mac.
     static var token: String {
         #if DEBUG
@@ -226,8 +234,22 @@ private struct HTTPRequest {
 /// What Profile → Claude Desktop copies: the entry for Claude Desktop's
 /// claude_desktop_config.json.
 enum ConnectorSetup {
-    /// Where the bridge is installed (outside the sandbox, by the setup).
-    static let bridgePath = "~/Library/Application Support/Hoopwise Connector/hoopwise-connector.py"
+    /// OFF until the coach turns it on and agrees (17 Nov 2026, before App
+    /// Store submission): until then nothing listens, so no athlete data can
+    /// reach Claude Desktop without an explicit choice (App Review 5.1.2(i)).
+    static let enabledKey = "connector.enabled"
+    static var isEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    }
+
+    /// Where the coach saved the bridge (Profile → Save the bridge), else the
+    /// usual place.
+    static let savedBridgeKey = "connector.bridgePath"
+    static let defaultBridgePath = "~/Library/Application Support/Hoopwise Connector/hoopwise-connector.py"
+    static var bridgePath: String {
+        UserDefaults.standard.string(forKey: savedBridgeKey) ?? defaultBridgePath
+    }
 
     static var isListening: Bool { ConnectorServer.shared.isListening }
 

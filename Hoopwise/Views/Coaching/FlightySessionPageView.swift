@@ -4951,114 +4951,55 @@ struct SessionGamesTabView: View {
         }
     }
     
+    /// "Why play games?" — one coaching tip, unattributed (17 Nov 2026,
+    /// before App Store submission: the card used to credit quotes to real
+    /// players and coaches that could not be sourced).
     private var emptyGamesState: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        let quotes: [(quote: String, author: String, role: String)] = isChinese ? [
-            ("孩子们通过打比赛学得最快。比赛教会他们技术练习无法教会的东西——如何竞争、如何应对压力、如何与队友沟通。", "格雷格·波波维奇", "NBA主教练"),
-            ("最好的球员是在街头和球场上成长的，在那里每次触球都是一次学习机会。让孩子们去比赛吧。", "埃托雷·梅西纳", "欧洲联赛主教练"),
-            ("我们过度执教、训练过度，却让他们比赛不足。比赛才是最好的老师。", "鲍勃·比格罗", "青少年篮球倡导者"),
-            ("我学习篮球的方式就是打球。没有人教我挡拆——我是在比赛中学会的。", "史蒂夫·纳什", "名人堂球员"),
-            ("让比赛成为老师。孩子们在有意义的比赛环境中学习得更快。", "唐·肖瓦尔特", "青少年篮球教练"),
-            ("你不能在黑板上学会游泳。篮球也是一样的。", "菲尔·杰克逊", "NBA传奇教练"),
-            ("比赛是最好的练习。训练中学到的东西只有在比赛中才能真正理解。", "帕特·莱利", "NBA名人堂教练"),
-            ("让孩子们犯错。比赛中的错误是最好的学习机会。", "杰伊·比拉斯", "ESPN篮球分析师"),
-            ("年轻球员需要比赛时间，而不是更多的训练时间。", "杰里·韦斯特", "NBA传奇人物"),
-            ("真正的篮球智商是在比赛中培养的，不是在训练中。", "拉里·伯德", "名人堂球员"),
-            ("我看过太多孩子练习完美的技术，但在比赛中却不知所措。", "查尔斯·巴克利", "名人堂球员"),
-            ("比赛教会孩子如何思考，训练只教会他们如何行动。", "休·霍林斯", "青少年篮球教练"),
-            ("5对5比赛是最好的篮球课堂。", "泽利科·奥布拉多维奇", "欧洲联赛传奇教练"),
-            ("孩子们需要感受比赛的节奏，这是任何训练都无法模拟的。", "里克·卡莱尔", "NBA主教练"),
-            ("在我执教生涯中，最好的球员都是在比赛中成长的。", "迈克·沙舍夫斯基", "大学篮球名帅"),
-            ("不要剥夺孩子犯错的权利。比赛中的错误是成长的催化剂。", "约翰·伍登", "UCLA传奇教练"),
-            ("每一次比赛都是一堂课。输赢都是学习。", "德安东尼", "NBA主教练"),
-            ("孩子们在玩乐中学习最快。让比赛保持有趣。", "史蒂夫·科尔", "NBA主教练"),
-            ("真正的决策能力只能在真实的比赛压力下培养。", "布拉德·史蒂文斯", "NBA主教练"),
-            ("我宁愿让孩子在比赛中学习，也不愿看他们在训练中完美。", "汤姆·伊佐", "大学篮球名帅"),
-            ("比赛是检验真理的唯一标准。篮球也是如此。", "姚明", "名人堂球员"),
-            ("孩子需要理解为什么，而不只是怎么做。比赛给他们这个答案。", "蒂姆·邓肯", "名人堂球员"),
-            ("最好的学习发生在孩子们忘记他们在学习的时候——那就是比赛。", "科比·布莱恩特", "名人堂球员"),
-            ("比赛是青少年篮球训练中最被低估的工具。", "大卫·布拉特", "欧洲联赛冠军教练"),
-            ("让孩子在比赛中找到自己的风格。", "马努·吉诺比利", "名人堂球员"),
-            ("训练教技术，比赛教智慧。两者都需要，但比赛更重要。", "托尼·帕克", "名人堂球员"),
-            ("孩子们不需要更多的训练，他们需要更多真正的比赛经验。", "迪肯贝·穆托姆博", "名人堂球员"),
-            ("比赛中的一分钟胜过训练中的十分钟。", "保罗·皮尔斯", "名人堂球员"),
-            ("让孩子们在比赛中解决问题，而不是告诉他们答案。", "雷吉·米勒", "名人堂球员"),
-            ("篮球智商不是教出来的，是打出来的。", "阿伦·艾弗森", "名人堂球员"),
-            ("我见过最聪明的年轻球员都是在街头比赛中成长的。", "凯文·杜兰特", "NBA球星"),
-            ("比赛给孩子们他们真正需要的东西：真实的反馈。", "勒布朗·詹姆斯", "NBA传奇球员")
+        let tips: [String] = isChinese ? [
+            "孩子们通过打比赛学得最快：竞争、应对压力、与队友沟通，这些是技术练习教不会的。",
+            "多比赛、少说教。比赛本身就是最好的老师。",
+            "让比赛成为老师。在有意义的比赛情境中，孩子们学得更快。",
+            "训练中学到的东西，只有放进比赛里才真正有意义。",
+            "允许孩子犯错。比赛中的错误是最好的学习机会。",
+            "篮球智商是在比赛中打出来的，不是在训练中讲出来的。",
+            "孩子们需要感受比赛的节奏，任何练习都无法完全模拟。",
+            "让比赛保持有趣——孩子们在玩乐中学得最快。",
+            "真正的判断力只能在真实的比赛压力下培养。",
+            "让孩子在比赛中自己解决问题，而不是直接告诉他们答案。",
+            "比赛给孩子最真实的反馈。",
+            "3对3、4对4、5对5，让每个孩子都有更多触球和决策的机会。",
         ] : [
-            ("Kids learn fastest by playing games. Games teach what drills can't — how to compete, handle pressure, and communicate with teammates.", "Gregg Popovich", "NBA Head Coach"),
-            ("The best players grew up on the streets and playgrounds, where every touch was a learning moment. Let kids play.", "Ettore Messina", "EuroLeague Head Coach"),
-            ("We over-coach, over-drill, and under-play. The game itself is the best teacher.", "Bob Bigelow", "Youth Basketball Advocate"),
-            ("The way I learned basketball was playing. Nobody taught me the pick-and-roll — I learned it in games.", "Steve Nash", "Hall of Fame Player"),
-            ("Let the game be the teacher. Kids learn faster in meaningful game situations.", "Don Showalter", "USA Basketball Youth Coach"),
-            ("You can't learn to swim on a blackboard. Basketball is the same.", "Phil Jackson", "Legendary NBA Coach"),
-            ("The game is the best practice. What you learn in drills only makes sense in games.", "Pat Riley", "Hall of Fame Coach"),
-            ("Let kids make mistakes. Mistakes in games are the best learning opportunities.", "Jay Bilas", "ESPN Basketball Analyst"),
-            ("Young players need game time, not more practice time.", "Jerry West", "NBA Legend"),
-            ("True basketball IQ is developed in games, not in practice.", "Larry Bird", "Hall of Fame Player"),
-            ("I've seen too many kids practice perfect technique but freeze up in games.", "Charles Barkley", "Hall of Fame Player"),
-            ("Games teach kids how to think. Drills only teach them how to act.", "Hugh Hollins", "Youth Basketball Coach"),
-            ("Five-on-five is the best basketball classroom.", "Željko Obradović", "EuroLeague Legend"),
-            ("Kids need to feel the rhythm of a game. No drill can simulate that.", "Rick Carlisle", "NBA Head Coach"),
-            ("In my coaching career, the best players grew up playing games.", "Mike Krzyzewski", "Duke Legend"),
-            ("Don't take away a child's right to make mistakes. Errors in games are catalysts for growth.", "John Wooden", "UCLA Legend"),
-            ("Every game is a lesson. Win or lose, you learn.", "Mike D'Antoni", "NBA Head Coach"),
-            ("Kids learn fastest when they're having fun. Keep games enjoyable.", "Steve Kerr", "NBA Head Coach"),
-            ("Real decision-making can only develop under real game pressure.", "Brad Stevens", "NBA Executive"),
-            ("I'd rather have kids learn in games than look perfect in practice.", "Tom Izzo", "College Basketball Coach"),
-            ("The game is the ultimate test. Let them play it.", "Yao Ming", "Hall of Fame Player"),
-            ("Kids need to understand why, not just how. Games give them the answer.", "Tim Duncan", "Hall of Fame Player"),
-            ("The best learning happens when kids forget they're learning — that's games.", "Kobe Bryant", "Hall of Fame Player"),
-            ("Games are the most underrated tool in youth basketball development.", "David Blatt", "EuroLeague Champion Coach"),
-            ("Let kids find their own style through games.", "Manu Ginóbili", "Hall of Fame Player"),
-            ("Drills teach technique, games teach wisdom. Both matter, but games matter more.", "Tony Parker", "Hall of Fame Player"),
-            ("Kids don't need more drills. They need more real game experience.", "Dikembe Mutombo", "Hall of Fame Player"),
-            ("One minute in a game is worth ten minutes in practice.", "Paul Pierce", "Hall of Fame Player"),
-            ("Let kids solve problems in games instead of giving them the answers.", "Reggie Miller", "Hall of Fame Player"),
-            ("Basketball IQ isn't taught — it's developed through playing.", "Allen Iverson", "Hall of Fame Player"),
-            ("The smartest young players I've seen grew up playing pickup games.", "Kevin Durant", "NBA Star"),
-            ("Games give kids what they really need: real feedback.", "LeBron James", "NBA Legend"),
-            ("Stop the whistle. Let them play. Let them learn.", "Doc Rivers", "NBA Head Coach"),
-            ("The playground taught me more than any coach ever could.", "Magic Johnson", "Hall of Fame Player"),
-            ("In Serbia, we let kids play 3v3, 4v4, 5v5 from age 6. That's why we produce great players.", "Saša Đorđević", "EuroLeague Coach"),
-            ("Youth basketball should be 80% games, 20% instruction. We have it backwards.", "Brian McCormick", "Youth Basketball Author")
+            "Kids learn fastest by playing games: competing, handling pressure and talking to teammates are things drills can't teach.",
+            "Coach less, play more. The game itself is the best teacher.",
+            "Let the game be the teacher. Kids learn faster in game situations that mean something.",
+            "What kids learn in drills only makes sense once they use it in a game.",
+            "Let kids make mistakes. Mistakes in games are the best learning moments.",
+            "Basketball IQ is built by playing, not explained in practice.",
+            "Kids need to feel the rhythm of a game. No drill quite recreates it.",
+            "Keep games fun — kids learn fastest when they're enjoying it.",
+            "Real decision-making only grows under real game pressure.",
+            "Let kids solve problems in games instead of handing them the answers.",
+            "Games give kids the most honest feedback there is.",
+            "Small-sided games — 3v3, 4v4 — give every child more touches and more decisions.",
         ]
-        let randomQuote = quotes[Int.random(in: 0..<quotes.count)]
-        
+        let tip = tips[Int.random(in: 0..<tips.count)]
+
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Label {
-                    Text(isChinese ? "为什么要打比赛？" : "Why Play Games?")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.primary)
-                } icon: {
-                    Image(systemName: "lightbulb.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.accentColor)
-                }
-                Spacer()
-                Image(systemName: "quote.opening")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+            Label {
+                Text(isChinese ? "为什么要打比赛？" : "Why Play Games?")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+            } icon: {
+                Image(systemName: "lightbulb.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.accentColor)
             }
 
-            Text("\u{201C}\(randomQuote.quote)\u{201D}")
+            Text(tip)
                 .font(.footnote)
                 .foregroundStyle(.primary)
-                .italic()
                 .lineSpacing(3)
-
-            HStack(spacing: 6) {
-                Text("— \(randomQuote.author)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text("·")
-                    .foregroundStyle(.tertiary)
-                Text(randomQuote.role)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)

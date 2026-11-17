@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 import PhotosUI
 import CloudKit
@@ -415,35 +416,75 @@ struct FlightyCoachProfileView: View {
     #if targetEnvironment(macCatalyst)
     // MARK: - Claude Desktop (Mac only, November 2026)
     @State private var claudeSetupCopied = false
+    @State private var connectorOn = ConnectorSetup.isEnabled
+    @State private var askingConnectorConsent = false
+    @State private var savingBridge = false
+    @State private var bridgeSaved = false
 
-    /// Lets Claude Desktop work in the app (ClaudeConnector/). The app serves
-    /// on this Mac only; the coach copies Claude Desktop's config entry here.
+    /// Lets Claude Desktop work in the app (ClaudeConnector/). OFF until the
+    /// coach turns it on and agrees to what it shares (17 Nov 2026); then the
+    /// app serves on this Mac only, the coach saves the bridge and copies
+    /// Claude Desktop's config entry here.
     private var claudeDesktopSection: some View {
         Section {
-            Label {
-                Text(ConnectorSetup.isListening
-                     ? (isChinese ? "已开启 · 仅限本机" : "On · this Mac only")
-                     : (isChinese ? "未运行" : "Not running"))
-            } icon: {
-                Image(systemName: ConnectorSetup.isListening ? "checkmark.circle.fill" : "xmark.circle")
-                    .foregroundStyle(ConnectorSetup.isListening ? .green : .secondary)
+            Toggle(isOn: Binding(get: { connectorOn }, set: { on in
+                if on { askingConnectorConsent = true } else { setConnector(false) }
+            })) {
+                Text(isChinese ? "允许 Claude Desktop 使用 Hoopwise" : "Let Claude Desktop use Hoopwise")
             }
-            Button {
-                UIPasteboard.general.string = ConnectorSetup.claudeDesktopConfig()
-                claudeSetupCopied = true
-            } label: {
-                Label(claudeSetupCopied
-                      ? (isChinese ? "已复制" : "Copied")
-                      : (isChinese ? "复制 Claude Desktop 设置" : "Copy setup for Claude Desktop"),
-                      systemImage: claudeSetupCopied ? "checkmark" : "doc.on.doc")
+            .accessibilityIdentifier("profile.connectorSwitch")
+            if connectorOn {
+                Button {
+                    savingBridge = true
+                } label: {
+                    Label(bridgeSaved
+                          ? (isChinese ? "已保存连接脚本" : "Bridge saved")
+                          : (isChinese ? "保存连接脚本…" : "Save the bridge…"),
+                          systemImage: bridgeSaved ? "checkmark" : "square.and.arrow.down")
+                }
+                Button {
+                    UIPasteboard.general.string = ConnectorSetup.claudeDesktopConfig()
+                    claudeSetupCopied = true
+                } label: {
+                    Label(claudeSetupCopied
+                          ? (isChinese ? "已复制" : "Copied")
+                          : (isChinese ? "复制 Claude Desktop 设置" : "Copy setup for Claude Desktop"),
+                          systemImage: claudeSetupCopied ? "checkmark" : "doc.on.doc")
+                }
+                .accessibilityIdentifier("profile.copyClaudeSetup")
             }
-            .accessibilityIdentifier("profile.copyClaudeSetup")
         } header: {
-            Text("Claude Desktop")
+            Text(isChinese ? "Claude Desktop · 高级" : "Claude Desktop · Advanced")
         } footer: {
             Text(isChinese
-                 ? "让 Claude Desktop 查找学员和课程、记录考勤、排课。Claude 每次操作前都会征求你的同意；没有删除功能。设置里含有访问密钥，请勿分享。"
-                 : "Lets Claude Desktop look up athletes and sessions, mark attendance and schedule classes. Claude asks you before each action, and nothing can be deleted. The setup contains this Mac's access key — don't share it.")
+                 ? "开启后，本机上的 Claude Desktop 可以查看学员姓名、课程、考勤和训练计划，并在你同意后进行修改，包括删除课程和战术；学员档案、合同和付款永远不会被删除。数据会按 Anthropic 的条款发送给 Claude。设置里含有访问密钥，请勿分享。"
+                 : "When on, Claude Desktop on this Mac can read athletes' names, sessions, attendance and plans, and make changes you approve — including deleting sessions and plays. Athlete records, contracts and payments are never deleted. What Claude reads is sent to Anthropic under their terms. The setup contains this Mac's access key — don't share it.")
+        }
+        .alert(isChinese ? "允许 Claude Desktop 访问？" : "Let Claude Desktop in?", isPresented: $askingConnectorConsent) {
+            Button(isChinese ? "允许" : "Allow") { setConnector(true) }
+            Button(isChinese ? "取消" : "Cancel", role: .cancel) {}
+        } message: {
+            Text(isChinese
+                 ? "Claude Desktop 将能读取学员姓名、课程、考勤和训练计划，这些内容会发送给 Anthropic。每次修改前 Claude 都会征求你的同意。你可以随时关闭。"
+                 : "Claude Desktop will be able to read athletes' names, sessions, attendance and plans, and what it reads is sent to Anthropic. Claude asks before every change. You can switch this off at any time.")
+        }
+        .fileExporter(isPresented: $savingBridge, document: ConnectorBridgeDocument(),
+                      contentType: .pythonScript, defaultFilename: ConnectorBridgeScript.fileName) { result in
+            if case .success(let url) = result {
+                UserDefaults.standard.set(url.path, forKey: ConnectorSetup.savedBridgeKey)
+                bridgeSaved = true
+                claudeSetupCopied = false
+            }
+        }
+    }
+
+    private func setConnector(_ on: Bool) {
+        ConnectorSetup.isEnabled = on
+        connectorOn = on
+        if on {
+            ConnectorServer.shared.start(dataManager: dataManager)
+        } else {
+            ConnectorServer.shared.stop()
         }
     }
 
@@ -1476,3 +1517,15 @@ struct FlightyEditCoachProfileView: View {
     FlightyCoachProfileView()
         .environmentObject(DataManager.shared)
 }
+
+#if targetEnvironment(macCatalyst)
+/// The bridge script as a file the coach saves (Profile → Claude Desktop).
+struct ConnectorBridgeDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.pythonScript] }
+    init() {}
+    init(configuration: ReadConfiguration) throws {}
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(ConnectorBridgeScript.source.utf8))
+    }
+}
+#endif

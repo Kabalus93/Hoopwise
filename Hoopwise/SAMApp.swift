@@ -38,8 +38,16 @@ struct SAMApp: App {
         #if targetEnvironment(macCatalyst)
         // Every popup on the Mac: no slide-up, window-sized (MacPresentation).
         MacPopups.install()
-        // Claude Desktop connector (ClaudeConnector/): local MCP on 127.0.0.1.
-        ConnectorServer.shared.start(dataManager: SwiftDataManager.shared)
+        // Claude Desktop connector (ClaudeConnector/): local MCP on 127.0.0.1,
+        // only once the coach has turned it on in Profile → Claude Desktop.
+        var connectorWanted = ConnectorSetup.isEnabled
+        #if DEBUG
+        // Demo copies verified over HTTP pass a token and expect the server.
+        if ProcessInfo.processInfo.environment["HOOPWISE_CONNECTOR_TOKEN"] != nil { connectorWanted = true }
+        #endif
+        if connectorWanted {
+            ConnectorServer.shared.start(dataManager: SwiftDataManager.shared)
+        }
         #endif
     }
 
