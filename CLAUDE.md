@@ -2104,6 +2104,18 @@ an ACCENT tile with a white glyph and a soft accent shadow, hover a faint
 fill, hairline group dividers and a hairline rail edge; the hover tooltip
 shows the name AND its key (a small keycap). Identifiers unchanged
 (`plays.editor.tool.<tool>`).
+COLOUR (same night, Luther: "I love the new icon looks … color the shoot to
+the basket red and the circle around the offensive player blue"): the shot's
+line is JPalette.shot and the player ring JPalette.play (`colored`, off on
+the selected accent tile, where the glyph is white).
+DRAWING DETAILS (same night): (1) a ball IN FLIGHT (pass, shot) or resting
+at the rim is drawn ON its line — only a held ball sits on its holder's
+shoulder (it was offset by 0.78 r even mid-flight: "the ball travels too
+far off the drawn line"); playback already moved it along the drawn path.
+(2) A SCREEN's T stands just past the screener's circle where he ends (end
++ r + 2 widths along the run, a stem to it), and it is drawn AFTER the
+players (`ScreenPart`: line under, mark over), so it reads even when set
+against a teammate ("the screener is literally over the sign").
 
 ## The full court is drawn UPRIGHT (17 Nov 2026, Luther: "full court should be vertical")
 Attacking UP, the attacked basket at the top like the half court's baseline,

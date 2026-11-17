@@ -1095,7 +1095,7 @@ struct JournalPlayStepEditor: View {
         return Button {
             select(tool: item)
         } label: {
-            icon(item)
+            icon(item, colored: !on)
                 .foregroundStyle(on ? Color.white : JPalette.ink.opacity(hovered ? 1 : 0.82))
                 .frame(width: 40, height: 40)
                 .background {
@@ -1814,8 +1814,8 @@ struct JournalPlayStepEditor: View {
 
     /// Every tool's icon, everywhere (rail, phone grid, Pencil palette):
     /// one drawn family — EditorToolGlyph.
-    private func icon(_ tool: Tool) -> some View {
-        EditorToolGlyph(tool: tool, size: 20)
+    private func icon(_ tool: Tool, colored: Bool = true) -> some View {
+        EditorToolGlyph(tool: tool, size: 20, colored: colored)
     }
 
     // MARK: - Undo

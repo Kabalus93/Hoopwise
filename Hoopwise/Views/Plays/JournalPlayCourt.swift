@@ -196,7 +196,8 @@ struct JournalPlayDiagramView: View {
                        width: width * 3.2, radius: r, keepsColor: true)
         }
         for action in diagram.actions {
-            drawAction(action, in: &actionLayer, scale: s, k: k, shading: ink, width: width, radius: r)
+            drawAction(action, in: &actionLayer, scale: s, k: k, shading: ink, width: width, radius: r,
+                       screenPart: .line)
         }
         if showsBends {
             let dot = max(4, r * 0.32)
@@ -256,17 +257,36 @@ struct JournalPlayDiagramView: View {
         }
         // Every ball beside its holder (a second ball on the same player on
         // the other shoulder), or in flight.
-        let ballsAt: [CGPoint] = {
-            if let frame { return frame.balls.map { JournalPlayCourt.point($0.at, scale: s, court: court) } }
-            return diagram.balls.compactMap { diagram.player($0) }.map { JournalPlayCourt.point($0.at, scale: s, court: court) }
+        // Screens' T over the players (their lines went under).
+        var screenLayer = context
+        if frame != nil { screenLayer.opacity = 0.22 }
+        for action in diagram.actions where action.kind == .screen {
+            drawAction(action, in: &screenLayer, scale: s, k: k, shading: ink, width: width, radius: r,
+                       screenPart: .mark)
+        }
+
+        // A ball IN FLIGHT (a pass, a shot) or resting at the rim is drawn ON
+        // its line (18 Nov 2026, Luther: "the ball travels too far off the
+        // drawn line") — only a held ball sits on its holder's shoulder.
+        let ballsAt: [(at: CGPoint, held: Bool)] = {
+            if let frame {
+                let holders = frame.players.values.map { JournalPlayCourt.point($0, scale: s, court: court) }
+                return frame.balls.map { ball in
+                    let at = JournalPlayCourt.point(ball.at, scale: s, court: court)
+                    let held = !ball.inFlight && holders.contains { hypot($0.x - at.x, $0.y - at.y) < r * 0.5 }
+                    return (at, held)
+                }
+            }
+            return diagram.balls.compactMap { diagram.player($0) }
+                .map { (JournalPlayCourt.point($0.at, scale: s, court: court), true) }
         }()
         var drawnAt: [CGPoint] = []
-        for ball in ballsAt {
+        for (ball, held) in ballsAt {
             let br = JournalPlayCourt.ballRadius * s * k
             let shared = drawnAt.filter { hypot($0.x - ball.x, $0.y - ball.y) < 0.5 }.count
             drawnAt.append(ball)
             let side: CGFloat = shared % 2 == 0 ? 1 : -1
-            let c = CGPoint(x: ball.x + side * r * 0.78, y: ball.y - r * (0.78 - 0.9 * CGFloat(shared / 2)))
+            let c = held ? CGPoint(x: ball.x + side * r * 0.78, y: ball.y - r * (0.78 - 0.9 * CGFloat(shared / 2))) : ball
             let dot = Path(ellipseIn: CGRect(x: c.x - br, y: c.y - br, width: 2 * br, height: 2 * br))
             context.fill(dot, with: .color(JCategory.court.color))
             context.stroke(dot, with: .color(JPalette.background), lineWidth: max(1, width * 0.7))
@@ -305,9 +325,13 @@ struct JournalPlayDiagramView: View {
 
     // MARK: - Actions
 
+    /// A screen's line goes under the players, its T over them, so a screen
+    /// set against a teammate stays readable (18 Nov 2026).
+    enum ScreenPart { case all, line, mark }
+
     private func drawAction(_ action: JournalPlayDiagram.Action, in context: inout GraphicsContext, scale s: CGFloat,
                             k: CGFloat, shading: GraphicsContext.Shading, width: CGFloat, radius r: CGFloat,
-                            keepsColor: Bool = false) {
+                            keepsColor: Bool = false, screenPart: ScreenPart = .all) {
         var points = action.path.map { JournalPlayCourt.point($0, scale: s, court: court) }
         guard points.count >= 2 else { return }
         // Leave the player's circle, and stop short of where it lands.
@@ -376,14 +400,27 @@ struct JournalPlayDiagramView: View {
             mark.addLine(to: CGPoint(x: c.x + ux * h, y: c.y + uy * h))
             context.stroke(mark, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
         case .screen:
-            context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
+            if screenPart != .mark {
+                context.stroke(curve, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
+            }
+            guard screenPart != .line else { break }
             let end = points[points.count - 1], before = points[points.count - 2]
             let dx = end.x - before.x, dy = end.y - before.y
             let len = max((dx * dx + dy * dy).squareRoot(), 0.001)
             let half = JournalPlayCourt.screenBar * s * k / 2
+            // The bar stands just PAST the screener's circle where he ends
+            // (18 Nov 2026, Luther: "the screener is literally over the
+            // sign"), the stem running on to it, so the T stays visible.
+            let ux = dx / len, uy = dy / len
+            let reach = r + width * 2
+            let foot = CGPoint(x: end.x + ux * reach, y: end.y + uy * reach)
+            var stem = Path()
+            stem.move(to: end)
+            stem.addLine(to: foot)
+            context.stroke(stem, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
             var bar = Path()
-            bar.move(to: CGPoint(x: end.x - dy / len * half, y: end.y + dx / len * half))
-            bar.addLine(to: CGPoint(x: end.x + dy / len * half, y: end.y - dx / len * half))
+            bar.move(to: CGPoint(x: foot.x - uy * half, y: foot.y + ux * half))
+            bar.addLine(to: CGPoint(x: foot.x + uy * half, y: foot.y - ux * half))
             context.stroke(bar, with: shading, style: StrokeStyle(lineWidth: width * 1.15, lineCap: .round))
         }
     }

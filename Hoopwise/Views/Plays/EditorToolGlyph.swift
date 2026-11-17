@@ -10,6 +10,11 @@ import SwiftUI
 struct EditorToolGlyph: View {
     let tool: JournalPlayStepEditor.Tool
     var size: CGFloat = 20
+    /// The two marks that carry the diagram's colours (18 Nov 2026, Luther:
+    /// "color the shoot to the basket red and the circle around the
+    /// offensive player blue"); off on the selected (accent) tile, where
+    /// everything is white.
+    var colored = true
 
     var body: some View {
         Canvas { context, canvas in
@@ -116,10 +121,11 @@ struct EditorToolGlyph: View {
             case .shot:
                 // Into the rim: the line ends in a ring, the backboard behind.
                 let rim = p(0.70, 0.30)
+                let red = colored ? GraphicsContext.Shading.color(JPalette.shot) : ink
                 var line = Path()
                 line.move(to: start)
                 line.addLine(to: p(0.56, 0.44))
-                context.stroke(line, with: ink, style: stroke)
+                context.stroke(line, with: red, style: stroke)
                 context.stroke(Path(ellipseIn: CGRect(x: rim.x - s * 0.13, y: rim.y - s * 0.13,
                                                       width: s * 0.26, height: s * 0.26)),
                                with: ink, style: stroke)
@@ -139,7 +145,7 @@ struct EditorToolGlyph: View {
 
             case .player:
                 context.stroke(Path(ellipseIn: CGRect(x: s * 0.12, y: s * 0.12, width: s * 0.76, height: s * 0.76)),
-                               with: ink, style: stroke)
+                               with: colored ? .color(JPalette.play) : ink, style: stroke)
                 context.draw(Text("1").font(.system(size: s * 0.50, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.foreground),
                              at: p(0.5, 0.52))
