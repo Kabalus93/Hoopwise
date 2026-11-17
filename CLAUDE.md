@@ -17,7 +17,10 @@
 ## What this is
 Basketball coaching management app. SwiftUI + SwiftData. iOS is the
 primary, mature target. The macOS version was retired on 6 November 2026
-(tag mac-app-final); the iPad is the next platform. Version 2, Build 2.
+(tag mac-app-final); the iPad is the next platform. VERSION 3.0 since 17
+November 2026 (Luther: "change the app version to 3.0 everywhere" — the app,
+the widget and notification extensions and the test targets all read
+MARKETING_VERSION 3.0); build numbers come from the archive command line.
 
 ## Sync architecture
 - CloudKit, via SwiftData's built-in integration. ModelConfiguration in
