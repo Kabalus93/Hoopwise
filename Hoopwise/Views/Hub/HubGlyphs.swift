@@ -1,156 +1,145 @@
 import SwiftUI
 
-/// The Hub's own icons (15 November 2026, Luther: "a better set of icons,
-/// preferably bespoke to the app" — Plays and Coach shared a court symbol and
-/// Teams' symbol overflowed its bubble). Drawn in a unit square so each fits
-/// its tile: a play diagram, a jersey, an open book, a cone, an org chart.
+/// The Hub's own icons, drawn to the play editor's tool standard (18 Nov
+/// 2026, Luther: "give these icons the same treatment as the tools icon" —
+/// EditorToolGlyph): one unit grid, ONE stroke weight (1/12 of the side,
+/// never under 1.5 pt), round caps and joins, no tinted fills, the same
+/// filled dart arrowhead, and the diagram's one colour cue — the offensive
+/// player's ring in blue. A play, a cone, a book, a jersey, an org chart, a
+/// board.
 struct HubGlyph: View {
     enum Kind { case plays, teams, lexicon, drills, organization, board }
 
     let kind: Kind
-    var tint: Color = .accentColor
+    var tint: Color = .primary
     var size: CGFloat = 26
 
     var body: some View {
-        Canvas { context, canvasSize in
-            let s = min(canvasSize.width, canvasSize.height)
+        Canvas { context, canvas in
+            let s = min(canvas.width, canvas.height)
+            let ink = GraphicsContext.Shading.color(tint)
+            let blue = GraphicsContext.Shading.color(JPalette.play)
+            let weight = max(1.5, s / 12)
+            let stroke = StrokeStyle(lineWidth: weight, lineCap: .round, lineJoin: .round)
             func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * s, y: y * s) }
-            let line = StrokeStyle(lineWidth: max(1.6, s * 0.075), lineCap: .round, lineJoin: .round)
-            let shade = GraphicsContext.Shading.color(tint)
+            func circle(_ c: CGPoint, _ r: CGFloat) -> Path {
+                Path(ellipseIn: CGRect(x: c.x - r * s, y: c.y - r * s, width: 2 * r * s, height: 2 * r * s))
+            }
+            /// The house dart (EditorToolGlyph's), tip at `tip`, arriving from `from`.
+            func head(from: CGPoint, tip: CGPoint) {
+                let a = atan2(tip.y - from.y, tip.x - from.x)
+                let length = s * 0.26, half = s * 0.13
+                let back = CGPoint(x: tip.x - cos(a) * length, y: tip.y - sin(a) * length)
+                let notch = CGPoint(x: tip.x - cos(a) * length * 0.72, y: tip.y - sin(a) * length * 0.72)
+                var dart = Path()
+                dart.move(to: tip)
+                dart.addLine(to: CGPoint(x: back.x + sin(a) * half, y: back.y - cos(a) * half))
+                dart.addLine(to: notch)
+                dart.addLine(to: CGPoint(x: back.x - sin(a) * half, y: back.y + cos(a) * half))
+                dart.closeSubpath()
+                context.fill(dart, with: ink)
+                context.stroke(dart, with: ink, style: StrokeStyle(lineWidth: weight * 0.5, lineJoin: .round))
+            }
+            func x(at c: CGPoint, _ r: CGFloat) {
+                var mark = Path()
+                mark.move(to: CGPoint(x: c.x - r * s, y: c.y - r * s)); mark.addLine(to: CGPoint(x: c.x + r * s, y: c.y + r * s))
+                mark.move(to: CGPoint(x: c.x + r * s, y: c.y - r * s)); mark.addLine(to: CGPoint(x: c.x - r * s, y: c.y + r * s))
+                context.stroke(mark, with: ink, style: stroke)
+            }
 
             switch kind {
             case .plays:
-                // O cuts past the X: a smooth curve with a head that points the
-                // way the curve arrives.
-                context.stroke(Path(ellipseIn: CGRect(origin: p(0.08, 0.60), size: CGSize(width: 0.28 * s, height: 0.28 * s))),
-                               with: shade, style: line)
-                let from = p(0.30, 0.58), to = p(0.88, 0.14), bend = p(0.36, 0.14)
-                var cut = Path()
-                cut.move(to: from)
-                cut.addQuadCurve(to: to, control: bend)
-                context.stroke(cut, with: shade, style: line)
-                let angle = atan2(to.y - bend.y, to.x - bend.x)
-                let headLength = 0.17 * s, spread = CGFloat.pi / 5.5
-                var head = Path()
-                head.move(to: CGPoint(x: to.x - headLength * cos(angle - spread), y: to.y - headLength * sin(angle - spread)))
-                head.addLine(to: to)
-                head.addLine(to: CGPoint(x: to.x - headLength * cos(angle + spread), y: to.y - headLength * sin(angle + spread)))
-                context.stroke(head, with: shade, style: line)
-                var x = Path()
-                x.move(to: p(0.64, 0.62)); x.addLine(to: p(0.88, 0.86))
-                x.move(to: p(0.88, 0.62)); x.addLine(to: p(0.64, 0.86))
-                context.stroke(x, with: shade, style: line)
-
-            case .teams:
-                // A clean tank-top jersey: scoop neck, curved armholes, a
-                // band at the hem.
-                var j = Path()
-                j.move(to: p(0.26, 0.08))
-                j.addLine(to: p(0.35, 0.08))
-                j.addCurve(to: p(0.65, 0.08), control1: p(0.37, 0.30), control2: p(0.63, 0.30))
-                j.addLine(to: p(0.74, 0.08))
-                j.addQuadCurve(to: p(0.86, 0.40), control: p(0.74, 0.36))
-                j.addLine(to: p(0.84, 0.92))
-                j.addLine(to: p(0.16, 0.92))
-                j.addLine(to: p(0.14, 0.40))
-                j.addQuadCurve(to: p(0.26, 0.08), control: p(0.26, 0.36))
-                j.closeSubpath()
-                context.fill(j, with: GraphicsContext.Shading.color(tint.opacity(0.16)))
-                context.stroke(j, with: shade, style: line)
-                var hem = Path()
-                hem.move(to: p(0.16, 0.80)); hem.addLine(to: p(0.84, 0.80))
-                context.stroke(hem, with: GraphicsContext.Shading.color(tint.opacity(0.55)),
-                               style: StrokeStyle(lineWidth: max(1, s * 0.05), lineCap: .round))
-
-            case .lexicon:
-                // The playbook dictionary: a closed book, its spine band on the
-                // left, a basketball on the cover.
-                let cover = Path(roundedRect: CGRect(origin: p(0.16, 0.06), size: CGSize(width: 0.68 * s, height: 0.88 * s)),
-                                 cornerRadius: 0.08 * s)
-                context.fill(cover, with: GraphicsContext.Shading.color(tint.opacity(0.16)))
-                context.stroke(cover, with: shade, style: line)
-                var spine = Path()
-                spine.move(to: p(0.30, 0.06)); spine.addLine(to: p(0.30, 0.94))
-                context.stroke(spine, with: shade, style: line)
-                let c = p(0.57, 0.44), r = 0.21 * s
-                context.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
-                               with: shade, style: StrokeStyle(lineWidth: max(1.3, s * 0.06)))
-                // A basketball's seams: the vertical line and the two side
-                // curves (a straight cross read as a crosshair).
-                var seams = Path()
-                seams.move(to: CGPoint(x: c.x, y: c.y - r)); seams.addLine(to: CGPoint(x: c.x, y: c.y + r))
-                seams.move(to: CGPoint(x: c.x - r * 0.62, y: c.y - r * 0.78))
-                seams.addQuadCurve(to: CGPoint(x: c.x - r * 0.62, y: c.y + r * 0.78), control: CGPoint(x: c.x - r * 0.05, y: c.y))
-                seams.move(to: CGPoint(x: c.x + r * 0.62, y: c.y - r * 0.78))
-                seams.addQuadCurve(to: CGPoint(x: c.x + r * 0.62, y: c.y + r * 0.78), control: CGPoint(x: c.x + r * 0.05, y: c.y))
-                context.stroke(seams, with: shade, style: StrokeStyle(lineWidth: max(1, s * 0.045), lineCap: .round))
-                var title = Path()
-                title.move(to: p(0.44, 0.82)); title.addLine(to: p(0.70, 0.82))
-                context.stroke(title, with: GraphicsContext.Shading.color(tint.opacity(0.55)),
-                               style: StrokeStyle(lineWidth: max(1, s * 0.05), lineCap: .round))
+                // O cuts around the X: a smooth run ending in the dart.
+                context.stroke(circle(p(0.22, 0.76), 0.15), with: blue, style: stroke)
+                let from = p(0.30, 0.59), tip = p(0.90, 0.14), bend = p(0.34, 0.14)
+                var run = Path()
+                run.move(to: from)
+                // Stop under the dart, along the way the curve arrives.
+                let a = atan2(tip.y - bend.y, tip.x - bend.x)
+                run.addQuadCurve(to: CGPoint(x: tip.x - cos(a) * s * 0.18, y: tip.y - sin(a) * s * 0.18), control: bend)
+                context.stroke(run, with: ink, style: stroke)
+                head(from: bend, tip: tip)
+                x(at: p(0.74, 0.76), 0.12)
 
             case .drills:
-                // A training cone: flat top, gently curved sides, a band, on a
-                // square base slab — not a letter A.
-                func edge(_ y: CGFloat) -> (CGFloat, CGFloat) {
-                    let t = (y - 0.14) / 0.60
-                    let half = 0.07 + 0.21 * t
-                    return (0.50 - half, 0.50 + half)
-                }
+                // A training cone: body, one band, the base (the Cone tool).
                 var body = Path()
-                body.move(to: p(0.43, 0.14))
-                body.addQuadCurve(to: p(0.57, 0.14), control: p(0.50, 0.08))
-                body.addQuadCurve(to: p(0.78, 0.74), control: p(0.65, 0.46))
-                body.addLine(to: p(0.22, 0.74))
-                body.addQuadCurve(to: p(0.43, 0.14), control: p(0.35, 0.46))
+                body.move(to: p(0.5, 0.12))
+                body.addLine(to: p(0.74, 0.78))
+                body.addLine(to: p(0.26, 0.78))
                 body.closeSubpath()
-                context.fill(body, with: GraphicsContext.Shading.color(tint.opacity(0.16)))
-                let (l1, r1) = edge(0.38), (l2, r2) = edge(0.54)
-                var band = Path()
-                band.move(to: p(l1 + 0.01, 0.38)); band.addLine(to: p(r1 - 0.01, 0.38))
-                band.addLine(to: p(r2 - 0.01, 0.54)); band.addLine(to: p(l2 + 0.01, 0.54))
-                band.closeSubpath()
-                context.fill(band, with: GraphicsContext.Shading.color(tint.opacity(0.45)))
-                context.stroke(body, with: shade, style: line)
-                let slab = Path(roundedRect: CGRect(origin: p(0.10, 0.74), size: CGSize(width: 0.80 * s, height: 0.14 * s)),
-                                cornerRadius: 0.04 * s)
-                context.fill(slab, with: GraphicsContext.Shading.color(tint.opacity(0.25)))
-                context.stroke(slab, with: shade, style: line)
+                context.stroke(body, with: ink, style: stroke)
+                var lines = Path()
+                lines.move(to: p(0.38, 0.46)); lines.addLine(to: p(0.62, 0.46))
+                lines.move(to: p(0.12, 0.88)); lines.addLine(to: p(0.88, 0.88))
+                context.stroke(lines, with: ink, style: stroke)
 
-            case .board:
-                // A coach's board: the frame, the clip, an O and an X with a
-                // dashed pass between them.
-                let frame = Path(roundedRect: CGRect(origin: p(0.12, 0.14), size: CGSize(width: 0.76 * s, height: 0.78 * s)),
-                                 cornerRadius: 0.10 * s)
-                context.fill(frame, with: GraphicsContext.Shading.color(tint.opacity(0.10)))
-                context.stroke(frame, with: shade, style: line)
-                let clip = Path(roundedRect: CGRect(origin: p(0.36, 0.06), size: CGSize(width: 0.28 * s, height: 0.14 * s)),
-                                cornerRadius: 0.05 * s)
-                context.fill(clip, with: shade)
-                context.stroke(Path(ellipseIn: CGRect(origin: p(0.24, 0.36), size: CGSize(width: 0.18 * s, height: 0.18 * s))),
-                               with: shade, style: line)
-                var x = Path()
-                x.move(to: p(0.58, 0.62)); x.addLine(to: p(0.76, 0.80))
-                x.move(to: p(0.76, 0.62)); x.addLine(to: p(0.58, 0.80))
-                context.stroke(x, with: shade, style: line)
-                var pass = Path()
-                pass.move(to: p(0.42, 0.52)); pass.addLine(to: p(0.58, 0.64))
-                context.stroke(pass, with: shade,
-                               style: StrokeStyle(lineWidth: line.lineWidth * 0.8, lineCap: .round, dash: [0.04 * s, 0.06 * s]))
+            case .lexicon:
+                // An open book: two pages from one spine, a line of text each.
+                var book = Path()
+                book.move(to: p(0.5, 0.24))
+                book.addQuadCurve(to: p(0.10, 0.20), control: p(0.30, 0.12))
+                book.addLine(to: p(0.10, 0.78))
+                book.addQuadCurve(to: p(0.5, 0.84), control: p(0.30, 0.70))
+                book.addQuadCurve(to: p(0.90, 0.78), control: p(0.70, 0.70))
+                book.addLine(to: p(0.90, 0.20))
+                book.addQuadCurve(to: p(0.5, 0.24), control: p(0.70, 0.12))
+                book.move(to: p(0.5, 0.24)); book.addLine(to: p(0.5, 0.84))
+                context.stroke(book, with: ink, style: stroke)
+                var text = Path()
+                text.move(to: p(0.22, 0.40)); text.addLine(to: p(0.38, 0.42))
+                text.move(to: p(0.22, 0.56)); text.addLine(to: p(0.38, 0.58))
+                text.move(to: p(0.62, 0.42)); text.addLine(to: p(0.78, 0.40))
+                text.move(to: p(0.62, 0.58)); text.addLine(to: p(0.78, 0.56))
+                context.stroke(text, with: ink, style: StrokeStyle(lineWidth: weight * 0.8, lineCap: .round))
+
+            case .teams:
+                // A tank-top jersey: straps, scoop neck, armholes, hem.
+                var jersey = Path()
+                jersey.move(to: p(0.30, 0.10))
+                jersey.addLine(to: p(0.38, 0.10))
+                jersey.addQuadCurve(to: p(0.62, 0.10), control: p(0.50, 0.34))
+                jersey.addLine(to: p(0.70, 0.10))
+                jersey.addQuadCurve(to: p(0.84, 0.40), control: p(0.70, 0.36))
+                jersey.addLine(to: p(0.84, 0.90))
+                jersey.addLine(to: p(0.16, 0.90))
+                jersey.addLine(to: p(0.16, 0.40))
+                jersey.addQuadCurve(to: p(0.30, 0.10), control: p(0.30, 0.36))
+                jersey.closeSubpath()
+                context.stroke(jersey, with: ink, style: stroke)
+                context.draw(Text("23").font(.system(size: s * 0.30, weight: .bold, design: .rounded))
+                                .foregroundStyle(tint),
+                             at: p(0.5, 0.62))
 
             case .organization:
                 // An org chart: one node over two.
-                let nodeSize = CGSize(width: 0.30 * s, height: 0.22 * s)
-                let top = Path(roundedRect: CGRect(origin: p(0.35, 0.08), size: nodeSize), cornerRadius: 0.06 * s)
-                let left = Path(roundedRect: CGRect(origin: p(0.06, 0.68), size: nodeSize), cornerRadius: 0.06 * s)
-                let right = Path(roundedRect: CGRect(origin: p(0.64, 0.68), size: nodeSize), cornerRadius: 0.06 * s)
-                context.fill(top, with: GraphicsContext.Shading.color(tint.opacity(0.25)))
-                for node in [top, left, right] { context.stroke(node, with: shade, style: line) }
+                let node = CGSize(width: 0.30 * s, height: 0.22 * s)
+                let nodes = [p(0.35, 0.08), p(0.06, 0.70), p(0.64, 0.70)].map {
+                    Path(roundedRect: CGRect(origin: $0, size: node), cornerRadius: 0.06 * s, style: .continuous)
+                }
+                for n in nodes { context.stroke(n, with: ink, style: stroke) }
                 var links = Path()
-                links.move(to: p(0.50, 0.30)); links.addLine(to: p(0.50, 0.49))
-                links.move(to: p(0.21, 0.68)); links.addLine(to: p(0.21, 0.49))
-                links.addLine(to: p(0.79, 0.49)); links.addLine(to: p(0.79, 0.68))
-                context.stroke(links, with: shade, style: line)
+                links.move(to: p(0.50, 0.30)); links.addLine(to: p(0.50, 0.50))
+                links.move(to: p(0.21, 0.70)); links.addLine(to: p(0.21, 0.50))
+                links.addLine(to: p(0.79, 0.50)); links.addLine(to: p(0.79, 0.70))
+                context.stroke(links, with: ink, style: stroke)
+
+            case .board:
+                // A coach's board: the frame and its clip, an O, a dashed pass, an X.
+                let frame = Path(roundedRect: CGRect(x: 0.12 * s, y: 0.16 * s, width: 0.76 * s, height: 0.76 * s),
+                                 cornerRadius: 0.10 * s, style: .continuous)
+                context.stroke(frame, with: ink, style: stroke)
+                var clip = Path()
+                clip.move(to: p(0.38, 0.16)); clip.addLine(to: p(0.38, 0.08))
+                clip.addLine(to: p(0.62, 0.08)); clip.addLine(to: p(0.62, 0.16))
+                context.stroke(clip, with: ink, style: stroke)
+                context.stroke(circle(p(0.34, 0.68), 0.11), with: blue, style: stroke)
+                x(at: p(0.67, 0.42), 0.09)
+                var pass = Path()
+                pass.move(to: p(0.44, 0.59))
+                pass.addLine(to: p(0.58, 0.50))
+                context.stroke(pass, with: ink, style: StrokeStyle(lineWidth: weight, lineCap: .round,
+                                                                   dash: [s * 0.05, s * 0.06]))
             }
         }
         .frame(width: size, height: size)

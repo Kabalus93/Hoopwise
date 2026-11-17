@@ -424,6 +424,9 @@ struct FlightyHubView: View {
             .frame(width: size, height: size)
             .background((tint ?? .primary).opacity(tint == nil ? 0.07 : 0.15),
                         in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
+            // The editor rail's hairline edge (18 Nov 2026 — same treatment).
+            .overlay(RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
     }
 
     private func hubTile(_ kind: HubGlyph.Kind, tint: Color? = nil, title: String, count: String, unit: String) -> some View {

@@ -1611,6 +1611,11 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   and PEOPLE — Teams, Organization. Icons are DRAWN (Views/Hub/
   HubGlyphs.swift: play diagram, cone, open book, jersey "23", org chart)
   in the ink colour on a neutral tile — the cone too (Luther).
+  REDRAWN TO THE EDITOR TOOLS' STANDARD (18 Nov 2026, Luther: "give these
+  icons the same treatment as the tools icon"): one stroke weight (1/12 of
+  the side, ≥ 1.5 pt), round caps, no tinted fills, the tools' dart
+  arrowhead, the offensive O's ring in blue (Plays, Coach board); Lexicon is
+  an open book with text lines; the tile gained a 0.5 pt hairline edge.
   Identifiers hub.plays / hub.drills / hub.lexicon / hub.teams /
   hub.organization / hub.revenue. Tests: PlaysUITests (Drills,
   Organization open), TeamsUITests, LexiconUITests, OrganizationUITests.
