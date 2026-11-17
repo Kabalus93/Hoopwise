@@ -2154,6 +2154,12 @@ own language.
   the page so it opens from any tab.
 - The Quick Peep always shows its REMINDERS card with the add line (it hid
   when empty), so a reminder can be added from the peep.
+- (18 Nov 2026, Luther) The program page's PHASES header has MANAGE beside
+  + Add (`program.managePhases` → PhasesListView: reorder, multi-delete; it
+  was only in the ⋯ menu). Its ATHLETES card shows the WHOLE roster (it
+  stopped at six behind "View all"). The drill page's Tags hide the skill
+  ratings (`attr:…`, `attr:by:coach`) and `by:` — bookkeeping shown as
+  "Attr:Passing=3" chips; the ratings live on the octagon card.
 
 ## Cycle planner (October 2026, Luther)
 - "Generate N phases" is now PLAN A CYCLE (Views/Coaching/CyclePlannerSheet,

@@ -658,8 +658,7 @@ struct FlightyProgramDetailView: View {
     // MARK: - Athletes Section
     /// One layout regardless of count: section header with native bordered
     /// Manage button, then either an empty state or a 2-column grid of
-    /// `AthleteCard`s. Past 6 athletes a "View all" footer appears — no more
-    /// branching layouts based on roster size.
+    /// `AthleteCard`s — every enrolled athlete, however many.
     private var athletesSection: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return VStack(alignment: .leading, spacing: 12) {
@@ -711,32 +710,15 @@ struct FlightyProgramDetailView: View {
                 .buttonStyle(.plain)
                 .padding(.vertical, 6)
             } else {
-                let visibleAthletes = Array(enrolledStudents.prefix(6))
+                // The whole roster, always (18 Nov 2026, Luther: "show the full
+                // list always" — it stopped at six behind "View all").
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    ForEach(visibleAthletes) { student in
+                    ForEach(enrolledStudents) { student in
                         NavigationLink(destination: StudentDetailView(student: student)) {
                             AthleteCard(student: student, accentColor: programColor)
                         }
                         .buttonStyle(.plain)
                     }
-                }
-
-                if enrolledStudents.count > 6 {
-                    Button { showingEditStudents = true } label: {
-                        HStack {
-                            Text(isChinese
-                                 ? "查看全部 \(enrolledStudents.count) 名学员"
-                                 : "View all \(enrolledStudents.count) athletes")
-                                .font(.subheadline.weight(.medium))
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .foregroundStyle(programColor)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
                 }
             }
         }
@@ -817,6 +799,22 @@ extension FlightyProgramDetailView {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .tint(programColor)
+                }
+                // Reorder, rename and delete phases (PhasesListView — it lived
+                // only in the ⋯ menu; 18 Nov 2026, Luther: "add a button to
+                // manage phases").
+                if !microCycles.isEmpty {
+                    Button {
+                        showingManagePhases = true
+                    } label: {
+                        Label(isChinese ? "管理" : "Manage", systemImage: "pencil")
+                            .font(.caption.weight(.semibold))
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(programColor)
+                    .accessibilityIdentifier("program.managePhases")
                 }
                 Button {
                     showingAddPhase = true

@@ -1108,6 +1108,10 @@ struct DrillDetailView: View {
             .filter { $0 != "quick-note" } // Hide internal tag
             .filter { $0 != ActivityLibrary.tag && !$0.hasPrefix("library:") && !$0.hasPrefix("block:")
                 && !$0.hasPrefix("type:") && !$0.hasPrefix("kind:") }  // library bookkeeping
+            // The skill ratings (attr:<axis>=n, attr:by:coach — shown on the
+            // octagon card) and who made it (by:claude) are bookkeeping too
+            // (18 Nov 2026, Luther: "what are those tags???").
+            .filter { !$0.hasPrefix(AttributeProfile.tagPrefix) && !$0.hasPrefix("by:") }
             .map { raw in
                 raw.replacingOccurrences(of: "-", with: " ")
                    .replacingOccurrences(of: "_", with: " ")
