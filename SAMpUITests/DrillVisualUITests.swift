@@ -105,10 +105,13 @@ final class DrillVisualUITests: XCTestCase {
         element("plays.editor.steps").tap()
         app.buttons["Move step earlier"].tap()
         XCTAssertTrue(app.staticTexts["Step 2 of 3"].waitForExistence(timeout: 4), "the step moved earlier")
-        app.buttons["Previous step"].tap()
+        // Phone: the steps bar's ‹; iPad: the steps strip's first frame.
+        if app.buttons["Previous step"].exists { app.buttons["Previous step"].tap() } else { element("plays.editor.step.1").tap() }
         element("plays.editor.steps").tap()
-        app.buttons["Delete step"].tap()
-        let confirm = app.buttons["Delete step"]
+        // Not the strip's trash button (iPad): the menu's item, then the dialog's.
+        let notTrash = NSPredicate(format: "label == 'Delete step' AND identifier != 'plays.editor.deleteStep'")
+        app.buttons.matching(notTrash).firstMatch.tap()
+        let confirm = app.buttons.matching(notTrash).firstMatch
         if confirm.waitForExistence(timeout: 4) { confirm.tap() }
         XCTAssertTrue(app.staticTexts["Step 1 of 2"].waitForExistence(timeout: 4), "a step was deleted")
         attach("phone editor steps bar")

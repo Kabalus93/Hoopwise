@@ -122,7 +122,7 @@ final class PlayEditorWorkspaceUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 3))
         confirm.tap()
         XCTAssertTrue(waitForLabel(title, containing: "Step 1 of 1"), "deleting step 1: \(title.label)")
-        XCTAssertFalse(deleteStep.isEnabled, "the last step can be deleted")
+        XCTAssertFalse(deleteStep.exists && deleteStep.isEnabled, "the last step cannot be deleted")
 
         // Cancel discards it all.
         app.buttons["Cancel"].firstMatch.tap()
@@ -161,7 +161,7 @@ final class PlayEditorWorkspaceUITests: XCTestCase {
 
     /// Upright (taller than wide) the inspector goes under the court and
     /// the court takes the whole width; on its side the inspector is a
-    /// column again. Add a step fits on one line in both.
+    /// column again. Add a step is the strip's last frame / the list's last row.
     func testInspectorFollowsTheWindowShape() throws {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
@@ -179,7 +179,7 @@ final class PlayEditorWorkspaceUITests: XCTestCase {
         let court = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Drawing of step'")).firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         XCTAssertGreaterThan(add.frame.minY, court.frame.maxY, "upright: the inspector is under the court")
-        XCTAssertLessThan(add.frame.height, 60, "Add a step is on one line")
+        XCTAssertLessThan(add.frame.height, 100, "Add a step is one frame of the steps strip")
         attachScreenshot(app, "editor upright")
 
         XCUIDevice.shared.orientation = .landscapeLeft

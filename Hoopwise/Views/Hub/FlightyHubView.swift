@@ -10,6 +10,8 @@ struct FlightyHubView: View {
     @StateObject private var themeManager = ThemeManager.shared
     @State private var currentTime = Date()
     @State private var showingRevenueHistory = false
+    /// The Coach board opens straight into the editor, full screen.
+    @State private var boardOpen = false
     @State private var presentedClient: Contract?
     @Environment(\.modelContext) private var modelContext
     
@@ -50,6 +52,10 @@ struct FlightyHubView: View {
         // landing page be the full page rather than a side bar"); its tiles
         // push their pages.
         NavigationStack { hubColumn }
+            .fullScreenCover(isPresented: $boardOpen) {
+                CoachBoardScreen()
+                    .environmentObject(dataManager)
+            }
     }
 
     // THE HUB, REDESIGNED (15 November 2026, Luther: "the command center bar
@@ -369,7 +375,7 @@ struct FlightyHubView: View {
         let detail = CoachBoardStore.load() == nil
             ? (isChinese ? "空白" : "Empty")
             : (isChinese ? "有未保存的画板" : "Drawing in progress")
-        NavigationLink(destination: CoachBoardScreen()) {
+        Button { boardOpen = true } label: {
             if wide {
                 hubTile(.board, title: title, count: detail, unit: "")
             } else {

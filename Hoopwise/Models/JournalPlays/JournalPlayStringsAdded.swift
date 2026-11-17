@@ -7,6 +7,14 @@ nonisolated enum JournalPlayStringsAdded {
     typealias Entry = JournalPlayStrings.Entry
 
     static let table: [String: Entry] = [
+        "Coach board": .init(en: "Coach board", enOne: nil, zh: "战术板"),
+        "Watch": .init(en: "Watch", enOne: nil, zh: "播放"),
+        "Clear": .init(en: "Clear", enOne: nil, zh: "清空"),
+        "Save": .init(en: "Save", enOne: nil, zh: "保存"),
+        "Save as Play": .init(en: "Save as Play", enOne: nil, zh: "存为战术"),
+        "Save as Drill": .init(en: "Save as Drill", enOne: nil, zh: "存为训练"),
+        "Step options": .init(en: "Step options", enOne: nil, zh: "步骤选项"),
+        "%lld of %lld": .init(en: "%lld of %lld", enOne: nil, zh: "%1$lld / %2$lld"),
         "It keeps the board's %lld steps.": .init(en: "It keeps the board's %lld steps.", enOne: "It keeps the board's one step.",
                                                  zh: "保留战术板上的 %lld 个步骤。"),
         "Click to select a player, a defender or a line; drag to move it, or the end or a bend of a line.":

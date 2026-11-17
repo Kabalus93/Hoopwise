@@ -34,6 +34,19 @@ struct JournalPlayStepEditor: View {
     /// "I'd like to find it as is when I come back"), so leaving the editor
     /// any way — Cancel included, or the app going away — loses nothing.
     private let onDrawingChange: ((DrillDrawing) -> Void)?
+    /// The Coach board's own controls (17 Nov 2026, Luther: "land directly in
+    /// the editor in full screen with only the tool bar on the side and steps
+    /// at the bottom left tucked into a button"). Present only on the board.
+    struct BoardActions {
+        var isBlank: Bool
+        var setCourt: (JournalCourtKind) -> Void
+        var clear: () -> Void
+        var saveAsPlay: () -> Void
+        var saveAsDrill: () -> Void
+    }
+    private let board: BoardActions?
+    @State private var boardStepsOpen = false
+    @State private var watching = false
 
     /// Every step, in order, as values: the one on screen is `current`, and
     /// `diagram`, `caption`, `text` and the undo stacks are its working copy;
@@ -254,6 +267,7 @@ struct JournalPlayStepEditor: View {
         part = step.part
         onSaveDrill = nil
         onDrawingChange = nil
+        board = nil
         let models = step.part?.sortedSteps ?? [step]
         let pages = models.map { model in
             Page(model: model, saved: Content(diagram: model.diagram, caption: model.caption, text: model.text),
@@ -268,12 +282,13 @@ struct JournalPlayStepEditor: View {
     }
 
     /// A drill's drawing, opened on its first step; Done hands it back.
-    init(drawing: DrillDrawing, onChange: ((DrillDrawing) -> Void)? = nil,
+    init(drawing: DrillDrawing, onChange: ((DrillDrawing) -> Void)? = nil, board: BoardActions? = nil,
          onSave: @escaping (DrillDrawing) -> Void) {
         court = drawing.court
         part = nil
         onSaveDrill = onSave
         onDrawingChange = onChange
+        self.board = board
         let steps = drawing.steps.isEmpty ? DrillDrawing.new(court: drawing.court).steps : drawing.steps
         let pages = steps.map { step in
             Page(saved: Content(diagram: step.diagram, caption: step.caption, text: step.text),
@@ -495,72 +510,29 @@ struct JournalPlayStepEditor: View {
         }
     }
 
-    /// ‹ › move, delete — icons — then Add a step, its words on one line.
-    private var stepControls: some View {
-        HStack(spacing: JSpacing.xs) {
-            Button { go(by: -1) } label: {
-                Label { JText("Previous step") } icon: { Image(systemName: "chevron.left") }
-            }
-            .disabled(number <= 1)
-            .keyboardShortcut(keysActive ? KeyboardShortcut("[", modifiers: .command) : nil)
-            .help(jp("Previous step") + " (⌘[)")
-            Button { go(by: 1) } label: {
-                Label { JText("Next step") } icon: { Image(systemName: "chevron.right") }
-            }
-            .disabled(number >= pages.count)
-            .keyboardShortcut(keysActive ? KeyboardShortcut("]", modifiers: .command) : nil)
-            .help(jp("Next step") + " (⌘])")
-            Menu {
-                Button { moveStep(by: -1) } label: {
-                    Label { JText("Move step earlier") } icon: { Image(systemName: "arrow.up") }
-                }
-                .disabled(number <= 1)
-                Button { moveStep(by: 1) } label: {
-                    Label { JText("Move step later") } icon: { Image(systemName: "arrow.down") }
-                }
-                .disabled(number >= pages.count)
-            } label: {
-                Label { JText("Move step") } icon: { Image(systemName: "arrow.up.arrow.down") }
-            }
-            .disabled(pages.count <= 1)
-            .help(jp("Move step"))
-            Button(role: .destructive) { confirmingDeleteStep = true } label: {
-                Label { JText("Delete step") } icon: { Image(systemName: "trash") }
-            }
-            .disabled(pages.count <= 1)
-            .help(jp("Delete step"))
-            .accessibilityIdentifier("plays.editor.deleteStep")
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-    }
-
-    private var addStepButton: some View {
-        Button(action: addStep) {
-            Label { JText("Add a step") } icon: { Image(systemName: "plus") }
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.small)
-        .accessibilityIdentifier("plays.editor.addStep")
-    }
-
-    /// The side inspector's Steps: the list, the controls, then Add a step
-    /// across the column (it wrapped letter by letter beside four buttons).
+    /// The side inspector's Steps: the same header as the filmstrip, the
+    /// steps as rows, then "+ Add a step" as the list's last row.
     private var stepsSection: some View {
-        inspectorSection("Steps") {
+        VStack(alignment: .leading, spacing: JSpacing.xs) {
+            stepsHeader
             ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
                 stepTile(i, other, vertical: false)
             }
-            HStack {
-                stepControls
-                Spacer(minLength: 0)
+            Button(action: addStep) {
+                Label { JText("Add a step") } icon: { Image(systemName: "plus") }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(Color.accentColor.opacity(0.08), in: .rect(cornerRadius: 8))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(Color.accentColor.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                    }
             }
-            addStepButton
-                .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .accessibilityIdentifier("plays.editor.addStep")
         }
+        .background { stepKeys }
     }
 
     var body: some View {
@@ -608,8 +580,14 @@ struct JournalPlayStepEditor: View {
             .navigationTitle(isWorkspace ? JText("Step \(number)") : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if isWorkspace {
+                if isWorkspace && board == nil {
                     ToolbarItem(placement: .principal) { stepMenu }
+                }
+                if let board {
+                    ToolbarItem(placement: .principal) {
+                        JText("Coach board").font(.headline)
+                    }
+                    ToolbarItemGroup(placement: .topBarLeading) { boardControls(board) }
                 }
                 // The Coach board keeps every change as it is made, so there
                 // is nothing to cancel there: Done alone closes it.
@@ -639,6 +617,7 @@ struct JournalPlayStepEditor: View {
                         .help(jp("Done") + " (⌘↩)")
                 }
             }
+            .sheet(isPresented: $watching) { BoardWatchSheet(drawing: drawingNow) }
             .confirmationDialog(JText("Delete this step?"), isPresented: $confirmingDeleteStep, titleVisibility: .visible) {
                 Button(role: .destructive, action: deleteStep) { JText("Delete step") }
             } message: {
@@ -701,7 +680,13 @@ struct JournalPlayStepEditor: View {
         HStack(spacing: 0) {
             toolRail
             Divider()
-            if inspectorBelow {
+            if board != nil {
+                canvas
+                    .padding(JSpacing.m)
+                    .padding(.bottom, 52)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .bottomLeading) { boardStepsButton.padding(JSpacing.m) }
+            } else if inspectorBelow {
                 VStack(spacing: 0) {
                     canvas
                         .padding(JSpacing.m)
@@ -734,20 +719,8 @@ struct JournalPlayStepEditor: View {
     /// and the selection.
     private var bottomInspector: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: JSpacing.s) {
-                HStack(spacing: JSpacing.s) {
-                    JEyebrowLabel(title: "Steps")
-                    Spacer(minLength: 0)
-                    stepControls
-                    addStepButton
-                }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: JSpacing.xs) {
-                        ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
-                            stepTile(i, other, vertical: true)
-                        }
-                    }
-                }
+            VStack(alignment: .leading, spacing: JSpacing.m) {
+                stepsPanel
                 HStack(alignment: .top, spacing: JSpacing.m) {
                     inspectorSection("This step") { stepFields(notesLines: 2...4) }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -763,6 +736,215 @@ struct JournalPlayStepEditor: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .background(JPalette.card)
+    }
+
+    // MARK: - Steps panel (17 Nov 2026, Luther: "the steps bottom tab is not
+    // so well designed") — one header line ("STEPS  2 of 3", then move and
+    // delete as one small capsule) over a filmstrip: each step a drawing with
+    // its number on it and its caption under, the one on screen ringed in the
+    // accent, and "+" as the strip's last frame. Tapping a frame shows it;
+    // ⌘[ ⌘] still step through (hidden buttons).
+
+    private var stepsPanel: some View {
+        VStack(alignment: .leading, spacing: JSpacing.s) {
+            stepsHeader
+            ScrollViewReader { reader in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: JSpacing.s) {
+                        ForEach(Array(pages.enumerated()), id: \.element.id) { i, other in
+                            filmFrame(i, other).id(other.id)
+                        }
+                        addFrame
+                    }
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 2)
+                }
+                .onChange(of: current) { _, id in withAnimation { reader.scrollTo(id, anchor: .center) } }
+            }
+        }
+        .background { stepKeys }
+    }
+
+    private var stepsHeader: some View {
+        HStack(spacing: JSpacing.s) {
+            JEyebrowLabel(title: "Steps")
+            JText("\(number) of \(pages.count)")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            if pages.count > 1 {
+                HStack(spacing: 0) {
+                    Menu {
+                        Button { moveStep(by: -1) } label: {
+                            Label { JText("Move step earlier") } icon: { Image(systemName: "arrow.left") }
+                        }
+                        .disabled(number <= 1)
+                        Button { moveStep(by: 1) } label: {
+                            Label { JText("Move step later") } icon: { Image(systemName: "arrow.right") }
+                        }
+                        .disabled(number >= pages.count)
+                    } label: {
+                        Label { JText("Move step") } icon: { Image(systemName: "arrow.left.arrow.right") }
+                            .frame(width: 40, height: 32)
+                    }
+                    .help(jp("Move step"))
+                    Divider().frame(height: 18)
+                    Button(role: .destructive) { confirmingDeleteStep = true } label: {
+                        Label { JText("Delete step") } icon: { Image(systemName: "trash") }
+                            .frame(width: 40, height: 32)
+                    }
+                    .help(jp("Delete step"))
+                    .accessibilityIdentifier("plays.editor.deleteStep")
+                }
+                .labelStyle(.iconOnly)
+                .font(.subheadline)
+                .buttonStyle(.plain)
+                .foregroundStyle(JPalette.ink)
+                .background(JPalette.fill, in: Capsule())
+            }
+        }
+    }
+
+    /// One frame of the filmstrip.
+    private func filmFrame(_ i: Int, _ other: Page) -> some View {
+        let on = other.id == current
+        let name = caption(of: other)
+        return Button { show(other.id) } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                JournalPlayThumbnail(diagram: shownDiagram(other), court: court, width: 104, height: 74)
+                    .overlay(alignment: .topLeading) {
+                        Text(verbatim: "\(i + 1)")
+                            .font(.caption2.weight(.bold).monospacedDigit())
+                            .foregroundStyle(on ? .white : JPalette.ink)
+                            .frame(minWidth: 18, minHeight: 18)
+                            .background(on ? Color.accentColor : JPalette.fill, in: Circle())
+                            .padding(4)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(on ? Color.accentColor : JPalette.ink.opacity(0.12), lineWidth: on ? 2 : 1)
+                    }
+                Text(verbatim: name.isEmpty ? jp("Step \(i + 1)") : name)
+                    .font(.caption.weight(on ? .semibold : .regular))
+                    .foregroundStyle(on ? JPalette.ink : .secondary)
+                    .lineLimit(1)
+                    .frame(width: 104, alignment: .leading)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("plays.editor.step.\(i + 1)")
+    }
+
+    /// The strip's last frame: a new step after the one on screen.
+    private var addFrame: some View {
+        Button(action: addStep) {
+            VStack(spacing: 4) {
+                Image(systemName: "plus").font(.title3.weight(.semibold))
+                JText("Add a step").font(.caption.weight(.semibold)).lineLimit(1)
+            }
+            .foregroundStyle(Color.accentColor)
+            .frame(width: 104, height: 74)
+            .background(Color.accentColor.opacity(0.08), in: .rect(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.accentColor.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("plays.editor.addStep")
+    }
+
+    /// ⌘[ and ⌘] with no buttons on screen (the frames are the buttons).
+    private var stepKeys: some View {
+        ZStack {
+            Button("") { go(by: -1) }
+                .keyboardShortcut(keysActive ? KeyboardShortcut("[", modifiers: .command) : nil)
+            Button("") { go(by: 1) }
+                .keyboardShortcut(keysActive ? KeyboardShortcut("]", modifiers: .command) : nil)
+        }
+        .opacity(0)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    // MARK: - The Coach board
+
+    /// Bottom left of the court: which step, opening the steps and this
+    /// step's words, defense, the tool's options and the selection.
+    private var boardStepsButton: some View {
+        Button { boardStepsOpen.toggle() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "square.stack.3d.up")
+                JText("Step \(number) of \(pages.count)").monospacedDigit()
+                Image(systemName: "chevron.up").font(.caption.weight(.semibold))
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Capsule())
+        .accessibilityIdentifier("plays.editor.steps")
+        .popover(isPresented: $boardStepsOpen, arrowEdge: .bottom) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: JSpacing.l) {
+                    stepsPanel
+                    inspectorSection("This step") { stepFields(notesLines: 2...5) }
+                    defenseSection
+                    toolSection
+                    if let selection { selectionSection(selection) }
+                }
+                .padding(JSpacing.m)
+            }
+            .frame(width: 460)
+            .frame(minHeight: 420, maxHeight: 640)
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
+    /// Court, Watch (▶ and Scribble), Clear and Save — the board's top bar.
+    @ViewBuilder
+    private func boardControls(_ board: BoardActions) -> some View {
+        Menu {
+            ForEach(JournalCourtKind.allCases) { kind in
+                Button { board.setCourt(kind) } label: {
+                    if kind == court {
+                        Label { JText(kind.label) } icon: { Image(systemName: "checkmark") }
+                    } else {
+                        JText(kind.label)
+                    }
+                }
+            }
+        } label: {
+            Label { JText(court.label) } icon: { Image(systemName: "sportscourt") }
+                .labelStyle(.titleAndIcon)
+        }
+        .accessibilityIdentifier("board.court")
+        Button { stash(); watching = true } label: {
+            Label { JText("Watch") } icon: { Image(systemName: "play.circle") }
+        }
+        .accessibilityIdentifier("board.watch")
+        Button(role: .destructive, action: board.clear) {
+            Label { JText("Clear") } icon: { Image(systemName: "eraser") }
+        }
+        .disabled(board.isBlank)
+        .accessibilityIdentifier("board.clear")
+        Menu {
+            Button(action: board.saveAsPlay) {
+                Label { JText("Save as Play") } icon: { Image(systemName: "point.topleft.down.to.point.bottomright.curvepath") }
+            }
+            .accessibilityIdentifier("board.saveAsPlay")
+            Button(action: board.saveAsDrill) {
+                Label { JText("Save as Drill") } icon: { Image(systemName: "figure.basketball") }
+            }
+            .accessibilityIdentifier("board.saveAsDrill")
+        } label: {
+            Label { JText("Save") } icon: { Image(systemName: "square.and.arrow.down") }
+        }
+        .accessibilityIdentifier("board.save")
     }
 
     /// One column of tools, grouped like a graphics app's: select, the four
@@ -1570,5 +1752,30 @@ struct JournalPlayStepEditor: View {
     /// Cancel: the drafts are dropped. Nothing was written, so nothing to undo.
     private func discard() {
         dismiss()
+    }
+}
+
+/// The Coach board's Watch: the board played step by step (▶), with Pencil
+/// mark-up and Scribble on an iPad — the play page's player.
+struct BoardWatchSheet: View {
+    let drawing: DrillDrawing
+    @State private var index = 0
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                JournalPlayStepPlayer(drawing: drawing, index: $index)
+                    .padding(JSpacing.m)
+            }
+            .background(JPalette.background)
+            .navigationTitle(JText("Coach board"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { dismiss() } label: { JText("Done") }
+                }
+            }
+        }
     }
 }

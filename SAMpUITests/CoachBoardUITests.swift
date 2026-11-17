@@ -29,8 +29,11 @@ final class CoachBoardUITests: XCTestCase {
     func testTheBoardKeepsWhatIsDrawnUntilCleared() {
         continueAfterFailure = false
         app = launch()
-        let draw = element("board.draw")
-        XCTAssertTrue(draw.waitForExistence(timeout: 30))
+        // It opens straight in the editor: tools, court, no Cancel.
+        let player = element("plays.editor.tool.player")
+        XCTAssertTrue(player.waitForExistence(timeout: 30), "the board is the editor, with the drill tools")
+        XCTAssertFalse(app.buttons["Cancel"].exists, "every change is kept; nothing to cancel")
+        XCTAssertTrue(element("plays.editor.steps").exists, "steps sit behind one button")
         // Start from an empty board.
         if element("board.clear").isEnabled {
             element("board.clear").tap()
@@ -39,23 +42,20 @@ final class CoachBoardUITests: XCTestCase {
         }
         XCTAssertFalse(element("board.clear").waitForEnabled(false, timeout: 5).isEnabled, "an empty board has nothing to clear")
 
-        // Draw: two more players and a second step, then Done (no Cancel here).
-        draw.tap()
-        let player = element("plays.editor.tool.player")
-        XCTAssertTrue(player.waitForExistence(timeout: 8), "the full editor, with the drill tools")
-        XCTAssertFalse(app.buttons["Cancel"].exists, "every change is kept; nothing to cancel")
+        // Draw a sixth player; the steps button opens the strip.
+        XCTAssertTrue(player.waitForExistence(timeout: 8))
         let court = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Drawing of step 1'")).firstMatch
         player.tap()
         court.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.8)).tap()
-        attach("board editor")
-        app.buttons["Done"].tap()
-        XCTAssertTrue(draw.waitForExistence(timeout: 8))
-        XCTAssertTrue(element("board.clear").isEnabled, "the drawing is on the board")
+        XCTAssertTrue(element("board.clear").waitForEnabled(true, timeout: 5).isEnabled, "the drawing is on the board")
+        element("plays.editor.steps").tap()
+        XCTAssertTrue(element("plays.editor.addStep").waitForExistence(timeout: 5), "the steps strip")
+        attach("board steps")
 
         // Relaunch: still there.
         app.terminate()
         app = launch()
-        XCTAssertTrue(element("board.draw").waitForExistence(timeout: 30))
+        XCTAssertTrue(element("plays.editor.tool.player").waitForExistence(timeout: 30))
         XCTAssertTrue(element("board.clear").isEnabled, "found as it was left")
         attach("board after relaunch")
 
@@ -68,6 +68,7 @@ final class CoachBoardUITests: XCTestCase {
         app.buttons["Cancel"].firstMatch.tap()
 
         // Clear empties it.
+        XCTAssertTrue(element("board.clear").waitForExistence(timeout: 5))
         element("board.clear").tap()
         XCTAssertTrue(element("board.confirmClear").waitForExistence(timeout: 5))
         element("board.confirmClear").tap()

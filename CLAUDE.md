@@ -2035,22 +2035,37 @@ Tests: SkillIntegrationTests, PlanGeneratorTests.
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including
 Scribble. Not cleared when I leave … save as play or skill in the corner …
-I hit Clear myself." Hub → Coach board (the third PEOPLE tile on a wide
-screen, a wide tile on the phone; glyph `.board`). Views/Hub/
-CoachBoardScreen.swift: the board is a DrillDrawing in a DEVICE-LOCAL file
-(Application Support/CoachBoard/board.json, `CoachBoardStore`) — a
-scratchpad, and syncing it would need a schema field. The page: Half | Full
-(converts the steps), the step player (▶, Pencil ink, Scribble on an iPad),
-"Draw on the board" → the full step editor in drawing mode (players, cones,
-every tool) as a full-screen cover. The editor's new `onChange` reports
-every change and the board saves it at once, so there is NO Cancel there
-(Done only, Esc closes, swipe-down allowed). Toolbar: Clear (asks;
-`board.confirmClear`) and Save ▾ — Save as Play (JournalNewPlaySheet
-(drawing:) → the concept's steps, cones dropped — `JournalPlay.fill`) / Save
-as Drill (AddDrillView(drawing:) — the drawing is the new drill's first
-visual). Saving leaves the board as it is. HOOPWISE_SHOT=coachBoard. Tests:
-CoachBoardUITests (draw → Done → relaunch → still there → Save → Clear),
-SkillIntegrationTests.
+I hit Clear myself." Then, the same night: "land directly in the editor in
+full screen with only the tool bar on the side and steps at the bottom left
+tucked into a button." Hub → Coach board (the third PEOPLE tile on a wide
+screen, a wide tile on the phone; glyph `.board`) opens a FULL-SCREEN COVER
+that IS the step editor in BOARD MODE (`JournalPlayStepEditor(drawing:
+onChange:board:onSave:)`, `BoardActions`): tool rail | court, no inspector;
+a glass "Step N of M ⌃" button at the bottom left opens a popover with the
+steps strip, this step's words, defense, the tool's options and the
+selection. Top bar: Court (Half/Full — converts the steps and rebuilds the
+editor), Watch (BoardWatchSheet — the step player: ▶, Pencil ink, Scribble
+on an iPad), Clear (asks; `board.confirmClear`), Save ▾ — Save as Play
+(JournalNewPlaySheet(drawing:) → the concept's steps, cones dropped —
+`JournalPlay.fill`) / Save as Drill (AddDrillView(drawing:) — the drawing is
+the new drill's first visual); Done closes. No Cancel: `onChange` reports
+every change and Views/Hub/CoachBoardScreen.swift saves it at once to a
+DEVICE-LOCAL file (Application Support/CoachBoard/board.json,
+`CoachBoardStore`) — a scratchpad; syncing would need a schema field.
+Saving leaves the board as it is. HOOPWISE_SHOT=coachBoard. Tests:
+CoachBoardUITests (opens in the editor, draw, steps button, relaunch → still
+there, Save → Play/Drill, Clear), SkillIntegrationTests.
+THE STEPS PANEL REDESIGNED (same night, Luther: "the steps bottom tab is not
+so well designed"): one header line — "STEPS  2 of 3", then move (menu) and
+delete as one small capsule (shown with two or more steps;
+`plays.editor.deleteStep`) — over a FILMSTRIP: each step a 104 × 74 drawing
+with its number on it and its caption under, the one on screen ringed in
+the accent, "+ Add a step" as the strip's last, dashed frame
+(`plays.editor.addStep`). The ‹ › buttons are gone (tap a frame); ⌘[ ⌘]
+still step through (hidden buttons, `stepKeys`). Used under the court
+(upright) and in the board's popover; the side column keeps rows with the
+same header and a dashed "+ Add a step" row. The phone's steps bar is
+unchanged.
 
 ## Languages by area (17 Nov 2026, Luther)
 Profile → Preferences → Languages by Area (AreaLanguageSettingsView):
