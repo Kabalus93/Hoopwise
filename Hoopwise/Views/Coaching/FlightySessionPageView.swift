@@ -2114,10 +2114,11 @@ struct FlightySessionPageView: View {
             // A private session offers anyone not already expected at it
             // (they join this session only); a group class, anyone not on
             // the program's roster.
-            let takenIds = isPrivateSession
-                ? Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
-                    .union(session.actualAttendeeIds)
-                : Set(parentProgram?.enrolledStudentIds ?? [])
+            // Group classes too (18 Nov 2026, Luther: enrolled athletes missing
+            // from a class could not be found here — the list left out the
+            // whole program): anyone not EXPECTED at this class.
+            let takenIds = Set(AttendanceMath.expectedIds(of: session, programs: dataManager.programs))
+                .union(session.actualAttendeeIds)
             // Without a program there is no roster to join: coaches only.
             let available = (parentProgram == nil && !isPrivateSession) ? []
                 : dataManager.students.filter { !takenIds.contains($0.id) }
@@ -2131,8 +2132,8 @@ struct FlightySessionPageView: View {
                 : AthletePickerSheet.Banner(
                     title: isChinese ? "从此课程开始计费" : "Sessions Count From Here",
                     subtitle: isChinese
-                        ? "学员的合约课时将从本节课开始计算"
-                        : "The student's contract sessions will count starting from this session",
+                        ? "学员加入这个项目以及本节和之后的课；合约课时从本节课开始计算"
+                        : "They join this program, this class and the ones after it; their contract sessions count from this one",
                     tint: programColor
                 )
             AthletePickerSheet(
@@ -2361,6 +2362,12 @@ struct FlightySessionPageView: View {
 
         if didChangeProgram {
             dataManager.updateProgram(program)
+        }
+        // Expected from now on: this class and the program's coming ones
+        // (an athlete already enrolled may have been missing from them).
+        dataManager.addToUpcomingRosters(studentIds: studentIds, programId: program.id, current: session.id)
+        if !session.attendeeIds.isEmpty {
+            for id in studentIds where !session.attendeeIds.contains(id) { session.attendeeIds.append(id) }
         }
         if didChangeSession {
             // Field-level attendance write — see `setAttendanceState`.

@@ -71,13 +71,41 @@ enum ProgramSessionSync {
                 s.location = newVenue
                 touched = true
             }
-            if rosterChanged, !s.attendeeIds.isEmpty, Set(s.attendeeIds) == oldRoster {
-                s.attendeeIds = after.enrolledStudentIds
-                touched = true
+            // ROSTER (18 Nov 2026, Luther: "students appear in the program
+            // but not in the session"): the CHANGE passes on — who joined the
+            // program joins the class's stored roster, who left leaves it —
+            // and whatever else that class's roster holds stays. It used to
+            // follow only when the roster EQUALLED the old enrolment, so one
+            // class that differed by a single child stopped hearing about
+            // every later enrolment.
+            if rosterChanged, !s.attendeeIds.isEmpty {
+                let joined = after.enrolledStudentIds.filter { !oldRoster.contains($0) }
+                let left = oldRoster.subtracting(after.enrolledStudentIds)
+                var roster = s.attendeeIds.filter { !left.contains($0) }
+                for id in joined where !roster.contains(id) { roster.append(id) }
+                if roster != s.attendeeIds {
+                    s.attendeeIds = roster
+                    touched = true
+                }
             }
             if touched { changed.append(s) }
         }
         return changed
+    }
+
+    /// `studentIds` put on the stored roster of every upcoming class of the
+    /// program that has one and lacks them (an empty roster already reads
+    /// the program's enrolment) — an enrolled athlete a class had lost.
+    static func joining(_ studentIds: [UUID], programId: UUID, sessions: [SessionEvent],
+                        now: Date = Date()) -> [SessionEvent] {
+        upcoming(of: programId, in: sessions, now: now).compactMap { session in
+            guard !session.attendeeIds.isEmpty else { return nil }
+            let missing = studentIds.filter { !session.attendeeIds.contains($0) }
+            guard !missing.isEmpty else { return nil }
+            var s = session
+            s.attendeeIds += missing
+            return s
+        }
     }
 
     /// A weekday SWAP (Saturday → Sunday): each upcoming session on a removed

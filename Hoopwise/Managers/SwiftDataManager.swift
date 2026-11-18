@@ -1711,6 +1711,23 @@ class SwiftDataManager: ObservableObject {
 
     /// After an enrollment write: each program whose roster changed passes the
     /// change on to its upcoming sessions.
+    /// Enrolled athletes a class had lost go back on this class and every
+    /// upcoming class of the program (ProgramSessionSync.joining). `current`
+    /// (the class being taken, possibly under way) is included even though it
+    /// is no longer "upcoming".
+    func addToUpcomingRosters(studentIds: [UUID], programId: UUID, current: UUID? = nil) {
+        var changed = ProgramSessionSync.joining(studentIds, programId: programId, sessions: cachedSessionEvents)
+        if let current, !changed.contains(where: { $0.id == current }),
+           var session = cachedSessionEvents.first(where: { $0.id == current }), !session.attendeeIds.isEmpty {
+            let missing = studentIds.filter { !session.attendeeIds.contains($0) }
+            if !missing.isEmpty {
+                session.attendeeIds += missing
+                changed.append(session)
+            }
+        }
+        for session in changed { updateSessionEvent(session, keepLiveFields: true) }
+    }
+
     private func rostersFollowEnrollment(programsBefore: [Program]) {
         for after in cachedPrograms {
             guard let before = programsBefore.first(where: { $0.id == after.id }),

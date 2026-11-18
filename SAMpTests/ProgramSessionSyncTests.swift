@@ -65,10 +65,30 @@ final class ProgramSessionSyncTests: XCTestCase {
         XCTAssertEqual(f.endTime.timeIntervalSince(f.startTime), 90 * 60)
         XCTAssertEqual(f.location, "体育馆")
         XCTAssertEqual(Set(f.attendeeIds), [kid, newKid])
-        let g = changed.first { $0.id == guest.id }!   // length follows, venue and roster are its own
+        let g = changed.first { $0.id == guest.id }!   // length follows, venue its own
         XCTAssertEqual(g.location, "Other gym")
-        XCTAssertEqual(g.attendeeIds.count, 2)
-        XCTAssertFalse(g.attendeeIds.contains(newKid))
+        // The roster takes the CHANGE (18 Nov 2026): the new enrollee joins,
+        // the guest stays.
+        XCTAssertEqual(g.attendeeIds.count, 3)
+        XCTAssertTrue(g.attendeeIds.contains(newKid))
+    }
+
+    /// Luther's case (18 Nov 2026): a class whose roster had drifted from the
+    /// enrolment never heard of later enrolments, and Add Athlete could not
+    /// offer the enrolled ones. Leaving passes on too; `joining` repairs.
+    func testRosterTakesTheChangeAndJoiningRepairs() {
+        let a = UUID(), b = UUID(), c = UUID(), d = UUID()
+        var before = program()
+        before.enrolledStudentIds = [a, b, c]
+        var after = before
+        after.enrolledStudentIds = [a, b, d]               // c left, d joined
+        let drifted = session(before, 31, roster: [a, b])  // already missing c
+        let out = ProgramSessionSync.follow(before: before, after: after, sessions: [drifted], now: now)
+        XCTAssertEqual(out.first?.attendeeIds, [a, b, d])
+        let repaired = ProgramSessionSync.joining([c], programId: before.id, sessions: [drifted], now: now)
+        XCTAssertEqual(repaired.first?.attendeeIds, [a, b, c])
+        XCTAssertTrue(ProgramSessionSync.joining([a], programId: before.id, sessions: [drifted], now: now).isEmpty,
+                      "already there: nothing to write")
     }
 
     func testUnrelatedEditChangesNothing() {

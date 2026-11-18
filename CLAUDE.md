@@ -151,6 +151,17 @@ roster kept); removing days still deletes those future classes, but their
 plans first REFLOW in date order onto the classes that remain
 (`reflowPlans`, gaps kept). Notifications and Live Activities re-sync from
 the moved times on the monitor's 30 s tick. Tests: ProgramSessionSyncTests.
+ROSTERS TAKE THE CHANGE, NOT A MATCH (18 Nov 2026, Luther: athletes on the
+program were missing from the session and not in Add Athlete). The roster
+rule used to need the stored roster to EQUAL the old enrolment; one drifted
+roster (a guest added, someone removed on that class) and no later enrolment
+ever reached it. Now an enrolment edit passes its DIFF on: who joined is
+appended, who left is removed, the session's own extras stay. Repair:
+`ProgramSessionSync.joining` + `addToUpcomingRosters` — the group session
+page's Add Athlete now offers every athlete not EXPECTED at this class
+(it hid everyone enrolled in the program, so the missing ones could not be
+picked); adding them enrols, puts them on this class and every upcoming
+class of the program whose roster is stored.
 
 EXPIRY SEMANTICS: `Contract.expiresOn` derives from `validityMonths` +
 `effectiveBundlePurchaseDate`; zero months is a term nobody agreed and never
