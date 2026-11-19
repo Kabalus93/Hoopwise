@@ -26,8 +26,8 @@ struct AreaLanguageSettingsView: View {
                 }
             } footer: {
                 Text(isChinese
-                     ? "这些内容可以使用与应用不同的语言。点名照片默认中文（发到微信群）。"
-                     : "These can use a different language from the app. The roll-call photo starts in Chinese, for WeChat groups.")
+                     ? "这些内容可以使用与应用不同的语言。点名照片始终为中文（发到微信群）。"
+                     : "These can use a different language from the app. The roll-call photo is always in Chinese, for WeChat groups.")
             }
         }
         .navigationTitle(isChinese ? "分区语言" : "Languages by Area")

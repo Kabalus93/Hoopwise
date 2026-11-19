@@ -780,6 +780,13 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   WHO/WHERE ("<coach>教练 · venue"), then the present names under a hairline.
   Text stays Chinese whatever the app language. HOOPWISE_SHOT=rollCallOverlay
   renders it over a stand-in photo.
+  REVISED 19 Nov 2026 (Luther): NO TOTAL — the count is who is present alone
+  ("7 到场"); WHEN is the moment the PHOTO WAS TAKEN (the attendance photo
+  file's date, `PhotoCaptureManager.attendancePhotoTakenDate`; now if it
+  cannot be read), not the session's start; ALWAYS CHINESE — the roll-call
+  photo left Languages by Area, the coach's name is their Chinese name
+  (profile, else their organization row, else the plain name), students by
+  `primaryName(chinese: true)`.
 - FOURTEENTH sanctioned exception (October 2026, Luther's request): ADDING an
   athlete opens the SAME page as editing one — `EditStudentView()` (create
   mode, a fresh unsaved record; `isNew`) — photo, name, Chinese name, the one
@@ -2165,11 +2172,10 @@ Arrow keys move the selection the way they point on screen
 ## Languages by area (17 Nov 2026, Luther)
 Profile → Preferences → Languages by Area (AreaLanguageSettingsView):
 Exported PDFs (the Parent Guide PDF and long image), Player card (app,
-image, A3 — names, words, octagon labels), Game recap, Roll-call photo —
+image, A3 — names, words, octagon labels), Game recap —
 each Same as app / English / 中文 (Models/AreaLanguage.swift, UserDefaults
 `language.area.<area>`, nonisolated — it reads `app_language` directly).
-The roll-call photo DEFAULTS TO CHINESE (it always was — WeChat groups);
-in English it reads "Coach X", "present", English names. Statement and
+The roll-call photo is ALWAYS Chinese (removed from this list 19 Nov 2026). Statement and
 agreement PDFs are bilingual by design and unchanged.
 `Student.primaryName(chinese:)` / `secondaryName(chinese:)`,
 `DrillAttribute.title(chinese:)` / `short(chinese:)` serve a page with its

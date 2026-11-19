@@ -6,8 +6,8 @@ import Foundation
 // Profile → Preferences → Languages. Device setting (UserDefaults), like the
 // app language itself.
 //
-// The roll-call photo was ALWAYS Chinese (it goes to WeChat groups), so its
-// default stays Chinese; the other three default to the app language.
+// The roll-call photo LEFT this list on 19 Nov 2026 (Luther: everything on it
+// in Chinese, the coach's name too) — it is always Chinese now.
 
 nonisolated enum AreaLanguage {
     enum Area: String, CaseIterable, Identifiable {
@@ -16,22 +16,19 @@ nonisolated enum AreaLanguage {
         /// The player card — in the app, the shared image and the A3 sheets.
         case playerCard
         case gameRecap
-        /// The band on the roll-call photo saved for WeChat.
-        case rollCall
 
         var id: String { rawValue }
 
         var key: String { "language.area.\(rawValue)" }
 
         /// What an area reads when the coach never chose.
-        var defaultChoice: Choice { self == .rollCall ? .chinese : .app }
+        var defaultChoice: Choice { .app }
 
         func title(chinese: Bool) -> String {
             switch self {
             case .exports: return chinese ? "导出的 PDF（家长指南）" : "Exported PDFs (Parent Guide)"
             case .playerCard: return chinese ? "球员卡" : "Player card"
             case .gameRecap: return chinese ? "比赛回顾" : "Game recap"
-            case .rollCall: return chinese ? "点名照片" : "Roll-call photo"
             }
         }
     }

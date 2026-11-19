@@ -177,6 +177,15 @@ class PhotoCaptureManager {
     ///      `AttendancePhotos/` and re-resolves.
     ///   4. Bare filename — searches Documents/AttendancePhotos.
     /// Returns nil only when no candidate exists on disk.
+    /// When the attendance photo was taken: its file is written at the
+    /// shutter (and rewritten on a retake), so the file's date is the
+    /// moment of the picture. Nil when the file cannot be found.
+    func attendancePhotoTakenDate(from path: String) -> Date? {
+        guard let resolved = resolveAttendancePhotoPath(path),
+              let attributes = try? FileManager.default.attributesOfItem(atPath: resolved) else { return nil }
+        return (attributes[.modificationDate] as? Date) ?? (attributes[.creationDate] as? Date)
+    }
+
     func loadAttendancePhoto(from path: String) -> PlatformImage? {
         guard let resolved = resolveAttendancePhotoPath(path) else {
             debugLog("⚠️ Attendance photo not found for stored path: \(path)")

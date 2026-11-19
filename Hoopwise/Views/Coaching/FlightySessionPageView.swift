@@ -2530,11 +2530,10 @@ struct FlightySessionPageView: View {
     }
 
     #if os(iOS)
-    /// Composes the attendance photo with a watermark of coach name,
-    /// timestamp, location, present-count and the names of present students,
-    /// then saves the result to the user's Photos library. The band is in the
-    /// roll-call language (AreaLanguage .rollCall) — Chinese unless the coach
-    /// changed it, since these photos go to Chinese-reading WeChat groups.
+    /// Composes the attendance photo with a watermark of coach name, when
+    /// the photo was taken, location, present-count and the names of present
+    /// students, then saves the result to the user's Photos library. The band
+    /// is always Chinese — these photos go to Chinese-reading WeChat groups.
     private func exportSessionPhotoToLibrary() {
         guard !isExportingSessionPhoto,
               let path = session.attendancePhotoPath,
@@ -2544,51 +2543,45 @@ struct FlightySessionPageView: View {
         HapticFeedback.impact(.light)
 
         let presentStudents = dataManager.students.filter { session.actualAttendeeIds.contains($0.id) }
-        // The band's language is the coach's choice (AreaLanguage .rollCall,
-        // Chinese unless changed — these photos go to WeChat groups).
-        let zh = AreaLanguage.isChinese(.rollCall)
+        // ALWAYS CHINESE (19 Nov 2026, Luther: "everything should be in
+        // Chinese including the name of the coach") — these photos go to
+        // WeChat groups. Students by Chinese name (else their pinyin name).
         let names: [String] = presentStudents.compactMap { student in
-            if zh, let chinese = student.chineseName?.trimmingCharacters(in: .whitespacesAndNewlines), !chinese.isEmpty {
-                return chinese
-            }
-            let english = student.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            return english.isEmpty ? nil : english
+            let name = student.primaryName(chinese: true).trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : name
         }
-        let nameList = names.joined(separator: zh ? "、" : ", ")
+        let nameList = names.joined(separator: "、")
 
-        // Prefer the coach's Chinese name on the watermark — these photos
-        // go to WeChat groups where Chinese-reading managers see them.
-        // Falls back to the English name when no Chinese name is set.
+        // The coach's Chinese name: their profile's, else their own row in
+        // the organization's, else (nothing in Chinese anywhere) their name.
         let coachName: String = {
             let coach = dataManager.coach
-            if zh, let chinese = coach.chineseName?.trimmingCharacters(in: .whitespacesAndNewlines), !chinese.isEmpty {
-                return chinese
+            func chinese(_ s: String?) -> String? {
+                guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+                return t
             }
+            if let zh = chinese(coach.chineseName) { return zh }
+            let me = dataManager.staffCoaches.first { $0.id == dataManager.loggedInCoachId }
+                ?? dataManager.staffCoaches.first {
+                    $0.name.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(
+                        coach.name.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
+                }
+            if let zh = chinese(me?.chineseName) { return zh }
             return coach.name.trimmingCharacters(in: .whitespacesAndNewlines)
         }()
 
-        // `session.date` is the day bucket with the time component zeroed —
-        // the actual start-of-session clock time lives on `session.startTime`.
-        // Compose by lifting H:m from startTime onto session.date so the
-        // watermark always reads e.g. "2026年5月18日 15:30" rather than 00:00.
-        let cal = Calendar.current
-        let day = cal.startOfDay(for: session.date)
-        let timeComponents = cal.dateComponents([.hour, .minute], from: session.startTime)
-        let stamp = cal.date(bySettingHour: timeComponents.hour ?? 0,
-                             minute: timeComponents.minute ?? 0,
-                             second: 0,
-                             of: day) ?? session.startTime
-
+        // WHEN THE PICTURE WAS TAKEN (19 Nov 2026, Luther: not the session's
+        // time) — the photo file is written at the shutter; a photo whose
+        // file date cannot be read falls back to now.
+        let stamp = PhotoCaptureManager.shared.attendancePhotoTakenDate(from: path) ?? Date()
+        let zhLocale = Locale(identifier: "zh_CN")
         let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: zh ? "zh_CN" : "en_US")
-        dateFormatter.dateFormat = zh ? "yyyy年M月d日 HH:mm" : "d MMM yyyy HH:mm"
+        dateFormatter.locale = zhLocale
+        dateFormatter.dateFormat = "yyyy年M月d日 HH:mm"
         let dateText = dateFormatter.string(from: stamp)
-
-        // Day-of-week chunk, rendered as its own emphasized line in the
-        // watermark so a quick glance shows e.g. "星期日 / 2026年5月18日".
         let weekdayFormatter = DateFormatter()
-        weekdayFormatter.locale = Locale(identifier: zh ? "zh_CN" : "en_US")
-        weekdayFormatter.dateFormat = "EEEE"  // → "星期日" / "Sunday"
+        weekdayFormatter.locale = zhLocale
+        weekdayFormatter.dateFormat = "EEEE"  // → "星期日"
         let weekdayText = weekdayFormatter.string(from: stamp)
 
         let composed = renderWatermarkedAttendancePhoto(
@@ -2598,9 +2591,7 @@ struct FlightySessionPageView: View {
             dateText: dateText,
             location: session.location,
             presentCount: presentStudents.count,
-            expectedCount: AttendanceMath.expectedIds(of: session, programs: dataManager.programs).count,
-            nameList: nameList,
-            chinese: zh
+            nameList: nameList
         ) ?? basePhoto
 
         PhotoCaptureManager.shared.saveImageToPhotoLibrary(composed) { result in
@@ -2639,9 +2630,7 @@ struct FlightySessionPageView: View {
         dateText: String,
         location: String?,
         presentCount: Int,
-        expectedCount: Int,
-        nameList: String,
-        chinese: Bool
+        nameList: String
     ) -> UIImage? {
         let pointSize = photo.size
         guard pointSize.width > 0, pointSize.height > 0 else { return nil }
@@ -2653,9 +2642,7 @@ struct FlightySessionPageView: View {
             dateText: dateText,
             location: location,
             presentCount: presentCount,
-            expectedCount: expectedCount,
-            nameList: nameList,
-            chinese: chinese
+            nameList: nameList
         )
 
         let renderer = ImageRenderer(content: overlay)
@@ -7087,9 +7074,9 @@ struct SessionPhotoExportToastView: View {
 // MARK: - Attendance Watermark Overlay
 #if os(iOS)
 /// The roll-call photo's band (October 2026 layout, Luther): one left edge,
-/// three levels. The COUNT leads — present against expected ("7/10 到场",
-/// expected = AttendanceMath.expectedIds) — then one line of WHEN (weekday ·
-/// date · time) and one of WHO/WHERE (coach · venue), and the names of the
+/// three levels. The COUNT leads — who is present ("7 到场"; no total since
+/// 19 Nov 2026) — then one line of WHEN THE PHOTO WAS TAKEN (weekday · date ·
+/// time) and one of WHO/WHERE (coach · venue), always in Chinese, and the names of the
 /// players present below a hairline. Attached with `.overlay(alignment:
 /// .bottom)` so it can never overflow the photo's bottom edge — anchoring
 /// with a ZStack clipped the last line of names on some aspect ratios.
@@ -7100,12 +7087,10 @@ struct AttendanceWatermarkOverlay: View {
     let weekdayText: String
     let dateText: String
     let location: String?
+    /// Who is in the picture — the count stands alone (19 Nov 2026,
+    /// Luther: no total); the band is always Chinese.
     let presentCount: Int
-    /// The session's roster. 0 = unknown, and the count stands alone.
-    var expectedCount: Int = 0
     let nameList: String
-    /// The band's language (AreaLanguage .rollCall); Chinese by default.
-    var chinese: Bool = true
 
     /// Sizes are tuned for a 1024-wide photo (PhotoCaptureManager's max) and
     /// scale with it, clamped so WeChat thumbnails stay legible.
@@ -7128,7 +7113,7 @@ struct AttendanceWatermarkOverlay: View {
 
     private var whoWhereLine: String {
         var parts: [String] = []
-        if !coachName.isEmpty { parts.append(chinese ? "\(coachName)教练" : "Coach \(coachName)") }
+        if !coachName.isEmpty { parts.append("\(coachName)教练") }
         if let location, !location.isEmpty { parts.append(location) }
         return parts.joined(separator: " · ")
     }
@@ -7187,20 +7172,15 @@ struct AttendanceWatermarkOverlay: View {
         )
     }
 
-    /// "7/10" large, "到场" under it.
+    /// "7" large, "到场" under it.
     private var countBlock: some View {
         VStack(alignment: .leading, spacing: 2 * s) {
             HStack(alignment: .firstTextBaseline, spacing: 2 * s) {
                 Text("\(presentCount)")
                     .font(.system(size: 92 * s, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
-                if expectedCount > 0 {
-                    Text("/\(expectedCount)")
-                        .font(.system(size: 44 * s, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
             }
-            Text(chinese ? "到场" : "present")
+            Text("到场")
                 .font(.system(size: 26 * s, weight: .bold))
                 .foregroundStyle(Color(red: 0.62, green: 0.88, blue: 0.80))
         }

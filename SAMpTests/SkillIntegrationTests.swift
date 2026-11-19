@@ -139,16 +139,15 @@ final class SkillIntegrationTests: XCTestCase {
 
     // MARK: - Languages by area
 
-    func testAreasFollowTheAppUnlessChosenAndRollCallStartsChinese() {
+    func testAreasFollowTheAppUnlessChosen() {
         let defaults = UserDefaults(suiteName: "AreaLanguageTests")!
         defaults.removePersistentDomain(forName: "AreaLanguageTests")
         defaults.set("en", forKey: "app_language")
         XCTAssertFalse(AreaLanguage.isChinese(.gameRecap, defaults: defaults))
-        XCTAssertTrue(AreaLanguage.isChinese(.rollCall, defaults: defaults), "WeChat photos stay Chinese by default")
         AreaLanguage.set(.chinese, for: .playerCard, defaults: defaults)
         XCTAssertTrue(AreaLanguage.isChinese(.playerCard, defaults: defaults))
-        AreaLanguage.set(.english, for: .rollCall, defaults: defaults)
-        XCTAssertFalse(AreaLanguage.isChinese(.rollCall, defaults: defaults))
+        AreaLanguage.set(.english, for: .gameRecap, defaults: defaults)
+        XCTAssertFalse(AreaLanguage.isChinese(.gameRecap, defaults: defaults))
         defaults.set("zh", forKey: "app_language")
         XCTAssertTrue(AreaLanguage.isChinese(.exports, defaults: defaults))
     }
