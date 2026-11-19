@@ -772,6 +772,15 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   press removed on hold and RE-ADDED on release. Tests: StatPressGateTests,
   LiveGameEntryTests, LiveGameStatUITests, LiveGameAssistUITests
   (HOOPWISE_SHOT=liveGame).
+  WHO IS UP (19 Nov 2026, Luther): with more than two teams, a team on the
+  scoreboard is a MENU ("Who's up instead?" → each waiting team; on the
+  phone also "Show <team>'s players") only while `lineupEditable` — clock
+  never run (timerSeconds 0, not running), no stat, no basket, no score.
+  The chosen team takes that slot in activeTeamIds and the replaced team
+  takes its place in the queue (teams swapped). A chevron marks it.
+  HOOPWISE_LIVE_TEAMS=3 (liveGame) adds a waiting Yellow. Test:
+  LiveGameLineupUITests (iPad mini; the first launch of a run sometimes
+  comes up without its environment — rerun).
 - THIRTEENTH sanctioned exception (October 2026, Luther's request): the
   roll-call photo band (AttendanceWatermarkOverlay, exported to Photos for
   WeChat). Same fields, one left edge: the count leads as present/expected
@@ -1701,7 +1710,8 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   stock, saddle-brown frame, the name in CAPITALS over the court header,
   the photo overlapping the header's edge, a DIAMOND (now the program's age
   group — it was a coach-facing A/B/C grade), the school GRADE only (AGE,
-  HT and HAND removed — Luther, same day), the MONTH pill (was "SINCE
+  HT and HAND removed — Luther, same day; a Chinese card shows the grade
+  as "二年级", no label — `SchoolGrade.shortName(chinese:)`, 19 Nov 2026), the MONTH pill (was "SINCE
   <year>"), the header a RADIAL gradient centred on the photo: clear at the
   photo → at the far corners the PHOTO'S OWN BACKGROUND colour
   (`AthleteCardFacts.backgroundHex(ofPhoto:)` — the average of the photo's
