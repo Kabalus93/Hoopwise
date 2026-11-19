@@ -748,6 +748,15 @@ private struct LiveGameGalleryHost: View {
         let home = GameTeam(name: black ? "Black" : "Blue", colorHex: black ? "#1C1C1E" : "#007AFF",
                             playerIds: Array(ids.prefix(5)))
         let away = GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: Array(ids.dropFirst(5).prefix(5)))
+        // HOOPWISE_LIVE_TEAMS=3: a third team waits and the round has not
+        // started — the scoreboard offers "Who's up instead?".
+        if ProcessInfo.processInfo.environment["HOOPWISE_LIVE_TEAMS"] == "3" {
+            let yellow = GameTeam(name: "Yellow", colorHex: "#FFCC00", playerIds: Array(ids.dropFirst(10).prefix(5)))
+            var g = SessionGame(sessionId: UUID(), teams: [home, away, yellow], status: .ready)
+            g.activeTeamIds = [home.id, away.id]
+            _game = State(initialValue: g)
+            return
+        }
         _game = State(initialValue: SessionGame(sessionId: UUID(), teams: [home, away],
                                                 status: .inProgress, startedAt: Date()))
     }

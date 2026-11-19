@@ -5782,19 +5782,87 @@ struct LiveGameScoringView: View {
         .sensoryFeedback(.selection, trigger: selectedTeamIndex)
     }
 
+    /// WHO IS UP (19 Nov 2026, Luther: with more than two teams, tap a team on
+    /// the scoreboard and pick which team plays instead). Only before the
+    /// clock has run and before anyone has a stat — after that the round is
+    /// under way and the rotation decides.
+    private var lineupEditable: Bool {
+        guard game.status != .completed, !game.waitingTeams.isEmpty,
+              timerSeconds == 0, !isTimerRunning else { return false }
+        let noStats = game.playerStats.allSatisfy {
+            $0.points == 0 && $0.rebounds == 0 && $0.assists == 0 && $0.steals == 0 && $0.blocks == 0
+        }
+        return noStats && game.baskets.isEmpty && game.teamScores.values.allSatisfy { $0 == 0 }
+    }
+
+    /// `waiting` goes on court in `current`'s slot, and `current` takes
+    /// `waiting`'s place in the queue.
+    private func putOnCourt(_ waiting: GameTeam, replacing current: GameTeam) {
+        guard let slot = game.activeTeamIds.firstIndex(of: current.id),
+              let a = game.teams.firstIndex(where: { $0.id == current.id }),
+              let b = game.teams.firstIndex(where: { $0.id == waiting.id }) else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            game.activeTeamIds[slot] = waiting.id
+            game.teams.swapAt(a, b)
+        }
+        HapticFeedback.impact(.light)
+        onSave()
+    }
+
+    @ViewBuilder
     private func teamScoreSwitch(team: GameTeam, index: Int) -> some View {
+        if lineupEditable {
+            Menu {
+                Section(isChinese ? "换上哪队？" : "Who's up instead?") {
+                    ForEach(game.waitingTeams) { waiting in
+                        Button {
+                            putOnCourt(waiting, replacing: team)
+                        } label: {
+                            Label(GameTeam.localizedColorName(waiting.name), systemImage: "arrow.left.arrow.right")
+                        }
+                    }
+                }
+                if !(isIPad && activeTeamsForScoring.count == 2) {
+                    Button {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { selectedTeamIndex = index }
+                    } label: {
+                        Label(isChinese ? "显示\(GameTeam.localizedColorName(team.name))的球员" : "Show \(GameTeam.localizedColorName(team.name))'s players",
+                              systemImage: "person.3")
+                    }
+                }
+            } label: {
+                teamScoreLabel(team: team, index: index, choosable: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("live.team.\(index)")
+        } else {
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { selectedTeamIndex = index }
+            } label: {
+                teamScoreLabel(team: team, index: index, choosable: false)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("live.team.\(index)")
+        }
+    }
+
+    private func teamScoreLabel(team: GameTeam, index: Int, choosable: Bool) -> some View {
         // Side by side (iPad / Mac) both teams are on screen: no selection.
         let selected = (isIPad && activeTeamsForScoring.count == 2) || selectedTeamIndex == index
         let color = team.displayColor(for: colorScheme)
-        return Button {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { selectedTeamIndex = index }
-        } label: {
+        return Group {
             HStack(spacing: 8) {
                 Circle().fill(Color(hex: team.colorHex)).frame(width: 14, height: 14)
                     .overlay(Circle().stroke(Color.primary.opacity(0.2), lineWidth: 0.5))
                 Text(GameTeam.localizedColorName(team.name))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(selected ? .primary : .secondary)
+                if choosable {
+                    // Says the team can be swapped for a waiting one.
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 4)
                 Text("\(game.score(for: team.id))")
                     .font(.system(size: 28, weight: .heavy, design: .rounded))
@@ -5808,8 +5876,6 @@ struct LiveGameScoringView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(color.opacity(selected ? 0.18 : 0.05)))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? color : .clear, lineWidth: 2))
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("live.team.\(index)")
     }
 
     /// Basket-value strip, the selected team's players, and the last action.

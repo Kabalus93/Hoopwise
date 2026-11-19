@@ -98,9 +98,12 @@ enum SchoolGrade: String, Codable, CaseIterable {
     /// Localized short name for picker buttons
     /// Shows Chinese local grade names (小班, 一年级, etc.) when in Chinese mode
     var localizedShortName: String {
-        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
-        guard isChinese else { return rawValue }
-        
+        shortName(chinese: LocalizationManager.shared.currentLanguage == .chinese)
+    }
+
+    /// The short name in a page's own language — "P2" / "二年级".
+    nonisolated func shortName(chinese: Bool) -> String {
+        guard chinese else { return rawValue }
         switch self {
         case .kindergarten1: return "小班"
         case .kindergarten2: return "中班"

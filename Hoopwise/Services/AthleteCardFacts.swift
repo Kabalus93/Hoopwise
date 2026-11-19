@@ -132,7 +132,8 @@ struct AthleteCardFacts: Equatable {
             },
             ageBadge: program?.ageGroup.rawValue,
             jersey: player?.jerseyNumber,
-            schoolGrade: student.currentSchoolGrade(asOf: now)?.rawValue,
+            // "二年级" on a Chinese card (19 Nov 2026, Luther), "P2" in English.
+            schoolGrade: student.currentSchoolGrade(asOf: now)?.shortName(chinese: chinese),
             photoBackgroundHex: student.profileImageData.flatMap(Self.backgroundHex(ofPhoto:)),
             accentHex: program?.colorHex ?? categoryHex,
             month: month.lowerBound,

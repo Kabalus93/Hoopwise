@@ -125,7 +125,8 @@ struct AthleteCardFront: View {
                     .frame(width: 96, alignment: .leading)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 5) {
-                    if let grade = card.schoolGrade { factRow(w.zh ? "年级" : "GRADE", grade) }
+                    // In Chinese the grade names itself ("二年级"), so no label.
+                    if let grade = card.schoolGrade { factRow(w.zh ? "" : "GRADE", grade) }
                 }
                 .frame(width: 96, alignment: .trailing)
             }
@@ -154,9 +155,11 @@ struct AthleteCardFront: View {
 
     private func factRow(_ label: String, _ value: String) -> some View {
         HStack(spacing: 6) {
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(AthleteCardStyle.label)
+            if !label.isEmpty {
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AthleteCardStyle.label)
+            }
             Text(value)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.black)
