@@ -1466,6 +1466,17 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   (.hoopwiseHomePins / .hoopwisePlayActivity) and an on-demand fetch.
   HOOPWISE_SHOT=homeCards (pins the demo team, marks its play edited).
   Tests: HomeTeamPlayUITests.
+  A PINNED STEP (19 Nov 2026, Luther: step 1 "almost never says anything
+  useful"): the play page's ⋯ → "Show this step on Home" pins the step on
+  screen (`PlayActivity.pin`, device-local `home.play.pinned`, ONE pin); the
+  pinned play wins over recent activity until "Remove from Home"; the card
+  draws that step, captioned "PINNED · STEP N OF M"; the play page opens on
+  it. HOOPWISE_HOME_PIN_STEP=<n> with homeCards. Tests: HomePinnedStepUITests.
+  THE BRIEFING (same day, Luther): opens by default in regular width (iPad,
+  Mac; a tap still folds it), shut on the iPhone; its "Handled
+  automatically" list is GONE (auto-close still runs; reopen from the
+  session's ⋯ → Mark Scheduled; `AttentionEngine.ledger` stays for the
+  DEBUG report).
 - SESSION HEADER CLEARS THE BACK BUTTON (12 November 2026, Luther: the
   Scheduled tag sat under Back on the iPhone and was tight on the Mac). The
   status is now the FIRST pill of the meta row (status · format · date ·
@@ -2662,8 +2673,8 @@ found two bugs, and both were in code that renders documents sent to clients.
   runAutomation closes sessions past end + 12h grace; hooked debounced
   into refreshAllCaches/refreshCachesSync (foreground + post-sync, both
   platforms), throttled 5 min, idempotent. The first run IS the amnesty.
-  Reopen = resetToScheduled (strips the marker). The ledger ("Handled
-  automatically", iOS briefing + Mac Today group) derives from the marker.
+  Reopen = resetToScheduled (strips the marker). The ledger derives from
+  the marker (no longer shown on Home since 19 Nov 2026 — Luther).
 - ATTENDANCE MATH: AttendanceMath.rate is THE per-student attendance
   definition for attention decisions — denominator counts ONLY sessions
   with an explicit mark (present/excused/unexcused). Unrecorded sessions

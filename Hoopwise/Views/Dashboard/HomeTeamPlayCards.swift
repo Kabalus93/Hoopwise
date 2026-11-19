@@ -183,16 +183,26 @@ struct HomePlayCard: View {
                 court
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Label {
-                            Text(edited ? (isChinese ? "正在做的战术" : "WORKING ON") : (isChinese ? "最近看过" : "LAST STUDIED"))
-                                .font(.caption2.weight(.bold)).monospaced()
-                        } icon: {
-                            Image(systemName: edited ? "pencil.and.scribble" : "eye").font(.caption)
+                        if let pinned = shownStep {
+                            Label {
+                                Text(isChinese ? "已固定 · 第 \(pinned + 1)/\(steps) 步" : "PINNED · STEP \(pinned + 1) OF \(steps)")
+                                    .font(.caption2.weight(.bold)).monospaced()
+                            } icon: {
+                                Image(systemName: "pin.fill").font(.caption)
+                            }
+                            .foregroundStyle(Color.accentColor)
+                        } else {
+                            Label {
+                                Text(edited ? (isChinese ? "正在做的战术" : "WORKING ON") : (isChinese ? "最近看过" : "LAST STUDIED"))
+                                    .font(.caption2.weight(.bold)).monospaced()
+                            } icon: {
+                                Image(systemName: edited ? "pencil.and.scribble" : "eye").font(.caption)
+                            }
+                            .foregroundStyle(edited ? Color.accentColor : .secondary)
+                            Text("·").foregroundStyle(.tertiary)
+                            Text(mark.date, format: .relative(presentation: .named))
+                                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         }
-                        .foregroundStyle(edited ? Color.accentColor : .secondary)
-                        Text("·").foregroundStyle(.tertiary)
-                        Text(mark.date, format: .relative(presentation: .named))
-                            .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                     }
                     Text(verbatim: play.name).font(.title2.bold()).lineLimit(2).multilineTextAlignment(.leading)
                     Text(verbatim: jp(play.category.label)).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
@@ -223,8 +233,10 @@ struct HomePlayCard: View {
     }
 
     private var court: some View {
-        JournalPlayDiagramView(diagram: play.conceptPart?.sortedSteps.first?.diagram ?? JournalPlayDiagram(),
-                               court: play.court, compact: true)
+        let all = play.conceptPart?.sortedSteps ?? []
+        let step = shownStep.map { all[$0] } ?? all.first
+        return JournalPlayDiagramView(diagram: step?.diagram ?? JournalPlayDiagram(),
+                                      court: play.court, compact: true)
             .padding(10)
             .frame(maxWidth: .infinity)
             .frame(height: play.court == .full ? 150 : 180)
@@ -239,6 +251,12 @@ struct HomePlayCard: View {
     }
 
     private var steps: Int { play.conceptPart?.sortedSteps.count ?? 0 }
+
+    /// The pinned step, while it still exists (steps can be deleted).
+    private var shownStep: Int? {
+        guard let s = mark.step, s >= 0, s < steps else { return nil }
+        return s
+    }
     private var wrinkles: Int { play.parts(.wrinkle).count }
     private var variations: Int { play.parts(.variation).count }
 

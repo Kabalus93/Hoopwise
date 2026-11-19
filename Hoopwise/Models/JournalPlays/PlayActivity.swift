@@ -9,10 +9,35 @@ enum PlayActivity {
     struct Mark: Codable, Equatable {
         let key: String
         let date: Date
+        /// A PINNED play's step (0-based, the concept's steps) — what Home
+        /// draws instead of step 1.
+        var step: Int? = nil
     }
 
     private static let editedKey = "home.play.edited"
     private static let openedKey = "home.play.opened"
+    /// PINNING A STEP (19 Nov 2026, Luther: "pin the particular slide of the
+    /// play on the home screen instead of the starting slide, that almost
+    /// never says anything useful"). One pin; it wins over recent activity
+    /// until removed.
+    private static let pinnedKey = "home.play.pinned"
+
+    @MainActor static func pin(_ play: JournalPlay, step: Int) {
+        write(Mark(key: play.planRef.key, date: .now, step: step), to: pinnedKey)
+    }
+
+    static func unpin() {
+        UserDefaults.standard.removeObject(forKey: pinnedKey)
+        NotificationCenter.default.post(name: .hoopwisePlayActivity, object: nil)
+    }
+
+    static var pinned: Mark? { read(pinnedKey) }
+
+    /// The step pinned for this play, if it is the pinned one.
+    @MainActor static func pinnedStep(of play: JournalPlay) -> Int? {
+        guard let p = pinned, p.key == play.planRef.key else { return nil }
+        return p.step
+    }
 
     @MainActor static func edited(_ play: JournalPlay) { write(Mark(key: play.planRef.key, date: .now), to: editedKey) }
     @MainActor static func opened(_ play: JournalPlay) { write(Mark(key: play.planRef.key, date: .now), to: openedKey) }
@@ -20,9 +45,10 @@ enum PlayActivity {
     static var lastEdited: Mark? { read(editedKey) }
     static var lastOpened: Mark? { read(openedKey) }
 
-    /// What Home shows: a play edited in the last 7 days, else one opened in
-    /// the last 3; `edited` says which.
+    /// What Home shows: the pinned play; else a play edited in the last 7
+    /// days, else one opened in the last 3; `edited` says which.
     static func current(now: Date = .now) -> (mark: Mark, edited: Bool)? {
+        if let p = pinned { return (p, false) }
         if let e = lastEdited, now.timeIntervalSince(e.date) < 7 * 86_400 {
             if let o = lastOpened, o.key != e.key, o.date > e.date, now.timeIntervalSince(o.date) < 3 * 86_400,
                o.date.timeIntervalSince(e.date) > 86_400 {

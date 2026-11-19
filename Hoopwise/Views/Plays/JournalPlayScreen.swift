@@ -23,6 +23,9 @@ struct JournalPlayScreen: View {
     @State private var openedPart: JournalPlayStudyRoute?
     /// The concept's step on show: the page plays it in place.
     @State private var conceptStep = 0
+    /// Opens on the step pinned to Home, once.
+    @State private var startedOnPin = false
+    @State private var pinTick = 0
     @State private var editingStep: JournalPlayStep?
     @State private var showingLegend = false
     /// The concept's step screen, for adding, moving and deleting steps.
@@ -147,6 +150,18 @@ struct JournalPlayScreen: View {
                 Button { editingSteps = true } label: {
                     Label { JText("Edit steps") } icon: { Image(systemName: "list.number") }
                 }
+                // Pin the step on screen to Home (19 Nov 2026, Luther).
+                let _ = pinTick
+                if PlayActivity.pinnedStep(of: play) == conceptStep {
+                    Button { PlayActivity.unpin(); pinTick += 1 } label: {
+                        Label { JText("Remove from Home") } icon: { Image(systemName: "pin.slash") }
+                    }
+                } else {
+                    Button { PlayActivity.pin(play, step: conceptStep); pinTick += 1 } label: {
+                        Label { JText("Show this step on Home") } icon: { Image(systemName: "pin") }
+                    }
+                    .accessibilityIdentifier("plays.pinStep")
+                }
             }
             Button { partSheet = .add(.wrinkle) } label: {
                 Label { JText("Add a wrinkle") } icon: { Image(systemName: "plus") }
@@ -187,7 +202,13 @@ struct JournalPlayScreen: View {
                                       viewportHeight: viewportHeight)
             }
             // Steps deleted on the step screen: stay on one that exists.
-            .onAppear { conceptStep = max(0, min(conceptStep, concept.sortedSteps.count - 1)) }
+            .onAppear {
+                if !startedOnPin {
+                    startedOnPin = true
+                    if let pinned = PlayActivity.pinnedStep(of: play) { conceptStep = pinned }
+                }
+                conceptStep = max(0, min(conceptStep, concept.sortedSteps.count - 1))
+            }
         }
     }
 

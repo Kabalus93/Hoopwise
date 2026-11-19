@@ -12,7 +12,10 @@ struct FlightyActionableDashboard: View {
     @State private var selectedProgram: Program?
     @State private var selectedContract: Contract?
     @State private var showingProfile = false
-    @State private var briefingExpanded = false
+    /// Nil until the coach taps it: the briefing then opens on iPad / Mac
+    /// (19 Nov 2026, Luther: "keep opened by default") and stays shut on the
+    /// iPhone.
+    @State private var briefingToggled: Bool?
     @State private var showingAllAttentionItems = false
     @State private var attentionCategoryFocus: AttentionCategory?
     @State private var showingAllPlayers = false
@@ -607,7 +610,7 @@ struct FlightyActionableDashboard: View {
         return VStack(spacing: 0) {
             Button {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    briefingExpanded.toggle()
+                    briefingToggled = !briefingExpanded
                 }
             } label: {
                 HStack(alignment: .center) {
@@ -682,76 +685,11 @@ struct FlightyActionableDashboard: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // The automation ledger — what the system handled so it never
-            // became attention. Trust comes from visibility: every entry is
-            // reversible.
-            if briefingExpanded && !automationLedger.isEmpty {
-                if hasSessions || !dataManager.todayReminders.isEmpty {
-                    Divider().padding(.leading, 20)
-                }
-                VStack(spacing: 0) {
-                    HStack(spacing: 8) {
-                        Label {
-                            Text(isChinese ? "已自动处理" : "HANDLED AUTOMATICALLY")
-                                .font(.caption2.weight(.bold))
-                                .monospaced()
-                        } icon: {
-                            Image(systemName: "checkmark.circle")
-                                .font(.caption)
-                        }
-                        .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(isChinese
-                             ? "已关闭 \(automationLedger.count) 节已结束课程"
-                             : "Closed \(automationLedger.count) ended session\(automationLedger.count == 1 ? "" : "s")")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
-
-                    ForEach(Array(automationLedger.prefix(5).enumerated()), id: \.element.id) { index, entry in
-                        HStack(spacing: 12) {
-                            Image(systemName: "gearshape")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(entry.title)
-                                    .font(.footnote.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                Text(entry.sessionEnd.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Spacer()
-                            Button(isChinese ? "恢复" : "Reopen") {
-                                AttentionEngine.reopen(sessionId: entry.sessionId,
-                                                       dataManager: dataManager)
-                            }
-                            .font(.caption.weight(.semibold))
-                            .buttonStyle(.bordered)
-                            .controlSize(.mini)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
-                        if index < min(automationLedger.count, 5) - 1 {
-                            Divider().padding(.leading, 44)
-                        }
-                    }
-                    Color.clear.frame(height: 8)
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
     }
 
-    /// Auto-closed sessions from the last 7 days, newest first.
-    private var automationLedger: [AttentionEngine.LedgerEntry] {
-        AttentionEngine.ledger(dataManager: dataManager)
-    }
+    private var briefingExpanded: Bool { briefingToggled ?? (horizontalSizeClass == .regular) }
     
     private func briefingReminderRow(_ reminder: Reminder, isLast: Bool) -> some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese

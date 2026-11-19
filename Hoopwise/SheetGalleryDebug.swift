@@ -554,6 +554,12 @@ enum SheetGalleryDebug {
                     let plays = (try? dm.modelContext.fetch(FetchDescriptor<JournalPlay>())) ?? []
                     if let key = team.playbook.focus.first, let play = plays.first(where: { $0.planRef.key == key }) {
                         PlayActivity.edited(play)
+                        // HOOPWISE_HOME_PIN_STEP=<n>: that play's step n (0-based) pinned.
+                        if let n = ProcessInfo.processInfo.environment["HOOPWISE_HOME_PIN_STEP"].flatMap(Int.init) {
+                            PlayActivity.pin(play, step: n)
+                        } else {
+                            PlayActivity.unpin()
+                        }
                     }
                 }()
                 FlightyActionableDashboard()

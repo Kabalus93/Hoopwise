@@ -72,6 +72,8 @@ nonisolated enum JournalPlayStringsAdded {
             .init(en: "Drag a player, a defender, the end of a line or a bend. Tap a line to make it straight or curved.",
                   enOne: nil, zh: "拖动球员、防守人、线的终点或弯折点。点一下线条可在直线和曲线之间切换。"),
         "Edit steps": .init(en: "Edit steps", enOne: nil, zh: "编辑步骤"),
+        "Show this step on Home": .init(en: "Show this step on Home", enOne: nil, zh: "把这一步固定到首页"),
+        "Remove from Home": .init(en: "Remove from Home", enOne: nil, zh: "从首页移除"),
         "Tap a player to give or take a ball. Several players can each have one.":
             .init(en: "Tap a player to give or take a ball. Several players can each have one.", enOne: nil,
                   zh: "点一下球员给球或收回球。可以让几名球员各拿一个球。"),
