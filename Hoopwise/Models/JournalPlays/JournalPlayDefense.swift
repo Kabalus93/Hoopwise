@@ -347,6 +347,8 @@ nonisolated extension JournalPlayMath {
         for (k, step) in steps.enumerated() {
             var d = step
             d.defenseMode = mode
+            // The rules place the defenders now: their drawn cuts go.
+            d.actions.removeAll { JournalPlayDiagram.defenderIndex($0.player) != nil }
             if k == 0 {
                 d.defense = matched(mode, defense: d.defense, offense: d.offense, ball: d.balls.first.flatMap { d.player($0)?.at }, court: court)
             } else {

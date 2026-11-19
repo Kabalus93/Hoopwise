@@ -68,7 +68,7 @@ struct CoachBoardScreen: View {
         JournalPlayStepEditor(
             drawing: drawing, onChange: keep,
             board: .init(isBlank: CoachBoardStore.isBlank(drawing),
-                         setCourt: changeCourt,
+                         setCourt: { court, now in keep(now); changeCourt(court) },
                          clear: { confirmingClear = true },
                          saveAsPlay: { savingPlay = true },
                          saveAsDrill: { savingDrill = true })

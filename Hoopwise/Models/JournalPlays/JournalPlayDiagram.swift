@@ -160,6 +160,16 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     /// Auto defense; nil when the defenders are drawn by hand. Written only
     /// when set, so a hand-drawn step's JSON is unchanged.
     var defenseMode: DefenseMode? = nil
+    /// The five lanes of the floor drawn over the court (19 Nov 2026, Luther:
+    /// "lanes — 5 lanes that can be toggled on or off"). Written only when on.
+    var lanes = false
+    /// The coach's annotations KEPT with the step (19 Nov 2026, Luther:
+    /// "annotations can stay saved if I so choose"): a PencilKit drawing in
+    /// the court drawing's own space at `inkScale` points a metre (margins
+    /// included, as `JournalPlayCourt.point` draws), so it lands on the same
+    /// spot at any size. nil = none; written only when present.
+    var ink: Data? = nil
+    static let inkScale: CGFloat = 40
 
     /// The first ball's holder: the play's ball when there is only one.
     var ball: Int? {
@@ -179,12 +189,28 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
 
     func player(_ number: Int) -> Player? { offense.first { $0.number == number } }
 
+    /// DEFENDERS MOVE TOO (19 Nov 2026, Luther: "move defenders (x) with the
+    /// cut tool like offensive players"). A line drawn from a defender names
+    /// him in `Action.player` as a NEGATIVE number — defender i is −(i + 1) —
+    /// so the drawing format is unchanged: an older build finds no offensive
+    /// player with that number and leaves the line unplayed. Only cuts, and
+    /// only while the defense is drawn by hand (auto defense places them).
+    static func defenderActor(_ index: Int) -> Int { -(index + 1) }
+    static func defenderIndex(_ actor: Int) -> Int? { actor < 0 ? -actor - 1 : nil }
+
+    /// Where actor `number` stands at the start: an offensive player, or a
+    /// defender (negative number).
+    func start(of number: Int) -> JournalCourtPoint? {
+        if let i = Self.defenderIndex(number) { return defense.indices.contains(i) ? defense[i].at : nil }
+        return player(number)?.at
+    }
+
     func hasBall(_ number: Int) -> Bool { balls.contains(number) }
 
     // Stored as before with `ball` (the first holder) beside `balls`, so a
     // build from before several balls still reads a drawing's first ball,
     // and a drawing it saved (no `balls`) reads back as that one ball.
-    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones, defenseMode }
+    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones, defenseMode, lanes, ink }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -197,6 +223,8 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         balls = all ?? first.map { [$0] } ?? []
         cones = try c.decodeIfPresent([JournalCourtPoint].self, forKey: .cones) ?? []
         defenseMode = try? c.decodeIfPresent(DefenseMode.self, forKey: .defenseMode)
+        lanes = (try? c.decodeIfPresent(Bool.self, forKey: .lanes)) ?? false
+        ink = try? c.decodeIfPresent(Data.self, forKey: .ink)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -209,6 +237,8 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         try c.encode(notes, forKey: .notes)
         if !cones.isEmpty { try c.encode(cones, forKey: .cones) }
         try c.encodeIfPresent(defenseMode, forKey: .defenseMode)
+        if lanes { try c.encode(true, forKey: .lanes) }
+        try c.encodeIfPresent(ink, forKey: .ink)
     }
 
     /// The number a new player takes: one past the highest on the court.

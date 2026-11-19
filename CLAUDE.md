@@ -2125,6 +2125,38 @@ play page. ‹ › move between steps. The Watch button and its popup are gone.
 A + at the bar's end (18 Nov 2026, Luther: "a plus button besides the next
 button to add a new step quick") adds a step after this one and shows it
 (`board.addStep`); its words go in the bottom-left steps panel.
+DRILL DRAWINGS USE THIS EDITOR (19 Nov 2026, Luther: "adding a drawing to a
+drill should use the general play editor like the one accessed in the hub,
+not the halfcourt set editor"): the drill page's Add / Edit and New Drill's
+"Draw on the court" open `DrillDrawingEditor` (Views/Drills/) — the board
+layout titled "Drill drawing", Court + Clear in the top bar (no Save menu;
+`BoardActions` clear/save are optional), Cancel + Done kept (a court change
+rebuilds the editor and `edited` keeps Cancel asking). HOOPWISE_SHOT=
+drillDrawingEditor.
+ADDED TO THE BOARD'S EDITOR (19 Nov 2026, Luther), board and drill drawings:
+· LANES — the top bar's Lanes button draws four dashed lines splitting the
+  floor's width into five lanes, on every step (`JournalPlayDiagram.lanes`,
+  written only when on; shown wherever the step is drawn; next steps keep it).
+· DEFENDERS CUT — the Cut tool starts from a hand-drawn defender too: the
+  line's `player` is −(index + 1) (`defenderActor` / `defenderIndex`), so the
+  format is unchanged and older builds leave it unplayed. Only cuts, only
+  while the defense is By hand (auto defense drops those lines). Playback
+  moves him (`PlayFrame.defense`), the next step starts him at the end,
+  dragging him takes his line's start, deleting one renumbers the others'
+  lines (`removing(defender:)`). The inspector calls it "A defender's cut".
+· ANNOTATIONS — Annotate (top bar menu): free ink over the court (finger,
+  Pencil, pointer; each stroke one undo step) with a floating palette — Pen
+  (red, white, yellow, blue, green) or a thick translucent Highlighter
+  (yellow, green, pink, blue, orange), remembered per device
+  (`plays.annotate.*`). KEPT only when "Keep annotations" is on (device
+  setting `plays.keepAnnotations`, off): `JournalPlayDiagram.ink` = the
+  PencilKit drawing at `inkScale` (40) points a metre of the court drawing,
+  so it lands on the same spot at any size (`PlayInkImages`); off, Done /
+  the board's autosave drop it. A new step starts without ink. "Clear this
+  step's annotations". DEBUG HOOPWISE_BOARD_ANNOTATE=1 opens annotating.
+  The simulator's synthetic touches draw near-invisible pen strokes (no
+  touch size); the highlighter shows — real fingers/Pencil need a device.
+Tests: BoardDrawingExtrasTests, BoardExtrasUITests (iPad mini).
 HOOPWISE_SHOT=coachBoard. Tests: CoachBoardUITests (opens in the editor,
 draw, steps button, relaunch → still there, Save → Play/Drill, Clear; full
 court upright; ball rule + play in place), SkillIntegrationTests.

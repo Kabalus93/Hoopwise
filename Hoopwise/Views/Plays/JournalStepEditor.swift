@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import PencilKit
 import OSLog
 
 /// Draw a part's steps: drag players and defenders, draw cuts, dribbles,
@@ -37,12 +38,21 @@ struct JournalPlayStepEditor: View {
     /// The Coach board's own controls (17 Nov 2026, Luther: "land directly in
     /// the editor in full screen with only the tool bar on the side and steps
     /// at the bottom left tucked into a button"). Present only on the board.
+    /// Also a DRILL'S DRAWING (19 Nov 2026, Luther: "adding a drawing to a
+    /// drill should use the general play editor like the one accessed in the
+    /// hub"): the same layout with its own title, no Clear / Save menu, and
+    /// Cancel + Done as before (`DrillDrawingEditor`).
     struct BoardActions {
+        var title: JPString = "Coach board"
         var isBlank: Bool
-        var setCourt: (JournalCourtKind) -> Void
-        var clear: () -> Void
-        var saveAsPlay: () -> Void
-        var saveAsDrill: () -> Void
+        /// The court to change to, and the drawing as it stands now.
+        var setCourt: (JournalCourtKind, DrillDrawing) -> Void
+        var clear: (() -> Void)? = nil
+        var saveAsPlay: (() -> Void)? = nil
+        var saveAsDrill: (() -> Void)? = nil
+        /// Edits made before the editor was rebuilt (a court change), so
+        /// Cancel still asks before throwing them away.
+        var edited: Bool = false
     }
     private let board: BoardActions?
     @State private var boardStepsOpen = false
@@ -111,6 +121,20 @@ struct JournalPlayStepEditor: View {
     /// opens at the Pencil tip, in the court's points.
     @State private var paletteAt: CGPoint?
     @AppStorage("plays.pencilDraws") private var pencilDraws = true
+    /// ANNOTATIONS (19 Nov 2026, Luther): free ink over the court, drawn
+    /// with the Annotate switch on; kept with the steps only when the coach
+    /// chooses (device setting, off by default), else dropped on Done.
+    @State private var annotating = false
+    @AppStorage("plays.keepAnnotations") private var keepAnnotations = false
+    @AppStorage("plays.annotate.pen") private var annotationPenRaw = AnnotationPen.pen.rawValue
+    @AppStorage("plays.annotate.penColor") private var penColorRaw = AnnotationColor.red.rawValue
+    @AppStorage("plays.annotate.highlighterColor") private var highlighterColorRaw = AnnotationColor.yellow.rawValue
+
+    private var annotationPen: AnnotationPen { AnnotationPen(rawValue: annotationPenRaw) ?? .pen }
+    private var annotationColor: AnnotationColor {
+        let raw = annotationPen == .pen ? penColorRaw : highlighterColorRaw
+        return AnnotationColor(rawValue: raw).flatMap { annotationPen.colors.contains($0) ? $0 : nil } ?? annotationPen.defaultColor
+    }
     @State private var undoStack: [JournalPlayDiagram] = []
     @State private var redoStack: [JournalPlayDiagram] = []
     @State private var drag: Drag?
@@ -308,6 +332,7 @@ struct JournalPlayStepEditor: View {
     }
 
     private var changed: Bool {
+        if board?.edited == true { return true }
         if !deleted.isEmpty || pages.contains(where: { $0.saved == nil }) { return true }
         return pages.contains { page in
             let content = page.id == current ? Content(diagram: diagram, caption: caption, text: text) : page.draft.content
@@ -562,10 +587,17 @@ struct JournalPlayStepEditor: View {
                 }
             }
             #endif
+            #if DEBUG
+            // HOOPWISE_BOARD_ANNOTATE=1: the board opens annotating.
+            .onAppear {
+                if board != nil, ProcessInfo.processInfo.environment["HOOPWISE_BOARD_ANNOTATE"] == "1" { annotating = true }
+            }
+            #endif
             // The Pencil's "previous tool" (double-tap) goes back to this.
             .onChange(of: tool) { old, _ in
                 previousTool = old
                 paletteAt = nil
+                annotating = false
                 // On the board, picking a tool goes back to drawing.
                 if board != nil, boardPlayer {
                     boardScribble = false
@@ -596,7 +628,7 @@ struct JournalPlayStepEditor: View {
                 }
                 if let board {
                     ToolbarItem(placement: .principal) {
-                        JText("Coach board").font(.headline)
+                        JText(board.title).font(.headline)
                     }
                     ToolbarItemGroup(placement: .topBarLeading) { boardControls(board) }
                 }
@@ -699,6 +731,10 @@ struct JournalPlayStepEditor: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay(alignment: .bottomLeading) { boardStepsButton.padding(JSpacing.m) }
                     .overlay(alignment: .bottomTrailing) { boardTransport.padding(JSpacing.m) }
+                    // Pen or highlighter and its colour, while annotating.
+                    .overlay(alignment: .top) {
+                        if annotating { annotationPalette.padding(.top, JSpacing.xs) }
+                    }
             } else if inspectorBelow {
                 VStack(spacing: 0) {
                     canvas
@@ -1026,7 +1062,7 @@ struct JournalPlayStepEditor: View {
     private func boardControls(_ board: BoardActions) -> some View {
         Menu {
             ForEach(JournalCourtKind.allCases) { kind in
-                Button { board.setCourt(kind) } label: {
+                Button { stash(); board.setCourt(kind, drawingNow) } label: {
                     if kind == court {
                         Label { JText(kind.label) } icon: { Image(systemName: "checkmark") }
                     } else {
@@ -1039,24 +1075,134 @@ struct JournalPlayStepEditor: View {
                 .labelStyle(.titleAndIcon)
         }
         .accessibilityIdentifier("board.court")
-        Button(role: .destructive, action: board.clear) {
-            Label { JText("Clear") } icon: { Image(systemName: "eraser") }
+        Button(action: toggleLanes) {
+            Label { JText("Lanes") } icon: { Image(systemName: "rectangle.split.3x1") }
         }
-        .disabled(board.isBlank)
-        .accessibilityIdentifier("board.clear")
+        .tint(diagram.lanes ? Color.accentColor : nil)
+        .accessibilityIdentifier("board.lanes")
+        .accessibilityAddTraits(diagram.lanes ? .isSelected : [])
         Menu {
-            Button(action: board.saveAsPlay) {
-                Label { JText("Save as Play") } icon: { Image(systemName: "point.topleft.down.to.point.bottomright.curvepath") }
+            Toggle(isOn: Binding(get: { annotating }, set: { on in
+                annotating = on
+                if on { boardScribble = false; boardPlayer = false }
+            })) {
+                Label { JText("Annotate") } icon: { Image(systemName: "pencil.tip") }
             }
-            .accessibilityIdentifier("board.saveAsPlay")
-            Button(action: board.saveAsDrill) {
-                Label { JText("Save as Drill") } icon: { Image(systemName: "figure.basketball") }
+            .accessibilityIdentifier("board.annotate")
+            Toggle(isOn: $keepAnnotations) {
+                Label { JText("Keep annotations") } icon: { Image(systemName: "tray.and.arrow.down") }
             }
-            .accessibilityIdentifier("board.saveAsDrill")
+            .accessibilityIdentifier("board.keepAnnotations")
+            Button(role: .destructive) {
+                guard diagram.ink != nil else { return }
+                pushUndo()
+                diagram.ink = nil
+            } label: {
+                Label { JText("Clear this step's annotations") } icon: { Image(systemName: "eraser.line.dashed") }
+            }
+            .disabled(diagram.ink == nil)
         } label: {
-            Label { JText("Save") } icon: { Image(systemName: "square.and.arrow.down") }
+            Label { JText("Annotate") } icon: { Image(systemName: annotating ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle") }
         }
-        .accessibilityIdentifier("board.save")
+        .tint(annotating ? Color.accentColor : nil)
+        .accessibilityIdentifier("board.annotations")
+        if let clear = board.clear {
+            Button(role: .destructive, action: clear) {
+                Label { JText("Clear") } icon: { Image(systemName: "eraser") }
+            }
+            .disabled(board.isBlank)
+            .accessibilityIdentifier("board.clear")
+        }
+        if let saveAsPlay = board.saveAsPlay, let saveAsDrill = board.saveAsDrill {
+            Menu {
+                Button(action: saveAsPlay) {
+                    Label { JText("Save as Play") } icon: { Image(systemName: "point.topleft.down.to.point.bottomright.curvepath") }
+                }
+                .accessibilityIdentifier("board.saveAsPlay")
+                Button(action: saveAsDrill) {
+                    Label { JText("Save as Drill") } icon: { Image(systemName: "figure.basketball") }
+                }
+                .accessibilityIdentifier("board.saveAsDrill")
+            } label: {
+                Label { JText("Save") } icon: { Image(systemName: "square.and.arrow.down") }
+            }
+            .accessibilityIdentifier("board.save")
+        }
+    }
+
+    /// Lanes on or off for every step (19 Nov 2026, Luther).
+    private func toggleLanes() {
+        let on = !diagram.lanes
+        pushUndo()
+        stash()
+        for i in pages.indices where i != currentIndex { pages[i].draft.diagram.lanes = on }
+        diagram.lanes = on
+    }
+
+    /// Free ink over the court while Annotate is on: finger, Pencil or
+    /// pointer; each stroke is one undo step.
+    private func annotationCanvas(size: CGSize) -> some View {
+        let s = JournalPlayCourt.scale(court, width: size.width)
+        return PlayInkLayer(drawing: Binding(
+            get: { PlayInkImages.drawing(diagram.ink, scale: s) },
+            set: { drawn in
+                let data = PlayInkImages.data(drawn, scale: s)
+                guard data != diagram.ink else { return }
+                pushUndo()
+                diagram.ink = data
+            }), anyInput: true, ink: annotationPen.tool(annotationColor))
+            .accessibilityIdentifier("board.inkCanvas")
+    }
+
+    /// Pen or highlighter, and its colour (19 Nov 2026, Luther), floating at
+    /// the top of the court while Annotate is on.
+    private var annotationPalette: some View {
+        HStack(spacing: 6) {
+            ForEach(AnnotationPen.allCases) { pen in
+                Button { annotationPenRaw = pen.rawValue } label: {
+                    Image(systemName: pen == .pen ? "pencil.tip" : "highlighter")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 40, height: 36)
+                        .foregroundStyle(annotationPen == pen ? Color.white : JPalette.ink)
+                        .background(annotationPen == pen ? Color.accentColor : .clear,
+                                    in: .rect(cornerRadius: 10, style: .continuous))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(pen == .pen ? JText("Pen") : JText("Highlighter"))
+                .accessibilityIdentifier("board.annotate.\(pen.rawValue)")
+                .accessibilityAddTraits(annotationPen == pen ? .isSelected : [])
+            }
+            Rectangle().fill(JPalette.ink.opacity(0.15)).frame(width: 0.5, height: 24).padding(.horizontal, 4)
+            ForEach(annotationPen.colors) { color in
+                Button {
+                    if annotationPen == .pen { penColorRaw = color.rawValue } else { highlighterColorRaw = color.rawValue }
+                } label: {
+                    Circle()
+                        .fill(Color(color.ui))
+                        .frame(width: 24, height: 24)
+                        .overlay(Circle().strokeBorder(JPalette.ink.opacity(0.25), lineWidth: 0.5))
+                        .padding(3)
+                        .overlay(Circle().strokeBorder(annotationColor == color ? Color.accentColor : .clear, lineWidth: 2.5))
+                        .frame(width: 36, height: 36)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(JText(color.label))
+                .accessibilityIdentifier("board.annotate.color.\(color.rawValue)")
+                .accessibilityAddTraits(annotationColor == color ? .isSelected : [])
+            }
+            Rectangle().fill(JPalette.ink.opacity(0.15)).frame(width: 0.5, height: 24).padding(.horizontal, 4)
+            Button { annotating = false } label: {
+                JText("Done").font(.subheadline.weight(.semibold)).padding(.horizontal, 8).frame(height: 36)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("board.annotate.done")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .glassEffect(.regular, in: .capsule)
     }
 
     /// One column of tools, grouped like a graphics app's: select, the four
@@ -1316,10 +1462,13 @@ struct JournalPlayStepEditor: View {
         case .action(let i):
             if diagram.actions.indices.contains(i) {
                 let action = diagram.actions[i]
-                inspectorSection(action.kind == .pass ? "Pass from \(action.player) to \(action.receiver ?? 0)"
+                let byDefender = JournalPlayDiagram.defenderIndex(action.player) != nil
+                inspectorSection(byDefender ? "A defender's cut"
+                                 : action.kind == .pass ? "Pass from \(action.player) to \(action.receiver ?? 0)"
                                  : action.kind == .handoff ? "Hand-off from \(action.player) to \(action.receiver ?? 0)"
                                  : action.kind == .shot ? "Shot by \(action.player)" : "Line by \(action.player)") {
-                    if action.kind.movesPlayer {
+                    // A defender only cuts: no dribble or screen for him.
+                    if action.kind.movesPlayer && !byDefender {
                         Picker(selection: Binding(get: { diagram.actions.indices.contains(i) ? diagram.actions[i].kind : .cut },
                                                   set: { kind in
                             guard diagram.actions.indices.contains(i), diagram.actions[i].kind != kind else { return }
@@ -1393,7 +1542,7 @@ struct JournalPlayStepEditor: View {
         case .defender(let i)?:
             guard diagram.defense.indices.contains(i) else { return }
             pushUndo()
-            diagram.defense.remove(at: i)
+            diagram = JournalPlayMath.removing(defender: i, from: diagram)
         case .action(let i)?:
             guard diagram.actions.indices.contains(i) else { return }
             pushUndo()
@@ -1424,8 +1573,7 @@ struct JournalPlayStepEditor: View {
             if diagram.defenseMode != nil {
                 diagram = JournalPlayMath.nudging(defender: i, to: JournalCourtPoint(at.x + dx, at.y + dy), in: diagram, court: court)
             } else {
-                diagram.defense[i].at.x += dx
-                diagram.defense[i].at.y += dy
+                diagram = JournalPlayMath.moving(defender: i, to: JournalCourtPoint(at.x + dx, at.y + dy), in: diagram)
             }
         case .cone(let i)?:
             guard diagram.cones.indices.contains(i) else { return }
@@ -1451,7 +1599,8 @@ struct JournalPlayStepEditor: View {
     // MARK: - Canvas
 
     private var canvas: some View {
-        JournalPlayDiagramView(diagram: shown, court: court, showsBends: tool == .move, highlight: selection?.hit)
+        JournalPlayDiagramView(diagram: shown, court: court, showsBends: tool == .move, highlight: selection?.hit,
+                               showsInk: !annotating)
             .overlay {
                 GeometryReader { proxy in
                     CourtInputLayer(
@@ -1462,6 +1611,9 @@ struct JournalPlayStepEditor: View {
                         onPencil: { shortcut, at in pencilShortcut(shortcut, at: at, size: proxy.size) })
                     .overlay(alignment: .topLeading) { hoverRing(size: proxy.size) }
                     .overlay(alignment: .topLeading) { pencilPalette(size: proxy.size) }
+                    .overlay {
+                        if annotating { annotationCanvas(size: proxy.size) }
+                    }
                 }
             }
             .padding(JSpacing.xs)
@@ -1593,7 +1745,7 @@ struct JournalPlayStepEditor: View {
     private func hoverTarget(_ point: JournalCourtPoint, size: CGSize) -> JournalCourtPoint? {
         let radius = hitRadius(size: size, precise: true)
         if let kind = tool.lineKind {
-            guard let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius),
+            guard let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius, defenders: kind == .cut),
                   Self.mayStart(kind, by: start.player, in: diagram) else { return nil }
             return start.from
         }
@@ -1657,7 +1809,8 @@ struct JournalPlayStepEditor: View {
             default: return .tap
             }
         }
-        if let kind = activeTool.lineKind, let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius),
+        if let kind = activeTool.lineKind,
+           let start = JournalPlayMath.lineStart(at: point, in: diagram, radius: radius, defenders: kind == .cut),
            Self.mayStart(kind, by: start.player, in: diagram) {
             return .line(player: start.player, points: [start.from])
         }
@@ -1682,7 +1835,7 @@ struct JournalPlayStepEditor: View {
             if diagram.defenseMode != nil {
                 diagram = JournalPlayMath.nudging(defender: i, to: point, in: diagram, court: court)
             } else {
-                diagram.defense[i].at = point
+                diagram = JournalPlayMath.moving(defender: i, to: point, in: diagram)
             }
         case .cone(let i): if diagram.cones.indices.contains(i) { diagram.cones[i] = point }
         case .actionEnd(let i): diagram = JournalPlayMath.moving(endOf: i, to: point, in: diagram)
@@ -1843,8 +1996,17 @@ struct JournalPlayStepEditor: View {
     private var drawingNow: DrillDrawing {
         DrillDrawing(court: court, steps: pages.map { page in
             let draft = page.id == current ? Draft(diagram: diagram, caption: caption, text: text) : page.draft
-            return DrillDrawing.Step(diagram: draft.diagram, caption: draft.caption, text: draft.text)
+            return DrillDrawing.Step(diagram: kept(draft.diagram), caption: draft.caption, text: draft.text)
         })
+    }
+
+    /// The step as it is kept: its annotations only when the coach chose to
+    /// keep them.
+    private func kept(_ d: JournalPlayDiagram) -> JournalPlayDiagram {
+        guard !keepAnnotations, d.ink != nil else { return d }
+        var out = d
+        out.ink = nil
+        return out
     }
 
     private func reportDrawing() {
@@ -1857,7 +2019,7 @@ struct JournalPlayStepEditor: View {
         func trimmed(_ string: String) -> String { string.trimmingCharacters(in: .whitespacesAndNewlines) }
         if let onSaveDrill {
             onSaveDrill(DrillDrawing(court: court, steps: pages.map { page in
-                DrillDrawing.Step(diagram: page.draft.diagram, caption: trimmed(page.draft.caption),
+                DrillDrawing.Step(diagram: kept(page.draft.diagram), caption: trimmed(page.draft.caption),
                                   text: trimmed(page.draft.text))
             }))
             dismiss()
@@ -1875,7 +2037,7 @@ struct JournalPlayStepEditor: View {
                 part.steps?.append(model)
             }
             if model.order != order { model.order = order }
-            let content = Content(diagram: page.draft.diagram, caption: trimmed(page.draft.caption),
+            let content = Content(diagram: kept(page.draft.diagram), caption: trimmed(page.draft.caption),
                                   text: trimmed(page.draft.text))
             guard page.model == nil || content != page.saved else { continue }
             model.caption = content.caption

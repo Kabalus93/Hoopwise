@@ -13,7 +13,7 @@ nonisolated extension JournalPlayMath {
     static func endPosition(of number: Int, in diagram: JournalPlayDiagram) -> JournalCourtPoint? {
         let moves = diagram.actions.filter { $0.player == number && $0.kind.movesPlayer }
         if let last = moves.last?.path.last { return last }
-        return diagram.player(number)?.at
+        return diagram.start(of: number)
     }
 
     /// Who has the ball when the step's actions are done: the receiver of
@@ -158,9 +158,19 @@ nonisolated extension JournalPlayMath {
         next.offense = diagram.offense.map { player in
             JournalPlayDiagram.Player(number: player.number, at: endPosition(of: player.number, in: diagram) ?? player.at)
         }
+        // Hand-drawn defenders who cut start the next step where they went.
+        if diagram.defenseMode == nil {
+            next.defense = diagram.defense.enumerated().map { i, defender in
+                var d = defender
+                d.at = endPosition(of: JournalPlayDiagram.defenderActor(i), in: diagram) ?? defender.at
+                return d
+            }
+        }
         next.balls = ballsAfter(diagram)
         next.actions = []
         next.notes = []
+        // Lanes stay on; a step's annotations are its own.
+        next.ink = nil
         return placingDefense(next, court: court)
     }
 
@@ -225,7 +235,31 @@ nonisolated extension JournalPlayMath {
             }
             frame.defense = sum.map { JournalCourtPoint($0.x / Double(samples), $0.y / Double(samples)) }
         }
+        // Hand-drawn defenders with a cut of their own run it.
+        if diagram.defenseMode == nil,
+           diagram.actions.contains(where: { JournalPlayDiagram.defenderIndex($0.player) != nil }) {
+            frame.defense = diagram.defense.indices.map { i in
+                position(of: JournalPlayDiagram.defenderActor(i), from: diagram.defense[i].at,
+                         diagram: diagram, plan: plan, at: now)
+            }
+        }
         return frame
+    }
+
+    /// Where actor `number` (who started at `start`) is `now` beats in.
+    static func position(of number: Int, from start: JournalCourtPoint, diagram: JournalPlayDiagram,
+                         plan: Schedule, at now: Double) -> JournalCourtPoint {
+        var at = start
+        for item in plan.items where diagram.actions[item.index].player == number
+            && diagram.actions[item.index].kind.movesPlayer {
+            let path = drawnPath(diagram.actions[item.index])
+            if now >= item.end { at = path.last ?? at; continue }
+            if now > item.start {
+                at = point(along: path, at: eased((now - item.start) / (item.end - item.start)))
+            }
+            break
+        }
+        return at
     }
 
     /// The offense and the balls `now` beats into the step.

@@ -171,13 +171,25 @@ nonisolated extension JournalPlayMath {
     /// current end (after their earlier moves) or start is nearest, and
     /// where the new line starts (always their current end, so a screen
     /// can be followed by a roll).
-    static func lineStart(at point: JournalCourtPoint, in diagram: JournalPlayDiagram, radius: Double) -> (player: Int, from: JournalCourtPoint)? {
+    /// With `defenders`, a defender is a starting point too (his actor
+    /// number, see `JournalPlayDiagram.defenderActor`) — only while the
+    /// defense is drawn by hand; an offensive player wins a tie.
+    static func lineStart(at point: JournalCourtPoint, in diagram: JournalPlayDiagram, radius: Double,
+                          defenders: Bool = false) -> (player: Int, from: JournalCourtPoint)? {
         let candidates = diagram.offense.compactMap { player -> (Int, JournalCourtPoint, Double)? in
             guard let end = endPosition(of: player.number, in: diagram) else { return nil }
             let d = min(end.distance(to: point), player.at.distance(to: point))
             return d <= radius ? (player.number, end, d) : nil
         }
-        return candidates.min { $0.2 < $1.2 }.map { ($0.0, $0.1) }
+        if let best = candidates.min(by: { $0.2 < $1.2 }) { return (best.0, best.1) }
+        guard defenders, diagram.defenseMode == nil else { return nil }
+        let guarding = diagram.defense.indices.compactMap { i -> (Int, JournalCourtPoint, Double)? in
+            let actor = JournalPlayDiagram.defenderActor(i)
+            guard let end = endPosition(of: actor, in: diagram) else { return nil }
+            let d = min(end.distance(to: point), diagram.defense[i].at.distance(to: point))
+            return d <= radius ? (actor, end, d) : nil
+        }
+        return guarding.min { $0.2 < $1.2 }.map { ($0.0, $0.1) }
     }
 
     /// A drawn line added to the step: a cut, dribble or screen along the
@@ -310,6 +322,37 @@ nonisolated extension JournalPlayMath {
         return out
     }
 
+    /// A hand-drawn defender dragged to `point`: his own line starting where
+    /// he stood starts from the new spot.
+    static func moving(defender index: Int, to point: JournalCourtPoint, in diagram: JournalPlayDiagram) -> JournalPlayDiagram {
+        guard diagram.defense.indices.contains(index) else { return diagram }
+        let old = diagram.defense[index].at
+        let actor = JournalPlayDiagram.defenderActor(index)
+        var out = diagram
+        out.defense[index].at = point
+        for i in out.actions.indices where out.actions[i].player == actor
+            && out.actions[i].path.first.map({ $0.distance(to: old) < 0.05 }) == true {
+            out.actions[i].path[0] = point
+        }
+        return out
+    }
+
+    /// A defender taken off: his lines go with him, and the defenders after
+    /// him keep their lines (their actor numbers move up one).
+    static func removing(defender index: Int, from diagram: JournalPlayDiagram) -> JournalPlayDiagram {
+        guard diagram.defense.indices.contains(index) else { return diagram }
+        var out = diagram
+        out.defense.remove(at: index)
+        out.actions = diagram.actions.compactMap { action in
+            guard let i = JournalPlayDiagram.defenderIndex(action.player) else { return action }
+            if i == index { return nil }
+            var moved = action
+            if i > index { moved.player = JournalPlayDiagram.defenderActor(i - 1) }
+            return moved
+        }
+        return out
+    }
+
     /// The end of a line dragged to `point`: the player's later lines
     /// start there, and passes to or from that spot follow.
     static func moving(endOf index: Int, to point: JournalCourtPoint, in diagram: JournalPlayDiagram) -> JournalPlayDiagram {
@@ -336,7 +379,7 @@ nonisolated extension JournalPlayMath {
         var out = diagram
         switch hit {
         case .player: break
-        case .defender(let i): if out.defense.indices.contains(i) { out.defense.remove(at: i) }
+        case .defender(let i): out = removing(defender: i, from: out)
         case .cone(let i): if out.cones.indices.contains(i) { out.cones.remove(at: i) }
         case .action(let i), .actionEnd(let i), .actionBend(let i, _):
             if out.actions.indices.contains(i) { out.actions.remove(at: i) }

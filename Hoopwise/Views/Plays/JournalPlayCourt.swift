@@ -149,6 +149,9 @@ struct JournalPlayDiagramView: View {
     var showsBends = false
     /// The editor's selection, haloed in the offense blue.
     var highlight: JournalPlayMath.PlayHit?
+    /// Draw the step's kept annotations (off while the editor's own ink
+    /// canvas shows them).
+    var showsInk = true
 
     /// Marks grow in thumbnails and on a small court (the full court on a
     /// phone) so players and numbers stay readable.
@@ -160,10 +163,38 @@ struct JournalPlayDiagramView: View {
             let lines = JournalPlayCourtLines(kind: court).path(in: CGRect(origin: .zero, size: size))
             context.stroke(lines, with: .color(JPalette.courtLine),
                            lineWidth: max(0.6, JournalPlayCourt.courtLineWidth * s))
+            if diagram.lanes { drawLanes(in: &context, scale: s) }
             draw(in: &context, scale: s)
+            if showsInk, let ink = diagram.ink,
+               let image = PlayInkImages.image(ink, scale: s, size: size) {
+                context.draw(Image(uiImage: image), in: CGRect(origin: .zero, size: size))
+            }
         }
         .aspectRatio(JournalPlayCourt.aspectRatio(court), contentMode: .fit)
         .accessibilityHidden(true)
+    }
+
+    /// The five lanes (19 Nov 2026, Luther): four dashed lines along the
+    /// floor splitting its width into five equal lanes — two outside, two
+    /// inside, the middle.
+    private func drawLanes(in context: inout GraphicsContext, scale s: CGFloat) {
+        var path = Path()
+        for k in 1...4 {
+            let a: JournalCourtPoint, b: JournalCourtPoint
+            switch court {
+            case .half:
+                let x = 15.0 * Double(k) / 5
+                (a, b) = (JournalCourtPoint(x, 0), JournalCourtPoint(x, 14))
+            case .full:
+                let y = 15.0 * Double(k) / 5
+                (a, b) = (JournalCourtPoint(0, y), JournalCourtPoint(28, y))
+            }
+            path.move(to: JournalPlayCourt.point(a, scale: s, court: court))
+            path.addLine(to: JournalPlayCourt.point(b, scale: s, court: court))
+        }
+        let width = max(0.8, JournalPlayCourt.courtLineWidth * s * 1.2)
+        context.stroke(path, with: .color(JPalette.play.opacity(compact ? 0.35 : 0.45)),
+                       style: StrokeStyle(lineWidth: width, lineCap: .round, dash: [s * 0.5, s * 0.4]))
     }
 
     /// The marks (no court lines), at `s` points a metre.

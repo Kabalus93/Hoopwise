@@ -530,6 +530,9 @@ enum SheetGalleryDebug {
                 }
                 .padding(12)
             }
+        case "drillDrawingEditor":
+            // A drill's drawing in the Coach board's editor (scratch, unsaved).
+            DrillDrawingEditor(drawing: .new()) { _ in }
         case "coachBoard":
             // Hub → Coach board (the editor, full screen), as it was left.
             CoachBoardScreen()

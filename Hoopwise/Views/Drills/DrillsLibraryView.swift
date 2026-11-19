@@ -1283,7 +1283,8 @@ struct DrillDetailView: View {
                 .environmentObject(dataManager)
         }
         .fullScreenCover(item: $drawingEditor) { edit in
-            JournalPlayStepEditor(drawing: edit.drawing) { drawing in
+            // The Coach board's editor (19 Nov 2026, Luther).
+            DrillDrawingEditor(drawing: edit.drawing) { drawing in
                 saveDrawing(drawing, existing: edit.existing)
             }
         }
@@ -2364,7 +2365,7 @@ struct AddDrillView: View {
                 }
             }
             .fullScreenCover(isPresented: $drawingOpen) {
-                JournalPlayStepEditor(drawing: drawing ?? DrillDrawing.new()) { drawing = $0 }
+                DrillDrawingEditor(drawing: drawing ?? DrillDrawing.new()) { drawing = $0 }
             }
             #if DEBUG
             // HOOPWISE_NEWDRILL_DESCRIPTION=<text> types it and presses Return;
