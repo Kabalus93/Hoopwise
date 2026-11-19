@@ -781,9 +781,12 @@ private struct LibraryRow: View {
                     .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(drill.localizedName)
-                    .font(.body)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(drill.localizedName)
+                        .font(.body)
+                        .lineLimit(2)
+                    DrillPreferenceMark(preference: drill.preference)
+                }
                 Text([showAge ? activity.age.rawValue : nil, showBlock ? activity.block.title : nil,
                       activity.type.title, showBlock ? nil : activity.sourceText]
                         .compactMap { $0 }.joined(separator: " · "))
@@ -1010,10 +1013,13 @@ private struct DrillRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(drill.localizedName)
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(drill.localizedName)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    DrillPreferenceMark(preference: drill.preference)
+                }
                 HStack(spacing: 6) {
                     Text("\(drill.localizedCategory) · \(drill.durationMinutes) min")
                         .font(.subheadline)
@@ -1134,7 +1140,7 @@ struct DrillDetailView: View {
             // The skill ratings (attr:<axis>=n, attr:by:coach — shown on the
             // octagon card) and who made it (by:claude) are bookkeeping too
             // (18 Nov 2026, Luther: "what are those tags???").
-            .filter { !$0.hasPrefix(AttributeProfile.tagPrefix) && !$0.hasPrefix("by:") }
+            .filter { !$0.hasPrefix(AttributeProfile.tagPrefix) && !$0.hasPrefix("by:") && !$0.hasPrefix(DrillItem.preferencePrefix) }
             .map { raw in
                 raw.replacingOccurrences(of: "-", with: " ")
                    .replacingOccurrences(of: "_", with: " ")
@@ -1221,6 +1227,9 @@ struct DrillDetailView: View {
                             updated.tags = updated.tags.filter { !$0.hasPrefix(AttributeProfile.tagPrefix) }
                             dataManager.updateDrill(updated)
                         })
+
+                        // How the plan engine should use it (19 Nov 2026).
+                        DrillPreferenceCard(drill: currentDrill)
                         
                         // Instructions (with placeholder for empty)
                         instructionsSection

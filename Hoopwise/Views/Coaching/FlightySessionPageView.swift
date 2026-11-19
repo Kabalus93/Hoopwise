@@ -1396,8 +1396,11 @@ struct FlightySessionPageView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(drill.localizedName)
-                        .font(.subheadline.weight(.medium))
+                    HStack(spacing: 5) {
+                        Text(drill.localizedName)
+                            .font(.subheadline.weight(.medium))
+                        DrillPreferenceMark(preference: drill.preference)
+                    }
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
@@ -1544,6 +1547,34 @@ struct FlightySessionPageView: View {
                                 .controlSize(.mini)
                                 .tint(.secondary)
                             }
+
+                            // How the engine should use it (19 Nov 2026, Luther).
+                            Menu {
+                                Picker(isChinese ? "在我的计划里" : "In my plans", selection: Binding(
+                                    get: { drill.preference },
+                                    set: { dataManager.setDrillPreference(drill.id, $0, reason: drill.preferenceReason) })) {
+                                    ForEach(DrillPreference.allCases) { p in
+                                        Label(p.title(chinese: isChinese), systemImage: p.icon).tag(p)
+                                    }
+                                }
+                                Button(role: .destructive) {
+                                    dataManager.setDrillPreference(drill.id, .never, reason: drill.preferenceReason)
+                                    withAnimation {
+                                        expandedDrillId = nil
+                                        removeDrill(drill.id, from: section)
+                                    }
+                                } label: {
+                                    Label(isChinese ? "不再使用，并从计划移除" : "Never use, and take it out",
+                                          systemImage: "nosign")
+                                }
+                            } label: {
+                                Label(isChinese ? "评价" : "Rate", systemImage: drill.preference == .normal ? "hand.thumbsup" : drill.preference.icon)
+                                    .font(.caption.weight(.medium))
+                            }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.mini)
+                            .accessibilityIdentifier("plan.rateDrill")
 
                             Button(role: .destructive) {
                                 withAnimation {

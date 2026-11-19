@@ -387,16 +387,19 @@ struct DrillPlanGenerator {
         let isFavorite: Bool
         /// What it develops (November 2026), for filling a phase's gaps.
         var attributes = AttributeProfile()
+        /// How the coach uses it (19 Nov 2026): more, normal, less.
+        var preference: DrillPreference = .normal
     }
 
     private static func candidates(drills: [DrillItem], window: [ActivityAge: Double], age: ActivityAge) -> [Candidate] {
         drills.compactMap { drill in
-            guard !drill.isSeries else { return nil }
+            // A series is not a drill; a drill the coach never uses is never planned.
+            guard !drill.isSeries, drill.preference != .never else { return nil }
             if let a = drill.libraryActivity {
                 guard !a.isRule, let w = window[a.age] else { return nil }
                 return Candidate(id: drill.id, minutes: drill.durationMinutes, block: a.block, type: a.type,
                                  category: drill.category, ageWeight: w, isFavorite: drill.isFavorite,
-                                 attributes: drill.attributes)
+                                 attributes: drill.attributes, preference: drill.preference)
             }
             // A coach's own drill: eligible when untagged or tagged for this age.
             let profile = DrillProfile(drill)
@@ -405,7 +408,7 @@ struct DrillPlanGenerator {
             guard fits else { return nil }
             return Candidate(id: drill.id, minutes: drill.durationMinutes, block: nil, type: nil,
                              category: drill.category, ageWeight: 0.6, isFavorite: drill.isFavorite,
-                             attributes: drill.attributes)
+                             attributes: drill.attributes, preference: drill.preference)
         }
     }
 
@@ -444,7 +447,9 @@ struct DrillPlanGenerator {
             // something run many times already less so.
             let n = history.count(c.id)
             if n > 0 { s += n <= 2 ? 0.5 : -0.5 * Double(n - 2) }
-            return max(0.05, s)
+            // The coach's way: use more / use less (never is already out).
+            s = c.preference.adjusted(max(0.05, s)) ?? 0
+            return max(0.02, s)
         }
         let review = eligible.filter { history.count($0.id) > 0 }
         let fresh = eligible.filter { history.count($0.id) == 0 }

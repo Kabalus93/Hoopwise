@@ -2541,6 +2541,8 @@ class SwiftDataManager: ObservableObject {
                     // A coach's attribute rating (attr: tags) survives the
                     // library refresh.
                     fresh.tags += sd.tags.filter { $0.hasPrefix(AttributeProfile.tagPrefix) }
+                    // So does how the coach uses it (DrillPreference).
+                    fresh.tags += sd.tags.filter { $0.hasPrefix(DrillItem.preferencePrefix) }
                     guard sd.lastModifiedAt == nil,
                           sd.name != fresh.name || sd.drillDescription != fresh.description
                             || sd.categoryRaw != fresh.category.rawValue || sd.tags != fresh.tags else { continue }
@@ -2687,6 +2689,24 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    /// How the plan engine should use a drill (19 Nov 2026, Luther). Only
+    /// the tags change: not an edit of the drill (no revision, no
+    /// lastModifiedAt), so a library drill still gets the library's text.
+    func setDrillPreference(_ drillId: UUID, _ preference: DrillPreference, reason: DrillPreferenceReason?) {
+        do {
+            let descriptor = FetchDescriptor<SDDrill>(predicate: #Predicate { $0.id == drillId })
+            if let sdDrill = try modelContext.fetch(descriptor).first {
+                let tags = DrillItem.tags(sdDrill.tags, preference: preference, reason: reason)
+                guard tags != sdDrill.tags else { return }
+                sdDrill.tags = tags
+                sdDrill.updatedAt = Date()
+                saveAndRefresh()
+            }
+        } catch {
+            debugLog("❌ Failed to set drill preference: \(error)")
+        }
+    }
+
     func toggleDrillFavorite(_ drill: DrillItem) {
         do {
             let descriptor = FetchDescriptor<SDDrill>(predicate: #Predicate { $0.id == drill.id })

@@ -1994,6 +1994,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   (also the iPad games list's status word — `statusBadge` is fixedSize, it
   read "Re…"; DEBUG HOOPWISE_DEMO_READY_GAMES=1|clear on sessionPage writes
   three unstarted games to the demo store, once per launch).
+  THE COACH'S WAY (19 Nov 2026, Luther: "rate drills so the engine knows to
+  use more often or never … too easy, boring, not challenging, no kids at
+  that stage … the engine learns my way of coaching"): every drill has a
+  PREFERENCE — Use more · Normal · Use less · Never — and for less / never a
+  reason (Too easy · Too hard · Boring · No one at that stage yet).
+  Models/DrillPreference.swift; stored in the drill's synced TAGS
+  (`pref:use=…`, `pref:why=…`, normal writes nothing) — no schema change;
+  `setDrillPreference` writes only the tags (no revision, no
+  lastModifiedAt, so a library drill still refreshes its text) and
+  syncActivityLibrary keeps `pref:` tags like `attr:`. ENGINE: never = not a
+  candidate; more = score + 2.5; less = score × 0.25. Set on the drill page
+  ("In my plans" card under What it develops) or from a plan row (open it →
+  Rate: the four, or "Never use, and take it out"); rated drills carry a
+  small mark in the plan and the library. Reasons are recorded for the
+  coach; the engine does not read them yet. Tests: DrillPreferenceTests,
+  DrillPreferenceUITests.
   `ProgramSkillTargets.hasTargets` (lastUpdatedDate
   set) gates skill-target comparisons, so a level-only blob never shows
   default 5s as targets. Tests: PlanGeneratorTests, PlanGeneratorUITests.
