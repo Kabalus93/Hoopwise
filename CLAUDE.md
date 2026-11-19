@@ -1980,7 +1980,21 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   assists-per-basket signal → passing), and HISTORY (every earlier plan of
   the program: nothing from the last session repeats; review vs new is 30/70
   in a phase's first two sessions, 60/40 after). `PlanRationale.summary` is
-  shown under the plan. `ProgramSkillTargets.hasTargets` (lastUpdatedDate
+  shown under the plan. GENERATE ASKS FIRST (19 Nov 2026, Luther: "make it a
+  custom generate with coach input — different parameters that would make
+  the plan perfect"): Generate Plan and Regenerate open PlanGenerateSheet
+  (Views/Coaching/) — BUILD IT AROUND (the eight skills as chips; preselected
+  = the phase's gaps ≥ 0.4, top two), TIME (warm-up / skills minutes), LEVEL
+  1–5 (starts on the engine's pick, which the footer names), MIX (Auto / All
+  new / Half / Mostly review), "Don't repeat last class", and on a planned
+  session "Keep what's planned, fill the rest". `DrillPlanGenerator.Options`
+  (all defaults = the engine as before): chosen skills weigh as a gap of 1.5
+  and the rationale says "your focus: …"; `History.forgetLastSession`.
+  Tests: PlanGeneratorTests.testCoachOptionsShapeThePlan, PlanGenerateUITests
+  (also the iPad games list's status word — `statusBadge` is fixedSize, it
+  read "Re…"; DEBUG HOOPWISE_DEMO_READY_GAMES=1|clear on sessionPage writes
+  three unstarted games to the demo store, once per launch).
+  `ProgramSkillTargets.hasTargets` (lastUpdatedDate
   set) gates skill-target comparisons, so a level-only blob never shows
   default 5s as targets. Tests: PlanGeneratorTests, PlanGeneratorUITests.
 

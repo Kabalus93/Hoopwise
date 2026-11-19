@@ -50,6 +50,8 @@ struct FlightySessionPageView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// What the plan generator read and decided on its last run here.
     @State private var planRationale: DrillPlanGenerator.PlanRationale?
+    /// Generate / Regenerate open the coach's choices first (19 Nov 2026).
+    @State private var showingGenerateSheet = false
     @State private var selectedStudentForPeep: Student?
     @State private var showingDrillPicker = false
     @State private var showingStudentPicker = false
@@ -1006,12 +1008,22 @@ struct FlightySessionPageView: View {
     /// finishes in milliseconds.
     @ViewBuilder
     private var generatePlanButton: some View {
+        generatePlanButtonContent
+            .sheet(isPresented: $showingGenerateSheet) {
+                PlanGenerateSheet(context: planContext, hasPlan: session.curriculum.totalDrillCount > 0) { options in
+                    generatePlanFromLibrary(options: options)
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var generatePlanButtonContent: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         let isEmpty = session.curriculum.totalDrillCount == 0
 
         if isEmpty {
             Button {
-                generatePlanFromLibrary()
+                showingGenerateSheet = true
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
@@ -1049,7 +1061,7 @@ struct FlightySessionPageView: View {
                 }
                 Spacer()
                 Button {
-                    generatePlanFromLibrary()
+                    showingGenerateSheet = true
                 } label: {
                     Label(isChinese ? "重新生成" : "Regenerate",
                           systemImage: "arrow.triangle.2.circlepath")
@@ -1064,7 +1076,8 @@ struct FlightySessionPageView: View {
         }
     }
 
-    private func generatePlanFromLibrary() {
+    /// What the engine reads for this session.
+    private var planContext: DrillPlanGenerator.Context {
         // Every earlier session of this program: the engine reads its plans
         // to decide what to review and what to introduce.
         let history: [SessionEvent] = {
@@ -1072,8 +1085,7 @@ struct FlightySessionPageView: View {
             return dataManager.sessionEvents.filter { $0.programId == pid && $0.id != session.id }
         }()
         let players = enrolledStudents.compactMap { dataManager.player(for: $0.id) }
-
-        let ctx = DrillPlanGenerator.Context(
+        return DrillPlanGenerator.Context(
             session: session,
             program: parentProgram,
             phase: parentPhase,
@@ -1082,8 +1094,10 @@ struct FlightySessionPageView: View {
             allDrills: dataManager.drills,
             programHistory: history
         )
+    }
 
-        let result = DrillPlanGenerator.generatePlan(in: ctx)
+    private func generatePlanFromLibrary(options: DrillPlanGenerator.Options = .init()) {
+        let result = DrillPlanGenerator.generatePlan(in: planContext, options: options)
         // Preserve the coach's hand-typed notes and chosen plays.
         var merged = result.curriculum
         if let existingNotes = session.curriculum.notes, !existingNotes.isEmpty {
@@ -5298,10 +5312,13 @@ struct SessionGamesTabView: View {
                 .symbolEffect(.pulse, options: .repeating, isActive: status == .inProgress)
             Text(status.displayName)
                 .font(.caption2.weight(.semibold))
+                // Never "Re…" (19 Nov 2026, Luther, iPad): the word keeps its width.
+                .fixedSize()
         }
         .foregroundStyle(statusColor(status))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .fixedSize()
         .glassEffect(.regular, in: Capsule())
     }
 

@@ -58,7 +58,27 @@ struct DrillPlanGenerator {
 
     static func generate(in ctx: Context) -> SessionCurriculum { generatePlan(in: ctx).curriculum }
 
-    static func generatePlan(in ctx: Context,
+    /// The coach's say before generating (19 Nov 2026, Luther: "when tapping
+    /// on generate, make it a custom generate with coach input — different
+    /// parameters that would make the plan perfect"). nil / empty = the
+    /// engine decides, exactly as before.
+    struct Options: Equatable {
+        /// Minutes for each visible block.
+        var warmupMinutes: Int? = nil
+        var skillsMinutes: Int? = nil
+        /// 1–5, instead of the program's level / the evaluations.
+        var level: Int? = nil
+        /// Skills to build this class around: drills strong on them win.
+        var skills: Set<DrillAttribute> = []
+        /// Share of the plan that revisits drills run before (0 = all new).
+        var reviewShare: Double? = nil
+        /// Keep the drills already in the plan and fill the time left.
+        var keepExisting = false
+        /// Leave out what the last class ran (the engine's rule).
+        var avoidLastSession = true
+    }
+
+    static func generatePlan(in ctx: Context, options: Options = Options(),
                              random: () -> Double = { Double.random(in: 0..<1) })
         -> (curriculum: SessionCurriculum, rationale: PlanRationale) {
         var cur = ctx.session.curriculum
@@ -70,31 +90,47 @@ struct DrillPlanGenerator {
             cur.skillsMinutes = total / 3
             cur.gameMinutes = total - 2 * (total / 3)
         }
-        let warmupBudget = max(5, cur.warmupMinutes)
-        let skillsBudget = max(5, cur.skillsMinutes)
+        let warmupBudget = max(5, options.warmupMinutes ?? cur.warmupMinutes)
+        let skillsBudget = max(5, options.skillsMinutes ?? cur.skillsMinutes)
         let gameBudget = max(0, cur.gameMinutes)
 
         let age = libraryAge(for: ctx.program?.ageGroup)
-        let (level, source) = resolveLevel(program: ctx.program, students: ctx.enrolledStudents, players: ctx.players)
+        let resolved = resolveLevel(program: ctx.program, students: ctx.enrolledStudents, players: ctx.players)
+        let (level, source) = options.level.map { (min(max($0, 1), 5), LevelSource.coach) } ?? resolved
         let window = ageWeights(age: age, level: level)
         let focus = focusTypes(phase: ctx.phase, students: ctx.enrolledStudents, players: ctx.players,
                                games: ctx.programHistory.flatMap(\.games))
-        let history = History(sessions: ctx.programHistory, before: ctx.session)
-        let gaps = phaseGaps(ctx)
-        let reviewShare = history.reviewShare(phase: ctx.phase, session: ctx.session)
+        var history = History(sessions: ctx.programHistory, before: ctx.session)
+        if !options.avoidLastSession { history.forgetLastSession() }
+        var gaps = phaseGaps(ctx)
+        // The coach's chosen skills weigh as a full gap (and a little more).
+        for skill in options.skills { gaps[skill] = max(gaps[skill] ?? 0, 1.5) }
+        let reviewShare = options.reviewShare ?? history.reviewShare(phase: ctx.phase, session: ctx.session)
 
         var rationale = PlanRationale(age: age, level: level, levelSource: source,
                                       ageWindow: ActivityAge.allCases.filter { window[$0] != nil },
                                       focus: focus.types)
         rationale.notes = focus.notes
-        let topGaps = gaps.filter { $0.value >= 0.4 }.sorted { $0.value > $1.value }.prefix(2).map(\.key.title)
+        if !options.skills.isEmpty {
+            let zh = LocalizationManager.shared.currentLanguage == .chinese
+            rationale.notes.append((zh ? "教练选择的重点：" : "your focus: ")
+                + DrillAttribute.allCases.filter { options.skills.contains($0) }.map(\.title).joined(separator: ", "))
+        }
+        let topGaps = gaps.filter { $0.value >= 0.4 && !options.skills.contains($0.key) }
+            .sorted { $0.value > $1.value }.prefix(2).map(\.key.title)
         if !topGaps.isEmpty {
             let zh = LocalizationManager.shared.currentLanguage == .chinese
             rationale.notes.append((zh ? "补本阶段的短板：" : "fills the phase's gaps: ") + topGaps.joined(separator: ", "))
         }
 
         let candidates = candidates(drills: ctx.allDrills, window: window, age: age)
-        var used: Set<UUID> = []
+        // Keeping what is planned: it stays first, and only the time left fills.
+        let keptWarmup = options.keepExisting ? cur.warmupDrillIds : []
+        let keptSkills = options.keepExisting ? cur.skillDrillIds : []
+        var used: Set<UUID> = Set(keptWarmup + keptSkills)
+        func minutes(_ ids: [UUID]) -> Int {
+            ids.reduce(0) { sum, id in sum + (ctx.allDrills.first { $0.id == id }?.durationMinutes ?? 0) }
+        }
         func fill(_ slot: Slot, _ budget: Int) -> [UUID] {
             let picks = pick(slot: slot, budget: budget, candidates: candidates, focus: Set(focus.types),
                              history: history, reviewShare: reviewShare, exclude: used, gaps: gaps, random: random)
@@ -102,8 +138,8 @@ struct DrillPlanGenerator {
             for p in picks { if history.count(p.id) > 0 { rationale.reviewCount += 1 } else { rationale.newCount += 1 } }
             return picks.map(\.id)
         }
-        let warmup = fill(.warmup, warmupBudget)
-        let skills = fill(.skills, skillsBudget)
+        let warmup = keptWarmup + fill(.warmup, max(0, warmupBudget - minutes(keptWarmup)))
+        let skills = keptSkills + fill(.skills, max(0, skillsBudget - minutes(keptSkills)))
         let game = fill(.game, gameBudget)
 
         let curriculum = SessionCurriculum(
@@ -324,6 +360,9 @@ struct DrillPlanGenerator {
         }
 
         func count(_ id: UUID) -> Int { counts[id] ?? 0 }
+
+        /// The coach allows the last class's drills again.
+        mutating func forgetLastSession() { lastSession = [] }
 
         /// Share of a slot that should be REVIEW. No history → all new. A
         /// phase's first two sessions introduce (30% review); after that the

@@ -91,6 +91,50 @@ final class PlanGeneratorTests: XCTestCase {
         XCTAssertGreaterThan(result.rationale.reviewCount, 0, "later in a phase, plans consolidate")
         XCTAssertGreaterThan(result.rationale.newCount, 0, "and still introduce something")
     }
+
+    /// The coach's say before generating (19 Nov 2026, Luther).
+    func testCoachOptionsShapeThePlan() {
+        let program = Program(name: "U10", ageGroup: .u10)
+        let s = session(program: program.id)
+        let c = ctx(program: program, history: [], session: s)
+        func minutes(_ ids: [UUID]) -> Int { ids.reduce(0) { sum, id in sum + (drills.first { $0.id == id }?.durationMinutes ?? 0) } }
+
+        // Time: each block stays within the minutes asked for.
+        var timed = DrillPlanGenerator.Options()
+        timed.warmupMinutes = 10
+        timed.skillsMinutes = 20
+        let short = DrillPlanGenerator.generatePlan(in: c, options: timed, random: seeded()).curriculum
+        XCTAssertLessThanOrEqual(minutes(short.warmupDrillIds), 10)
+        XCTAssertLessThanOrEqual(minutes(short.skillDrillIds), 20)
+        XCTAssertEqual(short.skillsMinutes, 20)
+
+        // Level: the age window follows the coach's choice.
+        var hard = DrillPlanGenerator.Options()
+        hard.level = 5
+        let r = DrillPlanGenerator.generatePlan(in: c, options: hard, random: seeded()).rationale
+        XCTAssertEqual(r.level, 5)
+        XCTAssertTrue(r.ageWindow.contains(.u12), "level 5 borrows older drills")
+
+        // Skills: drills strong on the chosen skill fill the plan.
+        var shooting = DrillPlanGenerator.Options()
+        shooting.skills = [.shooting]
+        let shot = DrillPlanGenerator.generatePlan(in: c, options: shooting, random: seeded())
+        let plain = DrillPlanGenerator.generatePlan(in: c, random: seeded())
+        func score(_ plan: SessionCurriculum) -> Int {
+            (plan.warmupDrillIds + plan.skillDrillIds).reduce(0) { sum, id in sum + (drills.first { $0.id == id }?.attributes[.shooting] ?? 0) }
+        }
+        XCTAssertGreaterThan(score(shot.curriculum), score(plain.curriculum))
+        XCTAssertTrue(shot.rationale.notes.contains { $0.hasPrefix("your focus") })
+
+        // Keep: what is planned stays, first.
+        var planned = s
+        planned.curriculum = shot.curriculum
+        var keep = DrillPlanGenerator.Options()
+        keep.keepExisting = true
+        let kept = DrillPlanGenerator.generatePlan(in: ctx(program: program, history: [], session: planned),
+                                                   options: keep, random: seeded()).curriculum
+        XCTAssertEqual(Array(kept.skillDrillIds.prefix(shot.curriculum.skillDrillIds.count)), shot.curriculum.skillDrillIds)
+    }
 }
 
 /// Game stats feed the plan only with enough games to mean something.

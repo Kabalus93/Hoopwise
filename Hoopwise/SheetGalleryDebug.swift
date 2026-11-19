@@ -304,6 +304,23 @@ enum SheetGalleryDebug {
                 .filter({ $0.programId == program.id })
                 .min(by: { $0.startTime < $1.startTime }) {
                 let env = ProcessInfo.processInfo.environment
+                // HOOPWISE_DEMO_READY_GAMES=1 | clear (demo store only): three
+                // unstarted games on this session, or none — the iPad games
+                // list's status word check (19 Nov 2026).
+                let _ = {
+                    // Once per launch: the write redraws this page.
+                    guard ScreenshotStore.isActive, !DemoGamesOnce.done,
+                          let mode = env["HOOPWISE_DEMO_READY_GAMES"] else { return }
+                    DemoGamesOnce.done = true
+                    let games: [SessionGame] = mode == "clear" ? [] : (1...3).map { n in
+                        var g = SessionGame(sessionId: session.id, gameNumber: n,
+                                            teams: [GameTeam(name: "Black", colorHex: "#1C1C1E", playerIds: []),
+                                                    GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: [])])
+                        g.status = .ready
+                        return g
+                    }
+                    dm.replaceSessionGames(inSessionId: session.id, games: games)
+                }()
                 NavigationStack {
                     FlightySessionPageView(session: session, accessMode: .execution,
                                            initialTab: env["HOOPWISE_SESSION_TAB"].flatMap(Int.init))
@@ -745,6 +762,9 @@ enum SheetGalleryDebug {
 
 /// Holds a scratch game for the "liveGame" shot: two teams of up to five,
 /// already in progress. Nothing is written to the store.
+/// HOOPWISE_DEMO_READY_GAMES writes once per launch.
+private enum DemoGamesOnce { static var done = false }
+
 private struct LiveGameGalleryHost: View {
     let students: [Student]
     @State private var game: SessionGame
