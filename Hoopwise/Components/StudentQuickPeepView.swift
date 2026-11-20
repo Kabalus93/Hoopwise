@@ -251,7 +251,7 @@ struct StudentQuickPeepView: View {
             .filter { $0.status == .completed }
             .sorted { ($0.endedAt ?? $0.updatedAt) > ($1.endedAt ?? $1.updatedAt) }
             .compactMap { game in
-                guard let stats = game.playerStats.first(where: { $0.playerId == student.id }) else { return nil }
+                guard let stats = game.participantLines.first(where: { $0.playerId == student.id }) else { return nil }
                 return (game, stats)
             }
     }

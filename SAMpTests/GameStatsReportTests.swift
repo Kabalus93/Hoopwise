@@ -124,6 +124,59 @@ final class GameStatsReportTests: XCTestCase {
 
     // MARK: Insights
 
+    // MARK: Who played (20 Nov 2026 — a game without a stat still counts)
+
+    /// A 2v2 between `home` and `away` (each team's first two start), with
+    /// the given stat lines.
+    private func teamGame(home: [UUID], away: [UUID], starters: Int? = 2,
+                          lines: [(UUID, Int)] = [], status: SessionGameStatus = .completed) -> SessionGame {
+        var h = GameTeam(name: "Black", colorHex: "#1A1A1A", playerIds: home)
+        var w = GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: away)
+        h.starters = starters; w.starters = starters
+        var g = SessionGame(sessionId: UUID(), gameType: .twoTeam, teams: [h, w], status: status)
+        for (p, pts) in lines {
+            g.playerStats.append(SessionPlayerStats(playerId: p, gameId: g.id, teamId: h.playerIds.contains(p) ? h.id : w.id, points: pts))
+        }
+        return g
+    }
+
+    func testAPlayerOnTheFloorWithoutAStatPlayedTheGame() {
+        let c = UUID(), d = UUID()
+        let s = session(day: 1, [teamGame(home: [a, b, bench], away: [c, d], lines: [(a, 4)])])
+        XCTAssertEqual(GameStatsReport.player(b, sessions: [s]).games, 1, "on the floor, no stat — played")
+        XCTAssertEqual(GameStatsReport.player(c, sessions: [s]).games, 1, "the other team too")
+        XCTAssertEqual(GameStatsReport.player(bench, sessions: [s]).games, 0, "never came off the bench")
+        let r = GameStatsReport.make(sessions: [s], roster: [a, b, bench, c, d], current: nil)
+        XCTAssertEqual(r.playing.first { $0.playerId == b }?.games, 1)
+        XCTAssertEqual(r.playing.first { $0.playerId == bench }?.games, 0)
+    }
+
+    func testASubstitutionCountsBothPlayers() {
+        var g = teamGame(home: [a, b, bench], away: [UUID(), UUID()])
+        // bench came on for b during the game: b now sits third, on the bench.
+        g.teams[0].playerIds = [a, bench, b]
+        g.subbedIds = [bench, b]
+        let s = session(day: 1, [g])
+        XCTAssertEqual(GameStatsReport.player(b, sessions: [s]).games, 1, "played, then went off")
+        XCTAssertEqual(GameStatsReport.player(bench, sessions: [s]).games, 1, "came on")
+    }
+
+    func testAGameWithNoStatsStillCountsButAnUnstartedOneDoesNot() {
+        let played = session(day: 1, [teamGame(home: [a, b], away: [UUID(), UUID()])])
+        let unstarted = session(day: 2, [teamGame(home: [a, b], away: [UUID(), UUID()], status: .ready)])
+        XCTAssertEqual(GameStatsReport.player(a, sessions: [played, unstarted]).games, 1)
+    }
+
+    func testAnOlderGameWithoutStartersCountsEveryoneOnTheTeamsThatPlayed() {
+        var g = teamGame(home: [a, b], away: [UUID()], starters: nil)
+        let waiting = GameTeam(name: "Red", colorHex: "#E74C3C", playerIds: [bench])
+        g.teams.append(waiting)
+        g.activeTeamIds = [g.teams[0].id, g.teams[1].id]
+        let s = session(day: 1, [g])
+        XCTAssertEqual(GameStatsReport.player(b, sessions: [s]).games, 1)
+        XCTAssertEqual(GameStatsReport.player(bench, sessions: [s]).games, 0, "his team waited")
+    }
+
     private func insights(_ sessions: [SessionEvent], roster: [UUID]) -> [GameStatsReport.Insight] {
         let r = GameStatsReport.make(sessions: sessions, roster: roster, current: sessions.last)
         return GameStatsReport.insights(report: r, sessions: sessions, roster: roster)

@@ -69,12 +69,23 @@ enum GameStatsReport {
         var copy = session
         for i in copy.games.indices {
             copy.games[i].playerStats.removeAll { ids.contains($0.playerId) }
+            copy.games[i].subbedIds.removeAll { ids.contains($0) }
+            for t in copy.games[i].teams.indices {
+                let team = copy.games[i].teams[t]
+                let starters = min(team.starters ?? team.playerIds.count, team.playerIds.count)
+                let removedStarters = team.playerIds.prefix(starters).filter { ids.contains($0) }.count
+                copy.games[i].teams[t].playerIds.removeAll { ids.contains($0) }
+                if team.starters != nil { copy.games[i].teams[t].starters = starters - removedStarters }
+            }
         }
         return copy
     }
 
+    /// A game that took place: something was recorded, or the clock ran /
+    /// the coach finished it. A game set up and never started is not.
     static func played(_ game: SessionGame) -> Bool {
-        game.status != .setup && !game.playerStats.isEmpty
+        guard game.status != .setup else { return false }
+        return !game.playerStats.isEmpty || [.inProgress, .paused, .completed].contains(game.status)
     }
 
     /// `excluding`: people whose stat lines are left out entirely — the
@@ -108,7 +119,7 @@ enum GameStatsReport {
         var gamesBy: [UUID: Int] = [:]
         var totals: [Metric: [UUID: Int]] = [:]
         for game in games {
-            for p in Set(game.playerStats.map(\.playerId)) { gamesBy[p, default: 0] += 1 }
+            for p in game.participants.keys { gamesBy[p, default: 0] += 1 }
             for line in game.playerStats {
                 totals[.points, default: [:]][line.playerId, default: 0] += line.points
                 totals[.rebounds, default: [:]][line.playerId, default: 0] += line.rebounds
@@ -171,7 +182,7 @@ enum GameStatsReport {
 
     // MARK: - One player (the athlete profile's Training Stats)
 
-    /// A game the player has a stat line in.
+    /// A game the player took part in (his line is empty if he recorded nothing).
     struct PlayerGame: Identifiable, Equatable {
         var id: UUID { game.id }
         let date: Date
@@ -215,7 +226,11 @@ enum GameStatsReport {
             .sorted { $0.startTime < $1.startTime }
             .flatMap { s in
                 s.games.filter(played).sorted { $0.gameNumber < $1.gameNumber }.compactMap { g in
-                    g.stats(for: playerId).map { PlayerGame(date: s.startTime, sessionId: s.id, game: g, line: $0) }
+                    // Every game he took part in — a game without a stat is
+                    // still a game played (an empty line).
+                    guard let team = g.participants[playerId] else { return nil }
+                    let line = g.stats(for: playerId) ?? SessionPlayerStats(playerId: playerId, gameId: g.id, teamId: team)
+                    return PlayerGame(date: s.startTime, sessionId: s.id, game: g, line: line)
                 }
             }
     }

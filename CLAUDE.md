@@ -822,6 +822,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   its scratch players got new ids on every redraw and the White team vanished.
   LiveGameAssistUITests' "five on screen" / "switching team" expect the
   iPhone layout and fail on the iPad mini (both teams side by side).
+  WHO PLAYED A GAME (20 Nov 2026, Luther: "when a player participates but
+  does not score or attain any stat, the app doesn't count the game"). A game
+  counted only for players with a STAT LINE, and a line exists only once a
+  stat is recorded — a player who played without one had no game, and a game
+  with no stats counted for nobody. Now `SessionGame.participants` (player →
+  team) = everyone with a line + the FLOOR of the teams that played (each
+  team's first `starters`; everyone on a team set up before starters) +
+  `subbedIds` (both players of every substitution made after the start —
+  LiveTeamPanel.substitute; before the start it is only a lineup change).
+  A bench player who never came on is not a participant. `played(game)`: a
+  stat, or the game ran (in progress / paused / completed) — set up and never
+  started does not count. GameStatsReport (games per player, playing time,
+  leaders' per-game), playerGames (profile, card, grade — an empty line for a
+  game without a stat), the recap's box score and the Quick Peep's last games
+  read participants (`participantLines`). `withoutPlayers` also strips staff
+  coaches from teams and subs. Tests: GameStatsReportTests (who played).
 - THIRTEENTH sanctioned exception (October 2026, Luther's request): the
   roll-call photo band (AttendanceWatermarkOverlay, exported to Photos for
   WeChat). Same fields, one left edge: the count leads as present/expected

@@ -459,6 +459,9 @@ struct SessionGame: Codable, Hashable, Identifiable {
     /// `playersPerSide` playerIds are its STARTERS, the rest its bench.
     /// Inside the games JSON (no schema change); older games have none.
     var playersPerSide: Int? = nil
+    /// Everyone who came ON or went OFF in a substitution once the game had
+    /// started (20 Nov 2026) — they stepped on the floor, so they played.
+    var subbedIds: [UUID] = []
     
     init(id: UUID = UUID(), sessionId: UUID, gameNumber: Int = 1,
          gameType: SessionGameType = .twoTeam, teams: [GameTeam] = [], 
@@ -514,14 +517,46 @@ struct SessionGame: Codable, Hashable, Identifiable {
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         baskets = (try? container.decodeIfPresent([GameBasket].self, forKey: .baskets)) ?? []
         playersPerSide = try? container.decodeIfPresent(Int.self, forKey: .playersPerSide)
+        subbedIds = (try? container.decodeIfPresent([UUID].self, forKey: .subbedIds)) ?? []
     }
     
     private enum CodingKeys: String, CodingKey {
         case id, sessionId, gameNumber, gameType, teams, activeTeamIds, teamScores
         case playerStats, durationMinutes, basketValue, roundNumber, status, startedAt, endedAt
-        case winningTeamId, notes, createdAt, updatedAt, baskets, playersPerSide
+        case winningTeamId, notes, createdAt, updatedAt, baskets, playersPerSide, subbedIds
     }
     
+    /// WHO PLAYED, player → team (20 Nov 2026, Luther: a player who took
+    /// part without a stat must still count the game). Everyone with a stat
+    /// line; in a team game also the players ON THE FLOOR of the teams that
+    /// played (each team's starters — everyone on a team set up before
+    /// starters existed) and everyone in a substitution after the start.
+    /// A bench player who never came on is not here.
+    var participants: [UUID: UUID] {
+        var out: [UUID: UUID] = [:]
+        for line in playerStats { out[line.playerId] = line.teamId }
+        guard !gameType.isIndividual else { return out }
+        let played = activeTeamIds.isEmpty ? teams : teams.filter { activeTeamIds.contains($0.id) }
+        for team in played {
+            let onFloor = min(team.starters ?? team.playerIds.count, team.playerIds.count)
+            for p in team.playerIds.prefix(onFloor) where out[p] == nil { out[p] = team.id }
+        }
+        for p in subbedIds where out[p] == nil {
+            if let team = teams.first(where: { $0.playerIds.contains(p) }) { out[p] = team.id }
+        }
+        return out
+    }
+
+    /// Every participant's stat line — an empty one for those who played
+    /// without recording anything.
+    var participantLines: [SessionPlayerStats] {
+        let have = Set(playerStats.map(\.playerId))
+        let missing = participants.filter { !have.contains($0.key) }
+            .sorted { $0.key.uuidString < $1.key.uuidString }
+            .map { SessionPlayerStats(playerId: $0.key, gameId: id, teamId: $0.value) }
+        return playerStats + missing
+    }
+
     /// Get teams currently on court
     var activeTeams: [GameTeam] {
         teams.filter { activeTeamIds.contains($0.id) }

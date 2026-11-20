@@ -256,6 +256,11 @@ struct LiveTeamPanel: View {
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             if game.teams[t].starters == nil { game.teams[t].starters = onCourtCount }
             game.teams[t].playerIds.swapAt(a, b)
+            // Once the game is under way both have stepped on the floor —
+            // they played. Before it starts it is only a lineup change.
+            if game.startedAt != nil || game.status == .inProgress || game.status == .paused {
+                for p in [incoming, outgoing] where !game.subbedIds.contains(p) { game.subbedIds.append(p) }
+            }
             game.updatedAt = Date()
         }
         subTick += 1

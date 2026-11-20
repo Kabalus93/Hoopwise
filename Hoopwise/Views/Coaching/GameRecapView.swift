@@ -454,7 +454,8 @@ struct GameRecapView: View {
     // MARK: - Box score
 
     private var groups: [(team: GameTeam?, lines: [SessionPlayerStats])] {
-        let sorted = game.playerStats.sorted { contribution($0) > contribution($1) }
+        // Everyone who played, zeros for those with no stat (20 Nov 2026).
+        let sorted = game.participantLines.sorted { contribution($0) > contribution($1) }
         guard !game.gameType.isIndividual, !teams.isEmpty else { return [(nil, sorted)] }
         var used = Set<UUID>()
         var out: [(GameTeam?, [SessionPlayerStats])] = []
