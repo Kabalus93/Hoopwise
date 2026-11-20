@@ -321,7 +321,7 @@ struct DrillPlanGenerator {
     /// least three athletes' latest results (the later runs win).
     static func shootingSignal(runs: [ShootingRun], roster: Set<UUID>) -> String? {
         var latest: [UUID: Double] = [:]
-        for run in runs where run.setup.mode == .attempts {
+        for run in runs where run.setup.mode.isShare {
             for e in run.entries where roster.contains(e.studentId) {
                 if let r = run.result(for: e.studentId) { latest[e.studentId] = r.value }
             }

@@ -15,6 +15,8 @@ struct ShootingProfileSection: View {
             VStack(alignment: .leading, spacing: 14) {
                 Label(isChinese ? "投篮记录" : "Shooting", systemImage: "gauge.with.dots.needle.67percent")
                     .font(.headline)
+                // Every drill with a place on the floor, on one map.
+                AthleteShotChartCard(studentId: studentId)
                 ForEach(series) { s in
                     row(s)
                     if s.id != series.last?.id { Divider() }
@@ -72,12 +74,12 @@ struct ShootingProfileSection: View {
                         AxisGridLine()
                         AxisValueLabel {
                             if let d = v.as(Double.self) {
-                                Text(mode == .attempts ? "\(Int((d * 100).rounded()))%" : String(format: "%.0f", d))
+                                Text(mode.isShare ? "\(Int((d * 100).rounded()))%" : String(format: "%.0f", d))
                             }
                         }
                     }
                 }
-                .chartYScale(domain: mode == .attempts ? 0...1 : 0...max(1, (s.best ?? 1) * 1.2))
+                .chartYScale(domain: mode.isShare ? 0...1 : 0...max(1, (s.best ?? 1) * 1.2))
                 .frame(height: 70)
             }
         }

@@ -65,4 +65,32 @@ final class ShootingAddOnUITests: XCTestCase {
         XCTAssertTrue(addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label ENDSWITH ' 6'")).firstMatch.exists)
         attach("logged")
     }
+
+    func testShotChartLogsAZoneFromTheMap() {
+        let app = launch("chart")
+        defer { _ = launch("clear") }
+        let addon = app.descendants(matching: .any).matching(identifier: "shooting.addon.shotChart").firstMatch
+        for _ in 0..<8 where !addon.exists || !addon.isHittable { app.swipeUp() }
+        XCTAssertTrue(addon.waitForExistence(timeout: 10), "the shot chart add-on shows")
+        let leftWing = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
+        XCTAssertTrue(leftWing.exists)
+        attach("map")
+        // The zone is L-shaped: its frame's centre lies in mid-range, so tap
+        // inside the wing itself (high on the left).
+        // A coordinate tap does not scroll: bring the whole map on screen.
+        let window = app.windows.firstMatch.frame
+        for _ in 0..<6 where leftWing.frame.maxY > window.maxY - 120 { app.swipeUp(velocity: .slow) }
+        let rim = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.0").firstMatch
+        for _ in 0..<6 where rim.frame.maxY > window.maxY - 60 { app.swipeUp(velocity: .slow) }
+        leftWing.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4)).tap()
+        let four = app.buttons["shotchart.pad.4"]
+        XCTAssertTrue(four.waitForExistence(timeout: 5), "tapping a zone opens the pad")
+        four.tap()                               // made
+        app.buttons["shotchart.pad.9"].tap()     // of 9
+        attach("pad")
+        app.buttons["shotchart.pad.done"].tap()
+        let zone = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
+        XCTAssertTrue(zone.label.contains("44%"), "4 of 9 in the left wing: \(zone.label)")
+        attach("logged")
+    }
 }

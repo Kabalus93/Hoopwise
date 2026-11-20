@@ -18,7 +18,7 @@ import Foundation
 
 enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
     // Listed close to far (the library shows them in this order).
-    case freeThrows, layups, mikan, twos, midRange, pullUps, threes
+    case freeThrows, layups, mikan, twos, midRange, pullUps, threes, shotChart
     var id: String { rawValue }
 
     /// Where the makes are counted: five spots, a side each way, or one
@@ -34,6 +34,18 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .freeThrows: return [("Line", "罚球线", "FT", "罚球")]
         case .midRange: return [("Mid-range", "中距离", "Mid", "中投")]
         case .mikan: return [("Under the rim", "篮下", "Rim", "篮下")]
+        case .shotChart:
+            // ShotZone order.
+            return [("At the rim", "篮下", "Rim", "篮下"),
+                    ("Left baseline mid-range", "左侧底线中投", "L base", "左底中"),
+                    ("Left elbow mid-range", "左肘区中投", "L elbow", "左肘"),
+                    ("Right elbow mid-range", "右肘区中投", "R elbow", "右肘"),
+                    ("Right baseline mid-range", "右侧底线中投", "R base", "右底中"),
+                    ("Left corner three", "左底角三分", "L corner 3", "左底三分"),
+                    ("Left wing three", "左侧翼三分", "L wing 3", "左翼三分"),
+                    ("Top three", "弧顶三分", "Top 3", "弧顶三分"),
+                    ("Right wing three", "右侧翼三分", "R wing 3", "右翼三分"),
+                    ("Right corner three", "右底角三分", "R corner 3", "右底三分")]
         }
     }
 
@@ -50,6 +62,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .layups: n = 5
         case .mikan: n = 6
         case .pullUps: n = 7
+        case .shotChart: n = 8
         }
         return UUID(uuidString: String(format: "5A0715F0-%04d-4000-8000-%012d", n, n))!
     }
@@ -73,6 +86,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .layups: "Lay-Ups Both Hands"
         case .mikan: "Mikan Drill"
         case .pullUps: "Pull-Up Jumpers"
+        case .shotChart: "Shot Chart"
         }
     }
 
@@ -86,6 +100,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .layups: return "左右手上篮"
         case .mikan: return "麦肯上篮"
         case .pullUps: return "急停跳投"
+        case .shotChart: return "投篮热区图"
         }
     }
 
@@ -98,6 +113,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .layups: chinese ? "上篮" : "LAY"
         case .mikan: chinese ? "麦肯" : "MIKAN"
         case .pullUps: chinese ? "急停" : "PULL-UP"
+        case .shotChart: chinese ? "热区" : "CHART"
         }
     }
 
@@ -111,6 +127,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .midRange: "scope"
         case .pullUps: "arrow.up.and.down.and.arrow.left.and.right"
         case .threes: "3.circle"
+        case .shotChart: "circle.grid.cross"
         }
     }
 
@@ -136,6 +153,9 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .mikan:
             return ("The Mikan Drill: under the basket, alternate right-hand and left-hand lay-ups off the backboard, catching the ball before it touches the floor. Best timed." + tail.0,
                     "麦肯上篮：在篮下左右手交替打板上篮，球落地前接住。最适合计时。" + tail.1)
+        case .shotChart:
+            return ("Free shooting across the floor, logged by zone: at the rim, four mid-range zones, five three-point zones. Enter made and attempted in each zone; the chart shows the percentage zone by zone. Results go to each athlete's shooting record and shot chart.",
+                    "全场自由投篮，按区域记录：篮下、四个中距离区、五个三分区。每区输入命中和出手，热区图逐区显示命中率。计入每位学员的投篮记录和热区图。")
         case .pullUps:
             return ("One or two hard dribbles into a pull-up jump shot from mid-range, going right then going left. Counted each way." + tail.0,
                     "一到两次快速运球后急停跳投，中距离，先向右再向左。左右分别记录。" + tail.1)
@@ -149,7 +169,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
     var drillItem: DrillItem {
         let finishing = self == .layups || self == .mikan
         return DrillItem(id: drillId, name: englishName, category: .shooting, difficulty: .beginner,
-                         durationMinutes: self == .freeThrows || self == .mikan ? 5 : 10,
+                         durationMinutes: self == .freeThrows || self == .mikan ? 5 : (self == .shotChart ? 15 : 10),
                          description: englishDescription, minPlayers: 1,
                          tags: [tag, "type:shooting", "kind:tracked"]
                             + (finishing ? ["attr:finishing=3", "attr:shooting=1", "attr:ballHandling=1"]
@@ -178,6 +198,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .threes: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 30)
         case .freeThrows: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 60)
         case .layups, .pullUps: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 30)
+        case .shotChart: ShootingSetup(drill: self, mode: .chart, shots: 10, seconds: 60)
         }
     }
 }
@@ -187,6 +208,12 @@ enum ShootingMode: String, Codable, CaseIterable {
     case attempts
     /// Makes in a set time a spot.
     case timed
+    /// Made AND attempted per zone (the shot chart: free shooting, a
+    /// different number of shots in each zone).
+    case chart
+
+    /// A share of shots (attempts, chart) rather than makes a minute.
+    var isShare: Bool { self != .timed }
 }
 
 enum TwosRange: String, Codable, CaseIterable {
@@ -212,17 +239,26 @@ struct ShootingSetup: Codable, Hashable {
 
     /// Same key = comparable results.
     var key: String {
-        let amount = mode == .attempts ? "n\(shots)" : "s\(seconds)"
+        let amount: String
+        switch mode {
+        case .attempts: amount = "n\(shots)"
+        case .timed: amount = "s\(seconds)"
+        case .chart: amount = ""
+        }
         return [drill.rawValue, mode.rawValue, amount, range?.rawValue ?? ""].joined(separator: "|")
     }
 
     /// "10 shots a spot · mid" / "1 min a spot".
     func summary(chinese: Bool) -> String {
         let perSpot = drill.spotCount > 1
+        let zone = drill == .shotChart
         var parts: [String] = []
         switch mode {
+        case .chart:
+            parts.append(chinese ? "每区命中 / 出手" : "made / attempted per zone")
         case .attempts:
-            parts.append(chinese ? (perSpot ? "每点 \(shots) 投" : "\(shots) 投") : (perSpot ? "\(shots) shots a spot" : "\(shots) shots"))
+            parts.append(chinese ? (perSpot ? (zone ? "每区 \(shots) 投" : "每点 \(shots) 投") : "\(shots) 投")
+                                 : (perSpot ? "\(shots) shots a \(zone ? "zone" : "spot")" : "\(shots) shots"))
         case .timed:
             let t = Self.time(seconds, chinese: chinese)
             parts.append(chinese ? (perSpot ? "每点 \(t)" : t) : (perSpot ? "\(t) a spot" : t))
@@ -257,9 +293,12 @@ struct ShootingSetup: Codable, Hashable {
 struct ShootingEntry: Codable, Hashable {
     var studentId: UUID
     var makes: [Int?]
+    /// Chart mode: shots taken per zone (nil elsewhere; older entries
+    /// decode without it).
+    var attempts: [Int?]? = nil
 
     var reported: [Int] { makes.compactMap { $0 } }
-    var isEmpty: Bool { reported.isEmpty }
+    var isEmpty: Bool { reported.isEmpty && (attempts ?? []).compactMap { $0 }.isEmpty }
 }
 
 /// The drill as run in one session.
@@ -288,11 +327,33 @@ struct ShootingRun: Codable, Hashable, Identifiable {
         }
     }
 
-    /// The athlete's result: a share (attempts) or makes a minute (timed),
-    /// over the spots reported.
+    func attempts(_ student: UUID, spot: Int) -> Int? {
+        guard let e = entry(for: student), let a = e.attempts, spot < a.count else { return nil }
+        return a[spot]
+    }
+
+    /// Chart mode: shots taken in a zone.
+    mutating func setAttempts(_ value: Int?, for student: UUID, spot: Int) {
+        let count = setup.drill.spotCount
+        if let i = entries.firstIndex(where: { $0.studentId == student }) {
+            var a = entries[i].attempts ?? Array(repeating: nil, count: count)
+            if a.count < count { a += Array(repeating: nil, count: count - a.count) }
+            a[spot] = value
+            entries[i].attempts = a
+            if entries[i].isEmpty { entries.remove(at: i) }
+        } else if let value {
+            var a = [Int?](repeating: nil, count: count)
+            a[spot] = value
+            entries.append(ShootingEntry(studentId: student, makes: Array(repeating: nil, count: count), attempts: a))
+        }
+    }
+
+    /// The athlete's result: a share (attempts, chart) or makes a minute
+    /// (timed), over the spots reported.
     func result(for student: UUID) -> ShootingResult? {
-        guard let e = entry(for: student), !e.isEmpty else { return nil }
-        return ShootingResult(setup: setup, makes: e.makes)
+        guard let e = entry(for: student) else { return nil }
+        let r = ShootingResult(setup: setup, makes: e.makes, attempts: e.attempts)
+        return r.spotsReported > 0 ? r : nil
     }
 }
 
@@ -300,31 +361,53 @@ struct ShootingRun: Codable, Hashable, Identifiable {
 struct ShootingResult: Hashable {
     let setup: ShootingSetup
     let makes: [Int?]
+    var attempts: [Int?]? = nil
 
-    var made: Int { makes.compactMap { $0 }.reduce(0, +) }
-    var spotsReported: Int { makes.compactMap { $0 }.count }
-
-    /// Attempts: made ÷ shots (0…1). Timed: makes a minute.
-    var value: Double {
-        let n = Double(max(spotsReported, 1))
+    /// Made and attempted at a spot — nil when not reported (or, timed, never:
+    /// a timed result has no attempts).
+    func shots(at spot: Int) -> (made: Int, attempted: Int)? {
+        guard spot < makes.count, let m = makes[spot] else { return nil }
         switch setup.mode {
-        case .attempts: return Double(made) / (Double(max(setup.shots, 1)) * n)
-        case .timed: return Double(made) / (Double(max(setup.seconds, 1)) * n / 60)
+        case .attempts: return (m, max(setup.shots, 1))
+        case .chart:
+            guard let a = attempts, spot < a.count, let n = a[spot], n > 0 else { return nil }
+            return (min(m, n), n)
+        case .timed: return nil
+        }
+    }
+
+    private var reportedSpots: [Int] {
+        (0..<makes.count).filter { spot in
+            setup.mode == .timed ? makes[spot] != nil : shots(at: spot) != nil
+        }
+    }
+
+    var made: Int { reportedSpots.compactMap { makes[$0] }.reduce(0, +) }
+    var attempted: Int { reportedSpots.compactMap { shots(at: $0)?.attempted }.reduce(0, +) }
+    var spotsReported: Int { reportedSpots.count }
+
+    /// Attempts / chart: made ÷ shots (0…1). Timed: makes a minute.
+    var value: Double {
+        switch setup.mode {
+        case .attempts, .chart: return Double(made) / Double(max(attempted, 1))
+        case .timed: return Double(made) / (Double(max(setup.seconds, 1)) * Double(max(spotsReported, 1)) / 60)
         }
     }
 
     func spotValue(_ spot: Int) -> Double? {
-        guard spot < makes.count, let m = makes[spot] else { return nil }
         switch setup.mode {
-        case .attempts: return Double(m) / Double(max(setup.shots, 1))
-        case .timed: return Double(m) / (Double(max(setup.seconds, 1)) / 60)
+        case .attempts, .chart:
+            return shots(at: spot).map { Double($0.made) / Double($0.attempted) }
+        case .timed:
+            guard spot < makes.count, let m = makes[spot] else { return nil }
+            return Double(m) / (Double(max(setup.seconds, 1)) / 60)
         }
     }
 
-    /// "64%" / "7/10" / "4.5 a min".
+    /// "64%" / "4.5/min".
     static func text(_ value: Double, mode: ShootingMode, chinese: Bool) -> String {
         switch mode {
-        case .attempts: return "\(Int((value * 100).rounded()))%"
+        case .attempts, .chart: return "\(Int((value * 100).rounded()))%"
         case .timed:
             let v = String(format: value < 10 ? "%.1f" : "%.0f", value)
             return chinese ? "每分钟 \(v) 中" : "\(v)/min"
@@ -333,10 +416,10 @@ struct ShootingResult: Hashable {
 
     var text: String { Self.text(value, mode: setup.mode, chinese: LocalizationManager.shared.currentLanguage == .chinese) }
 
-    /// "7/10" (attempts) or "7 made" (timed).
+    /// "7/10" (made of shots) or "7 made" (timed).
     func madeText(chinese: Bool) -> String {
         switch setup.mode {
-        case .attempts: return "\(made)/\(setup.shots * max(spotsReported, 1))"
+        case .attempts, .chart: return "\(made)/\(attempted)"
         case .timed: return chinese ? "进 \(made)" : "\(made) made"
         }
     }

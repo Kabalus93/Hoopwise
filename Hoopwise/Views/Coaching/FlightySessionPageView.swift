@@ -951,9 +951,15 @@ struct FlightySessionPageView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                 ForEach(tracked) { drill in
-                    ShootingAddOnCard(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
-                                      sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
-                                      canEdit: accessMode.canEdit)
+                    if drill == .shotChart {
+                        ShotChartAddOnCard(run: shootingRunBinding(drill), students: shootingRoster,
+                                           sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
+                                           canEdit: accessMode.canEdit)
+                    } else {
+                        ShootingAddOnCard(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
+                                          sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
+                                          canEdit: accessMode.canEdit)
+                    }
                 }
             }
         }

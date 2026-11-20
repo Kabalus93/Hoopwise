@@ -394,7 +394,7 @@ struct ShootingAddOnCard: View {
     /// 0…1 strength of a cell, for the heat tint.
     private func strength(_ makes: Int) -> Double {
         switch setup.mode {
-        case .attempts: return Double(makes) / Double(max(setup.shots, 1))
+        case .attempts, .chart: return Double(makes) / Double(max(setup.shots, 1))
         case .timed:
             let top = run.entries.flatMap { $0.makes.compactMap { $0 } }.max() ?? 1
             return Double(makes) / Double(max(top, 1))
@@ -429,7 +429,7 @@ struct ShootingAddOnCard: View {
             ForEach(0..<drill.spotCount, id: \.self) { spot in
                 let values = students.compactMap { run.result(for: $0.id)?.spotValue(spot) }
                 let avg = values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
-                Text(avg.map { setup.mode == .attempts ? "\(Int(($0 * 100).rounded()))%" : String(format: "%.1f", $0) } ?? "—")
+                Text(avg.map { setup.mode.isShare ? "\(Int(($0 * 100).rounded()))%" : String(format: "%.1f", $0) } ?? "—")
                     .font(.system(size: 11, weight: .bold)).monospacedDigit()
                     .frame(width: cellWidth, height: 24)
                     .background(RoundedRectangle(cornerRadius: 6)
@@ -588,7 +588,7 @@ struct ShootingEntryPad: View {
     private var question: String {
         let at = drill.spotCount > 1 ? drill.spotName(spot, chinese: isChinese) + " · " : ""
         switch setup.mode {
-        case .attempts: return at + (isChinese ? "\(setup.shots) 投中几个？" : "made of \(setup.shots)?")
+        case .attempts, .chart: return at + (isChinese ? "\(setup.shots) 投中几个？" : "made of \(setup.shots)?")
         case .timed: return at + (isChinese ? "\(ShootingSetup.time(setup.seconds, chinese: true)) 进了几个？"
                                             : "makes in \(ShootingSetup.time(setup.seconds, chinese: false))?")
         }

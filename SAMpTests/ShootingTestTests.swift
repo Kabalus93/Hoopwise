@@ -118,4 +118,60 @@ final class ShootingTestTests: XCTestCase {
         XCTAssertNil(DrillPlanGenerator.shootingSignal(runs: [low, good], roster: [a, b, c]), "the later results win")
         XCTAssertNil(DrillPlanGenerator.shootingSignal(runs: [low], roster: [a, b]), "fewer than three athletes")
     }
+
+    // MARK: Shot chart (21 Nov 2026)
+
+    private var chart: ShootingSetup { ShootingSetup(drill: .shotChart, mode: .chart) }
+
+    func testChartModeIsMadeOverAttemptedPerZone() {
+        var r = ShootingRun(setup: chart)
+        r.set(4, for: a, spot: 6); r.setAttempts(9, for: a, spot: 6)
+        r.set(7, for: a, spot: 0); r.setAttempts(10, for: a, spot: 0)
+        r.set(3, for: a, spot: 2)                       // no attempts yet: not counted
+        let result = r.result(for: a)!
+        XCTAssertEqual(result.made, 11)
+        XCTAssertEqual(result.attempted, 19)
+        XCTAssertEqual(result.value, 11.0 / 19.0, accuracy: 0.0001)
+        XCTAssertEqual(result.zoneValues[6]?.share ?? 0, 4.0 / 9.0, accuracy: 0.0001)
+        XCTAssertNil(result.zoneValues[2])
+        XCTAssertEqual(ShootingDrill.shotChart.spotCount, 10)
+    }
+
+    func testOtherDrillsFillTheAthletesMap() {
+        let threes = run(ShootingSetup(drill: .threes, mode: .attempts, shots: 10), [a: [3, 4, 5, 6, 7]])
+        let twos = run(twosMid10, [a: [6, 4, 8, 2, 5]])
+        let shortTwos = run(ShootingSetup(drill: .twos, mode: .attempts, shots: 10, range: .short), [a: [9, 9, 9, 9, 9]])
+        let lay = run(ShootingSetup(drill: .layups, mode: .attempts, shots: 10), [a: [8, 6]])
+        let timed = run(ShootingSetup(drill: .threes, mode: .timed, seconds: 30), [a: [5, 5, 5, 5, 5]])
+        let map = ShootingHistory.zoneMap(for: a, sessions: [session(day: 1, [threes, twos, shortTwos, lay, timed])])
+        XCTAssertEqual(map[0]?.share ?? 0, 14.0 / 20.0, accuracy: 0.0001, "lay-ups both hands at the rim")
+        XCTAssertEqual(map[1]?.share ?? 0, 0.6, accuracy: 0.0001, "corner two → left baseline mid")
+        XCTAssertEqual(map[2]?.attempted ?? 0, 15, accuracy: 0.0001, "left wing + half the top")
+        XCTAssertEqual(map[2]?.made ?? 0, 8, accuracy: 0.0001)
+        XCTAssertEqual(map[5]?.share ?? 0, 0.3, accuracy: 0.0001, "threes: left corner")
+        XCTAssertEqual(map[9]?.share ?? 0, 0.7, accuracy: 0.0001, "threes: right corner — the timed run adds nothing")
+    }
+
+    func testMapDeltasAndFreeThrowsBesideIt() {
+        let first = session(day: 1, [run(ShootingSetup(drill: .threes, mode: .attempts, shots: 10), [a: [2, 2, 2, 2, 2]]),
+                                     run(ft10, [a: [5]])])
+        let second = session(day: 2, [run(ShootingSetup(drill: .threes, mode: .attempts, shots: 10), [a: [6, 6, 6, 6, 6]]),
+                                      run(ft10, [a: [7]])])
+        let now = ShootingHistory.zoneMap(for: a, sessions: [first, second])
+        let before = ShootingHistory.zoneMap(for: a, sessions: [first, second], before: second.startTime)
+        XCTAssertEqual(ShootingHistory.deltas(now, before)[7] ?? 0, 0.4 - 0.2, accuracy: 0.0001)
+        XCTAssertEqual(ShootingHistory.latestMapSession(for: a, sessions: [first, second])?.id, second.id)
+        XCTAssertEqual(ShootingHistory.freeThrows(for: a, sessions: [first, second])?.share ?? 0, 0.6, accuracy: 0.0001)
+    }
+
+    func testTheZonesAreDrawn() {
+        for zone in ShotChartGeometry.zones {
+            XCTAssertFalse(zone.boundingBox.isEmpty, "every zone has an area")
+        }
+        // The corner three is a strip outside x = 6.6 m below where the arc meets it.
+        XCTAssertTrue(ShotChartGeometry.zones[9].contains(CGPoint(x: 7.0, y: 1.0)))
+        XCTAssertTrue(ShotChartGeometry.zones[0].contains(CGPoint(x: 0, y: 2.0)), "at the rim")
+        XCTAssertTrue(ShotChartGeometry.zones[7].contains(CGPoint(x: 0, y: 9.0)), "top three")
+        XCTAssertTrue(ShotChartGeometry.zones[3].contains(CGPoint(x: 1.5, y: 5.0)), "right elbow")
+    }
 }

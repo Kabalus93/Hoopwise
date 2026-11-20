@@ -2228,6 +2228,46 @@ use"; and the athlete's Shooting section in the Quick Peep too):
   is left.
 - Quick Peep: ShootingProfileSection under the skills (both layouts); its
   spot dots now carry the spot labels.
+THE SHOT CHART (21 Nov 2026, Luther: "this type of map … tap on a zone,
+enter numbers, the app calculates the percentage per student … useful to
+show athletes"; decided: 10 zones, made + attempted per zone, other drills
+fill the athlete's map, absolute bands by default with "own average"):
+- The eighth tracked drill `.shotChart` (id 8): ten zones = its spots — at
+  the rim (2.5 m from the rim centre), left baseline / left elbow / right
+  elbow / right baseline mid-range (rays at 45° · 90° · 135° from the rim),
+  left corner / left wing / top / right wing / right corner three (corners
+  outside 6.6 m below where the arc meets them; rays at 60° · 120°). A new
+  mode `.chart`: MADE AND ATTEMPTED per zone (`ShootingEntry.attempts`,
+  optional — older entries decode without it; `setAttempts`;
+  `ShootingResult.shots(at:)` is the one place a spot becomes made/attempted);
+  or the drill's .attempts mode = the same shots in every zone.
+  `ShootingMode.isShare` replaces "== .attempts" wherever a share is meant.
+- Views/Components/ShotChartMap.swift: the zones are CGPath boolean ops in
+  court METRES (FIBA: arc 6.75, corners 6.6, lane 4.9 × 5.8), basket at the
+  BOTTOM like a broadcast chart (plays draw it at the top); each zone a
+  tappable shape, % and made/att on it, ↑/↓ deltas, the court lines over
+  it; colour `ShotChartColour` bands (<25 / 25 / 35 / 45 / 55+ %, legend) or
+  ownAverage (±15 % hot/cold); `forImage` = light for sharing. A zone
+  element's accessibility frame is its bounding box (L-shaped zones: the
+  centre may lie in a neighbour — UI tests tap inside, after scrolling).
+- In the plan: ShotChartAddOnCard — athletes as photos (+ Group pooled,
+  each with today's % badge), the map, By % | Vs own average, Vs last time,
+  a summary line. Tap a zone → ShotZonePad: athletes, a small map (tap
+  another zone), made then attempted (made…made+20), then the athlete's
+  next empty zone.
+- The athlete's map (ShootingHistory.zoneMap / zones(of:student:)): the
+  Shot Chart zone = zone; 5-Spot Threes → the five three-point zones;
+  5-Spot Twos at MID (not short) → corners to baseline mid, wings to the
+  elbows, the top split between the elbows; lay-ups and Mikan → at the rim;
+  timed results never (no attempts); free throws BESIDE the map
+  (`freeThrows`). Profile and Quick Peep: AthleteShotChartCard leads the
+  Shooting section (All sessions | Last session; ↑/↓ = all vs before the
+  latest session); tap → AthleteShotChartScreen (zone list, colour, SHARE —
+  a light 600 pt card rendered at 3× via ImageRenderer: name, month, map,
+  legend, free throws, academy).
+DEBUG HOOPWISE_DEMO_SHOOTING=chart puts the Shot Chart in the demo plan.
+Tests: ShootingTestTests (chart maths, map feeding, deltas, zone geometry),
+ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan

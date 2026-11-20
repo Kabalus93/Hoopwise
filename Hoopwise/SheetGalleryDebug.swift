@@ -329,9 +329,12 @@ enum SheetGalleryDebug {
                           let mode = env["HOOPWISE_DEMO_SHOOTING"] else { return }
                     DemoShootingOnce.done = true
                     var copy = session
-                    let ids = [ShootingDrill.freeThrows.drillId, ShootingDrill.twos.drillId]
-                    copy.curriculum.skillDrillIds.removeAll { ids.contains($0) }
-                    copy.curriculum.warmupDrillIds.removeAll { ids.contains($0) }
+                    // =chart: the Shot Chart instead.
+                    let all = ShootingDrill.allCases.map(\.drillId)
+                    let ids = mode == "chart" ? [ShootingDrill.shotChart.drillId]
+                        : [ShootingDrill.freeThrows.drillId, ShootingDrill.twos.drillId]
+                    copy.curriculum.skillDrillIds.removeAll { all.contains($0) }
+                    copy.curriculum.warmupDrillIds.removeAll { all.contains($0) }
                     copy.curriculum.shooting = []
                     if mode != "clear" { copy.curriculum.skillDrillIds += ids }
                     dm.updateSessionEvent(copy, keepLiveFields: true)

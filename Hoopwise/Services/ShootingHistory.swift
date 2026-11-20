@@ -70,6 +70,92 @@ enum ShootingHistory {
             .first
     }
 
+    // MARK: The athlete's shot chart (21 Nov 2026)
+    //
+    // Fed by every tracked drill that has a place on the floor: the Shot
+    // Chart itself (zone = zone), 5-Spot Threes (the five three-point zones),
+    // 5-Spot Twos at MID range (corners → baseline mid, wings → elbows, top
+    // split between the elbows), and lay-ups / the Mikan drill (at the rim).
+    // Timed results have no attempts, so they cannot make a percentage.
+    // Free throws sit beside the map (`freeThrows`).
+
+    /// One run's contribution to the ten zones.
+    static func zones(of run: ShootingRun, student: UUID) -> [ShotZoneValue?] {
+        var out = [ShotZoneValue?](repeating: nil, count: 10)
+        guard run.setup.mode.isShare, let r = run.result(for: student) else { return out }
+        func add(_ zone: Int, _ made: Double, _ att: Double) {
+            var z = out[zone] ?? ShotZoneValue(made: 0, attempted: 0)
+            z.made += made; z.attempted += att
+            out[zone] = z
+        }
+        for spot in 0..<run.setup.drill.spotCount {
+            guard let s = r.shots(at: spot) else { continue }
+            let m = Double(s.made), a = Double(s.attempted)
+            switch run.setup.drill {
+            case .shotChart: add(spot, m, a)
+            case .threes: add(5 + spot, m, a)
+            case .twos:
+                guard run.setup.range != .short else { continue }
+                switch spot {
+                case 0: add(1, m, a)
+                case 1: add(2, m, a)
+                case 2: add(2, m / 2, a / 2); add(3, m / 2, a / 2)
+                case 3: add(3, m, a)
+                default: add(4, m, a)
+                }
+            case .layups, .mikan: add(0, m, a)
+            default: break
+            }
+        }
+        return out
+    }
+
+    private static func merge(_ a: [ShotZoneValue?], _ b: [ShotZoneValue?]) -> [ShotZoneValue?] {
+        zip(a, b).map { x, y in
+            guard let y else { return x }
+            guard let x else { return y }
+            return ShotZoneValue(made: x.made + y.made, attempted: x.attempted + y.attempted)
+        }
+    }
+
+    /// The athlete's ten zones over the sessions given (optionally only
+    /// those before a date).
+    static func zoneMap(for student: UUID, sessions: [SessionEvent], before: Date? = nil) -> [ShotZoneValue?] {
+        var out = [ShotZoneValue?](repeating: nil, count: 10)
+        for s in sessions where !SessionLifecycle.didNotHappen(s) && (before.map { s.startTime < $0 } ?? true) {
+            for run in s.curriculum.shooting { out = merge(out, zones(of: run, student: student)) }
+        }
+        return out
+    }
+
+    /// The latest session that put anything on the athlete's map.
+    static func latestMapSession(for student: UUID, sessions: [SessionEvent]) -> SessionEvent? {
+        sessions
+            .filter { s in !SessionLifecycle.didNotHappen(s)
+                && s.curriculum.shooting.contains { zones(of: $0, student: student).contains { $0 != nil } } }
+            .max { $0.startTime < $1.startTime }
+    }
+
+    /// Change per zone between the map before `date` and the map with it.
+    static func deltas(_ now: [ShotZoneValue?], _ then: [ShotZoneValue?]) -> [Double?] {
+        zip(now, then).map { n, t in
+            guard let n, let t, n.attempted > 0, t.attempted > 0 else { return nil }
+            return n.share - t.share
+        }
+    }
+
+    /// Free throws (made of N, or chart) over the sessions given.
+    static func freeThrows(for student: UUID, sessions: [SessionEvent]) -> ShotZoneValue? {
+        var total = ShotZoneValue(made: 0, attempted: 0)
+        for s in sessions where !SessionLifecycle.didNotHappen(s) {
+            for run in s.curriculum.shooting where run.setup.drill == .freeThrows && run.setup.mode.isShare {
+                guard let r = run.result(for: student) else { continue }
+                total.made += Double(r.made); total.attempted += Double(r.attempted)
+            }
+        }
+        return total.attempted > 0 ? total : nil
+    }
+
     // MARK: Evidence beside the Shooting rating
 
     struct Evidence: Hashable {
