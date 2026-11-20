@@ -440,6 +440,9 @@ struct StudentQuickPeepView: View {
             VStack(spacing: 16) {
                 skillsSection
 
+                // Tracked shooting, as on the profile (21 Nov 2026).
+                ShootingProfileSection(studentId: student.id)
+
                 if let notes = player?.coachNotes, !notes.isEmpty {
                     coachNotesSection(notes)
                 }
@@ -469,6 +472,9 @@ struct StudentQuickPeepView: View {
             
             // Skills evaluation with editable sliders
             skillsSection
+
+            // Tracked shooting, as on the profile (21 Nov 2026).
+            ShootingProfileSection(studentId: student.id)
             
             // Coach notes (only show if has custom notes)
             if let notes = player?.coachNotes, !notes.isEmpty {

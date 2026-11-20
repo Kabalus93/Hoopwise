@@ -17,19 +17,41 @@ import Foundation
 // mode, amount and range (`ShootingSetup.key`).
 
 enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
-    case twos, freeThrows, threes
+    // Listed close to far (the library shows them in this order).
+    case freeThrows, layups, mikan, twos, midRange, pullUps, threes
     var id: String { rawValue }
 
-    /// Five spots — corners, wings, top — or one line for free throws.
-    var spotCount: Int { self == .freeThrows ? 1 : 5 }
+    /// Where the makes are counted: five spots, a side each way, or one
+    /// number.
+    private var spots: [(en: String, zh: String, en2: String, zh2: String)] {
+        switch self {
+        case .twos, .threes:
+            return [("Left corner", "左底角", "LC", "左底"), ("Left wing", "左侧翼", "LW", "左翼"),
+                    ("Top", "弧顶", "Top", "弧顶"), ("Right wing", "右侧翼", "RW", "右翼"),
+                    ("Right corner", "右底角", "RC", "右底")]
+        case .layups: return [("Right hand", "右手", "R", "右"), ("Left hand", "左手", "L", "左")]
+        case .pullUps: return [("Going right", "向右运球", "→", "右"), ("Going left", "向左运球", "←", "左")]
+        case .freeThrows: return [("Line", "罚球线", "FT", "罚球")]
+        case .midRange: return [("Mid-range", "中距离", "Mid", "中投")]
+        case .mikan: return [("Under the rim", "篮下", "Rim", "篮下")]
+        }
+    }
+
+    var spotCount: Int { spots.count }
 
     /// Deterministic: every device seeds the same record.
     var drillId: UUID {
+        let n: Int
         switch self {
-        case .twos: UUID(uuidString: "5A0715F0-0002-4000-8000-000000000002")!
-        case .freeThrows: UUID(uuidString: "5A0715F0-0001-4000-8000-000000000001")!
-        case .threes: UUID(uuidString: "5A0715F0-0003-4000-8000-000000000003")!
+        case .freeThrows: n = 1
+        case .twos: n = 2
+        case .threes: n = 3
+        case .midRange: n = 4
+        case .layups: n = 5
+        case .mikan: n = 6
+        case .pullUps: n = 7
         }
+        return UUID(uuidString: String(format: "5A0715F0-%04d-4000-8000-%012d", n, n))!
     }
 
     static let tagPrefix = "tracked:"
@@ -47,6 +69,10 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .twos: "5-Spot Twos"
         case .freeThrows: "Free Throws"
         case .threes: "5-Spot Threes"
+        case .midRange: "Mid-Range Shooting"
+        case .layups: "Lay-Ups Both Hands"
+        case .mikan: "Mikan Drill"
+        case .pullUps: "Pull-Up Jumpers"
         }
     }
 
@@ -56,6 +82,10 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .twos: return "五点两分投篮"
         case .freeThrows: return "罚球"
         case .threes: return "五点三分投篮"
+        case .midRange: return "中距离投篮"
+        case .layups: return "左右手上篮"
+        case .mikan: return "麦肯上篮"
+        case .pullUps: return "急停跳投"
         }
     }
 
@@ -64,53 +94,91 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .twos: chinese ? "两分" : "2PT"
         case .freeThrows: chinese ? "罚球" : "FT"
         case .threes: chinese ? "三分" : "3PT"
+        case .midRange: chinese ? "中投" : "MID"
+        case .layups: chinese ? "上篮" : "LAY"
+        case .mikan: chinese ? "麦肯" : "MIKAN"
+        case .pullUps: chinese ? "急停" : "PULL-UP"
         }
     }
 
-    var englishDescription: String {
+    /// SF Symbol for the drill's row and card.
+    var symbol: String {
+        switch self {
+        case .freeThrows: "1.circle"
+        case .layups: "arrow.up.forward.circle"
+        case .mikan: "arrow.triangle.2.circlepath"
+        case .twos: "2.circle"
+        case .midRange: "scope"
+        case .pullUps: "arrow.up.and.down.and.arrow.left.and.right"
+        case .threes: "3.circle"
+        }
+    }
+
+    private var texts: (en: String, zh: String) {
+        let tail = (" Count the makes: out of a set number of shots, or within a set time. Results go to each athlete's shooting record.",
+                    "记录命中数：固定出手数，或固定时间。计入每位学员的投篮记录。")
         switch self {
         case .twos:
-            "Shoot from five spots inside the arc — left corner, left wing, top, right wing, right corner — at short or mid range. Count the makes at each spot: out of a set number of shots, or within a set time. Tracked: results go to each athlete's shooting record."
+            return ("Shoot from five spots inside the arc — left corner, left wing, top, right wing, right corner — at short or mid range, counting the makes at each spot." + tail.0,
+                    "在三分线内的五个点投篮——左底角、左侧翼、弧顶、右侧翼、右底角，近距离或中距离，分别记录每个点的命中。" + tail.1)
         case .freeThrows:
-            "Free throws from the line. Count the makes: out of a set number of shots, or within a set time. Tracked: results go to each athlete's shooting record."
+            return ("Free throws from the line, with the same routine every shot." + tail.0,
+                    "罚球线罚球，每一球用同样的投篮节奏。" + tail.1)
         case .threes:
-            "Shoot from five spots behind the arc — left corner, left wing, top, right wing, right corner. Count the makes at each spot: out of a set number of shots, or within a set time. Tracked: results go to each athlete's shooting record."
+            return ("Shoot from five spots behind the arc — left corner, left wing, top, right wing, right corner — counting the makes at each spot." + tail.0,
+                    "在三分线外的五个点投篮——左底角、左侧翼、弧顶、右侧翼、右底角，分别记录每个点的命中。" + tail.1)
+        case .midRange:
+            return ("A partner rebounds and passes back; the shooter moves to a new spot between the paint and the arc after every shot — any mid-range spot counts. One total." + tail.0,
+                    "同伴抢篮板并回传；投篮者每投一球换一个位置，油漆区外、三分线内的任何中距离位置都可以。记录总命中。" + tail.1)
+        case .layups:
+            return ("Lay-ups from the wing on both sides: right hand on the right, left hand on the left, off one or two dribbles. Counted per side." + tail.0,
+                    "两侧侧翼运球上篮：右侧用右手，左侧用左手，一到两次运球。左右分别记录。" + tail.1)
+        case .mikan:
+            return ("The Mikan Drill: under the basket, alternate right-hand and left-hand lay-ups off the backboard, catching the ball before it touches the floor. Best timed." + tail.0,
+                    "麦肯上篮：在篮下左右手交替打板上篮，球落地前接住。最适合计时。" + tail.1)
+        case .pullUps:
+            return ("One or two hard dribbles into a pull-up jump shot from mid-range, going right then going left. Counted each way." + tail.0,
+                    "一到两次快速运球后急停跳投，中距离，先向右再向左。左右分别记录。" + tail.1)
         }
     }
 
-    func description(chinese: Bool) -> String {
-        guard chinese else { return englishDescription }
-        switch self {
-        case .twos: return "在三分线内的五个点投篮——左底角、左侧翼、弧顶、右侧翼、右底角，近距离或中距离。记录每个点的命中数：固定出手数，或固定时间。计入每位学员的投篮记录。"
-        case .freeThrows: return "罚球线罚球。记录命中数：固定出手数，或固定时间。计入每位学员的投篮记录。"
-        case .threes: return "在三分线外的五个点投篮——左底角、左侧翼、弧顶、右侧翼、右底角。记录每个点的命中数：固定出手数，或固定时间。计入每位学员的投篮记录。"
-        }
-    }
+    var englishDescription: String { texts.en }
+    func description(chinese: Bool) -> String { chinese ? texts.zh : texts.en }
 
     /// The record the library seeds.
     var drillItem: DrillItem {
-        DrillItem(id: drillId, name: englishName, category: .shooting, difficulty: .beginner,
-                  durationMinutes: self == .freeThrows ? 5 : 10,
-                  description: englishDescription, minPlayers: 1,
-                  tags: [tag, "type:shooting", "kind:tracked",
-                         "attr:shooting=3", "attr:footwork=1"],
-                  createdAt: Date(timeIntervalSince1970: 1_795_000_000),
-                  updatedAt: Date(timeIntervalSince1970: 1_795_000_000))
+        let finishing = self == .layups || self == .mikan
+        return DrillItem(id: drillId, name: englishName, category: .shooting, difficulty: .beginner,
+                         durationMinutes: self == .freeThrows || self == .mikan ? 5 : 10,
+                         description: englishDescription, minPlayers: 1,
+                         tags: [tag, "type:shooting", "kind:tracked"]
+                            + (finishing ? ["attr:finishing=3", "attr:shooting=1", "attr:ballHandling=1"]
+                               : ["attr:shooting=3", "attr:footwork=1"]
+                                 + (self == .pullUps ? ["attr:ballHandling=2"] : [])),
+                         createdAt: Date(timeIntervalSince1970: 1_795_000_000),
+                         updatedAt: Date(timeIntervalSince1970: 1_795_000_000))
     }
 
-    /// Spot names, left to right.
     func spotName(_ index: Int, chinese: Bool) -> String {
-        guard self != .freeThrows else { return chinese ? "罚球线" : "Line" }
-        let en = ["Left corner", "Left wing", "Top", "Right wing", "Right corner"]
-        let zh = ["左底角", "左侧翼", "弧顶", "右侧翼", "右底角"]
-        return (chinese ? zh : en)[min(max(index, 0), 4)]
+        let s = spots[min(max(index, 0), spots.count - 1)]
+        return chinese ? s.zh : s.en
     }
 
     func spotShort(_ index: Int, chinese: Bool) -> String {
-        guard self != .freeThrows else { return chinese ? "罚球" : "FT" }
-        let en = ["LC", "LW", "Top", "RW", "RC"]
-        let zh = ["左底", "左翼", "弧顶", "右翼", "右底"]
-        return (chinese ? zh : en)[min(max(index, 0), 4)]
+        let s = spots[min(max(index, 0), spots.count - 1)]
+        return chinese ? s.zh2 : s.en2
+    }
+
+    /// The first time it is added.
+    var defaultSetup: ShootingSetup {
+        switch self {
+        case .mikan: ShootingSetup(drill: self, mode: .timed, shots: 10, seconds: 60)
+        case .midRange: ShootingSetup(drill: self, mode: .attempts, shots: 20, seconds: 120)
+        case .twos: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 30, range: .mid)
+        case .threes: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 30)
+        case .freeThrows: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 60)
+        case .layups, .pullUps: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 30)
+        }
     }
 }
 
@@ -175,9 +243,7 @@ struct ShootingSetup: Codable, Hashable {
             saved.drill = drill
             return saved
         }
-        return ShootingSetup(drill: drill, mode: .attempts, shots: 10,
-                             seconds: drill == .freeThrows ? 60 : 30,
-                             range: drill == .twos ? .mid : nil)
+        return drill.defaultSetup
     }
 
     func remember() {

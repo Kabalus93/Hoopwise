@@ -43,4 +43,26 @@ final class ShootingAddOnUITests: XCTestCase {
         XCTAssertTrue(addon.staticTexts["50%"].exists, "5 of 10")
         attach("logged")
     }
+
+    func testFiveSpotsLogAthleteByAthleteFromLogMakes() {
+        let app = launch("1")
+        defer { _ = launch("clear") }
+        let addon = app.descendants(matching: .any).matching(identifier: "shooting.addon.twos").firstMatch
+        for _ in 0..<8 where !addon.exists || !addon.isHittable { app.swipeUp() }
+        XCTAssertTrue(addon.waitForExistence(timeout: 10))
+        addon.buttons["shooting.log"].tap()
+        let six = app.buttons["shooting.pad.6"]
+        XCTAssertTrue(six.waitForExistence(timeout: 5), "Log makes opens the pad")
+        attach("pad")
+        // One athlete's five spots, one tap each.
+        for n in [6, 5, 7, 4, 8] { app.buttons["shooting.pad.\(n)"].tap() }
+        attach("next athlete")
+        XCTAssertGreaterThan(app.buttons.matching(identifier: "shooting.pad.athlete").count, 1, "everyone as photos")
+        app.buttons["shooting.pad.done"].tap()
+        // Whatever the shots a spot, all five spots of one athlete are in.
+        let filled = addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label ENDSWITH ' 8'"))
+        XCTAssertTrue(filled.firstMatch.waitForExistence(timeout: 5), "the right-corner 8 is in the table")
+        XCTAssertTrue(addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label ENDSWITH ' 6'")).firstMatch.exists)
+        attach("logged")
+    }
 }

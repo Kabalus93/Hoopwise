@@ -283,19 +283,21 @@ struct DrillsLibraryView: View {
     /// top, in the plan picker too.
     @ViewBuilder
     private var trackedSection: some View {
-        let tracked = ShootingDrill.allCases.compactMap { t in dataManager.drills.first { $0.id == t.drillId } }
-        if !tracked.isEmpty && (skill == nil || skill == .shooting) {
+        let tracked = ShootingDrill.allCases
+            .compactMap { t in dataManager.drills.first { $0.id == t.drillId } }
+            .filter { skill == nil || $0.attributes[skill!] >= 2 }
+        if !tracked.isEmpty {
             Section {
                 ForEach(tracked) { drill in
                     drillLink(drill) {
                         HStack(spacing: 12) {
-                            Image(systemName: "gauge.with.dots.needle.67percent")
+                            Image(systemName: drill.trackedShooting?.symbol ?? "gauge.with.dots.needle.67percent")
                                 .font(.title3)
                                 .foregroundStyle(Color.orange)
                                 .frame(width: 30)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(drill.localizedName).font(.body.weight(.semibold))
-                                Text(isChinese ? "记录每位学员的命中" : "Logs each athlete's makes")
+                                Text(trackedSubtitle(drill))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -306,6 +308,18 @@ struct DrillsLibraryView: View {
                 Text(isChinese ? "投篮测试 · 自动记录" : "Tracked shooting")
             }
         }
+    }
+
+    private func trackedSubtitle(_ drill: DrillItem) -> String {
+        guard let t = drill.trackedShooting else { return "" }
+        let where_: String
+        switch t.spotCount {
+        case 5: where_ = isChinese ? "五个点" : "five spots"
+        case 2: where_ = isChinese ? "\(t.spotName(0, chinese: true)) · \(t.spotName(1, chinese: true))"
+                                   : "\(t.spotName(0, chinese: false).lowercased()) · \(t.spotName(1, chinese: false).lowercased())"
+        default: where_ = isChinese ? "一个总数" : "one total"
+        }
+        return isChinese ? "记录命中 · \(where_)" : "Logs makes · \(where_)"
     }
 
     /// Series (18 Nov 2026): ladders of drills, easiest first — their own

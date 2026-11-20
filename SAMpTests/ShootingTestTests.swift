@@ -95,10 +95,20 @@ final class ShootingTestTests: XCTestCase {
     }
 
     func testTrackedDrillsAreRecognised() {
+        var ids = Set<UUID>()
         for t in ShootingDrill.allCases {
             XCTAssertEqual(ShootingDrill.of(t.drillItem), t)
-            XCTAssertEqual(t.drillItem.attributes[.shooting], 3)
+            let main: DrillAttribute = (t == .layups || t == .mikan) ? .finishing : .shooting
+            XCTAssertEqual(t.drillItem.attributes[main], 3, t.rawValue)
+            XCTAssertTrue(ids.insert(t.drillId).inserted, "ids are unique")
+            XCTAssertEqual(t.defaultSetup.drill, t)
         }
+        // The first three keep the ids results were saved under.
+        XCTAssertEqual(ShootingDrill.freeThrows.drillId.uuidString, "5A0715F0-0001-4000-8000-000000000001")
+        XCTAssertEqual(ShootingDrill.twos.drillId.uuidString, "5A0715F0-0002-4000-8000-000000000002")
+        XCTAssertEqual(ShootingDrill.threes.drillId.uuidString, "5A0715F0-0003-4000-8000-000000000003")
+        XCTAssertEqual(ShootingDrill.layups.spotCount, 2)
+        XCTAssertEqual(ShootingDrill.midRange.spotCount, 1)
     }
 
     func testThePlanEngineHearsALowShootingGroup() {

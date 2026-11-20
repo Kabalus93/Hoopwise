@@ -2203,6 +2203,31 @@ athletes SELF-REPORT, so entering a number must be one tap.
   results" in the rationale.
 DEBUG HOOPWISE_DEMO_SHOOTING=1|clear on sessionPage (HOOPWISE_SESSION_TAB=0).
 Tests: ShootingTestTests, ShootingAddOnUITests (iPad mini).
+SEVEN DRILLS + THE GROUP CARD (21 Nov 2026, Luther: "add other types … actual
+real ones … midrange in general (one rebounds, the other shoots) … the UI
+could use improvement — 12 athletes, data visibility, interactivity, ease of
+use"; and the athlete's Shooting section in the Quick Peep too):
+- Drills, close to far: Free Throws, Lay-Ups Both Hands (right / left hand),
+  Mikan Drill (under the rim, default timed 1 min), 5-Spot Twos, Mid-Range
+  Shooting (partner rebounds, any mid-range spot, one total, default 20
+  shots), Pull-Up Jumpers (going right / going left), 5-Spot Threes. Spots
+  are table-driven per drill (`spots`); ids 1–3 unchanged (results keep
+  their drill), 4–7 new. Lay-ups and Mikan rate as FINISHING (3), pull-ups
+  add ball handling. The library section filters by the chosen skill.
+- The card: header (drill symbol, title, setup + Change before any result,
+  LOG MAKES, fold); a SUMMARY readable folded (Logged n/N with a bar, Group
+  vs the same athletes last time with ↑/↓, Best today); the per-spot clock
+  (timed); a TABLE — spot column heads once, cells tinted by value (heat),
+  result with ↑/↓ and "last …", sort menu (roster / best first / still to
+  log first, `shooting.sort`), a SPOT AVERAGE footer.
+- The pad (`ShootingEntryPad`, full sheet): spot chips, EVERY ATHLETE AS A
+  PHOTO (green badge = their number at this spot, dimmed once in) — the
+  athletes self-report in any order, so tap whoever walked up — then the
+  numbers. Made of N: next empty spot of that athlete, then the next
+  athlete; timed: the next athlete at the clock's spot; closes when nothing
+  is left.
+- Quick Peep: ShootingProfileSection under the skills (both layouts); its
+  spot dots now carry the spot labels.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan

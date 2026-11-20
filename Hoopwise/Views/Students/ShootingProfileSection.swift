@@ -90,8 +90,8 @@ struct ShootingProfileSection: View {
         }
     }
 
-    /// Five dots, left corner to right corner, tinted against the athlete's
-    /// own average over the spots.
+    /// A dot per spot (left corner to right corner; right / left), tinted
+    /// against the athlete's own average: red hot, blue cold.
     private func spots(_ s: ShootingHistory.Series) -> some View {
         let averages = s.spotAverages
         let known = averages.compactMap { $0 }
@@ -105,8 +105,14 @@ struct ShootingProfileSection: View {
                     if v <= mean * 0.85 { return .blue.opacity(0.7) }      // cold
                     return .orange.opacity(0.5)
                 }()
-                Circle().fill(tint).frame(width: 14, height: 14)
-                    .accessibilityLabel(s.setup.drill.spotName(i, chinese: isChinese))
+                VStack(spacing: 2) {
+                    Circle().fill(tint).frame(width: 14, height: 14)
+                    Text(s.setup.drill.spotShort(i, chinese: isChinese))
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 18)
+                .accessibilityLabel(s.setup.drill.spotName(i, chinese: isChinese))
             }
         }
         .accessibilityElement(children: .combine)
