@@ -2265,6 +2265,18 @@ fill the athlete's map, absolute bands by default with "own average"):
   latest session); tap → AthleteShotChartScreen (zone list, colour, SHARE —
   a light 600 pt card rendered at 3× via ImageRenderer: name, month, map,
   legend, free throws, academy).
+THE WHEEL (21 Nov 2026, Luther: "a scrolling wheel would be elegant and
+practical"): Views/Components/NumberWheel.swift — a horizontal ruler of
+numbers snapping to the middle (scrollPosition + viewAligned), a haptic
+tick per number, tap a number to jump, VoiceOver adjustable; numbers are
+`<identifier>.<n>` (lazy — only those near the middle exist). The shooting
+pad uses it when there are MORE THAN TEN numbers (≤ 10 shots keeps the
+one-tap grid): it starts on what is in, else that athlete's number at this
+spot LAST TIME, else half the shots (timed: the others' median here); quick
+chips save at once (0 · half · all; timed: 0 · last time); LOG n saves and
+moves on. The shot chart pad: MADE and ATTEMPTED wheels side by side (start:
+what is in, else their last chart's zone, else 4/10), the live %, one LOG
+(refused while made > attempted); fixed shots per zone keeps the grid.
 DEBUG HOOPWISE_DEMO_SHOOTING=chart puts the Shot Chart in the demo plan.
 Tests: ShootingTestTests (chart maths, map feeding, deltas, zone geometry),
 ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap.

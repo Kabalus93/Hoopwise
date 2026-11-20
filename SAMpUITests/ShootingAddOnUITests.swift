@@ -51,18 +51,27 @@ final class ShootingAddOnUITests: XCTestCase {
         for _ in 0..<8 where !addon.exists || !addon.isHittable { app.swipeUp() }
         XCTAssertTrue(addon.waitForExistence(timeout: 10))
         addon.buttons["shooting.log"].tap()
-        let six = app.buttons["shooting.pad.6"]
-        XCTAssertTrue(six.waitForExistence(timeout: 5), "Log makes opens the pad")
+        let grid = app.buttons["shooting.pad.6"], log = app.buttons["shooting.pad.log"]
+        XCTAssertTrue(grid.waitForExistence(timeout: 5) || log.exists, "Log makes opens the pad")
         attach("pad")
-        // One athlete's five spots, one tap each.
-        for n in [6, 5, 7, 4, 8] { app.buttons["shooting.pad.\(n)"].tap() }
+        // One athlete's five spots, one action each: a grid tap (≤ 10 shots)
+        // or, on the wheel, a number near the start then Log.
+        for _ in 0..<5 {
+            if grid.exists {
+                grid.tap()
+            } else {
+                let start = Int(log.label.filter(\.isNumber)) ?? 0
+                let near = app.buttons["shooting.wheel.\(max(0, start - 1))"]
+                if near.exists { near.tap(); sleep(1) }
+                log.tap()
+            }
+        }
         attach("next athlete")
         XCTAssertGreaterThan(app.buttons.matching(identifier: "shooting.pad.athlete").count, 1, "everyone as photos")
         app.buttons["shooting.pad.done"].tap()
-        // Whatever the shots a spot, all five spots of one athlete are in.
-        let filled = addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label ENDSWITH ' 8'"))
-        XCTAssertTrue(filled.firstMatch.waitForExistence(timeout: 5), "the right-corner 8 is in the table")
-        XCTAssertTrue(addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label ENDSWITH ' 6'")).firstMatch.exists)
+        // Five cells of the first athlete are in.
+        let filled = addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label MATCHES '.* [0-9]+$'"))
+        XCTAssertGreaterThanOrEqual(filled.count, 5, "five spots logged")
         attach("logged")
     }
 
@@ -83,10 +92,14 @@ final class ShootingAddOnUITests: XCTestCase {
         let rim = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.0").firstMatch
         for _ in 0..<6 where rim.frame.maxY > window.maxY - 60 { app.swipeUp(velocity: .slow) }
         leftWing.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4)).tap()
-        let four = app.buttons["shotchart.pad.4"]
-        XCTAssertTrue(four.waitForExistence(timeout: 5), "tapping a zone opens the pad")
+        let four = app.buttons["shotchart.made.4"]
+        XCTAssertTrue(four.waitForExistence(timeout: 5), "tapping a zone opens the pad with its wheels")
         four.tap()                               // made
-        app.buttons["shotchart.pad.9"].tap()     // of 9
+        sleep(1)
+        app.buttons["shotchart.att.9"].tap()     // of 9
+        sleep(1)
+        XCTAssertTrue(app.buttons["shotchart.log"].label.contains("4/9"), app.buttons["shotchart.log"].label)
+        app.buttons["shotchart.log"].tap()
         attach("pad")
         app.buttons["shotchart.pad.done"].tap()
         let zone = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch

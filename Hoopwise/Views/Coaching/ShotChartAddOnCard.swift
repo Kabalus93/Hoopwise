@@ -65,7 +65,10 @@ struct ShotChartAddOnCard: View {
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.orange.opacity(0.22), lineWidth: 1))
         .sheet(item: $pad) { start in
-            ShotZonePad(run: $run, students: students, student: start.student, zone: start.zone)
+            ShotZonePad(run: $run, students: students,
+                        last: Dictionary(uniqueKeysWithValues: students.compactMap { s in
+                            ShootingHistory.previous(s.id, setup: setup, before: sessionDate, sessions: allSessions).map { (s.id, $0) } }),
+                        student: start.student, zone: start.zone)
                 .presentationDetents([.large])
         }
         .onAppear { if chosen == nil { chosen = students.first?.id } }
@@ -237,12 +240,18 @@ struct ShotZonePad: View {
     @State private var zone: Int
     /// Chart mode: the made just typed, waiting for its attempts.
     @State private var pendingMade: Int?
+    /// The wheels (21 Nov 2026): made and attempted.
+    @State private var madeWheel = 4
+    @State private var attWheel = 10
     @Environment(\.dismiss) private var dismiss
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private let drill = ShootingDrill.shotChart
 
-    init(run: Binding<ShootingRun>, students: [Student], student: UUID, zone: Int) {
-        _run = run; self.students = students
+    /// Each athlete's last shot chart — where the wheels start.
+    let last: [UUID: ShootingResult]
+
+    init(run: Binding<ShootingRun>, students: [Student], last: [UUID: ShootingResult] = [:], student: UUID, zone: Int) {
+        _run = run; self.students = students; self.last = last
         _student = State(initialValue: student)
         _zone = State(initialValue: zone)
     }
@@ -319,26 +328,82 @@ struct ShotZonePad: View {
         }
     }
 
-    /// Made: 0…20 (fixed shots: 0…shots). Attempted: made…made+20.
+    /// Chart mode: MADE and ATTEMPTED wheels side by side, one Log. Fixed
+    /// shots per zone: the one-tap grid (0…shots).
+    @ViewBuilder
     private var keypad: some View {
-        let range: ClosedRange<Int> = {
-            if !chart { return 0...run.setup.shots }
-            if let m = pendingMade { return max(m, 1)...(m + 20) }
-            return 0...20
-        }()
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-            ForEach(Array(range), id: \.self) { n in
-                Button { typed(n) } label: {
-                    Text("\(n)")
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                        .foregroundStyle(pendingMade != nil ? Color.white : Color.primary)
-                        .background(RoundedRectangle(cornerRadius: 12)
-                            .fill(pendingMade != nil ? Color.orange.opacity(0.85) : Color(.tertiarySystemFill)))
+        if chart {
+            VStack(spacing: 14) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(isChinese ? "命中" : "MADE").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                        NumberWheel(range: 0...40, value: $madeWheel, identifier: "shotchart.made")
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(isChinese ? "出手" : "ATTEMPTED").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                        NumberWheel(range: 1...50, value: $attWheel, tint: .secondary, identifier: "shotchart.att")
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("shotchart.pad.\(n)")
+                HStack {
+                    Text(attWheel > 0 ? "\(Int((Double(madeWheel) / Double(attWheel) * 100).rounded()))%" : "—")
+                        .font(.title2.weight(.heavy)).monospacedDigit()
+                        .foregroundStyle(madeWheel > attWheel ? Color.red : Color.primary)
+                    if madeWheel > attWheel {
+                        Text(isChinese ? "命中不能多于出手" : "more made than attempted")
+                            .font(.caption).foregroundStyle(.red)
+                    }
+                    Spacer()
+                    Button {
+                        run.set(madeWheel, for: student, spot: zone)
+                        run.setAttempts(attWheel, for: student, spot: zone)
+                        moveOn()
+                    } label: {
+                        Text(isChinese ? "记录 \(madeWheel)/\(attWheel)" : "Log \(madeWheel)/\(attWheel)")
+                            .font(.title3.weight(.bold)).monospacedDigit()
+                            .frame(minWidth: 160, minHeight: 50)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .tint(.orange)
+                    .disabled(madeWheel > attWheel)
+                    .accessibilityIdentifier("shotchart.log")
+                }
             }
+            .onAppear(perform: loadWheels)
+            .onChange(of: zone) { _, _ in loadWheels() }
+            .onChange(of: student) { _, _ in loadWheels() }
+        } else {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
+                ForEach(0...run.setup.shots, id: \.self) { n in
+                    Button { typed(n) } label: {
+                        Text("\(n)")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.tertiarySystemFill)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("shotchart.pad.\(n)")
+                }
+            }
+        }
+    }
+
+    /// What is in for this zone, else the athlete's last shot chart here,
+    /// else 4 of 10.
+    private func loadWheels() {
+        if let m = run.makes(student, spot: zone), let a = run.attempts(student, spot: zone) {
+            madeWheel = m; attWheel = a; return
+        }
+        if let last = last[student]?.shots(at: zone) {
+            madeWheel = last.made; attWheel = last.attempted; return
+        }
+        madeWheel = 4; attWheel = 10
+    }
+
+    private func moveOn() {
+        if let next = ((zone + 1)..<10).first(where: { run.makes(student, spot: $0) == nil })
+            ?? (0..<zone).first(where: { run.makes(student, spot: $0) == nil }) {
+            zone = next
         }
     }
 

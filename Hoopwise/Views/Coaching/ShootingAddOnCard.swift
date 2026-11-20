@@ -75,7 +75,7 @@ struct ShootingAddOnCard: View {
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.orange.opacity(0.22), lineWidth: 1))
         .sheet(item: $pad) { start in
-            ShootingEntryPad(drill: drill, setup: setup, run: $run, students: students,
+            ShootingEntryPad(drill: drill, setup: setup, run: $run, students: students, last: lastTime,
                              student: start.student, spot: start.spot,
                              timedSpot: setup.mode == .timed ? clockSpot : nil)
                 .presentationDetents([.large])
@@ -469,16 +469,21 @@ struct ShootingEntryPad: View {
     let setup: ShootingSetup
     @Binding var run: ShootingRun
     let students: [Student]
+    /// Each athlete's result in this test last time — where the wheel starts.
+    let last: [UUID: ShootingResult]
     /// Timed: the clock's spot — everyone reports that spot.
     let timedSpot: Int?
     @State private var student: UUID
     @State private var spot: Int
+    /// The number on the wheel.
+    @State private var wheel = 0
     @Environment(\.dismiss) private var dismiss
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
     init(drill: ShootingDrill, setup: ShootingSetup, run: Binding<ShootingRun>, students: [Student],
-         student: UUID, spot: Int, timedSpot: Int?) {
+         last: [UUID: ShootingResult] = [:], student: UUID, spot: Int, timedSpot: Int?) {
         self.drill = drill; self.setup = setup; _run = run; self.students = students; self.timedSpot = timedSpot
+        self.last = last
         _student = State(initialValue: student)
         _spot = State(initialValue: spot)
     }
@@ -499,7 +504,7 @@ struct ShootingEntryPad: View {
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     prompt
-                    keypad
+                    if wheelMode { wheelEntry } else { keypad }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -515,6 +520,74 @@ struct ShootingEntryPad: View {
             }
         }
         .sensoryFeedback(.selection, trigger: student)
+        .onAppear { wheel = startValue }
+        .onChange(of: student) { _, _ in wheel = startValue }
+        .onChange(of: spot) { _, _ in wheel = startValue }
+    }
+
+    // MARK: Wheel (21 Nov 2026) — more than ten numbers to choose from
+
+    /// Ten shots or fewer keep the one-tap grid; beyond, the wheel.
+    private var wheelMode: Bool { maximum > 10 }
+
+    /// What is already in, else this athlete's number at this spot last
+    /// time, else half the shots (timed: what the others reported here).
+    private var startValue: Int {
+        if let v = run.makes(student, spot: spot) { return v }
+        if let r = last[student], spot < r.makes.count, let v = r.makes[spot] { return min(v, maximum) }
+        switch setup.mode {
+        case .attempts, .chart: return setup.shots / 2
+        case .timed:
+            let here = students.compactMap { run.makes($0.id, spot: spot) }.sorted()
+            return here.isEmpty ? 5 : here[here.count / 2]
+        }
+    }
+
+    private var wheelEntry: some View {
+        VStack(spacing: 14) {
+            NumberWheel(range: 0...maximum, value: $wheel, identifier: "shooting.wheel")
+            HStack(spacing: 8) {
+                ForEach(quickChips, id: \.self) { n in
+                    Button { commit(n) } label: {
+                        Text("\(n)")
+                            .font(.headline.monospacedDigit())
+                            .frame(minWidth: 52, minHeight: 44)
+                            .background(Capsule().fill(Color(.tertiarySystemFill)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("shooting.chip.\(n)")
+                }
+                Spacer(minLength: 8)
+                Button { commit(wheel) } label: {
+                    Text(isChinese ? "记录 \(wheel)" : "Log \(wheel)")
+                        .font(.title3.weight(.bold))
+                        .monospacedDigit()
+                        .frame(minWidth: 150, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .tint(.orange)
+                .accessibilityIdentifier("shooting.pad.log")
+            }
+        }
+    }
+
+    /// One tap, saved: none, half and all (made of N); none and last time
+    /// (timed).
+    private var quickChips: [Int] {
+        switch setup.mode {
+        case .attempts, .chart:
+            return Array(Set([0, setup.shots / 2, setup.shots])).sorted()
+        case .timed:
+            var out = [0]
+            if let r = last[student], spot < r.makes.count, let v = r.makes[spot], v > 0 { out.append(v) }
+            return out
+        }
+    }
+
+    private func commit(_ n: Int) {
+        run.set(n, for: student, spot: spot)
+        advance()
     }
 
     private var spotPicker: some View {
