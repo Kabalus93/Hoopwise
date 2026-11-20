@@ -1643,6 +1643,17 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   now "<athletes> · from <program> · <day> · Due …"; the briefing row adds
   the source. COACH TAGGING removed from the UI (quick add and
   AddReminderSheet); stored coach tags are untouched.
+  CALMER (20 Nov 2026, Luther: the box was "kind of intimidating to interact
+  with"): the quick add is ONE QUIET LINE — "+ Add a reminder", no box, no
+  chips, no explanation line; the options appear only while writing
+  (`reminderComposing`, on focus; folds 0.4 s after leaving an empty
+  reminder so a chip's menu cannot close it) — due keeps its words, athlete
+  / priority / note are icon-only until set; "Type @ to tag an athlete"
+  shows until the coach has used @ or saved one (`reminders.mentionTipSeen`);
+  Return saves and folds (keyboard down). Rows: the due date small and grey,
+  red only when overdue. The pane is an accessibility CONTAINER — its
+  identifier used to override the field's and rows'. Test:
+  SessionRemindersUITests.
   FIXED: `refreshAllCaches` (the launch path) never called loadReminders —
   reminders appeared only after something ran the synchronous refresh (a
   write, an iCloud change), so on reopening a session its reminders looked

@@ -112,6 +112,11 @@ struct FlightySessionPageView: View {
     @State private var quickReminderNote = ""
     @State private var showQuickReminderNote = false
     @FocusState private var quickReminderFocused: Bool
+    /// The quick-add's options show only while a reminder is being written
+    /// (20 Nov 2026, Luther: the box was "kind of intimidating").
+    @State private var reminderComposing = false
+    /// The "@ tags an athlete" hint shows until the coach has used it once.
+    @AppStorage("reminders.mentionTipSeen") private var mentionTipSeen = false
     
     // Plan tab drill management
     @State private var expandedDrillId: UUID?
@@ -3224,7 +3229,10 @@ struct FlightySessionPageView: View {
         showQuickReminderNote = false
         quickReminderStudents = []
         quickReminderPriority = .medium
-        quickReminderFocused = true
+        mentionTipSeen = true
+        // Saved: the options fold away with the keyboard.
+        quickReminderFocused = false
+        withAnimation(.snappy(duration: 0.2)) { reminderComposing = false }
     }
 
     /// The reminder's details as chips under the quick-add field (14 Nov
@@ -3270,9 +3278,11 @@ struct FlightySessionPageView: View {
                     }
                 } label: {
                     reminderChip(icon: "person.fill",
-                                 text: taggedLabel(athletes.filter { quickReminderStudents.contains($0.id) }.map(\.primaryDisplayName),
-                                                   empty: isChinese ? "学员" : "Athlete"),
+                                 text: quickReminderStudents.isEmpty ? nil
+                                    : taggedLabel(athletes.filter { quickReminderStudents.contains($0.id) }.map(\.primaryDisplayName),
+                                                  empty: ""),
                                  active: !quickReminderStudents.isEmpty, tint: .blue)
+                    .accessibilityLabel(isChinese ? "学员" : "Athlete")
                 }
                 .menuActionDismissBehavior(.disabled)
             }
@@ -3286,17 +3296,20 @@ struct FlightySessionPageView: View {
                     }
                 }
             } label: {
-                reminderChip(icon: quickReminderPriority.icon, text: quickReminderPriority.displayName,
+                reminderChip(icon: quickReminderPriority == .medium ? "flag" : quickReminderPriority.icon,
+                             text: quickReminderPriority == .medium ? nil : quickReminderPriority.displayName,
                              active: quickReminderPriority != .medium, tint: quickReminderPriority.color)
+                    .accessibilityLabel(isChinese ? "优先级" : "Priority")
             }
 
             Button {
                 withAnimation(.snappy(duration: 0.2)) { showQuickReminderNote.toggle() }
             } label: {
-                reminderChip(icon: "text.alignleft", text: isChinese ? "备注" : "Note",
+                reminderChip(icon: "text.alignleft", text: nil,
                              active: showQuickReminderNote || !quickReminderNote.isEmpty, tint: .orange, menu: false)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isChinese ? "备注" : "Note")
         }
     }
 
@@ -3315,6 +3328,7 @@ struct FlightySessionPageView: View {
                             Button {
                                 quickReminderText = ReminderMentions.inserting(student.primaryDisplayName, into: quickReminderText)
                                 quickReminderStudents.insert(student.id)
+                                mentionTipSeen = true
                             } label: {
                                 HStack(spacing: 6) {
                                     StudentAvatarView(student: student, size: 22)
@@ -3344,10 +3358,11 @@ struct FlightySessionPageView: View {
         }
     }
 
-    private func reminderChip(icon: String, text: String, active: Bool, tint: Color, menu: Bool = true) -> some View {
+    /// A small chip; with no text it is the icon alone (an option not set).
+    private func reminderChip(icon: String, text: String?, active: Bool, tint: Color, menu: Bool = true) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon).font(.caption)
-            Text(text).lineLimit(1)
+            if let text { Text(text).lineLimit(1) }
             if menu {
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
             }
@@ -3379,39 +3394,58 @@ struct FlightySessionPageView: View {
                 }
 
                 if accessMode.canAddNotes {
+                    // One quiet line, like a new row in Reminders; the options
+                    // appear while a reminder is being written and fold away
+                    // when it is saved (20 Nov 2026, Luther).
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 10) {
                             Image(systemName: "plus.circle.fill")
                                 .font(.title3)
                                 .foregroundStyle(.orange)
-                            TextField(isChinese ? "添加提醒，@ 标记学员，按回车保存" : "Add a reminder — @ tags an athlete, Return saves", text: $quickReminderText)
+                            TextField(isChinese ? "添加提醒" : "Add a reminder", text: $quickReminderText)
                                 .focused($quickReminderFocused)
                                 .submitLabel(.done)
                                 .onSubmit(addQuickReminder)
                                 .accessibilityIdentifier("reminders.quickAdd")
                         }
-                        mentionSuggestions
-                        quickReminderOptions
-                            .padding(.leading, 34)
-                        if showQuickReminderNote {
-                            TextField(isChinese ? "备注（可选）" : "Note (optional)", text: $quickReminderNote, axis: .vertical)
-                                .font(.subheadline)
-                                .lineLimit(1...4)
+                        if reminderComposing {
+                            if !mentionTipSeen && quickReminderText.isEmpty {
+                                Text(isChinese ? "输入 @ 可标记学员" : "Type @ to tag an athlete")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.leading, 34)
+                            }
+                            mentionSuggestions
+                            quickReminderOptions
                                 .padding(.leading, 34)
-                                .accessibilityIdentifier("reminders.quickNote")
+                            if showQuickReminderNote {
+                                TextField(isChinese ? "备注（可选）" : "Note (optional)", text: $quickReminderNote, axis: .vertical)
+                                    .font(.subheadline)
+                                    .lineLimit(1...4)
+                                    .padding(.leading, 34)
+                                    .accessibilityIdentifier("reminders.quickNote")
+                            }
                         }
                     }
-                    .padding(12)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(reminderComposing ? 12 : 4)
+                    .background(reminderComposing ? Color.primary.opacity(0.04) : .clear,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onChange(of: quickReminderFocused) { _, focused in
+                        if focused {
+                            withAnimation(.snappy(duration: 0.2)) { reminderComposing = true }
+                        } else {
+                            // Leaving an empty reminder folds it; a chip's menu
+                            // taking focus a moment does not.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                guard !quickReminderFocused, quickReminderText.isEmpty, quickReminderNote.isEmpty,
+                                      quickReminderStudents.isEmpty else { return }
+                                withAnimation(.snappy(duration: 0.2)) { reminderComposing = false }
+                            }
+                        }
+                    }
                 }
 
-                if open.isEmpty {
-                    Text(isChinese ? "课后要跟进的事写在这里。到期时会出现在首页的待办里。"
-                                   : "Things to follow up after this class. When one is due it shows in Home's attention.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
+                if !open.isEmpty {
                     VStack(spacing: 0) {
                         ForEach(open) { reminder in
                             sessionReminderRow(reminder)
@@ -3452,6 +3486,8 @@ struct FlightySessionPageView: View {
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
+        // A container: its identifier must not override the field's and rows'.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("notes.reminders")
     }
 
@@ -3478,8 +3514,9 @@ struct FlightySessionPageView: View {
                     Text(note).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
                 HStack(spacing: 8) {
-                    Label(reminder.relativeTimeString, systemImage: "calendar")
-                        .foregroundStyle(reminder.isCompleted ? Color.secondary : reminder.statusColor)
+                    // The due date quietly, red only when it has passed.
+                    Text(reminder.relativeTimeString)
+                        .foregroundStyle(!reminder.isCompleted && reminder.isOverdue ? Color.red : Color.secondary)
                     if !tagged.isEmpty {
                         HStack(spacing: -6) {
                             ForEach(tagged.prefix(4)) { StudentAvatarView(student: $0, size: 18) }
