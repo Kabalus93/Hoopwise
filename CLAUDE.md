@@ -1079,6 +1079,38 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   beside the X. Connector: step "defense_mode" (man | 2-3 | 3-2 | off);
   get_play returns it and "guards". DEBUG HOOPWISE_PLAYS_DEFENSE=man|zone23|
   zone32 (with HOOPWISE_PLAYS_OPEN=editor). Tests: JournalPlayDefenseTests.
+  REBUILT (20 Nov 2026, Luther: "a thorough and accurate check … man to man,
+  2-3, 3-2 … NBA level of understanding … its own expandable place … explore
+  rotations, switches — only if reliable"). JournalPlayDefense.swift now:
+  MAN = the shell drill — on the ball an arm's length (1.1 m, looser beyond
+  8.5 m), "No middle" shading off the middle third; ONE PASS AWAY gap (a
+  third to the ball + a step to the rim) or deny (in the lane); TWO PASSES
+  AWAY on the SPLIT LINE between ball depth and his man's (low man in front
+  of the rim) — blended by `helpSideness`, never a jump; the POST 3/4 high
+  with the ball above the FT line extended, fronted below it (ball side
+  only); HELP from penetration (inside the FT line, full at 2.8 m), never
+  off the strong-side corner, with a ROTATION (the free defender nearest the
+  helper's man splits the two). SCREENS (`DefenseScheme.screens`): switch /
+  drop / hedge / trap / chase on BALL screens (user = the holder), off-ball
+  screens switch only under Switch (else chased); hedge and trap make the
+  low man TAG the roller and the next man split. `screenUses` +
+  `activeScreens` time the coverage (builds as the screen is set, fades a
+  beat after use); `switches` only under Switch. ZONES = SLIDE CHARTS (top,
+  deep, high post, wing, corner, low post, mirrored; 2-3 GL GR FL FR C, 3-2
+  P WL WR BL BR) blended by Gaussian weight of the ball's distance (σ 1.3,
+  relative — never all zero), the on-ball duty shared the same way, off-ball
+  shading of the attacker in the area (≤ 4 m, 40 %), the rim always covered.
+  `DefenseScheme` (onBall, offBall, screens, helpRotate) rides in each
+  step's JSON as `defenseScheme`, only when not standard; `applyingScheme`
+  changes it on every step keeping guards and nudges. UI: the board (and
+  drill drawings) have a DEFENSE DOCK between Step and the play bar
+  (`plays.editor.defenseDock`, "Man · Drop" / "2-3"), opening upward into
+  the controls (mode, then for man: On the ball, One pass away, Ball
+  screens, Help and rotate, and a line saying what the coverage does); it
+  left the steps popover. The play editor's inspector and the phone's
+  Defender tool show the same controls. The connector still sets only
+  defense_mode. Tests: JournalPlayDefensePrinciplesTests (each principle,
+  coverages, slide charts, smooth swing), BoardDefenseUITests.
 - TWENTY-FIRST sanctioned exception (8 November 2026, Luther's request):
   on a PRIVATE session (SessionPrivacy), the session page's Add Athlete adds
   to THAT SESSION ONLY — `addStudentsToSessionOnly` (roster = who was

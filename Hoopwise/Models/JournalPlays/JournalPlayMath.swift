@@ -222,6 +222,7 @@ nonisolated extension JournalPlayMath {
         var frame = rawFrame(diagram, plan: plan, at: now)
         if diagram.defenseMode != nil, !diagram.defense.isEmpty {
             let swaps = switches(diagram, plan: plan)
+            let uses = screenUses(diagram, plan: plan)
             // Each defender's spot averaged over the last reactionBeats: he
             // follows, a switch or a closeout slides.
             let samples = 6
@@ -229,8 +230,11 @@ nonisolated extension JournalPlayMath {
             for k in 0..<samples {
                 let at = max(0, now - reactionBeats * Double(k) / Double(samples - 1))
                 let moment = k == 0 ? frame : rawFrame(diagram, plan: plan, at: at)
+                let screens = activeScreens(uses, at: at,
+                                            ballHolder: ballHolder(players: moment.players, ball: moment.ball))
                 let spots = defenseSpots(diagram, players: moment.players, ball: moment.ball,
-                                         guards: guards(diagram, at: at, switches: swaps), court: court)
+                                         guards: guards(diagram, at: at, switches: swaps), court: court,
+                                         screens: screens)
                 for i in spots.indices { sum[i].x += spots[i].x; sum[i].y += spots[i].y }
             }
             frame.defense = sum.map { JournalCourtPoint($0.x / Double(samples), $0.y / Double(samples)) }

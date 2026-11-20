@@ -160,6 +160,9 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     /// Auto defense; nil when the defenders are drawn by hand. Written only
     /// when set, so a hand-drawn step's JSON is unchanged.
     var defenseMode: DefenseMode? = nil
+    /// How the man defense plays — on the ball, off it, screens, help (20 Nov
+    /// 2026). nil = the standard scheme; written only when set.
+    var defenseScheme: DefenseScheme? = nil
     /// The five lanes of the floor drawn over the court (19 Nov 2026, Luther:
     /// "lanes — 5 lanes that can be toggled on or off"). Written only when on.
     var lanes = false
@@ -210,7 +213,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
     // Stored as before with `ball` (the first holder) beside `balls`, so a
     // build from before several balls still reads a drawing's first ball,
     // and a drawing it saved (no `balls`) reads back as that one ball.
-    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones, defenseMode, lanes, ink }
+    private enum CodingKeys: String, CodingKey { case offense, defense, ball, balls, actions, notes, cones, defenseMode, defenseScheme, lanes, ink }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -223,6 +226,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         balls = all ?? first.map { [$0] } ?? []
         cones = try c.decodeIfPresent([JournalCourtPoint].self, forKey: .cones) ?? []
         defenseMode = try? c.decodeIfPresent(DefenseMode.self, forKey: .defenseMode)
+        defenseScheme = try? c.decodeIfPresent(DefenseScheme.self, forKey: .defenseScheme)
         lanes = (try? c.decodeIfPresent(Bool.self, forKey: .lanes)) ?? false
         ink = try? c.decodeIfPresent(Data.self, forKey: .ink)
     }
@@ -237,6 +241,7 @@ nonisolated struct JournalPlayDiagram: Codable, Equatable, Sendable {
         try c.encode(notes, forKey: .notes)
         if !cones.isEmpty { try c.encode(cones, forKey: .cones) }
         try c.encodeIfPresent(defenseMode, forKey: .defenseMode)
+        try c.encodeIfPresent(defenseScheme, forKey: .defenseScheme)
         if lanes { try c.encode(true, forKey: .lanes) }
         try c.encodeIfPresent(ink, forKey: .ink)
     }

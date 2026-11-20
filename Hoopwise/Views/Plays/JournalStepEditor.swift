@@ -56,6 +56,8 @@ struct JournalPlayStepEditor: View {
     }
     private let board: BoardActions?
     @State private var boardStepsOpen = false
+    /// The board's Defense dock, open above its capsule (20 Nov 2026).
+    @State private var defenseOpen = false
     /// The board's court plays in place: the step player replaces the
     /// editable court while it plays or while Scribble is on.
     @State private var boardPlayer = false
@@ -704,7 +706,7 @@ struct JournalPlayStepEditor: View {
                         .accessibilityIdentifier("plays.editor.lineShape")
                     }
                 }
-                if tool == .defender { defensePicker }
+                if tool == .defender { defenseControls }
                 TextField(text: $text, axis: .vertical) { JText("What happens, and what to read") }
                     .lineLimit(2...5)
                     .padding(JSpacing.s)
@@ -729,8 +731,18 @@ struct JournalPlayStepEditor: View {
                     .padding(JSpacing.m)
                     .padding(.bottom, 52)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay(alignment: .bottomLeading) { boardStepsButton.padding(JSpacing.m) }
-                    .overlay(alignment: .bottomTrailing) { boardTransport.padding(JSpacing.m) }
+                    // Steps · Defense · the play bar (20 Nov 2026, Luther:
+                    // the defense gets its own place, between the two).
+                    .overlay(alignment: .bottom) {
+                        HStack(alignment: .bottom, spacing: JSpacing.s) {
+                            boardStepsButton
+                            Spacer(minLength: 0)
+                            defenseDock
+                            Spacer(minLength: 0)
+                            boardTransport
+                        }
+                        .padding(JSpacing.m)
+                    }
                     // Pen or highlighter and its colour, while annotating.
                     .overlay(alignment: .top) {
                         if annotating { annotationPalette.padding(.top, JSpacing.xs) }
@@ -942,7 +954,6 @@ struct JournalPlayStepEditor: View {
                 VStack(alignment: .leading, spacing: JSpacing.l) {
                     stepsPanel
                     inspectorSection("This step") { stepFields(notesLines: 2...5) }
-                    defenseSection
                     toolSection
                     if let selection { selectionSection(selection) }
                 }
@@ -1362,17 +1373,150 @@ struct JournalPlayStepEditor: View {
     /// The workspace always shows the defense (Luther, 12 Nov 2026: a play
     /// left "By hand" looked broken — the choice hid under the Defender tool).
     private var defenseSection: some View {
-        inspectorSection("Defense") {
+        inspectorSection("Defense") { defenseControls }
+    }
+
+    /// The mode, what it does, and — for man-to-man — how it plays.
+    @ViewBuilder
+    private var defenseControls: some View {
+        VStack(alignment: .leading, spacing: JSpacing.s) {
             defensePicker
-            JText(diagram.defenseMode == nil
-                  ? "By hand: defenders stay where you put them."
-                  : diagram.defenseMode == .man
-                  ? "Each defender follows the nearest player; on a screen they switch. Drag one to nudge him."
-                  : "The zone shifts with the ball. Drag a defender to nudge him.")
+            JText(defenseExplanation)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if diagram.defenseMode == .man {
+                schemeRow("On the ball", id: "onBall", selection: Binding(
+                    get: { scheme.onBall }, set: { new in setScheme { $0.onBall = new } })) {
+                    JText("Contain").tag(DefenseScheme.OnBall.contain)
+                    JText("No middle").tag(DefenseScheme.OnBall.noMiddle)
+                }
+                schemeRow("One pass away", id: "offBall", selection: Binding(
+                    get: { scheme.offBall }, set: { new in setScheme { $0.offBall = new } })) {
+                    JText("Gap").tag(DefenseScheme.OffBall.gap)
+                    JText("Deny").tag(DefenseScheme.OffBall.deny)
+                }
+                schemeRow("Ball screens", id: "screens", selection: Binding(
+                    get: { scheme.screens }, set: { new in setScheme { $0.screens = new } })) {
+                    JText("Switch").tag(DefenseScheme.Screens.switchAll)
+                    JText("Drop").tag(DefenseScheme.Screens.drop)
+                    JText("Hedge").tag(DefenseScheme.Screens.hedge)
+                    JText("Trap").tag(DefenseScheme.Screens.trap)
+                    JText("Chase").tag(DefenseScheme.Screens.chase)
+                }
+                Toggle(isOn: Binding(get: { scheme.helpRotate }, set: { new in setScheme { $0.helpRotate = new } })) {
+                    JText("Help and rotate on drives")
+                }
+                .font(.subheadline)
+                .accessibilityIdentifier("plays.editor.defense.help")
+                JText(screensExplanation)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private func schemeRow<V: Hashable, Content: View>(_ title: JPString, id: String, selection: Binding<V>,
+                                                       @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            JText(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Picker(selection: selection, content: content) { JText(title) }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("plays.editor.defense.\(id)")
+        }
+    }
+
+    private var scheme: DefenseScheme { diagram.defenseScheme ?? .standard }
+
+    private var defenseExplanation: JPString {
+        switch diagram.defenseMode {
+        case nil: "By hand: defenders stay where you put them."
+        case .man: "Man-to-man: on the ball an arm's length off; one pass away in the gap or denying; two passes away on the split line. Drag a defender to nudge him."
+        case .zone23: "2-3 zone: the defenders slide with the ball as the chart says — top, wing, corner, high post, low post. Drag one to nudge him."
+        case .zone32: "3-2 zone: the defenders slide with the ball as the chart says — top, wing, corner, high post, low post. Drag one to nudge him."
+        }
+    }
+
+    private var screensExplanation: JPString {
+        switch scheme.screens {
+        case .switchAll: "Switch: on every screen the two defenders swap men."
+        case .drop: "Drop: the screener's man sinks between ball and rim; the handler's man goes over and trails."
+        case .hedge: "Hedge: the screener's man steps out into the handler's path, then recovers; the low man tags the roller."
+        case .trap: "Trap: both defenders on the ball; the low man tags the roller, the next man splits."
+        case .chase: "Chase: no switch — over the top, a soft show by the screener's man."
+        }
+    }
+
+    /// The Defense dock (20 Nov 2026, Luther: "instead of tucking it in steps
+    /// give it its own expandable place to live"): a capsule in the bottom
+    /// bar saying the defense; it opens upward into the controls.
+    private var defenseDock: some View {
+        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { defenseOpen.toggle() } } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "shield.lefthalf.filled")
+                Text(verbatim: defenseShortName)
+                Image(systemName: defenseOpen ? "chevron.down" : "chevron.up").font(.caption.weight(.semibold))
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Capsule())
+        .accessibilityIdentifier("plays.editor.defenseDock")
+        .overlay(alignment: .bottom) {
+            if defenseOpen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: JSpacing.s) {
+                        JEyebrowLabel(title: "Defense")
+                        defenseControls
+                    }
+                    .padding(JSpacing.m)
+                }
+                .frame(width: 420)
+                .frame(maxHeight: 460)
+                .fixedSize(horizontal: false, vertical: true)
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .offset(y: -56)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .accessibilityIdentifier("plays.editor.defensePanel")
+            }
+        }
+    }
+
+    private var defenseShortName: String {
+        switch diagram.defenseMode {
+        case nil: jp("By hand")
+        case .man:
+            switch scheme.screens {
+            case .switchAll: jp("Man") + " · " + jp("Switch")
+            case .drop: jp("Man") + " · " + jp("Drop")
+            case .hedge: jp("Man") + " · " + jp("Hedge")
+            case .trap: jp("Man") + " · " + jp("Trap")
+            case .chase: jp("Man") + " · " + jp("Chase")
+            }
+        case .zone23: "2-3"
+        case .zone32: "3-2"
+        }
+    }
+
+    /// A change to the man scheme, on every step of the part.
+    private func setScheme(_ change: (inout DefenseScheme) -> Void) {
+        var new = scheme
+        change(&new)
+        guard new != scheme else { return }
+        pushUndo()
+        stash()
+        let applied = JournalPlayMath.applyingScheme(new, to: pages.map(\.draft.diagram), court: court)
+        for (i, d) in applied.enumerated() where i != currentIndex {
+            if pages[i].draft.diagram != d {
+                pages[i].draft.undo.append(pages[i].draft.diagram)
+                pages[i].draft.diagram = d
+            }
+        }
+        if applied.indices.contains(currentIndex) { diagram = applied[currentIndex] }
     }
 
     /// Auto defense for the whole part (12 November 2026, Luther): drawn by
