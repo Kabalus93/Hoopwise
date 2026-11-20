@@ -263,6 +263,9 @@ struct GameTeam: Codable, Hashable, Identifiable {
     var role: TeamRole?           // For continuous full court games
     var wins: Int                 // Track wins for winner-stays-on
     var losses: Int               // Track losses
+    /// How many of the first playerIds START (20 Nov 2026 — the setup
+    /// page's starter slots); the rest are the bench. nil = older games.
+    var starters: Int? = nil
     
     init(id: UUID = UUID(), name: String, colorHex: String, playerIds: [UUID] = [], 
          role: TeamRole? = nil, wins: Int = 0, losses: Int = 0) {
@@ -285,10 +288,11 @@ struct GameTeam: Codable, Hashable, Identifiable {
         role = try container.decodeIfPresent(TeamRole.self, forKey: .role)
         wins = try container.decodeIfPresent(Int.self, forKey: .wins) ?? 0
         losses = try container.decodeIfPresent(Int.self, forKey: .losses) ?? 0
+        starters = try? container.decodeIfPresent(Int.self, forKey: .starters)
     }
     
     private enum CodingKeys: String, CodingKey {
-        case id, name, colorHex, playerIds, role, wins, losses
+        case id, name, colorHex, playerIds, role, wins, losses, starters
     }
     
     /// Common shirt colors first (the ones you'd actually see on a court),
@@ -450,6 +454,11 @@ struct SessionGame: Codable, Hashable, Identifiable {
     /// app read creation and chemistry. Inside the games JSON (no schema
     /// change); games scored before it have none and simply say nothing.
     var baskets: [GameBasket] = []
+    /// The format — players a side on the floor (2 for 2v2 … 5 for 5v5),
+    /// chosen on the setup page (20 Nov 2026, Luther). Each team's first
+    /// `playersPerSide` playerIds are its STARTERS, the rest its bench.
+    /// Inside the games JSON (no schema change); older games have none.
+    var playersPerSide: Int? = nil
     
     init(id: UUID = UUID(), sessionId: UUID, gameNumber: Int = 1,
          gameType: SessionGameType = .twoTeam, teams: [GameTeam] = [], 
@@ -504,12 +513,13 @@ struct SessionGame: Codable, Hashable, Identifiable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         baskets = (try? container.decodeIfPresent([GameBasket].self, forKey: .baskets)) ?? []
+        playersPerSide = try? container.decodeIfPresent(Int.self, forKey: .playersPerSide)
     }
     
     private enum CodingKeys: String, CodingKey {
         case id, sessionId, gameNumber, gameType, teams, activeTeamIds, teamScores
         case playerStats, durationMinutes, basketValue, roundNumber, status, startedAt, endedAt
-        case winningTeamId, notes, createdAt, updatedAt, baskets
+        case winningTeamId, notes, createdAt, updatedAt, baskets, playersPerSide
     }
     
     /// Get teams currently on court

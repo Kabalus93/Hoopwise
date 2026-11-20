@@ -19,6 +19,14 @@ struct CreateGameSheet: View {
     /// What a basket is worth in this game. Remembered between games — the
     /// coach sets it for what the session is working on.
     @AppStorage(SessionGame.basketValueDefaultsKey) private var basketValue: Int = 2
+    /// Players a side (2v2 … 5v5) — remembered between games.
+    @AppStorage("game.playersPerSide") private var playersPerSide: Int = 5
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.colorScheme) private var colorScheme
+    /// The slot (or "roster") a drag is over, for its highlight.
+    @State private var dropTargetKey: String?
+    /// The player whose options are open (a tap on him).
+    @State private var optionsFor: UUID?
     @State private var showOnlyPresent: Bool = true
     /// Tracks whether the coach has manually edited the duration. Once true
     /// we stop auto-snapping the duration when team count changes —
@@ -88,7 +96,8 @@ struct CreateGameSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ScrollView {
+              VStack(alignment: .leading, spacing: 22) {
                 gameTypeSection
                 durationSection
                 basketValueSection
@@ -98,16 +107,22 @@ struct CreateGameSheet: View {
                 } else {
                     if hasPreviousConfig { previousConfigSection }
                     teamsSection
-                    if !unassignedIds.isEmpty { unassignedSection }
+                    unassignedSection
                 }
                 if let reason = blockingReason {
-                    Section {
+                    SetupCard {
                         Label(reason, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                             .font(.subheadline)
                     }
                 }
+              }
+              .padding(.horizontal, 20)
+              .padding(.vertical, 16)
+              .frame(maxWidth: 860)
+              .frame(maxWidth: .infinity)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle(isChinese ? "创建比赛" : "Create Game")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -132,13 +147,14 @@ struct CreateGameSheet: View {
                 if !durationManuallyEdited { durationMinutes = defaultDurationForLayout }
             }
             .onChange(of: showOnlyPresent) { _, _ in refreshUnassigned() }
+            .onChange(of: playersPerSide) { _, _ in normalizeStarters() }
         }
     }
 
     // MARK: - Sections
 
     private var gameTypeSection: some View {
-        Section {
+        SetupCard {
             Picker("Game Type", selection: $gameType) {
                 ForEach(SessionGameType.allCases, id: \.self) { type in
                     Text(type.localizedName).tag(type)
@@ -146,6 +162,15 @@ struct CreateGameSheet: View {
             }
             .pickerStyle(.segmented)
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+            if !isBattleRoyal {
+                Picker(isChinese ? "人数" : "Players a side", selection: $playersPerSide) {
+                    ForEach(2...5, id: \.self) { n in Text("\(n)v\(n)").tag(n) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("setup.format")
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
 
             HStack(spacing: 8) {
                 Image(systemName: gameType.icon)
@@ -160,7 +185,7 @@ struct CreateGameSheet: View {
     }
 
     private var durationSection: some View {
-        Section {
+        SetupCard {
             // Quick presets — tuned for the team count. With 2 teams the
             // standard 5-minute scrimmage gives both sides enough touches;
             // 3+ teams rotate faster (3 min) so everyone plays sooner.
@@ -191,7 +216,7 @@ struct CreateGameSheet: View {
     }
 
     private var basketValueSection: some View {
-        Section {
+        SetupCard {
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { value in
                     let isSelected = basketValue == value
@@ -274,7 +299,7 @@ struct CreateGameSheet: View {
     }
 
     private var playersFilterSection: some View {
-        Section {
+        SetupCard {
             Picker(isChinese ? "球员池" : "Player Pool", selection: $showOnlyPresent) {
                 Text("\(isChinese ? "已到场" : "Present") (\(presentCount))").tag(true)
                 Text("\(isChinese ? "全部" : "All") (\(totalCount))").tag(false)
@@ -308,7 +333,7 @@ struct CreateGameSheet: View {
     }
 
     private var previousConfigSection: some View {
-        Section {
+        SetupCard {
             Toggle(isOn: $usePreviousConfig.animation()) {
                 Label(isChinese ? "沿用上次分队" : "Reuse Last Game's Teams",
                       systemImage: "clock.arrow.circlepath")
@@ -326,14 +351,24 @@ struct CreateGameSheet: View {
     }
 
     // MARK: - Teams
+    //
+    // TEAMS AS SLOTS (20 Nov 2026, Luther): each team is a row of photo
+    // slots with names — the first `playersPerSide` are STARTERS, then the
+    // bench. Everything moves by drag and drop (onto a slot = take that
+    // slot, swapping with whoever was there; onto the roster = unassign),
+    // and a tap on any player shows the same moves as a menu.
+
+    private var slotSize: CGFloat { sizeClass == .regular ? 60 : 50 }
 
     private var teamsSection: some View {
-        Section {
+        SetupCard {
             ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
+                if index > 0 { Divider() }
                 teamRow(index: index, team: team)
             }
 
             if teams.count < maxTeams {
+                Divider()
                 Button {
                     addTeam()
                 } label: {
@@ -350,26 +385,31 @@ struct CreateGameSheet: View {
             }
         } footer: {
             Text(isChinese
-                 ? "点击下方未分配球员的队伍颜色即可分配。"
-                 : "Tap an unassigned player below, then a team color to assign them.")
+                 ? "拖动球员到位置上，或点一下球员选择去向。前 \(playersPerSide) 个位置是首发。"
+                 : "Drag players onto a slot, or tap one for options. The first \(playersPerSide) slots are the starters.")
         }
     }
 
     private func teamRow(index: Int, team: GameTeam) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let color = team.displayColor(for: colorScheme)
+        let sc = starterCount(index)
+        let starters = Array(team.playerIds.prefix(sc))
+        let bench = Array(team.playerIds.dropFirst(sc))
+        let benchSlots = max(2, bench.count + 1)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 colorPickerMenu(for: index, currentHex: team.colorHex)
-
                 VStack(alignment: .leading, spacing: 1) {
                     Text(GameTeam.localizedColorName(team.name))
-                        .font(.body.weight(.medium))
-                    Text("^[\(team.playerIds.count) player](inflect: true)")
+                        .font(.body.weight(.semibold))
+                    Text(isChinese
+                         ? "首发 \(starters.count)/\(playersPerSide) · 替补 \(bench.count)"
+                         : "\(starters.count)/\(playersPerSide) starters · \(bench.count) bench")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(starters.count < playersPerSide ? .orange : .secondary)
+                        .monospacedDigit()
                 }
-
                 Spacer()
-
                 if teams.count > minTeams {
                     Button(role: .destructive) {
                         removeTeam(at: index)
@@ -382,37 +422,153 @@ struct CreateGameSheet: View {
                 }
             }
 
-            if !team.playerIds.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(team.playerIds, id: \.self) { pid in
-                        if let s = enrolledStudents.first(where: { $0.id == pid }) {
-                            Button {
-                                teams[index].playerIds.removeAll { $0 == pid }
-                                unassignedIds.insert(pid)
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(firstName(of: s))
-                                        .font(.caption.weight(.medium))
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 9, weight: .semibold))
-                                }
-                                .foregroundStyle(.primary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(
-                                    Capsule().fill(Color(hex: team.colorHex).opacity(0.18))
-                                )
-                                .overlay(
-                                    Capsule().strokeBorder(Color(hex: team.colorHex).opacity(0.4), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
+            FlowLayout(spacing: 8) {
+                ForEach(0..<playersPerSide, id: \.self) { i in
+                    slot(teamIndex: index, position: i, playerId: i < starters.count ? starters[i] : nil,
+                         color: color, starter: true)
+                }
+                Rectangle()
+                    .fill(Color.primary.opacity(0.15))
+                    .frame(width: 1, height: slotSize)
+                    .padding(.horizontal, 2)
+                ForEach(0..<benchSlots, id: \.self) { j in
+                    slot(teamIndex: index, position: playersPerSide + j,
+                         playerId: j < bench.count ? bench[j] : nil, color: color, starter: false)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("setup.team.\(index)")
+    }
+
+    /// One slot of a team: a player (photo + name, tap = options, drag to
+    /// move) or an empty place (drop target).
+    @ViewBuilder
+    private func slot(teamIndex: Int, position: Int, playerId: UUID?, color: Color, starter: Bool) -> some View {
+        let key = "\(teamIndex).\(position)"
+        let targeted = dropTargetKey == key
+        Group {
+            if let pid = playerId, let s = student(pid) {
+                Button { optionsFor = pid } label: {
+                    playerBubble(s, ring: color, solidRing: starter, highlighted: targeted)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: optionsBinding(pid)) { optionsPopover(pid: pid, currentTeam: teamIndex) }
+                .draggable(pid.uuidString) { playerBubble(s, ring: color, solidRing: true, highlighted: false) }
+                .accessibilityIdentifier("setup.slot.\(key)")
+            } else {
+                emptySlot(starter: starter, color: color, highlighted: targeted)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("setup.slot.\(key)")
+            }
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let raw = items.first, let pid = UUID(uuidString: raw) else { return false }
+            withAnimation(.snappy) { place(pid, team: teamIndex, position: position) }
+            return true
+        } isTargeted: { on in
+            if on { dropTargetKey = key } else if dropTargetKey == key { dropTargetKey = nil }
+        }
+    }
+
+    private func playerBubble(_ s: Student, ring: Color?, solidRing: Bool, highlighted: Bool) -> some View {
+        VStack(spacing: 4) {
+            StudentAvatarView(student: s, size: slotSize)
+                .overlay {
+                    if let ring {
+                        Circle().strokeBorder(ring, style: StrokeStyle(lineWidth: 2.5, dash: solidRing ? [] : [4, 3]))
+                            .padding(-3)
+                    }
+                }
+                .overlay {
+                    if highlighted { Circle().strokeBorder(Color.accentColor, lineWidth: 3).padding(-6) }
+                }
+            Text(s.primaryDisplayName)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.8)
+                .frame(width: slotSize + 14, height: 28, alignment: .top)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func emptySlot(starter: Bool, color: Color, highlighted: Bool) -> some View {
+        VStack(spacing: 4) {
+            Circle()
+                .strokeBorder(highlighted ? Color.accentColor : color.opacity(starter ? 0.7 : 0.4),
+                              style: StrokeStyle(lineWidth: highlighted ? 3 : 1.5, dash: [5, 4]))
+                .background(Circle().fill(highlighted ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.04)))
+                .frame(width: slotSize, height: slotSize)
+                .overlay {
+                    Image(systemName: "plus").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                }
+            Text(starter ? (isChinese ? "首发" : "Starter") : (isChinese ? "替补" : "Bench"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(width: slotSize + 14, height: 28, alignment: .top)
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// The moves a tap on a player offers.
+    @ViewBuilder
+    private func playerMenu(pid: UUID, currentTeam: Int?) -> some View {
+        if let current = currentTeam, let at = teams[current].playerIds.firstIndex(of: pid) {
+            if at >= starterCount(current) {
+                Button { act { makeStarter(pid, team: current) } } label: {
+                    Label(isChinese ? "改为首发" : "Make a starter", systemImage: "arrow.up.circle")
+                }
+            } else {
+                Button { act { place(pid, team: current, position: playersPerSide + benchCount(current)) } } label: {
+                    Label(isChinese ? "移到替补" : "Move to the bench", systemImage: "arrow.down.circle")
+                }
+            }
+        }
+        ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
+            if index != currentTeam {
+                Button { act { addToTeam(pid, index) } } label: {
+                    Label {
+                        Text(isChinese ? "到\(GameTeam.localizedColorName(team.name))" : "To \(GameTeam.localizedColorName(team.name))")
+                    } icon: {
+                        Circle().fill(Color(hex: team.colorHex)).frame(width: 14, height: 14)
+                            .overlay(Circle().strokeBorder(Color.primary.opacity(0.2), lineWidth: 1))
                     }
                 }
             }
         }
-        .padding(.vertical, 4)
+        if currentTeam != nil {
+            Divider()
+            Button(role: .destructive) { act { unassign(pid) } } label: {
+                Label(isChinese ? "移回名单" : "Back to the roster", systemImage: "arrow.uturn.backward")
+            }
+        }
+    }
+
+    private func optionsBinding(_ pid: UUID) -> Binding<Bool> {
+        Binding(get: { optionsFor == pid }, set: { if !$0, optionsFor == pid { optionsFor = nil } })
+    }
+
+    private func act(_ change: () -> Void) {
+        optionsFor = nil
+        withAnimation(.snappy) { change() }
+    }
+
+    private func optionsPopover(pid: UUID, currentTeam: Int?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let s = student(pid) {
+                Text(s.primaryDisplayName)
+                    .font(.headline)
+                    .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
+            }
+            playerMenu(pid: pid, currentTeam: currentTeam)
+        }
+        .buttonStyle(OptionRowStyle())
+        .padding(.bottom, 8)
+        .frame(minWidth: 240, alignment: .leading)
+        .presentationCompactAdaptation(.popover)
     }
 
     private func colorPickerMenu(for index: Int, currentHex: String) -> some View {
@@ -452,41 +608,53 @@ struct CreateGameSheet: View {
         }
     }
 
-    // MARK: - Unassigned
+    // MARK: - Roster (unassigned)
+
+    private var rosterIds: [UUID] {
+        availableStudents.map(\.id).filter { unassignedIds.contains($0) }
+    }
 
     private var unassignedSection: some View {
-        Section {
-            ForEach(Array(unassignedIds), id: \.self) { pid in
-                if let s = enrolledStudents.first(where: { $0.id == pid }) {
-                    unassignedRow(student: s)
+        SetupCard {
+            if rosterIds.isEmpty {
+                Text(isChinese ? "所有人都已分队。把球员拖到这里移出队伍。" : "Everyone has a team. Drag a player here to take them off.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: slotSize + 22), spacing: 8)], spacing: 12) {
+                    ForEach(rosterIds, id: \.self) { pid in
+                        if let s = student(pid) {
+                            Button { optionsFor = pid } label: {
+                                playerBubble(s, ring: nil, solidRing: true, highlighted: false)
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: optionsBinding(pid)) { optionsPopover(pid: pid, currentTeam: nil) }
+                            .draggable(pid.uuidString) { playerBubble(s, ring: nil, solidRing: true, highlighted: false) }
+                            .accessibilityIdentifier("setup.roster.player")
+                        }
+                    }
                 }
+                .padding(.vertical, 6)
             }
 
-            if !teams.isEmpty {
+            if !teams.isEmpty && !rosterIds.isEmpty {
                 Menu {
                     ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
                         Button {
                             assignAllUnassigned(to: index)
                         } label: {
-                            HStack {
-                                Circle().fill(Color(hex: team.colorHex)).frame(width: 12, height: 12)
-                                Text(isChinese
-                                     ? "全部分配到\(GameTeam.localizedColorName(team.name))"
-                                     : "Assign all to \(GameTeam.localizedColorName(team.name))")
-                            }
+                            Text(isChinese
+                                 ? "全部分配到\(GameTeam.localizedColorName(team.name))"
+                                 : "Assign all to \(GameTeam.localizedColorName(team.name))")
                         }
                     }
-
                     if teams.count >= 2 {
                         Divider()
-                        Button {
-                            distributeUnassignedBalanced()
-                        } label: {
+                        Button { distributeUnassignedBalanced() } label: {
                             Label(isChinese ? "按能力均衡分配" : "Balance by skill", systemImage: "scale.3d")
                         }
-                        Button {
-                            distributeUnassignedEvenly()
-                        } label: {
+                        Button { distributeUnassignedEvenly() } label: {
                             Label(isChinese ? "随机均匀分配" : "Distribute randomly", systemImage: "shuffle")
                         }
                     }
@@ -497,42 +665,121 @@ struct CreateGameSheet: View {
             }
         } header: {
             HStack {
-                Text(isChinese ? "未分配" : "Unassigned")
+                Text(isChinese ? "名单" : "Roster")
                 Spacer()
-                Text("\(unassignedIds.count)").foregroundStyle(.secondary).monospacedDigit()
+                Text("\(rosterIds.count)").foregroundStyle(.secondary).monospacedDigit()
             }
+        }
+        .overlay {
+            if dropTargetKey == "roster" {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+            }
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let raw = items.first, let pid = UUID(uuidString: raw) else { return false }
+            withAnimation(.snappy) { unassign(pid) }
+            return true
+        } isTargeted: { on in
+            if on { dropTargetKey = "roster" } else if dropTargetKey == "roster" { dropTargetKey = nil }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("setup.roster")
+    }
+
+    // MARK: - Moving players
+
+    private func student(_ id: UUID) -> Student? {
+        enrolledStudents.first { $0.id == id }
+    }
+
+    /// Bench → starters: the first open starter place, else swap with the
+    /// last starter.
+    private func makeStarter(_ pid: UUID, team: Int) {
+        normalizeStarters()
+        let n = starterCount(team)
+        place(pid, team: team, position: n < playersPerSide ? n : playersPerSide - 1)
+    }
+
+    /// Put a player at a slot. Onto someone: they swap places (the other
+    /// goes where the dragged one came from — another slot, another team or
+    /// the roster). Onto an empty starter slot: he joins the starters; onto
+    /// an empty bench slot: the end of the bench.
+    private func place(_ pid: UUID, team: Int, position: Int) {
+        guard teams.indices.contains(team) else { return }
+        normalizeStarters()
+        let sc = starterCount(team)
+        let ids = teams[team].playerIds
+        let occupant: UUID?
+        if position < playersPerSide {
+            occupant = position < sc ? ids[position] : nil
+        } else {
+            let b = position - playersPerSide
+            occupant = sc + b < ids.count ? ids[sc + b] : nil
+        }
+        if occupant == pid { return }
+
+        var from: (team: Int, index: Int)? = nil
+        for t in teams.indices {
+            if let i = teams[t].playerIds.firstIndex(of: pid) { from = (t, i) }
+        }
+
+        if let occupant, let at = teams[team].playerIds.firstIndex(of: occupant) {
+            if let from {
+                teams[from.team].playerIds[from.index] = occupant
+            } else {
+                unassignedIds.insert(occupant)
+            }
+            teams[team].playerIds[at] = pid
+            unassignedIds.remove(pid)
+            return
+        }
+
+        // An empty slot.
+        if let from {
+            if from.index < starterCount(from.team) { teams[from.team].starters = starterCount(from.team) - 1 }
+            teams[from.team].playerIds.remove(at: from.index)
+        }
+        unassignedIds.remove(pid)
+        if position < playersPerSide {
+            let n = starterCount(team)
+            teams[team].playerIds.insert(pid, at: n)
+            teams[team].starters = n + 1
+        } else {
+            teams[team].playerIds.append(pid)
         }
     }
 
-    private func unassignedRow(student: Student) -> some View {
-        HStack(spacing: 10) {
-            StudentAvatarView(student: student, size: 28)
-            Text(student.primaryDisplayName)
-                .font(.body)
-            Spacer()
-            Menu {
-                ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
-                    Button {
-                        assign(playerId: student.id, toTeamAt: index)
-                    } label: {
-                        HStack {
-                            Circle().fill(Color(hex: team.colorHex)).frame(width: 12, height: 12)
-                            Text(GameTeam.localizedColorName(team.name))
-                        }
-                    }
-                }
-            } label: {
-                Label(isChinese ? "分配" : "Assign", systemImage: "person.badge.plus")
-                    .labelStyle(.titleAndIcon)
-                    .font(.subheadline.weight(.medium))
-            }
-        }
+    /// Onto a team by a menu or a quick assign: a free starter place first,
+    /// else the end of the bench.
+    private func addToTeam(_ pid: UUID, _ team: Int) {
+        let n = starterCount(team)
+        place(pid, team: team, position: n < playersPerSide ? n : playersPerSide + benchCount(team))
+    }
+
+    private func starterCount(_ team: Int) -> Int {
+        let t = teams[team]
+        return min(t.starters ?? t.playerIds.count, playersPerSide, t.playerIds.count)
+    }
+
+    private func benchCount(_ team: Int) -> Int {
+        teams[team].playerIds.count - starterCount(team)
+    }
+
+    /// Every team's starter count written down and within the format.
+    private func normalizeStarters() {
+        for t in teams.indices { teams[t].starters = starterCount(t) }
+    }
+
+    private func unassign(_ pid: UUID) {
+        for t in teams.indices { teams[t].playerIds.removeAll { $0 == pid } }
+        unassignedIds.insert(pid)
     }
 
     // MARK: - Battle Royal
 
     private var battleRoyalSection: some View {
-        Section {
+        SetupCard {
             HStack {
                 Button {
                     battleRoyalIds = Set(availableStudents.map(\.id))
@@ -651,6 +898,7 @@ struct CreateGameSheet: View {
         gameType = game.gameType
         durationMinutes = game.durationMinutes
         basketValue = game.basketValue
+        if let n = game.playersPerSide { playersPerSide = n }
         let pool = Set(availableStudents.map(\.id))
         teams = game.teams.map { team in
             GameTeam(
@@ -660,26 +908,20 @@ struct CreateGameSheet: View {
                 playerIds: team.playerIds.filter { pool.contains($0) }
             )
         }
+        for i in teams.indices { teams[i].starters = game.teams[i].starters }
+        normalizeStarters()
         let assigned = Set(teams.flatMap(\.playerIds))
         unassignedIds = pool.subtracting(assigned)
     }
 
     private func assign(playerId: UUID, toTeamAt index: Int) {
         guard teams.indices.contains(index) else { return }
-        unassignedIds.remove(playerId)
-        if !teams[index].playerIds.contains(playerId) {
-            teams[index].playerIds.append(playerId)
-        }
+        addToTeam(playerId, index)
     }
 
     private func assignAllUnassigned(to teamIndex: Int) {
         guard teams.indices.contains(teamIndex) else { return }
-        for pid in unassignedIds {
-            if !teams[teamIndex].playerIds.contains(pid) {
-                teams[teamIndex].playerIds.append(pid)
-            }
-        }
-        unassignedIds.removeAll()
+        for pid in unassignedIds { addToTeam(pid, teamIndex) }
     }
 
     /// Round-robin shuffle — kept as an option for the "I just want random
@@ -689,8 +931,7 @@ struct CreateGameSheet: View {
         guard !teams.isEmpty else { return }
         let shuffled = Array(unassignedIds).shuffled()
         for (i, pid) in shuffled.enumerated() {
-            let teamIdx = i % teams.count
-            teams[teamIdx].playerIds.append(pid)
+            addToTeam(pid, i % teams.count)
         }
         unassignedIds.removeAll()
     }
@@ -726,7 +967,7 @@ struct CreateGameSheet: View {
                 if lhs.value != rhs.value { return lhs.value < rhs.value }
                 return teams[lhs.key].playerIds.count < teams[rhs.key].playerIds.count
             }) else { continue }
-            teams[pick.key].playerIds.append(pid)
+            addToTeam(pid, pick.key)
             ratingByTeam[pick.key, default: 0] += playerSkill(pid)
         }
         unassignedIds.removeAll()
@@ -763,6 +1004,7 @@ struct CreateGameSheet: View {
                 )
             }
         } else {
+            normalizeStarters()
             newGame = SessionGame(
                 sessionId: session.id,
                 gameNumber: session.games.count + 1,
@@ -772,6 +1014,7 @@ struct CreateGameSheet: View {
                 basketValue: basketValue,
                 status: .ready
             )
+            newGame.playersPerSide = playersPerSide
         }
         // Optimistic local append for the binding-driven UI, then a
         // field-level write so a stale parent `@State session` can no
@@ -786,5 +1029,67 @@ struct CreateGameSheet: View {
 
     private func firstName(of student: Student) -> String {
         student.name.components(separatedBy: " ").first ?? student.name
+    }
+}
+
+/// A row in a player's options popover.
+private struct OptionRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body)
+            .foregroundStyle(configuration.role == .destructive ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.primary))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)
+            .contentShape(Rectangle())
+    }
+}
+
+/// A grouped card with a header and footer — the setup page's sections.
+/// (Not a Form: inside a List, iOS drags the whole ROW, so a player could
+/// not be dragged on his own.)
+private struct SetupCard<Content: View, Header: View, Footer: View>: View {
+    let content: Content
+    let header: Header
+    let footer: Footer
+
+    init(@ViewBuilder content: () -> Content, @ViewBuilder header: () -> Header, @ViewBuilder footer: () -> Footer) {
+        self.content = content(); self.header = header(); self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+            VStack(alignment: .leading, spacing: 14) { content }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground)))
+            footer
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+        }
+    }
+}
+
+extension SetupCard where Footer == EmptyView {
+    init(@ViewBuilder content: () -> Content, @ViewBuilder header: () -> Header) {
+        self.init(content: content, header: header, footer: { EmptyView() })
+    }
+}
+
+extension SetupCard where Header == EmptyView {
+    init(@ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.init(content: content, header: { EmptyView() }, footer: footer)
+    }
+}
+
+extension SetupCard where Header == EmptyView, Footer == EmptyView {
+    init(@ViewBuilder content: () -> Content) {
+        self.init(content: content, header: { EmptyView() }, footer: { EmptyView() })
     }
 }

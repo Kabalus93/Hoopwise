@@ -781,6 +781,24 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   HOOPWISE_LIVE_TEAMS=3 (liveGame) adds a waiting Yellow. Test:
   LiveGameLineupUITests (iPad mini; the first launch of a run sometimes
   comes up without its environment — rerun).
+  GAME SETUP AS SLOTS (20 Nov 2026, Luther, markup on Create Game): a FORMAT
+  2v2 · 3v3 · 4v4 · 5v5 (`SessionGame.playersPerSide`, remembered in
+  `game.playersPerSide`); each team is a row of photo slots with names —
+  STARTER slots (the format's count, solid team ring) | BENCH slots (dashed;
+  at least two, always one free); the roster ("Roster", was Unassigned) is a
+  grid of photos with names. Drag and drop everywhere: onto a filled slot =
+  SWAP (the other goes where the dragged one came from — slot, team or
+  roster), onto an empty starter slot = joins the starters, onto a bench
+  slot = end of the bench, onto the roster = off the team. A TAP opens a
+  popover: Make a starter / Move to the bench, To <team>, Back to the roster.
+  `GameTeam.starters` (optional, in the games JSON) = how many leading
+  playerIds start, so the bench can hold players while a starter slot is
+  open; quick assign fills starters first. The page is a ScrollView of cards
+  (`SetupCard`), NOT a Form: inside a List, iOS drags the whole ROW, so a
+  single player could not be dragged. A tap uses a popover, not a Menu (a
+  Menu swallows the long press a drag needs). The live game still shows
+  every player of a team; starters/bench are recorded, not yet used there.
+  Test: CreateGameSlotsUITests (iPad mini; slow drag with a hold).
 - THIRTEENTH sanctioned exception (October 2026, Luther's request): the
   roll-call photo band (AttendanceWatermarkOverlay, exported to Photos for
   WeChat). Same fields, one left edge: the count leads as present/expected
