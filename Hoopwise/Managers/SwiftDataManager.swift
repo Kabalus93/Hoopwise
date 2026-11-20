@@ -4020,7 +4020,7 @@ class SwiftDataManager: ObservableObject {
                 if await ImageCacheManager.shared.image(for: id) != nil { continue }
                 // Inline thumbnail wins.
                 if let data = student.thumbnailImageData,
-                   let image = CacheImage(data: data) {
+                   let image = decodedProfileImage(data) {
                     await MainActor.run {
                         ImageCacheManager.shared.cacheInMemory(image, for: id)
                     }
@@ -4029,7 +4029,7 @@ class SwiftDataManager: ObservableObject {
                 // Full image on record — decode and also generate a thumbnail
                 // so subsequent launches are instant from the inline field.
                 if let data = student.profileImageData,
-                   let image = CacheImage(data: data) {
+                   let image = decodedProfileImage(data) {
                     await MainActor.run {
                         ImageCacheManager.shared.cacheInMemory(image, for: id)
                     }

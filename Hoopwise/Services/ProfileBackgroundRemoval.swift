@@ -192,7 +192,7 @@ enum ProfileBackgroundRemoval {
 // MARK: - Storing a photo that may be transparent
 
 /// A cut-out photo keeps its transparency on disk and in iCloud: HEIC with
-/// alpha for the full photo (small), PNG for the 120 px thumbnail; an opaque
+/// alpha for the full photo and its thumbnail (smaller than JPEG); an opaque
 /// photo stays JPEG as before. The stored field is plain Data — no schema
 /// change.
 enum ProfilePhotoEncoding {
@@ -212,10 +212,19 @@ enum ProfilePhotoEncoding {
         return stride(from: 3, to: pixels.count, by: 4).contains { pixels[$0] < 250 }
     }
 
+    /// Cheap: the file's own header (no decode); a 24 px copy only when the
+    /// header does not say.
     nonisolated static func isTransparent(data: Data) -> Bool {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return false }
-        return isTransparent(image)
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
+        // Only a cut-out is ever stored with alpha (ProfilePhotoEncoding.data
+        // writes HEIC only after checking), so the header is the answer.
+        if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+           let hasAlpha = props[kCGImagePropertyHasAlpha] as? Bool { return hasAlpha }
+        guard let small = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 24,
+        ] as CFDictionary) else { return false }
+        return isTransparent(small)
     }
 
     /// The bytes to store for a photo: HEIC with alpha when transparent (PNG
@@ -228,7 +237,8 @@ enum ProfilePhotoEncoding {
     }
 
     /// A small square-ish copy for list rows (≤ `maxDimension` px), keeping
-    /// transparency (PNG) when the photo has it.
+    /// transparency when the photo has it — HEIC (a PNG was 6× a JPEG's size),
+    /// PNG only if HEIC cannot be written.
     nonisolated static func thumbnail(from data: Data, maxDimension: Int = 120) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
@@ -236,7 +246,8 @@ enum ProfilePhotoEncoding {
                 kCGImageSourceThumbnailMaxPixelSize: maxDimension,
                 kCGImageSourceCreateThumbnailWithTransform: true,
               ] as CFDictionary) else { return nil }
-        return isTransparent(thumb) ? encode(thumb, type: .png, quality: 1) : encode(thumb, type: .jpeg, quality: 0.7)
+        guard isTransparent(thumb) else { return encode(thumb, type: .jpeg, quality: 0.7) }
+        return encode(thumb, type: .heic, quality: 0.7) ?? encode(thumb, type: .png, quality: 1)
     }
 
     nonisolated private static func encode(_ image: CGImage, type: UTType, quality: Double) -> Data? {

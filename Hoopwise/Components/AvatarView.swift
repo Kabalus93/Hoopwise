@@ -15,6 +15,20 @@ func makeProfileThumbnailData(from imageData: Data, maxDimension: CGFloat = 120)
     ProfilePhotoEncoding.thumbnail(from: imageData, maxDimension: Int(maxDimension * 3))
 }
 
+// MARK: - Decoding ahead of the screen
+
+/// A photo decoded NOW (off the main thread when called from one), so the
+/// first frame that draws it does not pay for it. A cut-out's HEIC takes
+/// ~2 ms to decode against a JPEG's ~0.3 ms; this keeps that out of scrolling.
+nonisolated func decodedProfileImage(_ data: Data) -> CacheImage? {
+    #if canImport(UIKit)
+    guard let image = UIImage(data: data) else { return nil }
+    return image.preparingForDisplay() ?? image
+    #else
+    return CacheImage(data: data)
+    #endif
+}
+
 // MARK: - Which group's level a photo shows
 
 extension EnvironmentValues {

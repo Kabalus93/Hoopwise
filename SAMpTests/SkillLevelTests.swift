@@ -134,4 +134,31 @@ final class SkillLevelTests: XCTestCase {
         XCTAssertEqual(map.tier(for: k[0], program: nil), map.tier(for: k[0], program: other.id),
                        "no program on screen: their primary program")
     }
+
+    /// Bigger than the real store (20 Nov 2026: 17 programs, 171 athletes,
+    /// 406 sessions): the rebuild runs on the main thread after data changes,
+    /// so it must stay a few milliseconds.
+    func testTheRebuildIsCheapAtFullSize() {
+        var programs: [Program] = []
+        var students: [Student] = []
+        var sessions: [SessionEvent] = []
+        var evaluations: [UUID: SkillsEvaluation] = [:]
+        for p in 0..<20 {
+            var program = Program(name: "P\(p)", ageGroup: .u10)
+            let members = (0..<10).map { _ in Student(name: "S") }
+            program.enrolledStudentIds = members.map(\.id)
+            for m in members { evaluations[m.id] = evaluation(Int.random(in: 3...9)) }
+            for day in 0..<30 {
+                sessions.append(session(program: program.id, daysAgo: day * 2,
+                                        points: Dictionary(uniqueKeysWithValues: members.map { ($0.id, Int.random(in: 0...12)) })))
+            }
+            programs.append(program); students += members
+        }
+        let start = Date()
+        let map = SkillTierMap.build(students: students, programs: programs, sessions: sessions, evaluations: evaluations)
+        let ms = Date().timeIntervalSince(start) * 1000
+        print("skill level rebuild: \(Int(ms)) ms for 200 athletes, 600 sessions")
+        XCTAssertEqual(map.primary.count, 200)
+        XCTAssertLessThan(ms, 250, "keep the rebuild off the critical path")
+    }
 }

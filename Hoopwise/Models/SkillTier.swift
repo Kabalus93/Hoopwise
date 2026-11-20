@@ -123,12 +123,27 @@ enum SkillLevel {
         return Double(rated.reduce(0, +)) / Double(rated.count)
     }
 
-    /// Production per game over the recent games of `sessions` (one program's).
-    static func gameScore(_ id: UUID, sessions: [SessionEvent], now: Date) -> Double? {
+    /// Production per game for every member, in ONE pass over the program's
+    /// games in the window (the same games GameStatsReport.playerGames counts:
+    /// played, in sessions that happened, everyone who took part).
+    static func gameScores(members: Set<UUID>, sessions: [SessionEvent], program: UUID, now: Date) -> [UUID: Double] {
         let start = Calendar.current.date(byAdding: .day, value: -gameWindowDays, to: now) ?? now
-        let games = GameStatsReport.playerGames(id, in: sessions, in: start...now)
-        guard games.count >= minimumGames else { return nil }
-        return games.reduce(0) { $0 + production($1.line) } / Double(games.count)
+        var total: [UUID: Double] = [:]
+        var count: [UUID: Int] = [:]
+        for session in sessions where session.programId == program
+            && session.startTime >= start && session.startTime <= now
+            && !SessionLifecycle.didNotHappen(session) {
+            for game in session.games where GameStatsReport.played(game) {
+                for (player, team) in game.participants where members.contains(player) {
+                    let line = game.stats(for: player) ?? SessionPlayerStats(playerId: player, gameId: game.id, teamId: team)
+                    total[player, default: 0] += production(line)
+                    count[player, default: 0] += 1
+                }
+            }
+        }
+        var out: [UUID: Double] = [:]
+        for (player, n) in count where n >= minimumGames { out[player] = (total[player] ?? 0) / Double(n) }
+        return out
     }
 
     /// Percentile (0 lowest … 1 highest, ties shared) of each value.
@@ -174,13 +189,11 @@ enum SkillLevel {
                       evaluations: [UUID: SkillsEvaluation], now: Date = Date()) -> [UUID: SkillTier] {
         let members = program.enrolledStudentIds
         guard members.count >= minimumGroup else { return [:] }
-        let theirs = sessions.filter { $0.programId == program.id }
         var evaluation: [UUID: Double] = [:]
-        var games: [UUID: Double] = [:]
         for id in members {
             if let e = evaluationScore(evaluations[id]) { evaluation[id] = e }
-            if let g = gameScore(id, sessions: theirs, now: now) { games[id] = g }
         }
+        let games = gameScores(members: Set(members), sessions: sessions, program: program.id, now: now)
         return tiers(evaluation: evaluation, games: games)
     }
 }

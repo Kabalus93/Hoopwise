@@ -1952,11 +1952,19 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   rebuilt on the main thread 0.5 s after every cache refresh
   (`scheduleSkillTiers`, both refresh paths) and published ONLY when a
   level moves (`DataManager.skillTiers`, `skillTier(for:program:)`,
-  `photoBackdropHex`). PHOTOS ARE STORED TRANSPARENT: the cut-out
+  `photoBackdropHex`). One pass over each program's games
+  (`SkillLevel.gameScores`): 10 ms for 200 athletes / 600 sessions in a
+  debug build (SkillLevelTests.testTheRebuildIsCheapAtFullSize; it was 36 ms
+  calling playerGames per athlete). PHOTOS ARE STORED TRANSPARENT: the cut-out
   (`ProfileBackgroundRemoval.transparent`) saves as HEIC with alpha, its
-  thumbnail PNG (`ProfilePhotoEncoding`, `UIImage.profilePhotoData`,
+  thumbnail too (`ProfilePhotoEncoding`, `UIImage.profilePhotoData`,
   `makeProfileThumbnailData`) — plain Data, no schema change; an opaque
-  photo stays JPEG. StudentAvatarView / StudentImageView paint the level
+  photo stays JPEG. Measured on the demo cut-outs: photo 23–31 KB (JPEG was
+  33–44), thumbnail 18–24 KB (JPEG 25–32; a PNG thumbnail was 160–206 KB —
+  never use PNG there). HEIC decodes in ~2 ms vs JPEG ~0.3, so the launch
+  warm-up decodes ahead (`decodedProfileImage` → preparingForDisplay, off
+  the main thread); `isTransparent(data:)` reads the file header only (a
+  HEIC is written only for a cut-out). StudentAvatarView / StudentImageView paint the level
   colour behind (env `\.skillLevelProgram`: the session page = its program,
   the program page = it, else primary). The capture review shows the cut-out
   over the level colour with Cut out | Original (the swatches are gone).
