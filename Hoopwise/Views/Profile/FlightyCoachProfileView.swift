@@ -662,8 +662,8 @@ struct FlightyCoachProfileView: View {
             Text(isChinese ? "偏好设置" : "Preferences")
         } footer: {
             Text(isChinese
-                 ? "拍学员头像后，在本机自动抠出人物并选择背景颜色。照片不会离开设备。"
-                 : "After you take an athlete's photo, the person is cut out on this device and you pick a background colour. Photos never leave the device.")
+                 ? "拍学员头像后，在本机自动抠出人物。背景颜色显示该学员在组内的水平：红 最佳 · 黄 较好 · 绿 平均 · 蓝 低于平均 · 紫 组内末位。分享或打印卡片时可另选颜色。照片不会离开设备。"
+                 : "After you take an athlete's photo, the person is cut out on this device. The colour behind them shows their level in their group: red best · yellow better · green average · blue below average · purple bottom of the group. When sharing or printing a card you can keep it or pick another. Photos never leave the device.")
         }
     }
 

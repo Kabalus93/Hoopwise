@@ -124,6 +124,47 @@ struct ProfileBackgroundDebugShot: View {
         }
     }
 
+    /// HOOPWISE_DEMO_CUTOUTS=<folder> (DEMO STORE ONLY): each <athlete id>.heic
+    /// there (a transparent cut-out made on the Mac, where Vision runs) becomes
+    /// that demo athlete's photo, so the level colours can be checked on the
+    /// simulator, which cannot cut out. Logs "bg demo cutouts N".
+    static func importDemoCutouts(dataManager: DataManager) {
+        guard ScreenshotStore.isActive,
+              let folder = ProcessInfo.processInfo.environment["HOOPWISE_DEMO_CUTOUTS"],
+              let files = try? FileManager.default.contentsOfDirectory(atPath: folder) else { return }
+        var done = 0
+        for file in files where file.hasSuffix(".heic") {
+            guard let id = UUID(uuidString: (file as NSString).deletingPathExtension),
+                  var student = dataManager.students.first(where: { $0.id == id }),
+                  let data = FileManager.default.contents(atPath: (folder as NSString).appendingPathComponent(file)),
+                  student.profileImageData != data else { continue }
+            student.profileImageData = data
+            student.thumbnailImageData = makeProfileThumbnailData(from: data)
+            dataManager.updateStudent(student)
+            done += 1
+        }
+        let log = Logger(subsystem: "hoopwise.mac", category: "background")
+        log.notice("bg demo cutouts \(done)")
+        // HOOPWISE_DEMO_EVALUATIONS=1: spread evaluations over the demo
+        // athletes who have a cut-out (9, 7, 6, 5, 3 on four skills), so
+        // every level shows.
+        if ProcessInfo.processInfo.environment["HOOPWISE_DEMO_EVALUATIONS"] == "1" {
+            let ids = files.compactMap { UUID(uuidString: ($0 as NSString).deletingPathExtension) }.sorted { $0.uuidString < $1.uuidString }
+            for (id, rating) in zip(ids, [9, 7, 6, 5, 3]) {
+                guard var player = dataManager.player(for: id) else { continue }
+                for axis in DrillAttribute.allCases.prefix(4) { player.skills.setRating(rating, for: axis) }
+                dataManager.updatePlayer(player)
+            }
+        }
+        // What the levels came out as, once they have been worked out.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            for student in dataManager.students {
+                let tier = dataManager.skillTier(for: student.id).map { "\($0)" } ?? "unranked"
+                log.notice("bg level \(student.name, privacy: .public) \(tier, privacy: .public)")
+            }
+        }
+    }
+
     private static func runAll() async {
         let log = Logger(subsystem: "hoopwise.mac", category: "background")
         let caches = WidgetShared.containerURL?.appendingPathComponent("Library/Caches", isDirectory: true)
@@ -132,7 +173,7 @@ struct ProfileBackgroundDebugShot: View {
             let line = await Task.detached(priority: .userInitiated) { () -> String in
                 guard let image = scene.render() else { return "bg \(scene.rawValue) draw-failed" }
                 let start = Date()
-                let output = ProfileBackgroundRemoval.process(image, hex: ProfileBackgroundRemoval.palette[0])
+                let output = ProfileBackgroundRemoval.process(image, hex: PhotoPalette.green)
                 let seconds = String(format: "%.2f", Date().timeIntervalSince(start))
                 if let output, let url = caches?.appendingPathComponent("background-\(scene.rawValue).png"),
                    let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) {

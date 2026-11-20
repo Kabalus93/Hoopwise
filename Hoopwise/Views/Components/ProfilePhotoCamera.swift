@@ -18,8 +18,9 @@ import UIKit
 //   on screen is the framing saved. No edit step.
 // BACKGROUND (November 2026, Luther): with Profile → "Remove Photo
 // Backgrounds" on (the default) the shot goes to ProfileBackgroundPicker —
-// subject cut out on the device, a colour picked, Use Photo. No subject
-// found: the plain photo goes through unchanged.
+// subject cut out on the device and saved transparent, shown over the
+// athlete's level colour, Use Photo. No subject found: the plain photo goes
+// through unchanged.
 //
 // SHARPNESS (October 2026, Luther: "sometimes the image stays blurry"). It
 // used the plain wide camera only — which cannot focus closer than ~15–20 cm
@@ -33,20 +34,22 @@ import UIKit
 // shutter waits (≤ 0.6 s) for focus to settle, and capture is .balanced.
 
 struct ProfilePhotoCamera: View {
+    /// The colour shown behind the cut-out on review (the athlete's level).
+    var backdropHex: String = PhotoPalette.unranked
     /// Receives the square photo (or nothing, on cancel).
     let onFinish: (UIImage?) -> Void
 
     @StateObject private var camera = ProfileCameraModel()
     @State private var circleRect: CGRect = .zero
     @State private var focusTap: CGPoint?
-    /// The shot, waiting for its background colour.
+    /// The shot, being cut out for review.
     @State private var review: UIImage?
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
     var body: some View {
         if let review {
-            ProfileBackgroundPicker(image: review) { result in
+            ProfileBackgroundPicker(image: review, backdropHex: backdropHex) { result in
                 if let result { onFinish(result) } else { self.review = nil }
             }
         } else {

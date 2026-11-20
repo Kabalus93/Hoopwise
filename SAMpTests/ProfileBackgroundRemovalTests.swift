@@ -157,8 +157,8 @@ final class ProfileBackgroundRemovalTests: XCTestCase {
     }
 
     func testThePaletteIsValidAndOnByDefault() {
-        XCTAssertFalse(ProfileBackgroundRemoval.palette.isEmpty)
-        for hex in ProfileBackgroundRemoval.palette {
+        XCTAssertEqual(PhotoPalette.all.count, 8, "the eight petals of the Photos logo")
+        for hex in PhotoPalette.all + [PhotoPalette.unranked] {
             XCTAssertNotNil(UInt32(hex.dropFirst(), radix: 16), hex)
             XCTAssertEqual(hex.count, 7, hex)
         }
@@ -169,6 +169,50 @@ final class ProfileBackgroundRemovalTests: XCTestCase {
         XCTAssertTrue(ProfileBackgroundRemoval.isEnabled, "on unless the coach switches it off")
         defaults.set(false, forKey: ProfileBackgroundRemoval.enabledKey)
         XCTAssertFalse(ProfileBackgroundRemoval.isEnabled)
+    }
+
+    // MARK: Stored transparent
+
+    /// A synthetic cut-out: a red disc on a clear square.
+    private func cutOutDisc(side: Int = 200) throws -> CGImage {
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        ctx.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fillEllipse(in: CGRect(x: side / 4, y: side / 4, width: side / 2, height: side / 2))
+        return try XCTUnwrap(ctx.makeImage())
+    }
+
+    func testACutOutIsStoredTransparentAndAPhotoStaysJPEG() throws {
+        let disc = try cutOutDisc()
+        XCTAssertTrue(ProfilePhotoEncoding.isTransparent(disc))
+        let stored = try XCTUnwrap(ProfilePhotoEncoding.data(for: disc))
+        XCTAssertTrue(ProfilePhotoEncoding.isTransparent(data: stored), "the transparency survives storage")
+        let thumb = try XCTUnwrap(ProfilePhotoEncoding.thumbnail(from: stored, maxDimension: 60))
+        XCTAssertTrue(ProfilePhotoEncoding.isTransparent(data: thumb), "and the thumbnail")
+
+        // An ordinary photo has nothing see-through: it stays a JPEG.
+        let opaque = try XCTUnwrap(still("single"))
+        XCTAssertFalse(ProfilePhotoEncoding.isTransparent(opaque))
+        let jpeg = try XCTUnwrap(ProfilePhotoEncoding.data(for: opaque))
+        XCTAssertEqual(Array(jpeg.prefix(2)), [0xFF, 0xD8], "JPEG")
+        XCTAssertFalse(ProfilePhotoEncoding.isTransparent(data: jpeg))
+    }
+
+    func testTheTransparentCutOutClearsTheBackground() throws {
+        // The mask keeps the left half: the right half comes out clear.
+        let side = 64
+        let ctx = try XCTUnwrap(CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                          space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        ctx.setFillColor(CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
+        let photo = try XCTUnwrap(ctx.makeImage())
+        let mask = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: side / 2, height: side))
+            .composited(over: CIImage(color: .black).cropped(to: CGRect(x: 0, y: 0, width: side, height: side)))
+        let out = try XCTUnwrap(ProfileBackgroundRemoval.transparent(.init(image: photo, mask: mask)))
+        XCTAssertTrue(ProfilePhotoEncoding.isTransparent(out))
+        assertClose(pixel(out, 0.2, 0.5), (0, 0, 255))
     }
 
     // MARK: Vision on the stills

@@ -49,4 +49,28 @@ final class AthleteCardUITests: XCTestCase {
         share.tap()
         checkTheShareSheet(app)
     }
+
+    /// A cut-out photo: before sharing, keep the level colour (chosen at first)
+    /// or pick one of the Photos colours (20 Nov 2026). Needs a demo athlete
+    /// with a cut-out — run once with HOOPWISE_DEMO_CUTOUTS (see
+    /// ProfileBackgroundDebug.swift); skips when the photo is not cut out.
+    func testTheShareSheetAsksForThePhotoBackground() throws {
+        continueAfterFailure = false
+        let app = launch("athleteCard")
+        XCTAssertTrue(app.descendants(matching: .any)["athleteCard.preview"].waitForExistence(timeout: 15))
+        let level = app.buttons["cardBackdrop.level"].firstMatch
+        guard level.waitForExistence(timeout: 3) else {
+            throw XCTSkip("this demo athlete's photo is not a cut-out")
+        }
+        XCTAssertTrue(level.isSelected, "the level colour is kept unless the coach picks another")
+        let blue = app.buttons["cardBackdrop.#00ACF9"].firstMatch
+        XCTAssertTrue(blue.exists, "the Photos petals are offered")
+        blue.tap()
+        XCTAssertTrue(blue.isSelected)
+        XCTAssertFalse(level.isSelected)
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "blue background"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
 }

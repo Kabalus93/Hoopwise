@@ -2,38 +2,37 @@
 import SwiftUI
 import UIKit
 
-// MARK: - Background picker (after the shot)
+// MARK: - The cut-out, before it is saved
 //
 // November 2026 (Luther's request, sanctioned with ProfileBackgroundRemoval).
 // Shown by ProfilePhotoCamera after the shutter when "Remove Photo
 // Backgrounds" is on, and by Edit Student's "Remove Background" for a photo
-// already saved. The subject is cut out once (Vision, off the main thread);
-// each swatch recolours at once; "Original" keeps the photo as taken.
-// From the camera, a photo with no subject found goes straight through
-// unchanged (`passThroughWhenNoSubject`) — the capture is never held up.
+// already saved. The subject is cut out once (Vision, off the main thread) and
+// shown over the athlete's SKILL LEVEL colour (Models/SkillTier.swift — 20 Nov
+// 2026: the colour is no longer picked here; it is painted live behind the
+// transparent photo everywhere). "Cut out | Original" keeps the photo as taken
+// when Vision got it wrong. From the camera, a photo with no subject found
+// goes straight through unchanged — the capture is never held up.
 
 struct ProfileBackgroundPicker: View {
     let image: UIImage
+    /// The colour shown behind the cut-out here (the athlete's level).
+    var backdropHex: String = PhotoPalette.unranked
     /// Camera: the left button retakes and a failed cut-out passes the photo
     /// straight through. Edit Student: the left button cancels.
     var fromCamera = true
-    /// The finished photo, or nil for retake / cancel.
+    /// The finished photo (transparent when cut out), or nil for retake / cancel.
     let onFinish: (UIImage?) -> Void
 
     private enum Stage: Equatable { case working, ready, noSubject }
-    private static let original = "original"
 
     @State private var stage: Stage = .working
-    @State private var cutout: ProfileBackgroundRemoval.Cutout?
-    @State private var selected: String = UserDefaults.standard.string(forKey: ProfileBackgroundRemoval.lastColorKey)
-        ?? ProfileBackgroundRemoval.palette[0]
-    @State private var rendered: [String: UIImage] = [:]
+    @State private var cutOut: UIImage?
+    @State private var keepOriginal = false
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
-    private var shown: UIImage {
-        selected == Self.original ? image : (rendered[selected] ?? image)
-    }
+    private var shown: UIImage { keepOriginal ? image : (cutOut ?? image) }
 
     var body: some View {
         GeometryReader { proxy in
@@ -41,6 +40,7 @@ struct ProfileBackgroundPicker: View {
             VStack(spacing: 0) {
                 Spacer(minLength: max(proxy.safeAreaInsets.top, 20))
                 ZStack {
+                    Circle().fill(Color(hex: backdropHex)).frame(width: diameter, height: diameter)
                     Image(uiImage: shown)
                         .resizable()
                         .scaledToFill()
@@ -63,7 +63,16 @@ struct ProfileBackgroundPicker: View {
 
                 Spacer()
 
-                if stage == .ready { swatches.padding(.bottom, 24) }
+                if stage == .ready {
+                    Picker("", selection: $keepOriginal) {
+                        Text(isChinese ? "抠图" : "Cut out").tag(false)
+                        Text(isChinese ? "原图" : "Original").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
+                    .padding(.bottom, 24)
+                    .accessibilityIdentifier("backgroundPicker.mode")
+                }
 
                 controls
                     .padding(.bottom, max(proxy.safeAreaInsets.bottom, 20))
@@ -73,45 +82,16 @@ struct ProfileBackgroundPicker: View {
         .background(Color.black)
         .ignoresSafeArea()
         .statusBarHidden()
+        .environment(\.colorScheme, .dark)
         .task { await prepare() }
-        .onChange(of: selected) { _, hex in Task { await render(hex) } }
     }
 
     private var caption: String {
         switch stage {
         case .working: return isChinese ? "正在去除背景…" : "Removing the background…"
-        case .ready: return isChinese ? "选择背景颜色" : "Pick a background"
+        case .ready: return isChinese ? "背景颜色显示该学员在组内的水平" : "The colour behind shows their level in the group"
         case .noSubject: return isChinese ? "没有找到人物，照片保持原样" : "No one found — the photo stays as taken"
         }
-    }
-
-    private var swatches: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
-                swatch(Self.original) {
-                    Image(uiImage: image).resizable().scaledToFill()
-                }
-                .accessibilityLabel(isChinese ? "原图" : "Original")
-                ForEach(ProfileBackgroundRemoval.palette, id: \.self) { hex in
-                    swatch(hex) { Color(hex: hex) }
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func swatch<Fill: View>(_ id: String, @ViewBuilder fill: () -> Fill) -> some View {
-        Button { selected = id } label: {
-            fill()
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1))
-                .padding(3)
-                .overlay(Circle().strokeBorder(.white, lineWidth: selected == id ? 2.5 : 0))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("backgroundPicker.swatch.\(id)")
     }
 
     private var controls: some View {
@@ -125,7 +105,7 @@ struct ProfileBackgroundPicker: View {
 
             Spacer()
 
-            Button(isChinese ? "使用照片" : "Use Photo") { finish() }
+            Button(isChinese ? "使用照片" : "Use Photo") { onFinish(stage == .ready ? shown : image) }
                 .font(.headline)
                 .foregroundStyle(.black)
                 .frame(minWidth: 120, minHeight: 50)
@@ -137,23 +117,16 @@ struct ProfileBackgroundPicker: View {
         .padding(.horizontal, 32)
     }
 
-    private func finish() {
-        if selected != Self.original, stage == .ready {
-            UserDefaults.standard.set(selected, forKey: ProfileBackgroundRemoval.lastColorKey)
-        }
-        onFinish(stage == .ready ? shown : image)
-    }
-
     // MARK: Work
 
     private func prepare() async {
         guard let cg = Self.upright(image) else { return noSubject() }
-        let found = await Task.detached(priority: .userInitiated) {
-            ProfileBackgroundRemoval.cutOut(cg)
+        let result = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+            guard let cutout = ProfileBackgroundRemoval.cutOut(cg) else { return nil }
+            return ProfileBackgroundRemoval.transparent(cutout)
         }.value
-        guard let found else { return noSubject() }
-        cutout = found
-        if selected != Self.original { await render(selected) }
+        guard let result else { return noSubject() }
+        cutOut = UIImage(cgImage: result)
         stage = .ready
     }
 
@@ -161,22 +134,24 @@ struct ProfileBackgroundPicker: View {
         if fromCamera { onFinish(image) } else { stage = .noSubject }
     }
 
-    private func render(_ hex: String) async {
-        guard hex != Self.original, rendered[hex] == nil, let cutout else { return }
-        let output = await Task.detached(priority: .userInitiated) {
-            ProfileBackgroundRemoval.composite(cutout, hex: hex)
-        }.value
-        if let output { rendered[hex] = UIImage(cgImage: output) }
-    }
-
     /// The photo as an upright CGImage (a saved JPEG may carry an orientation).
     static func upright(_ image: UIImage) -> CGImage? {
         if image.imageOrientation == .up, let cg = image.cgImage { return cg }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
+        format.opaque = false
         return UIGraphicsImageRenderer(size: image.size, format: format)
             .image { _ in image.draw(in: CGRect(origin: .zero, size: image.size)) }
             .cgImage
+    }
+}
+
+extension UIImage {
+    /// The bytes to store as a profile photo: HEIC with transparency for a
+    /// cut-out, JPEG otherwise (ProfilePhotoEncoding).
+    func profilePhotoData(quality: Double = 0.7) -> Data? {
+        guard let cg = ProfileBackgroundPicker.upright(self) else { return jpegData(compressionQuality: quality) }
+        return ProfilePhotoEncoding.data(for: cg, quality: quality) ?? jpegData(compressionQuality: quality)
     }
 }
 #endif

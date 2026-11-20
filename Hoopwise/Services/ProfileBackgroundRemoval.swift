@@ -2,21 +2,30 @@ import Foundation
 import CoreGraphics
 import CoreImage
 import Vision
+import ImageIO
+import UniformTypeIdentifiers
 
 // MARK: - Profile photo background removal
 //
 // November 2026 (Luther's request, a sanctioned exception to the iOS UI
 // freeze). A profile photo taken with ProfilePhotoCamera has its subject cut
-// out ON THE DEVICE and laid over a solid colour the coach picks. Apple Vision
-// only — no network, no third-party model.
+// out ON THE DEVICE. Apple Vision only — no network, no third-party model.
 //
-// Two steps, so the colour picker recolours instantly:
+// SINCE 20 NOVEMBER 2026 (Luther: the colour is the athlete's SKILL LEVEL in
+// their group — Models/SkillTier.swift) the photo is SAVED TRANSPARENT
+// (`transparent` + ProfilePhotoEncoding: HEIC with alpha, PNG thumbnail) and
+// the colour is painted live behind it wherever it is drawn, so it can follow
+// the child's level and the program on screen. Before that the colour the
+// coach picked was burned into a JPEG; those photos still show as they are,
+// and Edit Student → Remove Background cuts them out again.
+//
 // 1. `cutOut` (slow: Vision) finds the subject and returns the photo with a
 //    feathered mask. Foreground INSTANCES, not person segmentation, so what a
 //    child holds can stay; with several people in frame it keeps the one at
 //    the circle's centre (`chooseInstances`), plus small instances touching
 //    them (a ball Vision returned separately).
-// 2. `composite` (fast: Core Image) blends the photo over the colour.
+// 2. `transparent` keeps the subject and clears the rest; `composite` lays it
+//    over a solid colour (exports: shared cards, widget photos).
 // Anything that fails returns nil, and the caller keeps the plain photo —
 // a capture is never blocked or lost.
 
@@ -24,25 +33,10 @@ enum ProfileBackgroundRemoval {
 
     /// Device setting (Profile → Preferences): on unless switched off.
     static let enabledKey = "profilePhoto.removeBackground"
-    /// The colour picked last, as "#RRGGBB", preselected next time.
-    static let lastColorKey = "profilePhoto.backgroundColor"
 
     static var isEnabled: Bool {
         UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
     }
-
-    /// The colours on offer, first = default. Clean portrait backgrounds.
-    static let palette: [String] = [
-        "#2F6FDE", // Hoopwise blue
-        "#1C2B4A", // navy
-        "#E8742A", // court orange
-        "#C8312F", // red
-        "#2E8B57", // green
-        "#6A4BC4", // purple
-        "#D9DDE3", // light grey
-        "#FFFFFF", // white
-        "#1A1A1A", // black
-    ]
 
     /// The subject and its mask, at the photo's size.
     struct Cutout: Sendable {
@@ -164,6 +158,19 @@ enum ProfileBackgroundRemoval {
                                      format: .RGBA8, colorSpace: space)
     }
 
+    /// The subject alone, the rest transparent, the photo's size.
+    nonisolated static func transparent(_ cutout: Cutout) -> CGImage? {
+        let extent = CGRect(x: 0, y: 0, width: cutout.image.width, height: cutout.image.height)
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let filter = CIFilter(name: "CIBlendWithMask") else { return nil }
+        filter.setValue(CIImage(cgImage: cutout.image), forKey: kCIInputImageKey)
+        filter.setValue(CIImage(color: .clear).cropped(to: extent), forKey: kCIInputBackgroundImageKey)
+        filter.setValue(cutout.mask, forKey: kCIInputMaskImageKey)
+        guard let output = filter.outputImage else { return nil }
+        return context.createCGImage(output.cropped(to: extent), from: extent,
+                                     format: .RGBA8, colorSpace: space)
+    }
+
     /// Cut out and composite in one go; nil when no subject was found.
     nonisolated static func process(_ image: CGImage, hex: String,
                                     focus: CGPoint = CGPoint(x: 0.5, y: 0.5)) -> CGImage? {
@@ -180,4 +187,65 @@ enum ProfileBackgroundRemoval {
     }
 
     nonisolated private static let context = CIContext(options: [.cacheIntermediates: false])
+}
+
+// MARK: - Storing a photo that may be transparent
+
+/// A cut-out photo keeps its transparency on disk and in iCloud: HEIC with
+/// alpha for the full photo (small), PNG for the 120 px thumbnail; an opaque
+/// photo stays JPEG as before. The stored field is plain Data — no schema
+/// change.
+enum ProfilePhotoEncoding {
+    /// Whether any pixel is see-through (not just whether the format allows it).
+    nonisolated static func isTransparent(_ image: CGImage) -> Bool {
+        switch image.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: return false
+        default: break
+        }
+        // Sample on a small copy: the corners of a cut-out are clear.
+        let side = 24
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        guard let ctx = CGContext(data: &pixels, width: side, height: side, bitsPerComponent: 8,
+                                  bytesPerRow: side * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+        return stride(from: 3, to: pixels.count, by: 4).contains { pixels[$0] < 250 }
+    }
+
+    nonisolated static func isTransparent(data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return false }
+        return isTransparent(image)
+    }
+
+    /// The bytes to store for a photo: HEIC with alpha when transparent (PNG
+    /// if HEIC cannot be written), else JPEG.
+    nonisolated static func data(for image: CGImage, quality: Double = 0.7) -> Data? {
+        if isTransparent(image) {
+            return encode(image, type: .heic, quality: quality) ?? encode(image, type: .png, quality: 1)
+        }
+        return encode(image, type: .jpeg, quality: quality)
+    }
+
+    /// A small square-ish copy for list rows (≤ `maxDimension` px), keeping
+    /// transparency (PNG) when the photo has it.
+    nonisolated static func thumbnail(from data: Data, maxDimension: Int = 120) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let thumb = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+              ] as CFDictionary) else { return nil }
+        return isTransparent(thumb) ? encode(thumb, type: .png, quality: 1) : encode(thumb, type: .jpeg, quality: 0.7)
+    }
+
+    nonisolated private static func encode(_ image: CGImage, type: UTType, quality: Double) -> Data? {
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(out, type.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        // HEIC must come back with its alpha, or it is no use here.
+        if type == .heic, !isTransparent(data: out as Data) { return nil }
+        return out as Data
+    }
 }

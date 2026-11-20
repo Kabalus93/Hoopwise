@@ -31,6 +31,10 @@ struct AthleteCardFacts: Equatable {
     /// background-removal swatch, or whatever was behind them): the header's
     /// gradient runs out to it. nil without a photo.
     let photoBackgroundHex: String?
+    /// The colour painted behind a TRANSPARENT (cut-out) photo — the athlete's
+    /// skill level in the app, or what the coach picked when sharing (20 Nov
+    /// 2026). nil = the photo is opaque, nothing is painted behind it.
+    let backdropHex: String?
     /// The program's colour (else the age category's).
     let accentHex: String
     /// The month on the card (its first day).
@@ -74,7 +78,8 @@ struct AthleteCardFacts: Equatable {
 
     static func make(student: Student, players: [Player], programs: [Program], sessions: [SessionEvent],
                      drills: [DrillItem], categoryHex: String, coach: String, academy: String,
-                     coachLine: String = "", now: Date = Date(), calendar: Calendar = .current,
+                     coachLine: String = "", backdropHex: String? = nil,
+                     now: Date = Date(), calendar: Calendar = .current,
                      chinese: Bool = AreaLanguage.isChinese(.playerCard)) -> AthleteCardFacts {
         let month = monthRange(containing: now, calendar: calendar)
         let player = players.first { $0.studentId == student.id }
@@ -116,6 +121,7 @@ struct AthleteCardFacts: Equatable {
             scope = trained.count == 0 ? .none : .allTime
         }
 
+        let photoIsTransparent = student.profileImageData.map(ProfilePhotoEncoding.isTransparent(data:)) ?? false
         let report = GameStatsReport.player(student.id, sessions: sessions)
         let monthGames = GameStatsReport.playerGames(student.id, in: sessions, in: month).count
 
@@ -134,7 +140,9 @@ struct AthleteCardFacts: Equatable {
             jersey: player?.jerseyNumber,
             // "二年级" on a Chinese card (19 Nov 2026, Luther), "P2" in English.
             schoolGrade: student.currentSchoolGrade(asOf: now)?.shortName(chinese: chinese),
-            photoBackgroundHex: student.profileImageData.flatMap(Self.backgroundHex(ofPhoto:)),
+            // A cut-out's corners are clear: the backdrop is its background.
+            photoBackgroundHex: photoIsTransparent ? backdropHex : student.profileImageData.flatMap(Self.backgroundHex(ofPhoto:)),
+            backdropHex: photoIsTransparent ? backdropHex : nil,
             accentHex: program?.colorHex ?? categoryHex,
             month: month.lowerBound,
             classesAttended: attendedThisMonth.count,

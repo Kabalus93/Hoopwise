@@ -175,6 +175,7 @@ struct AthleteCardFront: View {
             #if canImport(UIKit)
             if let data = card.photo, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill()
+                    .background(card.backdropHex.map { Color(hex: $0) } ?? .clear)
             } else {
                 monogram
             }

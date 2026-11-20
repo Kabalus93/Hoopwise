@@ -1931,6 +1931,47 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   (the three Vision tests skip on the simulator; the Catalyst test runner does
   not launch — "Could not launch HoopwiseTests" — so check Vision with the
   Mac shot). Edge quality, gym light and A15 speed need a real device.
+  THE COLOUR IS THE SKILL LEVEL (20 Nov 2026, Luther: "the background should
+  represent their skill level compared to the group they are enrolled in";
+  decided: five levels, in-app only, ask when sharing/printing, 65/35,
+  colour drawn live). Models/SkillTier.swift: `SkillTier` Best (red, could
+  move up) · Better (yellow) · Average (green) · Below average (blue) ·
+  Bottom of the group (purple, candidate to move down) — words for the
+  COACH only, never on anything a child or parent sees; colours =
+  `PhotoPalette` (the Photos logo's petals, sampled; also the 8 swatches when
+  a colour is picked by hand; `unranked` light grey). SCORE per GROUP
+  program (`SkillLevel.tiers(in:)`, pure): evaluation = average of the rated
+  octagon skills (≥ 4 of 8) as points from the group's average, 65 %; games
+  = production per game (PTS + REB + 1.5 AST + 2 STL+BLK) in THAT program's
+  games of the last 42 days (≥ 3 games) as a percentile mapped to −2…+2,
+  35 %; one input alone decides alone; < 3 ranked members ranks nobody
+  (private clients have no level). Bands from the group average,
+  symmetric: ≥ +1.5 Best, ≥ +0.5 Better, > −0.5 Average, > −1.5 Below,
+  else Bottom — a level group is all green. `SkillTierMap` (byProgram +
+  primary = student.programId else the first group that ranks them) is
+  rebuilt on the main thread 0.5 s after every cache refresh
+  (`scheduleSkillTiers`, both refresh paths) and published ONLY when a
+  level moves (`DataManager.skillTiers`, `skillTier(for:program:)`,
+  `photoBackdropHex`). PHOTOS ARE STORED TRANSPARENT: the cut-out
+  (`ProfileBackgroundRemoval.transparent`) saves as HEIC with alpha, its
+  thumbnail PNG (`ProfilePhotoEncoding`, `UIImage.profilePhotoData`,
+  `makeProfileThumbnailData`) — plain Data, no schema change; an opaque
+  photo stays JPEG. StudentAvatarView / StudentImageView paint the level
+  colour behind (env `\.skillLevelProgram`: the session page = its program,
+  the program page = it, else primary). The capture review shows the cut-out
+  over the level colour with Cut out | Original (the swatches are gone).
+  Cards: in the app the level colour; AthleteCardShareSheet has "Photo
+  background" (Keep level colour · the 8 petals, `CardBackdropPicker`), and
+  session / program "Print Player Cards (A3)" first opens CardBackdropSheet
+  (`CardBackdrop` .level / .color; each card's level in THAT program).
+  Widget photo files flatten a cut-out over its level colour (part of the
+  re-encode hash). PHOTOS TAKEN BEFORE THIS have the old colour burned in
+  and show no level until re-cut (Edit Student → Remove Background).
+  DEBUG HOOPWISE_DEMO_CUTOUTS=<folder of <athlete id>.heic> (+
+  HOOPWISE_DEMO_EVALUATIONS=1) loads Mac-made cut-outs (the simulator cannot
+  run Vision) into the DEMO store and logs "bg level <name> <tier>". Tests:
+  SkillLevelTests, ProfileBackgroundRemovalTests (transparent storage),
+  AthleteCardUITests.testTheShareSheetAsksForThePhotoBackground.
 - LIVE ACTIVITY — ONLY TWO MOMENTS (October 2026, Luther): an activity is
   on screen for a class that is LIVE (counts down the time left) or that
   starts within 10 minutes (counts down to the start). Nothing else.

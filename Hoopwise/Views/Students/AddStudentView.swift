@@ -286,7 +286,7 @@ struct EditStudentView: View {
                 ImagePicker(image: $selectedImage, sourceType: imagePickerSource)
             }
             .fullScreenCover(isPresented: $showingProfileCamera) {
-                ProfilePhotoCamera { image in
+                ProfilePhotoCamera(backdropHex: dataManager.photoBackdropHex(for: student.id)) { image in
                     if let image { selectedImage = image }
                     showingProfileCamera = false
                 }
@@ -294,7 +294,9 @@ struct EditStudentView: View {
             // Remove Background on the photo already here; like every edit on
             // this page it is only stored on Save.
             .fullScreenCover(item: $backgroundSource) { source in
-                ProfileBackgroundPicker(image: source.image, fromCamera: false) { image in
+                ProfileBackgroundPicker(image: source.image,
+                                        backdropHex: dataManager.photoBackdropHex(for: student.id),
+                                        fromCamera: false) { image in
                     if let image { selectedImage = image }
                     backgroundSource = nil
                 }
@@ -318,7 +320,7 @@ struct EditStudentView: View {
             .onChange(of: selectedImage) { _, newImage in
                 if let image = newImage {
                     // Store locally first for immediate display
-                    localImageData = image.jpegData(compressionQuality: 0.8)
+                    localImageData = image.profilePhotoData(quality: 0.8)
                     uploadImage()
                 }
             }
@@ -624,6 +626,7 @@ struct EditStudentView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 120, height: 120)
+                        .background(Color(hex: dataManager.photoBackdropHex(for: student.id)))
                         .clipShape(Circle())
                         .overlay(Circle().stroke(studentColor, lineWidth: 3))
                 } else if let selectedImage = selectedImage {
@@ -631,6 +634,7 @@ struct EditStudentView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 120, height: 120)
+                        .background(Color(hex: dataManager.photoBackdropHex(for: student.id)))
                         .clipShape(Circle())
                         .overlay(Circle().stroke(studentColor, lineWidth: 3))
                 } else if let imageUrl = profileImageUrl, !imageUrl.isEmpty {
@@ -1198,7 +1202,7 @@ struct EditStudentView: View {
     #if os(iOS)
     private func uploadImage() {
         guard let image = selectedImage,
-              let imageData = image.jpegData(compressionQuality: 0.7) else { return }
+              let imageData = image.profilePhotoData() else { return }
 
         isUploadingImage = true
         uploadError = nil

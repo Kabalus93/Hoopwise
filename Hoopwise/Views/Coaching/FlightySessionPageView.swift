@@ -56,6 +56,8 @@ struct FlightySessionPageView: View {
     @State private var showingDrillPicker = false
     @State private var showingStudentPicker = false
     @State private var isExportingCards = false
+    /// Before printing: keep each athlete's level colour or pick one.
+    @State private var choosingCardBackdrop = false
     @State private var exportedCardsURL: URL?
     @State private var showingCardShareSheet = false
     @State private var cardExportError: String?
@@ -184,6 +186,12 @@ struct FlightySessionPageView: View {
     }
     
     var body: some View {
+        page.environment(\.skillLevelProgram, session.programId)
+    }
+
+    /// The page; its photos show skill levels in this group (SkillTier).
+    @ViewBuilder
+    private var page: some View {
         GeometryReader { _ in
             ZStack(alignment: .top) {
                 #if os(iOS)
@@ -255,7 +263,7 @@ struct FlightySessionPageView: View {
 
                         allPresentMenuItem
 
-                        Button(action: { exportPlayerCards() }) {
+                        Button(action: { choosingCardBackdrop = true }) {
                             Label(
                                 LocalizationManager.shared.currentLanguage == .chinese ? "打印球员卡（A3）" : "Print Player Cards (A3)",
                                 systemImage: "rectangle.stack.badge.person.crop"
@@ -405,6 +413,9 @@ struct FlightySessionPageView: View {
             }
         }
         #if os(iOS)
+        .sheet(isPresented: $choosingCardBackdrop) {
+            CardBackdropSheet { exportPlayerCards(backdrop: $0) }
+        }
         .sheet(isPresented: $showingCardShareSheet) {
             if let url = exportedCardsURL {
                 ShareSheet(items: [url])
@@ -521,12 +532,12 @@ struct FlightySessionPageView: View {
     /// session's roster — who it expects plus anyone marked; its stored roster
     /// is often empty, so it used to export nobody.
     @MainActor
-    private func exportPlayerCards() {
+    private func exportPlayerCards(backdrop: CardBackdrop) {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         isExportingCards = true
         Task { @MainActor in
             defer { isExportingCards = false }
-            let cards = dataManager.athleteCards(forSession: session)
+            let cards = dataManager.athleteCards(forSession: session, backdrop: backdrop)
             guard !cards.isEmpty else {
                 cardExportError = isChinese ? "没有可导出的球员" : "No players to export"
                 return
@@ -2146,7 +2157,7 @@ struct FlightySessionPageView: View {
         // (no library, no edit step). The square photo replaces the
         // student's profile picture on capture; cancel changes nothing.
         .fullScreenCover(item: $studentForPhoto) { student in
-            ProfilePhotoCamera { image in
+            ProfilePhotoCamera(backdropHex: dataManager.photoBackdropHex(for: student.id, program: session.programId)) { image in
                 if let image { saveProfilePhoto(image, for: student.id) }
                 studentForPhoto = nil
             }
@@ -2229,7 +2240,8 @@ struct FlightySessionPageView: View {
     /// thumbnail, through updateStudent. Reads the student fresh from the
     /// store so the swipe never saves a stale copy over newer edits.
     private func saveProfilePhoto(_ image: UIImage, for studentId: UUID) {
-        guard let data = image.jpegData(compressionQuality: 0.7),
+        // A cut-out keeps its transparency so its level colour shows behind.
+        guard let data = image.profilePhotoData(),
               var student = dataManager.students.first(where: { $0.id == studentId }) else { return }
         student.profileImageData = data
         student.thumbnailImageData = makeProfileThumbnailData(from: data)

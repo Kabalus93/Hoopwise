@@ -7,32 +7,20 @@ import AppKit
 #endif
 
 // MARK: - Thumbnail Generation
-/// Produce a small square JPEG (~`maxDimension`pt) suitable for inline storage on a record.
-/// Used so list rows can render instantly without waiting on a CKAsset/file decode.
+/// Produce a small copy (~`maxDimension` pt at 3×) suitable for inline storage
+/// on a record, so list rows render instantly without decoding the full photo.
+/// A cut-out photo keeps its transparency (PNG) so its level colour can be
+/// painted behind it (ProfilePhotoEncoding).
 func makeProfileThumbnailData(from imageData: Data, maxDimension: CGFloat = 120) -> Data? {
-    #if os(iOS)
-    guard let img = UIImage(data: imageData) else { return nil }
-    let ratio = max(img.size.width, img.size.height) / maxDimension
-    let target = ratio > 1
-        ? CGSize(width: img.size.width / ratio, height: img.size.height / ratio)
-        : img.size
-    let renderer = UIGraphicsImageRenderer(size: target)
-    let resized = renderer.image { _ in img.draw(in: CGRect(origin: .zero, size: target)) }
-    return resized.jpegData(compressionQuality: 0.7)
-    #elseif os(macOS)
-    guard let img = NSImage(data: imageData) else { return nil }
-    let ratio = max(img.size.width, img.size.height) / maxDimension
-    let target = ratio > 1
-        ? NSSize(width: img.size.width / ratio, height: img.size.height / ratio)
-        : img.size
-    let resized = NSImage(size: target)
-    resized.lockFocus()
-    img.draw(in: NSRect(origin: .zero, size: target))
-    resized.unlockFocus()
-    guard let tiff = resized.tiffRepresentation,
-          let bmp = NSBitmapImageRep(data: tiff) else { return nil }
-    return bmp.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
-    #endif
+    ProfilePhotoEncoding.thumbnail(from: imageData, maxDimension: Int(maxDimension * 3))
+}
+
+// MARK: - Which group's level a photo shows
+
+extension EnvironmentValues {
+    /// The program whose skill levels colour the photos below (a session page,
+    /// a program page, a game). nil = each athlete's primary program.
+    @Entry var skillLevelProgram: UUID? = nil
 }
 
 // MARK: - Avatar View (Minimalist)
@@ -63,6 +51,7 @@ struct AvatarView: View {
 // MARK: - Student Avatar View
 struct StudentAvatarView: View {
     @EnvironmentObject var dataManager: DataManager
+    @Environment(\.skillLevelProgram) private var levelProgram
     let student: Student
     var size: CGFloat = 44
     var showBadge: Bool = false
@@ -106,6 +95,12 @@ struct StudentAvatarView: View {
             // Use cached image or placeholder (centered)
             if let image = displayImage {
                 #if os(iOS)
+                // A cut-out photo is transparent: its skill level's colour
+                // shows through (Models/SkillTier.swift). Hidden behind an
+                // opaque photo.
+                Circle()
+                    .fill(Color(hex: dataManager.photoBackdropHex(for: student.id, program: levelProgram)))
+                    .frame(width: size, height: size)
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -228,6 +223,7 @@ struct StudentAvatarView: View {
 /// in-memory cache → on-disk cache → file URL). Never hits the network.
 struct StudentImageView<Placeholder: View>: View {
     @EnvironmentObject var dataManager: DataManager
+    @Environment(\.skillLevelProgram) private var levelProgram
     let student: Student
     var contentMode: ContentMode = .fill
     @ViewBuilder var placeholder: () -> Placeholder
@@ -241,6 +237,7 @@ struct StudentImageView<Placeholder: View>: View {
             if let cachedImage {
                 #if canImport(UIKit)
                 Image(uiImage: cachedImage).resizable().aspectRatio(contentMode: contentMode)
+                    .background(Color(hex: dataManager.photoBackdropHex(for: student.id, program: levelProgram)))
                 #elseif canImport(AppKit)
                 Image(nsImage: cachedImage).resizable().aspectRatio(contentMode: contentMode)
                 #endif

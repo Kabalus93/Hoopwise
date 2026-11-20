@@ -78,6 +78,10 @@ class SwiftDataManager: ObservableObject {
     @Published private(set) var cachedMeasurements: [PlayerMeasurement] = []
     @Published private(set) var cachedCoach: Coach = Coach.default
     @Published private(set) var cachedAppSettings: AppSettings = AppSettings.default
+    /// Every athlete's skill level per group program (Models/SkillTier.swift),
+    /// rebuilt after data changes and published only when a level moves.
+    @Published private(set) var skillTiers = SkillTierMap()
+    private var pendingSkillTiers: Task<Void, Never>?
     
     // Legacy compatibility aliases
     var students: [Student] { cachedStudents }
@@ -679,10 +683,44 @@ class SwiftDataManager: ObservableObject {
         lastSyncDate = Date()
     }
     
+    // MARK: - Skill levels
+
+    /// Rebuild the skill levels 0.5 s after the last data change (a run of
+    /// saves rebuilds once). Published only when a level actually moved, so
+    /// avatars redraw only then.
+    func scheduleSkillTiers() {
+        pendingSkillTiers?.cancel()
+        pendingSkillTiers = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.rebuildSkillTiers()
+        }
+    }
+
+    func rebuildSkillTiers(now: Date = Date()) {
+        var evaluations: [UUID: SkillsEvaluation] = [:]
+        for player in cachedPlayers { evaluations[player.studentId] = player.skills }
+        let map = SkillTierMap.build(students: cachedStudents, programs: cachedPrograms,
+                                     sessions: cachedSessionEvents, evaluations: evaluations, now: now)
+        if map != skillTiers { skillTiers = map }
+    }
+
+    /// The athlete's level in `program` (nil = their primary program).
+    func skillTier(for studentId: UUID, program: UUID? = nil) -> SkillTier? {
+        skillTiers.tier(for: studentId, program: program)
+    }
+
+    /// The colour behind the athlete's cut-out photo: their level's, else the
+    /// neutral grey.
+    func photoBackdropHex(for studentId: UUID, program: UUID? = nil) -> String {
+        skillTier(for: studentId, program: program)?.hex ?? PhotoPalette.unranked
+    }
+
     // MARK: - Refresh Caches
     func refreshAllCaches() async {
         defer {
             if !isEphemeralTestInstance {
+                scheduleSkillTiers()
                 WidgetSnapshotWriter.scheduleWrite(dataManager: self)
                 AttentionEngine.scheduleAutomation(dataManager: self)
                 SessionReconciler.scheduleReconcile(dataManager: self)
@@ -4665,6 +4703,7 @@ class SwiftDataManager: ObservableObject {
     private func refreshCachesSync() {
         defer {
             if !isEphemeralTestInstance {
+                scheduleSkillTiers()
                 WidgetSnapshotWriter.scheduleWrite(dataManager: self)
                 AttentionEngine.scheduleAutomation(dataManager: self)
                 #if os(iOS)

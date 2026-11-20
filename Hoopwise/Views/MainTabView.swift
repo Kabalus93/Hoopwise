@@ -102,6 +102,9 @@ struct MainTabView: View {
         // when the URL arrived before this view existed.
         .onAppear {
             consumePendingWidgetRoute()
+            #if DEBUG
+            ProfileBackgroundDebugShot.importDemoCutouts(dataManager: dataManager)
+            #endif
             #if targetEnvironment(macCatalyst)
             MacWindow.configure()
             #if DEBUG

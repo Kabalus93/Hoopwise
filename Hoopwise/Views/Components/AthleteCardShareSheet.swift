@@ -1,33 +1,51 @@
 import SwiftUI
 
+/// What fills the background of a cut-out photo on a shared or printed card
+/// (20 Nov 2026, Luther: the level colour is shown in the app; before sharing
+/// or printing the coach chooses to keep it or pick one colour).
+enum CardBackdrop: Equatable {
+    /// Each athlete's skill level colour (in the card's program).
+    case level
+    /// One colour for every card.
+    case color(String)
+}
+
 extension DataManager {
     /// The athlete's card for this month (Services/AthleteCardFacts.swift).
-    func athleteCard(for student: Student, coachLine: String = "", now: Date = Date()) -> AthleteCardFacts {
+    /// `levelProgram` = the group whose level colours the photo (nil = their
+    /// primary program).
+    func athleteCard(for student: Student, coachLine: String = "", backdrop: CardBackdrop = .level,
+                     levelProgram: UUID? = nil, now: Date = Date()) -> AthleteCardFacts {
         let academy = ProgramGuideStore.academyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let backdropHex: String
+        switch backdrop {
+        case .level: backdropHex = photoBackdropHex(for: student.id, program: levelProgram)
+        case .color(let hex): backdropHex = hex
+        }
         return AthleteCardFacts.make(
             student: student, players: players, programs: programs, sessions: sessionEvents, drills: drills,
             categoryHex: ageCategory(for: student)?.colorHex ?? "#007AFF",
-            coach: coach.name, academy: academy, coachLine: coachLine, now: now)
+            coach: coach.name, academy: academy, coachLine: coachLine, backdropHex: backdropHex, now: now)
     }
 
     /// Cards for everyone a session expects, plus anyone marked at it — the
     /// roster the session page shows (its stored roster is often empty and
     /// the program's enrolment stands in).
-    func athleteCards(forSession session: SessionEvent) -> [AthleteCardFacts] {
+    func athleteCards(forSession session: SessionEvent, backdrop: CardBackdrop = .level) -> [AthleteCardFacts] {
         var ids = AttendanceMath.expectedIds(of: session, programs: programs)
         for id in session.actualAttendeeIds + session.excusedAbsences + session.unexcusedAbsences where !ids.contains(id) {
             ids.append(id)
         }
         return ids.compactMap { id in students.first { $0.id == id } }
             .sorted { $0.primaryDisplayName < $1.primaryDisplayName }
-            .map { athleteCard(for: $0) }
+            .map { athleteCard(for: $0, backdrop: backdrop, levelProgram: session.programId) }
     }
 
     /// Cards for a program's enrolled athletes.
-    func athleteCards(forProgram program: Program) -> [AthleteCardFacts] {
+    func athleteCards(forProgram program: Program, backdrop: CardBackdrop = .level) -> [AthleteCardFacts] {
         program.enrolledStudentIds.compactMap { id in students.first { $0.id == id } }
             .sorted { $0.primaryDisplayName < $1.primaryDisplayName }
-            .map { athleteCard(for: $0) }
+            .map { athleteCard(for: $0, backdrop: backdrop, levelProgram: program.id) }
     }
 }
 
@@ -39,18 +57,26 @@ struct AthleteCardShareSheet: View {
     let student: Student
 
     @State private var coachLine = ""
+    @State private var backdrop: CardBackdrop = .level
     @State private var shareItems: [Any]?
     @State private var working = false
     @State private var problem: String?
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
-    private var card: AthleteCardFacts { dataManager.athleteCard(for: student, coachLine: coachLine) }
+    private var card: AthleteCardFacts { dataManager.athleteCard(for: student, coachLine: coachLine, backdrop: backdrop) }
+    /// Only a cut-out photo has a background to choose.
+    private var photoIsCutOut: Bool { card.backdropHex != nil }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     preview
+                    if photoIsCutOut {
+                        CardBackdropPicker(backdrop: $backdrop,
+                                           levelHex: dataManager.photoBackdropHex(for: student.id))
+                            .frame(maxWidth: 620)
+                    }
                     VStack(alignment: .leading, spacing: 6) {
                         Text(isChinese ? "教练寄语（可选）" : "A word from the coach (optional)")
                             .font(.footnote.weight(.semibold))
@@ -175,5 +201,96 @@ enum AthleteCardMonth {
         f.locale = Locale(identifier: chinese ? "zh_CN" : "en_US")
         f.dateFormat = chinese ? "yyyy年M月" : "MMMM yyyy"
         return f.string(from: date)
+    }
+}
+
+// MARK: - Choosing the card background
+
+/// "Keep the level colour, or pick one" — the share sheet's row of swatches.
+/// The level colour comes first and is the default; its meaning is never
+/// written (the card goes to the child and parents).
+struct CardBackdropPicker: View {
+    @Binding var backdrop: CardBackdrop
+    /// This athlete's level colour (or one per athlete on a print sheet: nil).
+    var levelHex: String?
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(isChinese ? "照片背景" : "Photo background")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    Button { backdrop = .level } label: {
+                        HStack(spacing: 8) {
+                            if let levelHex {
+                                Circle().fill(Color(hex: levelHex)).frame(width: 22, height: 22)
+                            } else {
+                                Image(systemName: "circle.hexagongrid.fill").font(.title3)
+                            }
+                            Text(isChinese ? "保留水平颜色" : "Keep level colour")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .padding(.horizontal, 12).frame(minHeight: 40)
+                        .background(Capsule().fill(Color(.secondarySystemGroupedBackground)))
+                        .overlay(Capsule().strokeBorder(backdrop == .level ? Color.accentColor : .clear, lineWidth: 2))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(backdrop == .level ? .isSelected : [])
+                    .accessibilityIdentifier("cardBackdrop.level")
+                    ForEach(PhotoPalette.all, id: \.self) { hex in
+                        Button { backdrop = .color(hex) } label: {
+                            Circle().fill(Color(hex: hex))
+                                .frame(width: 34, height: 34)
+                                .padding(3)
+                                .overlay(Circle().strokeBorder(backdrop == .color(hex) ? Color.accentColor : .clear, lineWidth: 2.5))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(backdrop == .color(hex) ? .isSelected : [])
+                        .accessibilityIdentifier("cardBackdrop.\(hex)")
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+}
+
+/// Before a print sheet of many cards: keep everyone's level colour, or one
+/// colour for all.
+struct CardBackdropSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onChoose: (CardBackdrop) -> Void
+    @State private var backdrop: CardBackdrop = .level
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(isChinese ? "抠图照片的背景用什么颜色？" : "What colour goes behind the cut-out photos?")
+                    .font(.headline)
+                CardBackdropPicker(backdrop: $backdrop, levelHex: nil)
+                Spacer()
+            }
+            .padding(20)
+            .navigationTitle(isChinese ? "打印球员卡" : "Print player cards")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isChinese ? "取消" : "Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isChinese ? "打印" : "Print") {
+                        onChoose(backdrop)
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("cardBackdrop.print")
+                }
+            }
+        }
+        .presentationDetents([.height(260)])
     }
 }

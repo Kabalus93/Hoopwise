@@ -18,6 +18,8 @@ struct FlightyProgramDetailView: View {
     @State private var showingSessionsList = false
     @State private var selectedStudentIds: Set<UUID> = []
     @State private var isExportingCards = false
+    /// Before printing: keep each athlete's level colour or pick one.
+    @State private var choosingCardBackdrop = false
     @State private var exportedCardsURL: URL?
     @State private var showingCardShareSheet = false
     @State private var cardExportError: String?
@@ -119,6 +121,12 @@ struct FlightyProgramDetailView: View {
     }
     
     var body: some View {
+        page.environment(\.skillLevelProgram, program.id)
+    }
+
+    /// The page; its photos show skill levels in this group (SkillTier).
+    @ViewBuilder
+    private var page: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 // Hero header with integrated stats
@@ -194,7 +202,7 @@ struct FlightyProgramDetailView: View {
                         )
                     }
 
-                    Button(action: { exportPlayerCards() }) {
+                    Button(action: { choosingCardBackdrop = true }) {
                         Label(
                             LocalizationManager.shared.currentLanguage == .chinese ? "打印球员卡（A3）" : "Print Player Cards (A3)",
                             systemImage: "rectangle.stack.badge.person.crop"
@@ -328,6 +336,9 @@ struct FlightyProgramDetailView: View {
         } message: {
             Text(dedupeResultMessage ?? "")
         }
+        .sheet(isPresented: $choosingCardBackdrop) {
+            CardBackdropSheet { exportPlayerCards(backdrop: $0) }
+        }
         .sheet(isPresented: $showingCardShareSheet) {
             if let url = exportedCardsURL {
                 ShareSheet(items: [url])
@@ -364,12 +375,12 @@ struct FlightyProgramDetailView: View {
     /// The A3 print sheet of player cards for the program's athletes
     /// (AthleteCardRenderer).
     @MainActor
-    private func exportPlayerCards() {
+    private func exportPlayerCards(backdrop: CardBackdrop) {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         isExportingCards = true
         Task { @MainActor in
             defer { isExportingCards = false }
-            let cards = dataManager.athleteCards(forProgram: program)
+            let cards = dataManager.athleteCards(forProgram: program, backdrop: backdrop)
             guard !cards.isEmpty else {
                 cardExportError = isChinese ? "没有可导出的球员" : "No players to export"
                 return

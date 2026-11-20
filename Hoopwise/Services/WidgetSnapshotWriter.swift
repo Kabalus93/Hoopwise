@@ -476,12 +476,15 @@ enum WidgetSnapshotWriter {
             else { continue }
             let filename = "\(id.uuidString).jpg"
             let fileURL = directory.appendingPathComponent(filename)
-            let hash = SHA256.hash(data: source).map { String(format: "%02x", $0) }.joined()
+            // A cut-out is flattened over its level colour (a JPEG has no
+            // transparency), so the colour is part of what makes it current.
+            let backdrop = dataManager.photoBackdropHex(for: id)
+            let hash = SHA256.hash(data: source + Data(backdrop.utf8)).map { String(format: "%02x", $0) }.joined()
 
             // Re-encode only when missing or the source photo changed.
             if manifest[id.uuidString] != hash
                 || !FileManager.default.fileExists(atPath: fileURL.path) {
-                guard let jpeg = downsampledSquareJPEG(from: source, side: 360) else { continue }
+                guard let jpeg = downsampledSquareJPEG(from: source, side: 360, backdropHex: backdrop) else { continue }
                 try? jpeg.write(to: fileURL, options: .atomic)
                 manifest[id.uuidString] = hash
             }
@@ -504,7 +507,7 @@ enum WidgetSnapshotWriter {
 
     /// CGImageSource thumbnailing — the full-res photo never gets decoded
     /// at size, and never reaches the widget process.
-    private static func downsampledSquareJPEG(from data: Data, side: CGFloat) -> Data? {
+    private static func downsampledSquareJPEG(from data: Data, side: CGFloat, backdropHex: String) -> Data? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: side,
@@ -519,7 +522,18 @@ enum WidgetSnapshotWriter {
         let squareSide = min(width, height)
         let cropRect = CGRect(x: (width - squareSide) / 2, y: (height - squareSide) / 2,
                               width: squareSide, height: squareSide)
-        let squared = thumb.cropping(to: cropRect) ?? thumb
+        var squared = thumb.cropping(to: cropRect) ?? thumb
+        if ProfilePhotoEncoding.isTransparent(squared),
+           let ctx = CGContext(data: nil, width: squared.width, height: squared.height, bitsPerComponent: 8,
+                               bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                               bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) {
+            let (r, g, b) = ProfileBackgroundRemoval.rgb(backdropHex)
+            let rect = CGRect(x: 0, y: 0, width: squared.width, height: squared.height)
+            ctx.setFillColor(red: r, green: g, blue: b, alpha: 1)
+            ctx.fill(rect)
+            ctx.draw(squared, in: rect)
+            if let flat = ctx.makeImage() { squared = flat }
+        }
 
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
