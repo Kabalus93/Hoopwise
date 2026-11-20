@@ -26,8 +26,11 @@ final class CreateGameSlotsUITests: XCTestCase {
     }
 
     func testFormatSlotsDragAndTap() {
-        XCTAssertTrue(app.buttons["3v3"].waitForExistence(timeout: 20), "no format picker")
+        let format = app.buttons["setup.format"]
+        XCTAssertTrue(format.waitForExistence(timeout: 20), "no format chip")
+        format.tap()
         app.buttons["3v3"].tap()
+        app.buttons["setup.pool"].tap()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'All'")).firstMatch.tap()
 
         app.swipeUp()

@@ -98,14 +98,10 @@ struct CreateGameSheet: View {
         NavigationStack {
             ScrollView {
               VStack(alignment: .leading, spacing: 22) {
-                gameTypeSection
-                durationSection
-                basketValueSection
-                playersFilterSection
+                settingsCard
                 if isBattleRoyal {
                     battleRoyalSection
                 } else {
-                    if hasPreviousConfig { previousConfigSection }
                     teamsSection
                     unassignedSection
                 }
@@ -148,105 +144,19 @@ struct CreateGameSheet: View {
             }
             .onChange(of: showOnlyPresent) { _, _ in refreshUnassigned() }
             .onChange(of: playersPerSide) { _, _ in normalizeStarters() }
+            .onChange(of: usePreviousConfig) { _, useIt in
+                if useIt, let last = session.games.last(where: { !$0.gameType.isIndividual }) {
+                    loadPreviousConfiguration(from: last)
+                } else {
+                    setupDefaultTeams()
+                    refreshUnassigned()
+                    distributeUnassignedBalanced()
+                }
+            }
         }
     }
 
     // MARK: - Sections
-
-    private var gameTypeSection: some View {
-        SetupCard {
-            Picker("Game Type", selection: $gameType) {
-                ForEach(SessionGameType.allCases, id: \.self) { type in
-                    Text(type.localizedName).tag(type)
-                }
-            }
-            .pickerStyle(.segmented)
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-
-            if !isBattleRoyal {
-                Picker(isChinese ? "人数" : "Players a side", selection: $playersPerSide) {
-                    ForEach(2...5, id: \.self) { n in Text("\(n)v\(n)").tag(n) }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("setup.format")
-                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: gameType.icon)
-                    .foregroundStyle(.secondary)
-                Text(gameType.localizedDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        } header: {
-            Text(isChinese ? "比赛模式" : "Format")
-        }
-    }
-
-    private var durationSection: some View {
-        SetupCard {
-            // Quick presets — tuned for the team count. With 2 teams the
-            // standard 5-minute scrimmage gives both sides enough touches;
-            // 3+ teams rotate faster (3 min) so everyone plays sooner.
-            HStack(spacing: 8) {
-                ForEach(durationPresets, id: \.self) { mins in
-                    presetChip(minutes: mins)
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-
-            Stepper(value: $durationMinutes, in: 1...120, step: 1) {
-                HStack {
-                    Text(isChinese ? "时长" : "Duration")
-                    Spacer()
-                    Text("\(durationMinutes) \(isChinese ? "分钟" : "min")")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: Double(durationMinutes)))
-                }
-            }
-            .sensoryFeedback(.increase, trigger: durationMinutes)
-            .onChange(of: durationMinutes) { _, _ in durationManuallyEdited = true }
-        } footer: {
-            Text(presetFooter)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    private var basketValueSection: some View {
-        SetupCard {
-            HStack(spacing: 8) {
-                ForEach(1...3, id: \.self) { value in
-                    let isSelected = basketValue == value
-                    Button {
-                        basketValue = value
-                    } label: {
-                        Text(isChinese ? "\(value) 分" : "\(value) pt\(value == 1 ? "" : "s")")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.primary))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 10)
-                                .fill(isSelected ? Color.accentColor : Color(.tertiarySystemFill)))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("setup.basket.\(value)")
-                }
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-            .sensoryFeedback(.selection, trigger: basketValue)
-        } header: {
-            Text(isChinese ? "每球标准分值" : "Standard basket value")
-        } footer: {
-            Text(isChinese
-                 ? "比赛中点击球员即记这个分值；其他分值在比赛页上方随时可选。"
-                 : "Tapping a player in the game scores this. The other values stay one tap away above the players.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
 
     /// Default minutes for the current team layout. Tuned to roster sizes
     /// the user actually runs:
@@ -263,91 +173,98 @@ struct CreateGameSheet: View {
         return teams.count >= 3 ? [2, 3, 4, 5] : [3, 5, 8, 10]
     }
 
-    private var presetFooter: String {
-        if isBattleRoyal {
-            return isChinese
-                ? "大乱斗默认 5 分钟。可点上方按钮快速切换或用滑杆微调。"
-                : "Battle royal defaults to 5 min. Tap a preset or use the stepper for custom."
-        }
-        return teams.count >= 3
-            ? (isChinese
-               ? "3 队及以上默认 3 分钟，让每个人更快上场。"
-               : "3+ teams default to 3 min so everyone rotates in sooner.")
-            : (isChinese
-               ? "2 队默认 5 分钟。"
-               : "2 teams default to 5 min.")
-    }
+    // MARK: - Settings (one compact card)
+    //
+    // 20 Nov 2026, Luther: the settings "take unreasonable space — make it
+    // smarter". One card: the game type, then four chips — format, minutes,
+    // basket value, who is in the pool — each a tap-to-change menu showing
+    // its value. Explanations went; the choices say what they are.
 
-    private func presetChip(minutes: Int) -> some View {
-        let isSelected = durationMinutes == minutes
-        return Button {
-            durationMinutes = minutes
-            durationManuallyEdited = true
-        } label: {
-            Text("\(minutes) \(isChinese ? "分" : "min")")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(isSelected ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.primary))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color.accentColor : Color(.tertiarySystemFill))
-                )
-        }
-        .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: isSelected)
-    }
-
-    private var playersFilterSection: some View {
+    private var settingsCard: some View {
         SetupCard {
-            Picker(isChinese ? "球员池" : "Player Pool", selection: $showOnlyPresent) {
-                Text("\(isChinese ? "已到场" : "Present") (\(presentCount))").tag(true)
-                Text("\(isChinese ? "全部" : "All") (\(totalCount))").tag(false)
+            Picker(isChinese ? "比赛模式" : "Game type", selection: $gameType) {
+                ForEach(SessionGameType.allCases, id: \.self) { type in
+                    Text(type.localizedName).tag(type)
+                }
             }
             .pickerStyle(.segmented)
 
-            if showOnlyPresent && presentCount == 0 {
-                Button {
-                    showOnlyPresent = false
-                } label: {
-                    Label(
-                        isChinese ? "没有人到场，使用全部球员" : "No present players — use full roster",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .foregroundStyle(.orange)
+            HStack(spacing: 8) {
+                if !isBattleRoyal {
+                    settingChip(isChinese ? "人数" : "Format", value: "\(playersPerSide)v\(playersPerSide)", id: "setup.format") {
+                        Picker("", selection: $playersPerSide) {
+                            ForEach(2...5, id: \.self) { n in Text("\(n)v\(n)").tag(n) }
+                        }
+                    }
+                }
+                settingChip(isChinese ? "时长" : "Time", value: isChinese ? "\(durationMinutes) 分钟" : "\(durationMinutes) min", id: "setup.duration") {
+                    Picker("", selection: Binding(get: { durationMinutes }, set: { durationMinutes = $0; durationManuallyEdited = true })) {
+                        ForEach(durationChoices, id: \.self) { m in
+                            Text(isChinese ? "\(m) 分钟" : "\(m) min").tag(m)
+                        }
+                    }
+                }
+                settingChip(isChinese ? "每球" : "Basket", value: isChinese ? "\(basketValue) 分" : "\(basketValue) pt\(basketValue == 1 ? "" : "s")", id: "setup.basket") {
+                    Picker("", selection: $basketValue) {
+                        ForEach(1...3, id: \.self) { v in Text(isChinese ? "\(v) 分" : "\(v) pt\(v == 1 ? "" : "s")").tag(v) }
+                    }
+                }
+                settingChip(isChinese ? "球员" : "Players",
+                            value: showOnlyPresent ? (isChinese ? "到场 \(presentCount)" : "Present \(presentCount)")
+                                                   : (isChinese ? "全部 \(totalCount)" : "All \(totalCount)"),
+                            id: "setup.pool") {
+                    Picker("", selection: $showOnlyPresent) {
+                        Text(isChinese ? "已到场 (\(presentCount))" : "Present (\(presentCount))").tag(true)
+                        Text(isChinese ? "全部 (\(totalCount))" : "All (\(totalCount))").tag(false)
+                    }
                 }
             }
-        } header: {
-            Text(isChinese ? "球员池" : "Players")
-        } footer: {
-            if isBattleRoyal {
-                Text(isChinese
-                     ? "在大乱斗里，每个人为自己得分。"
-                     : "In Battle Royal, every player scores for themselves.")
-            } else {
-                Text(isChinese
-                     ? "切换到“到场”只显示出席的球员。"
-                     : "Toggle Present to limit team-building to attendees.")
+
+            if showOnlyPresent && presentCount == 0 {
+                Button { showOnlyPresent = false } label: {
+                    Label(isChinese ? "没有人到场，使用全部球员" : "No one is marked present — use the full roster",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private var previousConfigSection: some View {
-        SetupCard {
-            Toggle(isOn: $usePreviousConfig.animation()) {
-                Label(isChinese ? "沿用上次分队" : "Reuse Last Game's Teams",
-                      systemImage: "clock.arrow.circlepath")
-            }
-            .onChange(of: usePreviousConfig) { _, useIt in
-                if useIt, let last = session.games.last(where: { !$0.gameType.isIndividual }) {
-                    loadPreviousConfiguration(from: last)
-                } else {
-                    setupDefaultTeams()
-                    refreshUnassigned()
-                    distributeUnassignedBalanced()
+    /// A compact setting: its name small, its value big, a menu on tap.
+    private func settingChip<Choices: View>(_ title: String, value: String, id: String,
+                                            @ViewBuilder choices: () -> Choices) -> some View {
+        Menu {
+            choices()
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(value)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.tertiarySystemFill)))
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+    }
+
+    private var durationChoices: [Int] {
+        Array(Set([2, 3, 4, 5, 6, 8, 10, 12, 15, 20, durationMinutes])).sorted()
     }
 
     // MARK: - Teams
@@ -379,6 +296,16 @@ struct CreateGameSheet: View {
             HStack {
                 Text(isChinese ? "队伍" : "Teams")
                 Spacer()
+                if hasPreviousConfig {
+                    Toggle(isOn: $usePreviousConfig.animation()) {
+                        Label(isChinese ? "沿用上次分队" : "Last game's teams", systemImage: "clock.arrow.circlepath")
+                    }
+                    .toggleStyle(.button)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.small)
+                    .font(.caption.weight(.semibold))
+                    .accessibilityIdentifier("setup.reuse")
+                }
                 Text("\(teams.count) / \(maxTeams)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)

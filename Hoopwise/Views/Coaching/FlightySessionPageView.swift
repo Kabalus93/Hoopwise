@@ -4956,6 +4956,11 @@ struct SessionGamesTabView: View {
                     onSaveCompletedRound: { completedRound in
                         session.games.append(completedRound)
                         dataManager.appendSessionGame(toSessionId: session.id, game: completedRound)
+                    },
+                    onNextGame: { next in
+                        session.games.append(next)
+                        dataManager.appendSessionGame(toSessionId: session.id, game: next)
+                        selectedGame = next
                     }
                 )
             }
@@ -5419,6 +5424,13 @@ struct LiveGameScoringView: View {
     let allGamesInSession: [SessionGame]
     let onSave: () -> Void
     var onSaveCompletedRound: ((SessionGame) -> Void)? = nil  // Callback to save completed round as new game
+    /// NEXT GAME (20 Nov 2026, Luther): the current game is finished and
+    /// saved, this new one (same teams; the chosen ones on court) is added
+    /// to the session and opened in its place.
+    var onNextGame: ((SessionGame) -> Void)? = nil
+    /// The teams preselected when the "who plays next?" sheet opens (nil = closed).
+    @State private var nextPick: NextPick?
+    struct NextPick: Identifiable { let id = UUID(); let teams: Set<UUID> }
     @State private var timerSeconds: Int = 0
     @State private var isTimerRunning = false
     @State private var selectedTeamIndex: Int = 0
@@ -5503,15 +5515,16 @@ struct LiveGameScoringView: View {
                     Button(isChinese ? "完成" : "Done") { onSave(); dismiss() }
                 }
                 ToolbarItem(placement: .principal) {
-                    if !isBattleRoyal && game.teams.count > 2 && game.status != .completed {
-                        Button(action: endRound) {
-                            Label(isChinese ? "下一轮" : "Next Round", systemImage: "arrow.triangle.2.circlepath")
-                                .font(.caption.weight(.semibold))
+                    if !isBattleRoyal && onNextGame != nil {
+                        Button(action: nextGameTapped) {
+                            Label(isChinese ? "下一场" : "Next Game", systemImage: "forward.end.fill")
+                                .labelStyle(.titleAndIcon)
+                                .font(.subheadline.weight(.semibold))
                         }
                         .buttonStyle(.bordered)
                         .buttonBorderShape(.capsule)
-                        .controlSize(.small)
                         .tint(Color.accentColor)
+                        .accessibilityIdentifier("live.nextGame")
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -5542,6 +5555,16 @@ struct LiveGameScoringView: View {
             }
             .sheet(isPresented: $showingRecap) {
                 GameRecapView(game: game, students: students, allGamesInSession: allGamesInSession)
+            }
+            // A sheet, not a popover on the toolbar button: a toolbar
+            // popover kept a stale copy of the choice (nothing ticked).
+            .sheet(item: $nextPick) { pick in
+                NextTeamsChooser(game: game, required: teamsOnCourtCount, initial: pick.teams,
+                                 gameNumber: allGamesInSession.count + 1) { chosen in
+                    nextPick = nil
+                    startNextGame(onCourt: game.teams.map(\.id).filter { chosen.contains($0) })
+                }
+                .presentationDetents([.height(CGFloat(200 + 50 * game.teams.count))])
             }
         }
     }
@@ -6562,6 +6585,63 @@ struct LiveGameScoringView: View {
         onSave()
     }
     
+    // MARK: - Next game
+
+    private var teamsOnCourtCount: Int { max(2, game.gameType.requiredTeams) }
+
+    private func nextGameTapped() {
+        if game.teams.count <= teamsOnCourtCount {
+            startNextGame(onCourt: game.teams.map(\.id))
+            return
+        }
+        // Winner stays on, the next waiting team comes in — preselected,
+        // the coach changes it if he wants.
+        let active = activeTeamsForScoring
+        var pick: [UUID] = []
+        if game.gameType == .twoTeam {
+            if let winner = active.max(by: { game.score(for: $0.id) < game.score(for: $1.id) }),
+               game.score(for: winner.id) > 0 { pick.append(winner.id) }
+            pick += game.waitingTeams.map(\.id)
+            pick += active.map(\.id)
+        } else {
+            pick = active.map(\.id)
+        }
+        var seen = Set<UUID>()
+        nextPick = NextPick(teams: Set(pick.filter { seen.insert($0).inserted }.prefix(teamsOnCourtCount)))
+    }
+
+    /// Finish this game (winner, record) and open a fresh one with the same
+    /// teams and lineups, `onCourt` playing.
+    private func startNextGame(onCourt: [UUID]) {
+        isTimerRunning = false
+        if game.status != .completed {
+            game.status = .completed
+            game.endedAt = Date()
+            let scores = game.activeTeamIds.map { ($0, game.score(for: $0)) }
+            if let best = scores.max(by: { $0.1 < $1.1 }), best.1 > 0,
+               scores.filter({ $0.1 == best.1 }).count == 1 {
+                game.winningTeamId = best.0
+                for (id, _) in scores {
+                    guard let i = game.teams.firstIndex(where: { $0.id == id }) else { continue }
+                    if id == best.0 { game.teams[i].wins += 1 } else { game.teams[i].losses += 1 }
+                }
+            }
+            onSave()
+        }
+        var next = SessionGame(
+            sessionId: game.sessionId,
+            gameNumber: allGamesInSession.count + 1,
+            gameType: game.gameType,
+            teams: game.teams,
+            activeTeamIds: onCourt,
+            durationMinutes: game.durationMinutes,
+            basketValue: game.basketValue,
+            status: .ready)
+        next.playersPerSide = game.playersPerSide
+        HapticFeedback.impact(.medium)
+        onNextGame?(next)
+    }
+
     private func endGame() {
         isTimerRunning = false; game.status = .completed; game.endedAt = Date()
         
@@ -7391,3 +7471,71 @@ private extension View {
     }
 }
 #endif
+
+/// "Who plays next?" — pick the teams for the next game (Next Game with
+/// more teams than fit on the court).
+struct NextTeamsChooser: View {
+    let game: SessionGame
+    let required: Int
+    let gameNumber: Int
+    let onStart: (Set<UUID>) -> Void
+    @State private var picked: Set<UUID>
+    private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+
+    init(game: SessionGame, required: Int, initial: Set<UUID>, gameNumber: Int, onStart: @escaping (Set<UUID>) -> Void) {
+        self.game = game; self.required = required; self.gameNumber = gameNumber; self.onStart = onStart
+        _picked = State(initialValue: initial)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(isChinese ? "下一场谁上？" : "Who plays next?")
+                .font(.headline)
+                .padding(.horizontal, 16).padding(.top, 20)
+            Text(isChinese ? "选 \(required) 队 · 这一场会结束并保存" : "Pick \(required) · this game ends and is saved")
+                .font(.caption).foregroundStyle(.secondary)
+                .padding(.horizontal, 16).padding(.bottom, 8)
+            ForEach(game.teams) { team in
+                let on = picked.contains(team.id)
+                Button {
+                    if on { picked.remove(team.id) }
+                    else if picked.count < required { picked.insert(team.id) }
+                } label: {
+                    HStack(spacing: 10) {
+                        Circle().fill(Color(hex: team.colorHex)).frame(width: 18, height: 18)
+                            .overlay(Circle().stroke(Color.primary.opacity(0.2), lineWidth: 0.5))
+                        Text(GameTeam.localizedColorName(team.name)).foregroundStyle(.primary)
+                        if game.activeTeamIds.contains(team.id) {
+                            Text("\(game.score(for: team.id))")
+                                .font(.subheadline.weight(.bold)).monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(isChinese ? "候场" : "waiting").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(on ? Color.accentColor : Color.secondary)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("live.next.team")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+            Button {
+                onStart(picked)
+            } label: {
+                Text(isChinese ? "开始第 \(gameNumber) 场" : "Start Game \(gameNumber)")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(picked.count != required)
+            .padding(16)
+            .accessibilityIdentifier("live.next.start")
+        }
+        .frame(maxWidth: 520)
+    }
+}

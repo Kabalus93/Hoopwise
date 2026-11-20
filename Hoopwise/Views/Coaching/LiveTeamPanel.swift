@@ -90,23 +90,41 @@ struct LiveTeamPanel: View {
 
     private static let space = "liveTeamPanel"
     private var teamColor: Color { team.displayColor(for: colorScheme) }
+    /// ON THE FLOOR (20 Nov 2026, Luther: "only the starters, with subs
+    /// coming from the bench, seamless"): the team's first `starters`
+    /// players; a game set up before starters existed has everyone on.
     private var players: [Student] {
-        team.playerIds.compactMap { id in students.first { $0.id == id } }
+        Array(team.playerIds.prefix(onCourtCount)).compactMap { id in students.first { $0.id == id } }
     }
+    private var bench: [Student] {
+        Array(team.playerIds.dropFirst(onCourtCount)).compactMap { id in students.first { $0.id == id } }
+    }
+    private var onCourtCount: Int {
+        min(team.starters ?? team.playerIds.count, team.playerIds.count)
+    }
+
+    /// A bench player being dragged toward the floor.
+    @State private var subDrag: (id: UUID, at: CGPoint)?
+    /// The bench player whose "in for whom?" popover is open.
+    @State private var subChoosing: UUID?
+    @State private var subTick = 0
 
     var body: some View {
         GeometryReader { proxy in
             let count = max(players.count, 5)
             let spacing: CGFloat = 8
+            let benchHeight: CGFloat = bench.isEmpty ? 0 : 84
             // Tall enough for a thumb, never a slab (an iPad's height / 5).
-            let rowHeight = min(150, max(56, (proxy.size.height - spacing * CGFloat(count - 1)) / CGFloat(count)))
+            let rowHeight = min(150, max(56, (proxy.size.height - benchHeight - spacing * CGFloat(count - 1)) / CGFloat(count)))
             VStack(spacing: spacing) {
                 ForEach(players) { student in
                     row(student, height: rowHeight)
                 }
                 Spacer(minLength: 0)
+                if !bench.isEmpty { benchStrip }
             }
             .overlay { assistLine }
+            .overlay { subGhost }
         }
         .coordinateSpace(name: Self.space)
         .onPreferenceChange(RowFrameKey.self) { frames in
@@ -123,6 +141,136 @@ struct LiveTeamPanel: View {
             #endif
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: basketTick)
+        .sensoryFeedback(.success, trigger: subTick)
+    }
+
+    // MARK: Bench — subs
+
+    private var benchStrip: some View {
+        HStack(spacing: 10) {
+            VStack(spacing: 2) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.caption.weight(.bold))
+                Text(LocalizationManager.shared.currentLanguage == .chinese ? "替补" : "BENCH")
+                    .font(.system(size: 10, weight: .heavy))
+            }
+            .foregroundStyle(.secondary)
+            .frame(width: 44)
+            ForEach(bench) { student in
+                benchChip(student)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 76)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(teamColor.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("live.bench")
+    }
+
+    private func benchChip(_ student: Student) -> some View {
+        let dragging = subDrag?.id == student.id
+        return VStack(spacing: 3) {
+            StudentAvatarView(student: student, size: 44)
+                .overlay(Circle().strokeBorder(teamColor, style: StrokeStyle(lineWidth: 2, dash: [3, 2])).padding(-2))
+            Text(student.primaryDisplayName.components(separatedBy: " ").first ?? student.primaryDisplayName)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .frame(maxWidth: 64)
+        }
+        .opacity(dragging ? 0.35 : 1)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
+                .onChanged { value in
+                    let moved = hypot(value.translation.width, value.translation.height)
+                    if moved >= AssistDrop.dragThreshold { subDrag = (student.id, value.location) }
+                }
+                .onEnded { value in
+                    let moved = hypot(value.translation.width, value.translation.height)
+                    if moved < AssistDrop.dragThreshold {
+                        subChoosing = student.id
+                    } else if let out = subTarget(at: value.location) {
+                        substitute(in: student.id, out: out)
+                    }
+                    subDrag = nil
+                }
+        )
+        .popover(isPresented: Binding(get: { subChoosing == student.id },
+                                      set: { if !$0 { subChoosing = nil } })) {
+            subChooser(for: student)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("live.bench.player")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { subChoosing = student.id }
+    }
+
+    /// The floor player a bench drag is over — anywhere across his row's
+    /// height (the stat buttons too), so the drop is easy to hit.
+    private func subTarget(at point: CGPoint) -> UUID? {
+        rowFrames.first { id, frame in
+            players.contains { $0.id == id } && point.y >= frame.minY - 4 && point.y <= frame.maxY + 4
+        }?.key
+    }
+
+    /// Tap on a bench player: who does he come in for?
+    private func subChooser(for student: Student) -> some View {
+        let zh = LocalizationManager.shared.currentLanguage == .chinese
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(zh ? "\(student.primaryDisplayName) 换下谁？" : "\(student.primaryDisplayName) in for…")
+                .font(.headline)
+                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 6)
+            ForEach(players) { out in
+                Button {
+                    subChoosing = nil
+                    substitute(in: student.id, out: out.id)
+                } label: {
+                    HStack(spacing: 10) {
+                        StudentAvatarView(student: out, size: 32)
+                        Text(out.primaryDisplayName).foregroundStyle(.primary)
+                        Spacer()
+                        Text("\(game.stats(for: out.id)?.points ?? 0)")
+                            .font(.subheadline.weight(.bold)).monospacedDigit()
+                            .foregroundStyle(teamColor)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("live.sub.out")
+            }
+        }
+        .padding(.bottom, 8)
+        .frame(minWidth: 260)
+        .presentationCompactAdaptation(.popover)
+    }
+
+    /// The bench player takes the floor player's place; he goes to the
+    /// bench in the other's spot. Stats stay with each player.
+    private func substitute(in incoming: UUID, out outgoing: UUID) {
+        guard let t = game.teams.firstIndex(where: { $0.id == team.id }),
+              let a = game.teams[t].playerIds.firstIndex(of: incoming),
+              let b = game.teams[t].playerIds.firstIndex(of: outgoing) else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            if game.teams[t].starters == nil { game.teams[t].starters = onCourtCount }
+            game.teams[t].playerIds.swapAt(a, b)
+            game.updatedAt = Date()
+        }
+        subTick += 1
+    }
+
+    /// The bench player following the finger while dragged.
+    @ViewBuilder
+    private var subGhost: some View {
+        if let drag = subDrag, let s = students.first(where: { $0.id == drag.id }) {
+            StudentAvatarView(student: s, size: 52)
+                .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: 3))
+                .shadow(radius: 6)
+                .position(drag.at)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: Row
@@ -130,9 +278,9 @@ struct LiveTeamPanel: View {
     private func row(_ student: Student, height: CGFloat) -> some View {
         let stats = game.stats(for: student.id)
         let isSource = dragFrom?.id == student.id
-        let isTarget = dragTo.map { point in
+        let isTarget = (dragTo.map { point in
             rowFrames[student.id]?.contains(point) == true && dragFrom?.id != student.id
-        } ?? false
+        } ?? false) || (subDrag.map { subTarget(at: $0.at) == student.id } ?? false)
         let avatar = min(56, height - 16)
         return HStack(spacing: 8) {
             // POINTS target — the whole left part of the row.

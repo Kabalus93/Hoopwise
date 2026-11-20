@@ -799,6 +799,29 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Menu swallows the long press a drag needs). The live game still shows
   every player of a team; starters/bench are recorded, not yet used there.
   Test: CreateGameSlotsUITests (iPad mini; slow drag with a hold).
+  SAME NIGHT, three follow-ups (Luther, markups):
+  · SETTINGS IN ONE CARD ("take unreasonable space — make it smarter"): the
+    game type, then four chips — FORMAT · TIME · BASKET · PLAYERS — each a
+    tap-to-change menu showing its value (`settingChip`); the explanations
+    are gone; "Last game's teams" is a small toggle in the Teams header.
+  · THE LIVE SCREEN SHOWS THE FLOOR ONLY: LiveTeamPanel rows = the team's
+    first `starters` players (older games without starters: everyone), then
+    a dashed BENCH strip (`live.bench`). Sub: DRAG a bench player onto a
+    floor player (anywhere across that row's height — `subTarget`), or TAP
+    him → "<name> in for…" lists who is on the floor (`live.sub.out`). They
+    swap places in playerIds; stats stay with each player.
+  · NEXT GAME (the top button; was "Next Round", which reset the same game in
+    place): finishes and saves this game (winner, W–L) and opens a NEW game —
+    same teams and lineups, same minutes / value / format (`startNextGame`,
+    `onNextGame` → the games tab appends it and presents it). Two teams: at
+    once. More: a sheet "Who plays next?" (`NextTeamsChooser`) — winner and
+    the next waiting team preselected — then Start Game N. The new game opens
+    READY (the coach starts the clock).
+  Tests: LiveGameBenchUITests (HOOPWISE_LIVE_BENCH=1 on liveGame = 3v3 with
+  two on each bench). The gallery's live game keeps its roster in @State —
+  its scratch players got new ids on every redraw and the White team vanished.
+  LiveGameAssistUITests' "five on screen" / "switching team" expect the
+  iPhone layout and fail on the iPad mini (both teams side by side).
 - THIRTEENTH sanctioned exception (October 2026, Luther's request): the
   roll-call photo band (AttendanceWatermarkOverlay, exported to Photos for
   WeChat). Same fields, one left edge: the count leads as present/expected

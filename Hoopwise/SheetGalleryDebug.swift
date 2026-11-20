@@ -633,7 +633,13 @@ enum SheetGalleryDebug {
             let scratch = [("Wáng Shī Líng", "王诗玲"), ("Zhāng Zǐ Chén", "张梓晨"), ("Shěn Sī Fàn", "沈思梵"),
                            ("Wāng Wén Xuān", "汪文轩"), ("Rèn Yì Miǎn", "任逸冕")]
                 .map { Student(name: $0.0, chineseName: $0.1) }
-            LiveGameGalleryHost(students: Array(dm.students.prefix(5)) + scratch)
+            // Built once the roster has loaded — its @State game would keep
+            // a half-empty first build.
+            if dm.students.count >= 5 {
+                LiveGameGalleryHost(students: Array(dm.students.prefix(5)) + scratch)
+            } else {
+                ProgressView()
+            }
 
         case "athletePicker":
             // Add Athlete as a session opens it (banner, sort chips, list).
@@ -766,32 +772,47 @@ enum SheetGalleryDebug {
 private enum DemoGamesOnce { static var done = false }
 
 private struct LiveGameGalleryHost: View {
-    let students: [Student]
+    /// Kept with the game: the scratch players are rebuilt (new ids) on
+    /// every redraw of the shot.
+    @State private var students: [Student]
     @State private var game: SessionGame
 
     init(students: [Student]) {
-        self.students = students
+        _students = State(initialValue: students)
         let ids = students.map(\.id)
         // HOOPWISE_LIVE_BLACK=1: the home team plays in black (dark-mode check).
         let black = ProcessInfo.processInfo.environment["HOOPWISE_LIVE_BLACK"] == "1"
-        let home = GameTeam(name: black ? "Black" : "Blue", colorHex: black ? "#1C1C1E" : "#007AFF",
+        var home = GameTeam(name: black ? "Black" : "Blue", colorHex: black ? "#1C1C1E" : "#007AFF",
                             playerIds: Array(ids.prefix(5)))
-        let away = GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: Array(ids.dropFirst(5).prefix(5)))
+        var away = GameTeam(name: "White", colorHex: "#F5F5F5", playerIds: Array(ids.dropFirst(5).prefix(5)))
+        // HOOPWISE_LIVE_BENCH=1: 3v3 — three on the floor, two on each bench.
+        let benched = ProcessInfo.processInfo.environment["HOOPWISE_LIVE_BENCH"] == "1"
+        if benched { home.starters = 3; away.starters = 3 }
         // HOOPWISE_LIVE_TEAMS=3: a third team waits and the round has not
         // started — the scoreboard offers "Who's up instead?".
         if ProcessInfo.processInfo.environment["HOOPWISE_LIVE_TEAMS"] == "3" {
-            let yellow = GameTeam(name: "Yellow", colorHex: "#FFCC00", playerIds: Array(ids.dropFirst(10).prefix(5)))
+            var yellow = GameTeam(name: "Yellow", colorHex: "#FFCC00", playerIds: Array(ids.dropFirst(10).prefix(5)))
+            if benched { yellow.starters = 3 }
             var g = SessionGame(sessionId: UUID(), teams: [home, away, yellow], status: .ready)
+            if benched { g.playersPerSide = 3 }
             g.activeTeamIds = [home.id, away.id]
             _game = State(initialValue: g)
             return
         }
-        _game = State(initialValue: SessionGame(sessionId: UUID(), teams: [home, away],
-                                                status: .inProgress, startedAt: Date()))
+        var g = SessionGame(sessionId: UUID(), teams: [home, away], status: .inProgress, startedAt: Date())
+        if benched { g.playersPerSide = 3 }
+        _game = State(initialValue: g)
     }
 
+    @State private var played: [SessionGame] = []
+
     var body: some View {
-        LiveGameScoringView(game: $game, students: students, allGamesInSession: [game], onSave: {})
+        LiveGameScoringView(game: $game, students: students, allGamesInSession: played + [game], onSave: {},
+                            onNextGame: { next in
+                                played.append(game)
+                                game = next
+                            })
+            .id(game.id)
     }
 
 }
