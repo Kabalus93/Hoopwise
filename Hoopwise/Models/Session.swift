@@ -103,6 +103,9 @@ struct SessionCurriculum: Codable, Hashable {
     /// The Team (Hub → Teams) a team practice belongs to. In the curriculum
     /// JSON — no schema change.
     var teamId: UUID?
+    /// Tracked shooting drills' results (20 Nov 2026 — ShootingTest.swift):
+    /// one run per tracked drill in the plan. In the curriculum JSON.
+    var shooting: [ShootingRun] = []
     
     init(warmupDrillIds: [UUID] = [], skillDrillIds: [UUID] = [], gameDrillIds: [UUID] = [],
          warmupMinutes: Int = 30, skillsMinutes: Int = 30, gameMinutes: Int = 30, notes: String? = nil,
@@ -121,7 +124,7 @@ struct SessionCurriculum: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case warmupDrillIds, skillDrillIds, gameDrillIds, warmupMinutes, skillsMinutes, gameMinutes, notes, plays
-        case coachIds, teamId
+        case coachIds, teamId, shooting
     }
 
     init(from decoder: Decoder) throws {
@@ -136,6 +139,7 @@ struct SessionCurriculum: Codable, Hashable {
         plays = try c.decodeIfPresent([SessionPlayRef].self, forKey: .plays) ?? []
         coachIds = try c.decodeIfPresent([UUID].self, forKey: .coachIds) ?? []
         teamId = try c.decodeIfPresent(UUID.self, forKey: .teamId)
+        shooting = (try? c.decodeIfPresent([ShootingRun].self, forKey: .shooting)) ?? []
     }
     
     var totalDrillCount: Int { warmupDrillIds.count + skillDrillIds.count + gameDrillIds.count }

@@ -2163,6 +2163,47 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   set) gates skill-target comparisons, so a level-only blob never shows
   default 5s as targets. Tests: PlanGeneratorTests, PlanGeneratorUITests.
 
+## Tracked shooting drills (20 Nov 2026, Luther)
+"Drills that are part of Hoopwise — added to a session they appear as an
+add-on in the plan with a functioning mechanism … made vs miss or made in a
+set amount of time … add to athletes and make it part of the student eval."
+Decided: five spots for 2PT and 3PT, free throws one number; one clock per
+spot; twos at Short / Mid; numbers BESIDE the rating only; in groups the
+athletes SELF-REPORT, so entering a number must be one tap.
+- Models/ShootingTest.swift: `ShootingDrill` (twos, freeThrows, threes —
+  fixed ids, tag `tracked:<raw>`, seeded by syncActivityLibrary with
+  `attr:shooting=3`; names/descriptions bilingual via localizedName),
+  `ShootingSetup` (mode attempts | timed, shots or seconds a spot, range for
+  twos; `key` = the comparison key; the coach's last setup per drill is
+  remembered in UserDefaults `shooting.setup.<drill>`), `ShootingRun` (one per
+  tracked drill in a plan: entries = per athlete, makes per spot, nil = not
+  reported), `ShootingResult` (attempts → share over the spots reported;
+  timed → makes a minute). Stored in `SessionCurriculum.shooting` (curriculum
+  JSON, no schema change).
+- Library: a "Tracked shooting" section at the top of the drills page and
+  the plan picker (`library.tracked`); not listed under Personal.
+- Plan: tracked drills in Warm-up/Skills show ADD-ONS under Skills
+  (Views/Coaching/ShootingAddOnCard.swift): setup menu (locked once a result
+  exists), a per-spot clock for timed (buzzer; when it ends, the pencil opens
+  the pad on that spot), one row per athlete (present ones once roll call
+  started, else expected) with a cell per spot, result, "Last …" and ↑/↓ vs
+  last time, a group line. THE PAD (`ShootingEntryPad`): number buttons
+  0…shots (timed 0…20+); a tap writes and moves on — made-of-N walks athlete
+  by athlete through the spots, timed walks the athletes at the clock's spot;
+  closes after the last empty cell; ‹ › and Clear.
+- Private sessions: the Plan tab has no Plan Balance and no Plays.
+- Athlete: Services/ShootingHistory.swift (series per key oldest first,
+  previous, evidence); profile → ShootingProfileSection (latest, best, last
+  3, sessions, a trend chart, five spot dots hot/cold vs their own average);
+  Quick Peep → under the SHOOTING rating, up to three lines "FT · 10 shots:
+  64% (last 3) · up from 48% · 2nd of 9 same grade" (peers = same current
+  school grade). Never sets the rating.
+- Plan engine: `shootingSignal` — the roster's latest made-of-N results
+  average < 35 % over ≥ 3 athletes → shooting focus, "low shooting-drill
+  results" in the rationale.
+DEBUG HOOPWISE_DEMO_SHOOTING=1|clear on sessionPage (HOOPWISE_SESSION_TAB=0).
+Tests: ShootingTestTests, ShootingAddOnUITests (iPad mini).
+
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan
 becomes a dashboard … feeds back into the program." Decided: 8 axes, ship

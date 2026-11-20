@@ -66,6 +66,9 @@ struct StudentDetailView: View {
                     // Reminders that tag this athlete (14 Nov 2026).
                     StudentRemindersCard(student: student)
 
+                    // Tracked shooting drills (20 Nov 2026).
+                    ShootingProfileSection(studentId: student.id)
+
                     // Team workout (Hub → Teams): drills from the roles
                     // this athlete plays in a team's play breakdowns.
                     TeamWorkoutProfileSection(memberId: student.id)

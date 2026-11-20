@@ -2596,6 +2596,25 @@ class SwiftDataManager: ObservableObject {
                 }
             }
 
+            // The tracked shooting drills (20 Nov 2026) — built in, seeded
+            // with fixed ids; a coach's preference tags survive.
+            for tracked in ShootingDrill.allCases {
+                let fresh = tracked.drillItem
+                if let sd = existing[tracked.drillId] {
+                    let keep = sd.tags.filter { $0.hasPrefix(DrillItem.preferencePrefix) }
+                    if sd.lastModifiedAt == nil, sd.tags.filter({ !$0.hasPrefix(DrillItem.preferencePrefix) }) != fresh.tags
+                        || sd.drillDescription != fresh.description {
+                        sd.name = fresh.name
+                        sd.drillDescription = fresh.description
+                        sd.tags = fresh.tags + keep
+                        updated += 1
+                    }
+                } else {
+                    modelContext.insert(SDDrill.from(fresh))
+                    added += 1
+                }
+            }
+
             if removed + added + updated > 0 {
                 try modelContext.save()
                 cachedDrills = try modelContext.fetch(FetchDescriptor<SDDrill>()).map { $0.toStruct() }

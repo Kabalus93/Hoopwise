@@ -785,8 +785,19 @@ struct StudentQuickPeepView: View {
                             sessions: dataManager.sessionEvents)
     }
 
+    /// Tracked shooting results beside the Shooting rating, ranked among
+    /// athletes of the same grade (20 Nov 2026). Numbers only — they never
+    /// set the rating.
+    private var shootingEvidence: [String] {
+        let grade = student.currentSchoolGrade()
+        let peers = grade == nil ? [] : dataManager.students.filter { $0.currentSchoolGrade() == grade }.map(\.id)
+        return ShootingHistory.evidence(for: student.id, peers: peers, sessions: dataManager.sessionEvents)
+            .map { ShootingHistory.text($0, chinese: isChinese) }
+    }
+
     private var skillsSection: some View {
         let evidence = skillEvidence
+        let shooting = shootingEvidence
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(isChinese ? "技能评估" : "Skills Evaluation")
@@ -837,6 +848,15 @@ struct StudentQuickPeepView: View {
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                                 .padding(.leading, 24)
+                        }
+                        if axis == .shooting {
+                            ForEach(shooting, id: \.self) { line in
+                                Label(line, systemImage: "gauge.with.dots.needle.67percent")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .padding(.leading, 24)
+                                    .accessibilityIdentifier("peep.shootingEvidence")
+                            }
                         }
                     }
                 }

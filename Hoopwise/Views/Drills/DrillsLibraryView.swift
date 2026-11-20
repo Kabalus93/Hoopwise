@@ -113,7 +113,7 @@ struct DrillsLibraryView: View {
     /// Personal drills have no age or block, so those filters leave them out.
     private var personalEntries: [Entry] {
         guard source != .library, age == nil, block == nil, type == nil else { return [] }
-        return visibleDrills.filter { !$0.isLibraryDrill }.map { Entry(drill: $0, activity: nil, order: -1) }
+        return visibleDrills.filter { !$0.isLibraryDrill && $0.trackedShooting == nil }.map { Entry(drill: $0, activity: nil, order: -1) }
     }
 
     /// The list: every filter, then the order.
@@ -277,6 +277,36 @@ struct DrillsLibraryView: View {
     }
 
     // MARK: Filters — skill first, then removable filters and the order
+
+    /// TRACKED SHOOTING (20 Nov 2026): the three built-in drills whose
+    /// results are logged in the plan and kept on each athlete. Always at the
+    /// top, in the plan picker too.
+    @ViewBuilder
+    private var trackedSection: some View {
+        let tracked = ShootingDrill.allCases.compactMap { t in dataManager.drills.first { $0.id == t.drillId } }
+        if !tracked.isEmpty && (skill == nil || skill == .shooting) {
+            Section {
+                ForEach(tracked) { drill in
+                    drillLink(drill) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "gauge.with.dots.needle.67percent")
+                                .font(.title3)
+                                .foregroundStyle(Color.orange)
+                                .frame(width: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(drill.localizedName).font(.body.weight(.semibold))
+                                Text(isChinese ? "记录每位学员的命中" : "Logs each athlete's makes")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("library.tracked")
+                }
+            } header: {
+                Text(isChinese ? "投篮测试 · 自动记录" : "Tracked shooting")
+            }
+        }
+    }
 
     /// Series (18 Nov 2026): ladders of drills, easiest first — their own
     /// page; they are not listed as drills.
@@ -511,6 +541,7 @@ struct DrillsLibraryView: View {
                 searchResults
             } else {
                 filterSection
+                trackedSection
                 if pick == nil { seriesEntry }
                 drillList
             }

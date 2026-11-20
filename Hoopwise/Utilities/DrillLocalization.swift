@@ -246,6 +246,9 @@ extension DrillItem {
         if let activity = libraryActivity, name == activity.name {
             return activity.displayName
         }
+        if let tracked = trackedShooting, name == tracked.englishName {
+            return tracked.title(chinese: LocalizationManager.shared.currentLanguage == .chinese)
+        }
         return DrillLocalization.localizedDrillName(name)
     }
     
@@ -379,6 +382,9 @@ extension DrillItem {
             return activity.localizedHowItRuns
         }
         if isLibraryDrill { return description }
+        if let tracked = trackedShooting, description == tracked.englishDescription {
+            return tracked.description(chinese: LocalizationManager.shared.currentLanguage == .chinese)
+        }
         return DrillContentLocalization.localizedDescription(for: name) ?? description
     }
     

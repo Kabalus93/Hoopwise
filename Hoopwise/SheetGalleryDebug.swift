@@ -321,8 +321,25 @@ enum SheetGalleryDebug {
                     }
                     dm.replaceSessionGames(inSessionId: session.id, games: games)
                 }()
+                // HOOPWISE_DEMO_SHOOTING=1 | clear (demo store only): Free
+                // Throws and 5-Spot Twos in this session's Skills with no
+                // results yet, or out again (20 Nov 2026).
+                let _ = {
+                    guard ScreenshotStore.isActive, !DemoShootingOnce.done,
+                          let mode = env["HOOPWISE_DEMO_SHOOTING"] else { return }
+                    DemoShootingOnce.done = true
+                    var copy = session
+                    let ids = [ShootingDrill.freeThrows.drillId, ShootingDrill.twos.drillId]
+                    copy.curriculum.skillDrillIds.removeAll { ids.contains($0) }
+                    copy.curriculum.warmupDrillIds.removeAll { ids.contains($0) }
+                    copy.curriculum.shooting = []
+                    if mode != "clear" { copy.curriculum.skillDrillIds += ids }
+                    dm.updateSessionEvent(copy, keepLiveFields: true)
+                }()
                 NavigationStack {
-                    FlightySessionPageView(session: session, accessMode: .execution,
+                    // Re-read: a demo hook above may just have written it.
+                    FlightySessionPageView(session: dm.sessionEvents.first { $0.id == session.id } ?? session,
+                                           accessMode: .execution,
                                            initialTab: env["HOOPWISE_SESSION_TAB"].flatMap(Int.init))
                 }
             } else {
@@ -770,6 +787,7 @@ enum SheetGalleryDebug {
 /// already in progress. Nothing is written to the store.
 /// HOOPWISE_DEMO_READY_GAMES writes once per launch.
 private enum DemoGamesOnce { static var done = false }
+private enum DemoShootingOnce { static var done = false }
 
 private struct LiveGameGalleryHost: View {
     /// Kept with the game: the scratch players are rebuilt (new ids) on

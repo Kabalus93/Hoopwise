@@ -908,6 +908,57 @@ struct FlightySessionPageView: View {
         return book.skills(in: book.focusPlays)
     }
 
+    // MARK: - Tracked shooting add-ons (20 Nov 2026)
+
+    /// The tracked shooting drills in this plan, in plan order, once each.
+    private var trackedDrillsInPlan: [ShootingDrill] {
+        var seen = Set<ShootingDrill>()
+        return (session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds).compactMap { id in
+            guard let t = ShootingDrill.allCases.first(where: { $0.drillId == id }), seen.insert(t).inserted else { return nil }
+            return t
+        }
+    }
+
+    /// Who logs: those marked present once roll call has started, else
+    /// everyone expected.
+    private var shootingRoster: [Student] {
+        let present = enrolledStudents.filter { session.actualAttendeeIds.contains($0.id) }
+        let list = present.isEmpty ? enrolledStudents : present
+        return list.sorted { $0.primaryDisplayName.localizedStandardCompare($1.primaryDisplayName) == .orderedAscending }
+    }
+
+    private func shootingRunBinding(_ drill: ShootingDrill) -> Binding<ShootingRun> {
+        Binding(
+            get: { session.curriculum.shooting.first { $0.setup.drill == drill }
+                ?? ShootingRun(setup: .remembered(drill)) },
+            set: { updated in
+                if let i = session.curriculum.shooting.firstIndex(where: { $0.setup.drill == drill }) {
+                    session.curriculum.shooting[i] = updated
+                } else {
+                    session.curriculum.shooting.append(updated)
+                }
+                saveSession()
+            })
+    }
+
+    @ViewBuilder
+    private var shootingAddOns: some View {
+        let tracked = trackedDrillsInPlan
+        if !tracked.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(LocalizationManager.shared.currentLanguage == .chinese ? "附加 · 投篮记录" : "ADD-ONS")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                ForEach(tracked) { drill in
+                    ShootingAddOnCard(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
+                                      sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
+                                      canEdit: accessMode.canEdit)
+                }
+            }
+        }
+    }
+
     private var planTab: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return ScrollView(showsIndicators: false) {
@@ -927,6 +978,9 @@ struct FlightySessionPageView: View {
                 }
 
                 // What the plan trains vs what it should (November 2026).
+                // Not on a private lesson (20 Nov 2026, Luther: plan balance
+                // and plays are not relevant there).
+                if !isPrivateSession {
                 SessionPlanDashboard(
                     curriculum: session.curriculum,
                     drills: dataManager.drills,
@@ -944,6 +998,7 @@ struct FlightySessionPageView: View {
                         pickerAttribute = axis
                         showingSmartDrillPicker = true
                     })
+                }
 
                 // Warmup
                 curriculumSection(
@@ -965,13 +1020,18 @@ struct FlightySessionPageView: View {
                     section: .main
                 )
 
+                // Tracked shooting drills in the plan: their add-ons.
+                shootingAddOns
+
                 // Plays from the Hub's library this session runs.
+                if !isPrivateSession {
                 SessionPlanPlaysSection(
                     plays: $session.curriculum.plays,
                     canEdit: accessMode.canEdit,
                     color: Color.accentColor,
                     onChange: saveSession
                 )
+                }
 
                 Spacer(minLength: 100)
             }

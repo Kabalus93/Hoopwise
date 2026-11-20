@@ -99,7 +99,8 @@ struct DrillPlanGenerator {
         let (level, source) = options.level.map { (min(max($0, 1), 5), LevelSource.coach) } ?? resolved
         let window = ageWeights(age: age, level: level)
         let focus = focusTypes(phase: ctx.phase, students: ctx.enrolledStudents, players: ctx.players,
-                               games: ctx.programHistory.flatMap(\.games))
+                               games: ctx.programHistory.flatMap(\.games),
+                               shooting: ctx.programHistory.sorted { $0.startTime < $1.startTime }.flatMap(\.curriculum.shooting))
         var history = History(sessions: ctx.programHistory, before: ctx.session)
         if !options.avoidLastSession { history.forgetLastSession() }
         var gaps = phaseGaps(ctx)
@@ -260,7 +261,7 @@ struct DrillPlanGenerator {
     // MARK: - Focus
 
     private static func focusTypes(phase: MicroCycle?, students: [Student], players: [Player],
-                                   games: [SessionGame] = [])
+                                   games: [SessionGame] = [], shooting: [ShootingRun] = [])
         -> (types: [ActivityType], notes: [String]) {
         var types: [ActivityType] = []
         var notes: [String] = []
@@ -286,6 +287,11 @@ struct DrillPlanGenerator {
             types += [.defence, .oneOnOne]
             notes.append(signal)
         }
+        // Tracked shooting drills (20 Nov 2026): the group shoots poorly.
+        if let signal = shootingSignal(runs: shooting, roster: Set(students.map(\.id))) {
+            types += [.shooting, .layups]
+            notes.append(signal)
+        }
 
         var seen = Set<ActivityType>()
         return (types.filter { seen.insert($0).inserted }, notes)
@@ -308,6 +314,21 @@ struct DrillPlanGenerator {
         guard baskets >= 10 else { return nil }
         let ratio = Double(assists) / baskets
         return ratio < 0.2 ? "assists:\(String(format: "%.2f", ratio))" : nil
+    }
+
+    /// "shooting:<share>" when the roster's tracked shooting (made out of N —
+    /// timed results have no common yardstick) averages under 35 %, over at
+    /// least three athletes' latest results (the later runs win).
+    static func shootingSignal(runs: [ShootingRun], roster: Set<UUID>) -> String? {
+        var latest: [UUID: Double] = [:]
+        for run in runs where run.setup.mode == .attempts {
+            for e in run.entries where roster.contains(e.studentId) {
+                if let r = run.result(for: e.studentId) { latest[e.studentId] = r.value }
+            }
+        }
+        guard latest.count >= 3 else { return nil }
+        let avg = latest.values.reduce(0, +) / Double(latest.count)
+        return avg < 0.35 ? "shooting:\(Int((avg * 100).rounded()))%" : nil
     }
 
     /// "stocks:<per player-game>" when the roster's games show under one
@@ -538,6 +559,8 @@ extension DrillPlanGenerator.PlanRationale {
             return zh ? "评估最弱：\(axis.title)" : "weakest evaluated: \(axis.title)"
         case "assists":
             return zh ? "比赛中助攻偏少（每球 \(parts[1])）" : "few assists in games (\(parts[1]) per basket)"
+        case "shooting":
+            return zh ? "投篮测试命中偏低（平均 \(parts[1])）" : "low shooting-drill results (\(parts[1]) average)"
         case "stocks":
             return zh ? "比赛中抢断盖帽偏少（人均每场 \(parts[1])）" : "few steals and blocks in games (\(parts[1]) per player-game)"
         default:
