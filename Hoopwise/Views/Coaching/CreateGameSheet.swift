@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // MARK: - Create Game Sheet
 /// Native-Form layout for creating an in-session scrimmage game.
@@ -25,6 +26,29 @@ struct CreateGameSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     /// The slot (or "roster") a drag is over, for its highlight.
     @State private var dropTargetKey: String?
+    /// The player being carried (in-app drag, 21 Nov 2026 — the system drag
+    /// and drop crashed on the court) and where the finger is, in the
+    /// page's content space.
+    @State private var carrying: (pid: UUID, at: CGPoint)?
+    /// Every drop target's frame in the content space: "t.p" slots, "team.t"
+    /// rows, "roster".
+    @State private var targetFrames: [String: CGRect] = [:]
+    /// The visible part of the page, for scrolling while carrying.
+    @State private var visibleRect: CGRect = .zero
+    @State private var scrollPosition = ScrollPosition()
+    /// How far the page can scroll (content height − visible height).
+    @State private var maxScroll: CGFloat = 0
+    /// How far the page scrolled under the current carry.
+    @State private var carryScrolled: CGFloat = 0
+    @State private var liftTick = 0
+    /// True while a carry gesture is under way; going false with a player
+    /// still carried means the gesture was cancelled — put it back.
+    @GestureState private var carryGestureActive = false
+    /// When a carry last ended — the Button under it must not open options.
+    @State private var carryEndedAt = Date.distantPast
+    @State private var dropTick = 0
+    private let edgeTimer = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
+    static let space = "createGame.content"
     /// The player whose options are open (a tap on him).
     @State private var optionsFor: UUID?
     @State private var showOnlyPresent: Bool = true
@@ -117,7 +141,29 @@ struct CreateGameSheet: View {
               .padding(.vertical, 16)
               .frame(maxWidth: 860)
               .frame(maxWidth: .infinity)
+              // The carried player rides above everything, under the finger.
+              .overlay(alignment: .topLeading) { carriedGhost }
+              .coordinateSpace(name: Self.space)
+              .onPreferenceChange(TargetFrameKey.self) { targetFrames = $0 }
             }
+            .scrollPosition($scrollPosition)
+            .onScrollGeometryChange(for: CGRect.self) { $0.visibleRect } action: { old, rect in
+                visibleRect = rect
+                // The page moved under a carried player: keep it under the
+                // finger. Only scrolling that HAPPENED counts.
+                if carrying != nil {
+                    let dy = rect.minY - old.minY
+                    carryScrolled += dy
+                    carrying?.at.y += dy
+                }
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { max(0, $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom - $0.containerSize.height) } action: { _, v in maxScroll = v }
+            .onReceive(edgeTimer) { _ in scrollWhileCarrying() }
+            .scrollDisabled(carrying != nil)
+            .onChange(of: carryGestureActive) { _, active in if !active, carrying != nil { finishCarry(false) } }
+            .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
+            .sensoryFeedback(.impact(weight: .light), trigger: dropTick)
+            .sensoryFeedback(.selection, trigger: dropTargetKey)
             .background(Color(.systemGroupedBackground))
             .navigationTitle(isChinese ? "创建比赛" : "Create Game")
             .navigationBarTitleDisplayModeCompat(.inline)
@@ -310,10 +356,6 @@ struct CreateGameSheet: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-        } footer: {
-            Text(isChinese
-                 ? "拖动球员到位置上，或点一下球员选择去向。前 \(playersPerSide) 个位置是首发。"
-                 : "Drag players onto a slot, or tap one for options. The first \(playersPerSide) slots are the starters.")
         }
     }
 
@@ -365,24 +407,26 @@ struct CreateGameSheet: View {
             }
         }
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .dropTarget("team.\(index)")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup.team.\(index)")
     }
 
-    /// One slot of a team: a player (photo + name, tap = options, drag to
-    /// move) or an empty place (drop target).
+    /// One slot of a team: a player (tap = options; press, hold and carry
+    /// to move) or an empty place.
     @ViewBuilder
     private func slot(teamIndex: Int, position: Int, playerId: UUID?, color: Color, starter: Bool) -> some View {
         let key = "\(teamIndex).\(position)"
-        let targeted = dropTargetKey == key
+        let targeted = dropTargetKey == key && carrying?.pid != playerId
         Group {
             if let pid = playerId, let s = student(pid) {
-                Button { optionsFor = pid } label: {
+                Button { if Date().timeIntervalSince(carryEndedAt) > 0.4 { optionsFor = pid } } label: {
                     playerBubble(s, ring: color, solidRing: starter, highlighted: targeted)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: optionsBinding(pid)) { optionsPopover(pid: pid, currentTeam: teamIndex) }
-                .draggable(pid.uuidString) { playerBubble(s, ring: color, solidRing: true, highlighted: false) }
+                .carryable(pid, in: self)
                 .accessibilityIdentifier("setup.slot.\(key)")
             } else {
                 emptySlot(starter: starter, color: color, highlighted: targeted)
@@ -390,13 +434,9 @@ struct CreateGameSheet: View {
                     .accessibilityIdentifier("setup.slot.\(key)")
             }
         }
-        .dropDestination(for: String.self) { items, _ in
-            guard let raw = items.first, let pid = UUID(uuidString: raw) else { return false }
-            withAnimation(.snappy) { place(pid, team: teamIndex, position: position) }
-            return true
-        } isTargeted: { on in
-            if on { dropTargetKey = key } else if dropTargetKey == key { dropTargetKey = nil }
-        }
+        .scaleEffect(targeted ? 1.08 : 1)
+        .animation(.snappy(duration: 0.18), value: targeted)
+        .dropTarget(key)
     }
 
     private func playerBubble(_ s: Student, ring: Color?, solidRing: Bool, highlighted: Bool) -> some View {
@@ -544,20 +584,20 @@ struct CreateGameSheet: View {
     private var unassignedSection: some View {
         SetupCard {
             if rosterIds.isEmpty {
-                Text(isChinese ? "所有人都已分队。把球员拖到这里移出队伍。" : "Everyone has a team. Drag a player here to take them off.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                Image(systemName: "person.crop.circle.dashed")
+                    .font(.title2)
+                    .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, minHeight: 60)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: slotSize + 22), spacing: 8)], spacing: 12) {
                     ForEach(rosterIds, id: \.self) { pid in
                         if let s = student(pid) {
-                            Button { optionsFor = pid } label: {
+                            Button { if Date().timeIntervalSince(carryEndedAt) > 0.4 { optionsFor = pid } } label: {
                                 playerBubble(s, ring: nil, solidRing: true, highlighted: false)
                             }
                             .buttonStyle(.plain)
                             .popover(isPresented: optionsBinding(pid)) { optionsPopover(pid: pid, currentTeam: nil) }
-                            .draggable(pid.uuidString) { playerBubble(s, ring: nil, solidRing: true, highlighted: false) }
+                            .carryable(pid, in: self)
                             .accessibilityIdentifier("setup.roster.player")
                         }
                     }
@@ -603,15 +643,115 @@ struct CreateGameSheet: View {
                     .strokeBorder(Color.accentColor, lineWidth: 2)
             }
         }
-        .dropDestination(for: String.self) { items, _ in
-            guard let raw = items.first, let pid = UUID(uuidString: raw) else { return false }
-            withAnimation(.snappy) { unassign(pid) }
-            return true
-        } isTargeted: { on in
-            if on { dropTargetKey = "roster" } else if dropTargetKey == "roster" { dropTargetKey = nil }
-        }
+        .dropTarget("roster")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup.roster")
+    }
+
+    // MARK: - Carrying a player (in-app drag, like the Home Screen)
+    //
+    // 21 Nov 2026, Luther: the system drag and drop crashed on the court —
+    // its preview is rendered outside the page (no data for the photo) and
+    // the drop wrote the teams while the page redrew. Now: press and hold
+    // lifts the player (a bump), it follows the finger above everything,
+    // the slot under it swells, letting go drops it — on a player = swap, on
+    // an empty slot or a team row = join, on the roster = off the team;
+    // anywhere else = back where it was. The page scrolls near its edges.
+    // No hints.
+
+    fileprivate func isCarrying(_ pid: UUID) -> Bool { carrying?.pid == pid }
+
+    /// Hold 0.3 s, then move: SwiftUI's own sequence, run alongside the
+    /// player's Button (a tap still opens the options). Taken over by the
+    /// page's scroll if the finger moves before the hold completes.
+    fileprivate func carryGesture(_ pid: UUID) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.3, maximumDistance: 10)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .updating($carryGestureActive) { _, active, _ in active = true }
+            .onChanged { value in
+                guard case .second(true, let dragValue) = value, let dragValue,
+                      let home = targetFrames["p.\(pid)"] else { return }
+                // Where the player sat + how far the finger has moved: the
+                // TRANSLATION is reliable inside a scroll view, the
+                // reported location is not.
+                let drag = (location: CGPoint(x: home.midX + dragValue.translation.width,
+                                              y: home.midY + dragValue.translation.height + carryScrolled), ())
+                if carrying == nil {
+                    optionsFor = nil
+                    carryScrolled = 0
+                    withAnimation(.snappy(duration: 0.2)) { carrying = (pid, drag.location) }
+                    liftTick += 1
+                    dropTargetKey = target(at: drag.location)
+                } else {
+                    carrying?.at = drag.location
+                    let k = target(at: drag.location)
+                    if k != dropTargetKey { dropTargetKey = k }
+                }
+            }
+            .onEnded { _ in finishCarry(true) }
+    }
+
+    /// The drop target under a point: a slot first, then a team row, then
+    /// the roster.
+    private func target(at p: CGPoint) -> String? {
+        if let k = targetFrames.first(where: { !$0.key.hasPrefix("team.") && !$0.key.hasPrefix("p.") && $0.key != "roster"
+                                                && $0.value.insetBy(dx: -6, dy: -6).contains(p) })?.key { return k }
+        if let k = targetFrames.first(where: { $0.key.hasPrefix("team.") && $0.value.contains(p) })?.key { return k }
+        if targetFrames["roster"]?.contains(p) == true { return "roster" }
+        return nil
+    }
+
+    private func finishCarry(_ dropped: Bool) {
+        guard let c = carrying else { return }
+        let key = dropTargetKey
+        withAnimation(.snappy(duration: 0.28)) {
+            if dropped, let key {
+                if key == "roster" {
+                    if !unassignedIds.contains(c.pid) { unassign(c.pid) }
+                } else if key.hasPrefix("team."), let t = Int(key.dropFirst(5)), teams.indices.contains(t) {
+                    if !teams[t].playerIds.contains(c.pid) { addToTeam(c.pid, t) }
+                } else {
+                    let parts = key.split(separator: ".")
+                    if parts.count == 2, let t = Int(parts[0]), let pos = Int(parts[1]), teams.indices.contains(t) {
+                        place(c.pid, team: t, position: pos)
+                    }
+                }
+                dropTick += 1
+            }
+            carrying = nil
+            dropTargetKey = nil
+        }
+        carryEndedAt = Date()
+    }
+
+    /// Near the top or bottom of what is visible, the page scrolls under
+    /// the carried player.
+    private func scrollWhileCarrying() {
+        guard let c = carrying, visibleRect.height > 0 else { return }
+        let edge: CGFloat = 90, step: CGFloat = 14
+        var y = visibleRect.minY
+        if c.at.y < visibleRect.minY + edge { y -= step } else if c.at.y > visibleRect.maxY - edge { y += step }
+        y = min(max(0, y), maxScroll)
+        let dy = y - visibleRect.minY
+        guard abs(dy) > 0.5 else { return }
+        scrollPosition.scrollTo(y: y)
+        if let at = carrying?.at {
+            let k = target(at: at)
+            if k != dropTargetKey { dropTargetKey = k }
+        }
+    }
+
+    @ViewBuilder
+    private var carriedGhost: some View {
+        if let c = carrying, let s = student(c.pid) {
+            playerBubble(s, ring: teams.first { $0.playerIds.contains(c.pid) }.map { $0.displayColor(for: colorScheme) },
+                         solidRing: true, highlighted: false)
+                .scaleEffect(1.2)
+                .shadow(color: .black.opacity(0.35), radius: 14, y: 8)
+                .position(x: c.at.x, y: c.at.y - 10)
+                .allowsHitTesting(false)
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
+        }
     }
 
     // MARK: - Moving players
@@ -1018,5 +1158,30 @@ extension SetupCard where Header == EmptyView {
 extension SetupCard where Header == EmptyView, Footer == EmptyView {
     init(@ViewBuilder content: () -> Content) {
         self.init(content: content, header: { EmptyView() }, footer: { EmptyView() })
+    }
+}
+
+// MARK: - In-app carry
+
+private struct TargetFrameKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+private extension View {
+    /// Registers this view as a drop target under `key`.
+    func dropTarget(_ key: String) -> some View {
+        background(GeometryReader { g in
+            Color.clear.preference(key: TargetFrameKey.self, value: [key: g.frame(in: .named(CreateGameSheet.space))])
+        })
+    }
+
+    /// Press, hold and carry this player; the original fades while carried.
+    func carryable(_ pid: UUID, in sheet: CreateGameSheet) -> some View {
+        opacity(sheet.isCarrying(pid) ? 0.0 : 1)
+            .dropTarget("p.\(pid)")
+            .simultaneousGesture(sheet.carryGesture(pid))
     }
 }

@@ -799,6 +799,26 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Menu swallows the long press a drag needs). The live game still shows
   every player of a team; starters/bench are recorded, not yet used there.
   Test: CreateGameSlotsUITests (iPad mini; slow drag with a hold).
+  IN-APP CARRY, NOT SYSTEM DRAG AND DROP (21 Nov 2026, Luther: the drag and
+  drop crashed the app on the court; "clean like dragging apps on iOS … no
+  hand holding"). `.draggable` / `.dropDestination` are gone (the system
+  preview renders outside the page — StudentAvatarView's DataManager is not
+  there — and the drop wrote the teams mid-redraw). Now `carryGesture`: a
+  LongPress (0.3 s) sequenced before a Drag, as a SIMULTANEOUS gesture on the
+  player's Button (tap still opens options; a tap within 0.4 s after a carry
+  is ignored). The player lifts (bump), rides above the page (`carriedGhost`,
+  ×1.2 with a shadow) — its own spot fades — the slot under it swells, a
+  tick on each new target; letting go drops it (player = swap, empty slot or
+  team row = join, roster = off; elsewhere = back). Drop targets register
+  their frames in the page's named space (`.dropTarget`, TargetFrameKey);
+  players register `p.<id>`. THE CARRIED POSITION = the player's own frame
+  centre + the drag's TRANSLATION (+ whatever the page really scrolled):
+  inside the scroll view / the roster's lazy grid a named-space location
+  came back ~1500 pt off. The page scrolls near its edges while carrying
+  (`scrollWhileCarrying`); only scrolling that HAPPENED moves the player
+  (adding the requested step each tick ran away to y ≈ 4700). The page's
+  own scroll is disabled during a carry. No hint texts (the teams footer
+  and the empty-roster sentence went; an empty roster is a dashed icon).
   SAME NIGHT, three follow-ups (Luther, markups):
   · SETTINGS IN ONE CARD ("take unreasonable space — make it smarter"): the
     game type, then four chips — FORMAT · TIME · BASKET · PLAYERS — each a
