@@ -38,8 +38,10 @@ struct CreateGameSheet: View {
     @State private var scrollPosition = ScrollPosition()
     /// How far the page can scroll (content height − visible height).
     @State private var maxScroll: CGFloat = 0
-    /// How far the page scrolled under the current carry.
-    @State private var carryScrolled: CGFloat = 0
+    /// The hold began on no player: ignore the rest of this gesture.
+    @State private var carryMissed = false
+    /// The page's scroll view on screen.
+    @State private var scrollFrame: CGRect = .zero
     @State private var liftTick = 0
     /// True while a carry gesture is under way; going false with a player
     /// still carried means the gesture was cancelled — put it back.
@@ -141,26 +143,38 @@ struct CreateGameSheet: View {
               .padding(.vertical, 16)
               .frame(maxWidth: 860)
               .frame(maxWidth: .infinity)
-              // The carried player rides above everything, under the finger.
-              .overlay(alignment: .topLeading) { carriedGhost }
               .coordinateSpace(name: Self.space)
+              .simultaneousGesture(pageCarryGesture)
               .onPreferenceChange(TargetFrameKey.self) { targetFrames = $0 }
             }
             .scrollPosition($scrollPosition)
+            // The carried player rides above everything, under the finger.
+            .overlay {
+                GeometryReader { g in
+                    carriedGhost(origin: g.frame(in: .global).origin)
+                }
+                .allowsHitTesting(false)
+            }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
             .onScrollGeometryChange(for: CGRect.self) { $0.visibleRect } action: { old, rect in
                 visibleRect = rect
                 // The page moved under a carried player: keep it under the
                 // finger. Only scrolling that HAPPENED counts.
-                if carrying != nil {
-                    let dy = rect.minY - old.minY
-                    carryScrolled += dy
-                    carrying?.at.y += dy
+                // Targets are re-measured on screen as the page moves; the
+                // finger stays where it is — nothing to adjust.
+                if let at = carrying?.at {
+                    let k = target(at: at)
+                    if k != dropTargetKey { dropTargetKey = k }
                 }
             }
             .onScrollGeometryChange(for: CGFloat.self) { max(0, $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom - $0.containerSize.height) } action: { _, v in maxScroll = v }
             .onReceive(edgeTimer) { _ in scrollWhileCarrying() }
-            .scrollDisabled(carrying != nil)
-            .onChange(of: carryGestureActive) { _, active in if !active, carrying != nil { finishCarry(false) } }
+            .onChange(of: carryGestureActive) { _, active in
+                if !active {
+                    carryMissed = false
+                    if carrying != nil { finishCarry(false) }
+                }
+            }
             .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
             .sensoryFeedback(.impact(weight: .light), trigger: dropTick)
             .sensoryFeedback(.selection, trigger: dropTargetKey)
@@ -661,24 +675,26 @@ struct CreateGameSheet: View {
 
     fileprivate func isCarrying(_ pid: UUID) -> Bool { carrying?.pid == pid }
 
-    /// Hold 0.3 s, then move: SwiftUI's own sequence, run alongside the
-    /// player's Button (a tap still opens the options). Taken over by the
-    /// page's scroll if the finger moves before the hold completes.
-    fileprivate func carryGesture(_ pid: UUID) -> some Gesture {
+    /// ONE carry gesture for the whole page (a gesture on each player broke:
+    /// when a drop swapped players, the slot's still-running gesture picked
+    /// up the newcomer). Hold 0.3 s on a player, then move. It runs
+    /// alongside everything — the players' Buttons still take a tap, and a
+    /// swipe that moves before the hold completes still scrolls the page.
+    fileprivate var pageCarryGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.3, maximumDistance: 10)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
             .updating($carryGestureActive) { _, active, _ in active = true }
             .onChanged { value in
-                guard case .second(true, let dragValue) = value, let dragValue,
-                      let home = targetFrames["p.\(pid)"] else { return }
-                // Where the player sat + how far the finger has moved: the
-                // TRANSLATION is reliable inside a scroll view, the
-                // reported location is not.
-                let drag = (location: CGPoint(x: home.midX + dragValue.translation.width,
-                                              y: home.midY + dragValue.translation.height + carryScrolled), ())
+                guard case .second(true, let drag?) = value else { return }
                 if carrying == nil {
+                    guard !carryMissed else { return }
+                    // Whose photo is under the finger where the hold began?
+                    guard let hit = targetFrames.first(where: { $0.key.hasPrefix("p.") && $0.value.contains(drag.startLocation) }),
+                          let pid = UUID(uuidString: String(hit.key.dropFirst(2))) else {
+                        carryMissed = true
+                        return
+                    }
                     optionsFor = nil
-                    carryScrolled = 0
                     withAnimation(.snappy(duration: 0.2)) { carrying = (pid, drag.location) }
                     liftTick += 1
                     dropTargetKey = target(at: drag.location)
@@ -727,28 +743,23 @@ struct CreateGameSheet: View {
     /// Near the top or bottom of what is visible, the page scrolls under
     /// the carried player.
     private func scrollWhileCarrying() {
-        guard let c = carrying, visibleRect.height > 0 else { return }
+        guard let c = carrying, scrollFrame.height > 0, visibleRect.height > 0 else { return }
         let edge: CGFloat = 90, step: CGFloat = 14
         var y = visibleRect.minY
-        if c.at.y < visibleRect.minY + edge { y -= step } else if c.at.y > visibleRect.maxY - edge { y += step }
+        if c.at.y < scrollFrame.minY + edge { y -= step } else if c.at.y > scrollFrame.maxY - edge { y += step }
         y = min(max(0, y), maxScroll)
-        let dy = y - visibleRect.minY
-        guard abs(dy) > 0.5 else { return }
+        guard abs(y - visibleRect.minY) > 0.5 else { return }
         scrollPosition.scrollTo(y: y)
-        if let at = carrying?.at {
-            let k = target(at: at)
-            if k != dropTargetKey { dropTargetKey = k }
-        }
     }
 
     @ViewBuilder
-    private var carriedGhost: some View {
+    private func carriedGhost(origin: CGPoint) -> some View {
         if let c = carrying, let s = student(c.pid) {
             playerBubble(s, ring: teams.first { $0.playerIds.contains(c.pid) }.map { $0.displayColor(for: colorScheme) },
                          solidRing: true, highlighted: false)
                 .scaleEffect(1.2)
                 .shadow(color: .black.opacity(0.35), radius: 14, y: 8)
-                .position(x: c.at.x, y: c.at.y - 10)
+                .position(x: c.at.x - origin.x, y: c.at.y - origin.y - 10)
                 .allowsHitTesting(false)
                 .transition(.scale(scale: 0.85).combined(with: .opacity))
         }
@@ -1174,7 +1185,10 @@ private extension View {
     /// Registers this view as a drop target under `key`.
     func dropTarget(_ key: String) -> some View {
         background(GeometryReader { g in
-            Color.clear.preference(key: TargetFrameKey.self, value: [key: g.frame(in: .named(CreateGameSheet.space))])
+            // SCREEN space: the finger's screen position is the one number
+            // that always matched reality (named-space frames came back
+            // ~70 pt off inside the page). Re-measured as the page scrolls.
+            Color.clear.preference(key: TargetFrameKey.self, value: [key: g.frame(in: .global)])
         })
     }
 
@@ -1182,6 +1196,5 @@ private extension View {
     func carryable(_ pid: UUID, in sheet: CreateGameSheet) -> some View {
         opacity(sheet.isCarrying(pid) ? 0.0 : 1)
             .dropTarget("p.\(pid)")
-            .simultaneousGesture(sheet.carryGesture(pid))
     }
 }

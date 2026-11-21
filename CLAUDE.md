@@ -810,14 +810,22 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   ×1.2 with a shadow) — its own spot fades — the slot under it swells, a
   tick on each new target; letting go drops it (player = swap, empty slot or
   team row = join, roster = off; elsewhere = back). Drop targets register
-  their frames in the page's named space (`.dropTarget`, TargetFrameKey);
-  players register `p.<id>`. THE CARRIED POSITION = the player's own frame
-  centre + the drag's TRANSLATION (+ whatever the page really scrolled):
-  inside the scroll view / the roster's lazy grid a named-space location
-  came back ~1500 pt off. The page scrolls near its edges while carrying
-  (`scrollWhileCarrying`); only scrolling that HAPPENED moves the player
-  (adding the requested step each tick ran away to y ≈ 4700). The page's
-  own scroll is disabled during a carry. No hint texts (the teams footer
+  their frames ON SCREEN (`.dropTarget`, TargetFrameKey, frame(in: .global)
+  — re-measured as the page scrolls); players register `p.<id>`. ONE
+  page-level gesture (`pageCarryGesture`, simultaneous on the page content):
+  a LongPress (0.3 s) sequenced before a Drag in GLOBAL space; at the start
+  it finds whose `p.` frame holds the finger. WHAT BROKE ON THE WAY (found
+  by driving the iPad mini simulator with real touch paths — the XCUITest
+  drag passed throughout and proved nothing): (1) a gesture per player:
+  after a swap, the slot's still-running gesture picked up the newcomer;
+  (2) `.scrollDisabled(carrying != nil)` CANCELS the touch in progress the
+  moment the player lifts — never toggle it during a gesture; (3) frames
+  and locations in the page's NAMED space came back 70–1500 pt off (lazy
+  grid, popover-wrapped buttons) — screen space is the one that matched;
+  (4) the edge auto-scroll must not move the carried point itself (it ran
+  away to y ≈ 4700) — targets are re-measured as the page moves. The ghost
+  rides an overlay on the scroll view, placed at finger − overlay origin.
+ No hint texts (the teams footer
   and the empty-roster sentence went; an empty roster is a dashed icon).
   SAME NIGHT, three follow-ups (Luther, markups):
   · SETTINGS IN ONE CARD ("take unreasonable space — make it smarter"): the
