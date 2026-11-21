@@ -494,6 +494,7 @@ struct FlightySessionPageView: View {
         if session.excusedAbsences != fresh.excusedAbsences { session.excusedAbsences = fresh.excusedAbsences }
         if session.unexcusedAbsences != fresh.unexcusedAbsences { session.unexcusedAbsences = fresh.unexcusedAbsences }
         if session.attendancePhotoPath != fresh.attendancePhotoPath { session.attendancePhotoPath = fresh.attendancePhotoPath }
+        if session.curriculum.shooting != fresh.curriculum.shooting { session.curriculum.shooting = fresh.curriculum.shooting }
 
         // Bail early when nothing else has changed downstream.
         guard fresh.updatedAt > session.updatedAt else { return }
@@ -910,13 +911,16 @@ struct FlightySessionPageView: View {
 
     // MARK: - Tracked shooting add-ons (20 Nov 2026)
 
-    /// The tracked shooting drills in this plan, in plan order, once each.
+    /// The tracked shooting drills in this plan, in plan order, once each —
+    /// and any drill that has RESULTS here even if it has left the plan
+    /// (results are never hidden).
     private var trackedDrillsInPlan: [ShootingDrill] {
         var seen = Set<ShootingDrill>()
-        return (session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds).compactMap { id in
-            guard let t = ShootingDrill.allCases.first(where: { $0.drillId == id }), seen.insert(t).inserted else { return nil }
-            return t
+        let inPlan = (session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds).compactMap { id in
+            ShootingDrill.allCases.first(where: { $0.drillId == id })
         }
+        let withResults = session.curriculum.shooting.filter { !$0.entries.isEmpty }.map(\.setup.drill)
+        return (inPlan + withResults).filter { seen.insert($0).inserted }
     }
 
     /// Who logs: those marked present once roll call has started, else
@@ -937,7 +941,8 @@ struct FlightySessionPageView: View {
                 } else {
                     session.curriculum.shooting.append(updated)
                 }
-                saveSession()
+                // Field-level: only the results, never the whole session.
+                dataManager.setSessionShooting(sessionId: session.id, runs: session.curriculum.shooting)
             })
     }
 
@@ -1186,6 +1191,16 @@ struct FlightySessionPageView: View {
             merged.notes = existingNotes
         }
         merged.plays = session.curriculum.plays
+        // Tracked shooting drills stay in the plan, and their results stay
+        // (the old Regenerate dropped both).
+        let tracked = Set(ShootingDrill.allCases.map(\.drillId))
+        for id in session.curriculum.warmupDrillIds where tracked.contains(id) && !merged.warmupDrillIds.contains(id) {
+            merged.warmupDrillIds.append(id)
+        }
+        for id in session.curriculum.skillDrillIds where tracked.contains(id) && !merged.skillDrillIds.contains(id) {
+            merged.skillDrillIds.append(id)
+        }
+        merged.shooting = session.curriculum.shooting
         session.curriculum = merged
         planRationale = result.rationale
         saveSession()

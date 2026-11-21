@@ -33,8 +33,27 @@ struct SessionVersionsSheet: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(versions, id: \.id) { v in
-                        Button { pending = v.id } label: { summary(v.event, date: v.createdAt, actor: v.actor) }
-                            .buttonStyle(.plain)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button { pending = v.id } label: { summary(v.event, date: v.createdAt, actor: v.actor) }
+                                .buttonStyle(.plain)
+                            // Shooting results alone, without rolling back the
+                            // games and marks (21 Nov 2026).
+                            if shootingEntries(v.event) > 0, v.event.curriculum.shooting != currentShooting {
+                                Button {
+                                    dataManager.setSessionShooting(sessionId: sessionId, runs: v.event.curriculum.shooting)
+                                    restored = true
+                                    HapticFeedback.notification(.success)
+                                    load()
+                                } label: {
+                                    Label(zh ? "只恢复投篮记录" : "Bring back the shooting results only",
+                                          systemImage: "gauge.with.dots.needle.67percent")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                                .buttonStyle(.borderless)
+                                .tint(.orange)
+                                .accessibilityIdentifier("versions.restoreShooting")
+                            }
+                        }
                     }
                 } header: {
                     Text(zh ? "早前版本 · 点按恢复" : "Earlier versions · tap to restore")
@@ -81,6 +100,14 @@ struct SessionVersionsSheet: View {
 
     private func load() { versions = dataManager.sessionRevisions(for: sessionId) }
 
+    private var currentShooting: [ShootingRun] {
+        dataManager.sessionEvents.first { $0.id == sessionId }?.curriculum.shooting ?? []
+    }
+
+    private func shootingEntries(_ e: SessionEvent) -> Int {
+        e.curriculum.shooting.reduce(0) { $0 + $1.entries.count }
+    }
+
     private func summary(_ e: SessionEvent, date: Date?, actor: String?) -> some View {
         let stats = e.games.reduce(0) { $0 + $1.playerStats.count }
         let points = e.games.flatMap(\.playerStats).reduce(0) { $0 + $1.points }
@@ -108,6 +135,11 @@ struct SessionVersionsSheet: View {
                 label("hand.raised", zh ? "请假 \(e.excusedAbsences.count)" : "\(e.excusedAbsences.count) excused")
                 label("xmark.circle", zh ? "缺席 \(e.unexcusedAbsences.count)" : "\(e.unexcusedAbsences.count) absent")
                 if e.attendancePhotoPath != nil { label("camera", zh ? "照片" : "photo") }
+            }
+            if shootingEntries(e) > 0 {
+                label("gauge.with.dots.needle.67percent",
+                      zh ? "投篮记录 \(shootingEntries(e)) 条（\(e.curriculum.shooting.filter { !$0.entries.isEmpty }.map { $0.setup.drill.short(chinese: true) }.joined(separator: "、"))）"
+                         : "\(shootingEntries(e)) shooting results (\(e.curriculum.shooting.filter { !$0.entries.isEmpty }.map { $0.setup.drill.short(chinese: false) }.joined(separator: ", ")))")
             }
         }
         .padding(.vertical, 2)

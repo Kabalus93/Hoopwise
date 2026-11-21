@@ -18,7 +18,7 @@ import Foundation
 
 enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
     // Listed close to far (the library shows them in this order).
-    case freeThrows, layups, mikan, twos, midRange, pullUps, threes, shotChart
+    case freeThrows, layups, mikan, twos, midRange, pullUps, dribbleShoot, threes, shotChart
     var id: String { rawValue }
 
     /// Where the makes are counted: five spots, a side each way, or one
@@ -34,6 +34,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .freeThrows: return [("Line", "罚球线", "FT", "罚球")]
         case .midRange: return [("Mid-range", "中距离", "Mid", "中投")]
         case .mikan: return [("Under the rim", "篮下", "Rim", "篮下")]
+        case .dribbleShoot: return [("Trips", "往返", "Made", "命中")]
         case .shotChart:
             // ShotZone order.
             return [("At the rim", "篮下", "Rim", "篮下"),
@@ -63,6 +64,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .mikan: n = 6
         case .pullUps: n = 7
         case .shotChart: n = 8
+        case .dribbleShoot: n = 9
         }
         return UUID(uuidString: String(format: "5A0715F0-%04d-4000-8000-%012d", n, n))!
     }
@@ -87,6 +89,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .mikan: "Mikan Drill"
         case .pullUps: "Pull-Up Jumpers"
         case .shotChart: "Shot Chart"
+        case .dribbleShoot: "Dribble Out & Shoot"
         }
     }
 
@@ -101,6 +104,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .mikan: return "麦肯上篮"
         case .pullUps: return "急停跳投"
         case .shotChart: return "投篮热区图"
+        case .dribbleShoot: return "运球折返投篮"
         }
     }
 
@@ -114,6 +118,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .mikan: chinese ? "麦肯" : "MIKAN"
         case .pullUps: chinese ? "急停" : "PULL-UP"
         case .shotChart: chinese ? "热区" : "CHART"
+        case .dribbleShoot: chinese ? "折返" : "DRIBBLE"
         }
     }
 
@@ -128,6 +133,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .pullUps: "arrow.up.and.down.and.arrow.left.and.right"
         case .threes: "3.circle"
         case .shotChart: "circle.grid.cross"
+        case .dribbleShoot: "arrow.uturn.backward.circle"
         }
     }
 
@@ -153,6 +159,9 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .mikan:
             return ("The Mikan Drill: under the basket, alternate right-hand and left-hand lay-ups off the backboard, catching the ball before it touches the floor. Best timed." + tail.0,
                     "麦肯上篮：在篮下左右手交替打板上篮，球落地前接住。最适合计时。" + tail.1)
+        case .dribbleShoot:
+            return ("Dribble to half court (or the far baseline) and back, shoot, get your own rebound, and go again — shooting on tired legs, at game speed. Each athlete on their own ball." + tail.0,
+                    "运球到半场（或对面底线）再运回来，投篮，自己抢篮板，再出发——在疲劳中以比赛速度投篮。每人一个球。" + tail.1)
         case .shotChart:
             return ("Free shooting across the floor, logged by zone: at the rim, four mid-range zones, five three-point zones. Enter made and attempted in each zone; the chart shows the percentage zone by zone. Results go to each athlete's shooting record and shot chart.",
                     "全场自由投篮，按区域记录：篮下、四个中距离区、五个三分区。每区输入命中和出手，热区图逐区显示命中率。计入每位学员的投篮记录和热区图。")
@@ -168,13 +177,14 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
     /// The record the library seeds.
     var drillItem: DrillItem {
         let finishing = self == .layups || self == .mikan
+        let attrs: [String] = self == .dribbleShoot
+            ? ["attr:shooting=2", "attr:ballHandling=2", "attr:footwork=2"]
+            : (finishing ? ["attr:finishing=3", "attr:shooting=1", "attr:ballHandling=1"]
+               : ["attr:shooting=3", "attr:footwork=1"] + (self == .pullUps ? ["attr:ballHandling=2"] : []))
         return DrillItem(id: drillId, name: englishName, category: .shooting, difficulty: .beginner,
                          durationMinutes: self == .freeThrows || self == .mikan ? 5 : (self == .shotChart ? 15 : 10),
                          description: englishDescription, minPlayers: 1,
-                         tags: [tag, "type:shooting", "kind:tracked"]
-                            + (finishing ? ["attr:finishing=3", "attr:shooting=1", "attr:ballHandling=1"]
-                               : ["attr:shooting=3", "attr:footwork=1"]
-                                 + (self == .pullUps ? ["attr:ballHandling=2"] : [])),
+                         tags: [tag, "type:shooting", "kind:tracked"] + attrs,
                          createdAt: Date(timeIntervalSince1970: 1_795_000_000),
                          updatedAt: Date(timeIntervalSince1970: 1_795_000_000))
     }
@@ -199,6 +209,7 @@ enum ShootingDrill: String, Codable, CaseIterable, Identifiable {
         case .freeThrows: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 60)
         case .layups, .pullUps: ShootingSetup(drill: self, mode: .attempts, shots: 10, seconds: 30)
         case .shotChart: ShootingSetup(drill: self, mode: .chart, shots: 10, seconds: 60)
+        case .dribbleShoot: ShootingSetup(drill: self, mode: .timed, shots: 10, seconds: 60, court: .half)
         }
     }
 }
@@ -226,6 +237,17 @@ enum TwosRange: String, Codable, CaseIterable {
     }
 }
 
+/// How far the dribble goes before the shot (Dribble Out & Shoot).
+enum CourtLength: String, Codable, CaseIterable {
+    case half, full
+    func title(chinese: Bool) -> String {
+        switch self {
+        case .half: chinese ? "半场折返" : "Half court"
+        case .full: chinese ? "全场折返" : "Full court"
+        }
+    }
+}
+
 /// How the drill is scored this time — the comparison key.
 struct ShootingSetup: Codable, Hashable {
     var drill: ShootingDrill
@@ -236,6 +258,8 @@ struct ShootingSetup: Codable, Hashable {
     var seconds: Int = 60
     /// Twos only.
     var range: TwosRange?
+    /// Dribble Out & Shoot only: to half court or the far baseline.
+    var court: CourtLength? = nil
 
     /// Same key = comparable results.
     var key: String {
@@ -246,6 +270,7 @@ struct ShootingSetup: Codable, Hashable {
         case .chart: amount = ""
         }
         return [drill.rawValue, mode.rawValue, amount, range?.rawValue ?? ""].joined(separator: "|")
+            + (court.map { "|" + $0.rawValue } ?? "")
     }
 
     /// "10 shots a spot · mid" / "1 min a spot".
@@ -264,6 +289,7 @@ struct ShootingSetup: Codable, Hashable {
             parts.append(chinese ? (perSpot ? "每点 \(t)" : t) : (perSpot ? "\(t) a spot" : t))
         }
         if let range, drill == .twos { parts.append(range.title(chinese: chinese)) }
+        if let court, drill == .dribbleShoot { parts.append(court.title(chinese: chinese)) }
         return parts.joined(separator: " · ")
     }
 

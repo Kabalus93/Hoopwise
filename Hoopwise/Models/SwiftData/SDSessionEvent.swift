@@ -249,32 +249,37 @@ final class SDSessionEvent {
     /// `id` and `createdAt` are identity, not content, so they are not
     /// touched. Adding a property to this @Model means adding it here;
     /// SessionRoundTripTests fails until you do.
+    /// Only the fields that DIFFER are assigned (21 Nov 2026): a status
+    /// change written from a device that had not yet received another
+    /// device's plan used to rewrite the plan too — every column was
+    /// assigned, so every column was changed and uploaded — and the newer
+    /// plan (with its shooting results) was lost everywhere.
     func apply(_ event: SessionEvent) {
-        microCycleId = event.microCycleId
-        programId = event.programId
-        seriesId = event.seriesId
-        sessionType = event.sessionType
-        title = event.title
-        date = event.date
-        startTime = event.startTime
-        endTime = event.endTime
-        location = event.location
-        status = event.status
-        curriculum = event.curriculum
-        games = event.games
-        attendeeIds = event.attendeeIds
-        actualAttendeeIds = event.actualAttendeeIds
-        excusedAbsences = event.excusedAbsences
-        unexcusedAbsences = event.unexcusedAbsences
-        attendancePhotoPath = event.attendancePhotoPath
-        notes = event.notes
-        coachNotes = event.coachNotes
-        developmentFocus = event.developmentFocus
-        manOfTheMatchId = event.manOfTheMatchId
-        drillsCompleted = event.drillsCompleted
-        rating = event.rating
-        createdByCoachId = event.createdByCoachId
-        headerImageURL = event.headerImageURL
+        if microCycleId != event.microCycleId { microCycleId = event.microCycleId }
+        if programId != event.programId { programId = event.programId }
+        if seriesId != event.seriesId { seriesId = event.seriesId }
+        if sessionType != event.sessionType { sessionType = event.sessionType }
+        if title != event.title { title = event.title }
+        if date != event.date { date = event.date }
+        if startTime != event.startTime { startTime = event.startTime }
+        if endTime != event.endTime { endTime = event.endTime }
+        if location != event.location { location = event.location }
+        if status != event.status { status = event.status }
+        if curriculum != event.curriculum { curriculum = event.curriculum }
+        if games != event.games { games = event.games }
+        if attendeeIds != event.attendeeIds { attendeeIds = event.attendeeIds }
+        if actualAttendeeIds != event.actualAttendeeIds { actualAttendeeIds = event.actualAttendeeIds }
+        if excusedAbsences != event.excusedAbsences { excusedAbsences = event.excusedAbsences }
+        if unexcusedAbsences != event.unexcusedAbsences { unexcusedAbsences = event.unexcusedAbsences }
+        if attendancePhotoPath != event.attendancePhotoPath { attendancePhotoPath = event.attendancePhotoPath }
+        if notes != event.notes { notes = event.notes }
+        if coachNotes != event.coachNotes { coachNotes = event.coachNotes }
+        if developmentFocus != event.developmentFocus { developmentFocus = event.developmentFocus }
+        if manOfTheMatchId != event.manOfTheMatchId { manOfTheMatchId = event.manOfTheMatchId }
+        if drillsCompleted != event.drillsCompleted { drillsCompleted = event.drillsCompleted }
+        if rating != event.rating { rating = event.rating }
+        if createdByCoachId != event.createdByCoachId { createdByCoachId = event.createdByCoachId }
+        if headerImageURL != event.headerImageURL { headerImageURL = event.headerImageURL }
         updatedAt = event.updatedAt
     }
 }

@@ -163,6 +163,11 @@ struct ShootingAddOnCard: View {
                     ForEach(TwosRange.allCases, id: \.self) { Text($0.title(chinese: isChinese)).tag(Optional($0)) }
                 }
             }
+            if drill == .dribbleShoot {
+                Picker(isChinese ? "折返距离" : "Dribble to", selection: setupBinding(\.court)) {
+                    ForEach(CourtLength.allCases, id: \.self) { Text($0.title(chinese: isChinese)).tag(Optional($0)) }
+                }
+            }
         } label: {
             Label(isChinese ? "更改" : "Change", systemImage: "slider.horizontal.3")
                 .labelStyle(.titleAndIcon)

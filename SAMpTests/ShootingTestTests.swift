@@ -99,7 +99,7 @@ final class ShootingTestTests: XCTestCase {
         for t in ShootingDrill.allCases {
             XCTAssertEqual(ShootingDrill.of(t.drillItem), t)
             let main: DrillAttribute = (t == .layups || t == .mikan) ? .finishing : .shooting
-            XCTAssertEqual(t.drillItem.attributes[main], 3, t.rawValue)
+            XCTAssertEqual(t.drillItem.attributes[main], t == .dribbleShoot ? 2 : 3, t.rawValue)
             XCTAssertTrue(ids.insert(t.drillId).inserted, "ids are unique")
             XCTAssertEqual(t.defaultSetup.drill, t)
         }
@@ -173,5 +173,19 @@ final class ShootingTestTests: XCTestCase {
         XCTAssertTrue(ShotChartGeometry.zones[0].contains(CGPoint(x: 0, y: 2.0)), "at the rim")
         XCTAssertTrue(ShotChartGeometry.zones[7].contains(CGPoint(x: 0, y: 9.0)), "top three")
         XCTAssertTrue(ShotChartGeometry.zones[3].contains(CGPoint(x: 1.5, y: 5.0)), "right elbow")
+    }
+
+    func testDribbleOutAndShootComparesHalfAndFullCourtApart() {
+        let half = ShootingDrill.dribbleShoot.defaultSetup
+        XCTAssertEqual(half.mode, .timed)
+        XCTAssertEqual(half.court, .half)
+        var full = half
+        full.court = .full
+        XCTAssertNotEqual(half.key, full.key)
+        XCTAssertTrue(full.summary(chinese: false).contains("Full court"))
+        // Older setups (no court) decode and keep their key.
+        let old = try! JSONDecoder().decode(ShootingSetup.self, from: JSONEncoder().encode(ft10))
+        XCTAssertNil(old.court)
+        XCTAssertEqual(old.key, ft10.key)
     }
 }

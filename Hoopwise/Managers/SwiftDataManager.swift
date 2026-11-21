@@ -2060,6 +2060,9 @@ class SwiftDataManager: ObservableObject {
                 // unexcusedAbsences, developmentFocus, headerImageURL and
                 // createdByCoachId on every save.
                 if keepLiveFields {
+                    // Tracked shooting results are live data too (21 Nov
+                    // 2026): only setSessionShooting writes them.
+                    event.curriculum.shooting = sdSession.curriculum.shooting
                     event.games = sdSession.games
                     event.actualAttendeeIds = sdSession.actualAttendeeIds
                     event.excusedAbsences = sdSession.excusedAbsences
@@ -2156,6 +2159,22 @@ class SwiftDataManager: ObservableObject {
     }
 
     /// Sets or clears the attendance-photo relative path.
+    /// THE writer of a session's tracked shooting results (21 Nov 2026 —
+    /// they vanished: whole-session saves from stale copies wrote the plan
+    /// back without them). Touches nothing else; whole-session saves keep
+    /// what this wrote.
+    func setSessionShooting(sessionId: UUID, runs: [ShootingRun]) {
+        do {
+            let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == sessionId })
+            guard let sd = try modelContext.fetch(descriptor).first, sd.curriculum.shooting != runs else { return }
+        } catch { return }
+        mutateSession(id: sessionId, reason: .manualEdit) { sd in
+            var c = sd.curriculum
+            c.shooting = runs
+            sd.curriculum = c
+        }
+    }
+
     func setSessionAttendancePhoto(sessionId: UUID, path: String?) {
         mutateSession(id: sessionId, reason: .manualEdit) { sd in
             sd.attendancePhotoPath = path

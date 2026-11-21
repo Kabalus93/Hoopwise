@@ -2306,6 +2306,28 @@ moves on. The shot chart pad: MADE and ATTEMPTED wheels side by side (start:
 what is in, else their last chart's zone, else 4/10), the live %, one LOG
 (refused while made > attempted); fixed shots per zone keeps the grid.
 DEBUG HOOPWISE_DEMO_SHOOTING=chart puts the Shot Chart in the demo plan.
+RESULTS ARE LIVE DATA (21 Nov 2026, Luther: add-ons with recorded results
+vanished from a session hours later). Causes: (1) Regenerate rebuilt the
+curriculum keeping only notes and plays — results and tracked drills went;
+(2) every whole-session save (auto-close at end + 12 h, auto-start, Home /
+attention actions, another device whose copy predated the results) wrote
+its curriculum back, and SDSessionEvent.apply assigned EVERY column, so
+the stale plan was changed and uploaded too. Fixes: `setSessionShooting`
+is THE writer of `curriculum.shooting` (field-level, a revision first; the
+add-on binding calls it, never saveSession); `updateSessionEvent(keepLive
+Fields: true)` keeps the STORED shooting like games and marks; `apply`
+assigns only fields that DIFFER (a status change no longer rewrites the
+plan); the page refresh always takes the stored shooting; Regenerate keeps
+tracked drills and results; an add-on with results shows even when its
+drill left the plan. Restore Earlier Version lists shooting results per
+version and offers "Bring back the shooting results only". Sync: results
+live in `curriculumData` (an existing synced column) — no schema change.
+Tests: ShootingPersistenceTests.
+DRIBBLE OUT & SHOOT (21 Nov 2026, Luther): `.dribbleShoot` (id 9) —
+dribble to half court or the far baseline and back, shoot, own rebound,
+repeat; one total; default makes in 1 min at half court; `CourtLength`
+(`ShootingSetup.court`, optional — in the key, so half and full compare
+apart); rated shooting / ball handling / footwork 2; not on the map.
 Tests: ShootingTestTests (chart maths, map feeding, deltas, zone geometry),
 ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap.
 
