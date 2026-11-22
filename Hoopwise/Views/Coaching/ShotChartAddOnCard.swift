@@ -1,9 +1,10 @@
 import SwiftUI
 
 // THE SHOT CHART ADD-ON (21 Nov 2026). In the plan: athletes as photos
-// (and Group — everyone pooled), the map for the one chosen, tap a zone,
-// type made then attempted. The pad stays open and moves to the athlete's
-// next empty zone; athletes can be switched on the pad as they walk up.
+// (and Group — everyone pooled), the map for the one chosen, tap a zone:
+// the floating number pad pops out of it (23 Nov 2026, Luther: "the popup
+// should only be a number pad") — made, → attempted, ✓ logs and the pad
+// moves to the athlete's next empty zone. Switch athletes on the strip.
 // Colour by absolute bands or against the athlete's own average; ↑/↓ per
 // zone against their last shot chart.
 
@@ -18,15 +19,19 @@ struct ShotChartAddOnCard: View {
 
     @EnvironmentObject private var dataManager: DataManager
     @State private var chosen: UUID?
-    @State private var pad: PadStart?
+    /// The zone the number pad is open on; made and attempted being typed.
+    @State private var active: Int?
+    @State private var madeEntry = NumberPadEntry(text: "")
+    @State private var attEntry = NumberPadEntry(text: "")
+    @State private var typingAttempts = false
+    /// The zone to open once the current popup has gone.
+    @State private var pendingZone: Int?
     @State private var editingSetup = false
     @State private var expanded = true
     @AppStorage("shotChart.colour") private var colourRaw = ShotChartColour.bands.rawValue
     @AppStorage("shotChart.vsLast") private var vsLast = true
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private let drill = ShootingDrill.shotChart
-
-    struct PadStart: Identifiable { let id = UUID(); let student: UUID; let zone: Int }
 
     private var setup: ShootingSetup { run.setup }
     private var colour: ShotChartColour { ShotChartColour(rawValue: colourRaw) ?? .bands }
@@ -72,14 +77,6 @@ struct ShotChartAddOnCard: View {
             .strokeBorder(station ? Color.clear : Color.orange.opacity(0.22), lineWidth: 1))
         .sheet(isPresented: $editingSetup) {
             ShootingSetupSheet(setup: run.setup) { run.setup = $0 }
-        }
-        .sheet(item: $pad) { start in
-            ShotZonePad(run: $run, students: students,
-                        last: Dictionary(uniqueKeysWithValues: students.compactMap { s in
-                            ShootingHistory.previous(s.id, setup: setup, before: sessionDate, sessions: allSessions).map { (s.id, $0) } }),
-                        student: start.student, zone: start.zone)
-                .presentationDetents([.large])
-                .environmentObject(dataManager)
         }
         .onAppear { if chosen == nil { chosen = students.first?.id } }
         .accessibilityElement(children: .contain)
@@ -177,10 +174,9 @@ struct ShotChartAddOnCard: View {
         return ShotChartMap(zones: now,
                             deltas: vsLast ? last.map { ShootingHistory.deltas(now, $0) } : nil,
                             colour: colour,
-                            onTap: canEdit ? { zone in
-                                guard let who = chosen ?? students.first?.id else { return }
-                                pad = PadStart(student: who, zone: zone)
-                            } : nil)
+                            selected: active,
+                            onTap: canEdit ? { zone in open(zone) } : nil,
+                            pad: canEdit ? .init(isPresented: presented, content: { AnyView(zonePad) }) : nil)
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
     }
@@ -232,194 +228,115 @@ struct ShotChartAddOnCard: View {
     }
 }
 
-// MARK: - The zone pad
+// MARK: - The number pad on a zone
 
-/// Made, then attempted (or made alone with a fixed number of shots).
-struct ShotZonePad: View {
-    @Binding var run: ShootingRun
-    let students: [Student]
-    @State private var student: UUID
-    @State private var zone: Int
-    /// Chart mode: the made just typed, waiting for its attempts.
-    @State private var pendingMade: Int?
-    /// The wheels (21 Nov 2026): made and attempted.
-    @State private var madeWheel = 4
-    @State private var attWheel = 10
-    @Environment(\.dismiss) private var dismiss
-    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
-    private let drill = ShootingDrill.shotChart
+extension ShotChartAddOnCard {
+    private var chart: Bool { setup.mode == .chart }
+    private var who: UUID? { chosen ?? students.first?.id }
 
-    /// Each athlete's last shot chart — where the wheels start.
-    let last: [UUID: ShootingResult]
-
-    init(run: Binding<ShootingRun>, students: [Student], last: [UUID: ShootingResult] = [:], student: UUID, zone: Int) {
-        _run = run; self.students = students; self.last = last
-        _student = State(initialValue: student)
-        _zone = State(initialValue: zone)
+    func open(_ zone: Int) {
+        if chosen == nil { chosen = students.first?.id }
+        guard let who else { return }
+        let made = run.makes(who, spot: zone)
+        madeEntry = .cell(made.map(Double.init), maximum: Double(chart ? 40 : max(1, setup.shots)))
+        attEntry = .cell((chart ? run.attempts(who, spot: zone) : nil).map(Double.init), maximum: 50)
+        typingAttempts = false
+        active = zone
     }
 
-    private var chart: Bool { run.setup.mode == .chart }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    athletes
-                    HStack(alignment: .top, spacing: 14) {
-                        ShotChartMap(zones: run.result(for: student)?.zoneValues ?? Array(repeating: nil, count: 10),
-                                     selected: zone, showCounts: false,
-                                     onTap: { zone = $0; pendingMade = nil })
-                            .frame(maxWidth: 260)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(drill.spotName(zone, chinese: isChinese)).font(.headline)
-                            Text(prompt).font(.subheadline).foregroundStyle(.secondary)
-                            if let m = run.makes(student, spot: zone) {
-                                let a = chart ? run.attempts(student, spot: zone) : run.setup.shots
-                                Text(isChinese ? "已记：\(m)/\(a.map(String.init) ?? "?")" : "In: \(m)/\(a.map(String.init) ?? "?")")
-                                    .font(.footnote.weight(.semibold)).foregroundStyle(.green)
-                                Button(role: .destructive) {
-                                    run.set(nil, for: student, spot: zone)
-                                    if chart { run.setAttempts(nil, for: student, spot: zone) }
-                                    pendingMade = nil
-                                } label: { Label(isChinese ? "清除此区" : "Clear zone", systemImage: "delete.left") }
-                                    .font(.footnote)
-                            }
-                        }
-                    }
-                    keypad
-                }
-                .padding(20)
-            }
-            .navigationTitle(drill.title(chinese: isChinese))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "完成" : "Done") { dismiss() }
-                        .fontWeight(.semibold)
-                        .accessibilityIdentifier("shotchart.pad.done")
-                }
-            }
-        }
-        .sensoryFeedback(.selection, trigger: zone)
+    func presented(_ zone: Int) -> Binding<Bool> {
+        Binding(get: { active == zone }, set: { on in
+            guard !on, active == zone else { return }
+            _ = commit(zone)
+            active = nil
+        })
     }
 
-    private var prompt: String {
-        if !chart { return isChinese ? "\(run.setup.shots) 投中几个？" : "Made of \(run.setup.shots)?" }
-        if let m = pendingMade { return isChinese ? "命中 \(m) · 共出手几次？" : "\(m) made · out of how many?" }
-        return isChinese ? "命中几个？" : "How many made?"
+    /// Made and (chart) attempted from what was typed, else what is in.
+    private func values(_ zone: Int) -> (made: Int?, att: Int?) {
+        guard let who else { return (nil, nil) }
+        let made = madeEntry.typed ? (madeEntry.text.isEmpty ? nil : Int(madeEntry.value)) : run.makes(who, spot: zone)
+        let att = chart ? (attEntry.typed ? (attEntry.text.isEmpty ? nil : Int(attEntry.value)) : run.attempts(who, spot: zone)) : nil
+        return (made, att)
     }
 
-    private var athletes: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(students) { s in
-                    let on = s.id == student
-                    Button { student = s.id; pendingMade = nil } label: {
-                        VStack(spacing: 3) {
-                            StudentAvatarView(student: s, size: 44)
-                                .overlay(Circle().strokeBorder(on ? Color.orange : .clear, lineWidth: 3).padding(-3))
-                            Text(s.primaryDisplayName.components(separatedBy: " ").first ?? s.primaryDisplayName)
-                                .font(.caption2.weight(on ? .bold : .medium)).lineLimit(1)
-                        }
-                        .frame(width: 58)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("shotchart.pad.athlete")
-                }
-            }
-        }
+    private var invalid: Bool {
+        guard chart, let zone = active else { return false }
+        let v = values(zone)
+        guard let m = v.made, let a = v.att else { return false }
+        return m > a || a == 0
     }
 
-    /// Chart mode: MADE and ATTEMPTED wheels side by side, one Log. Fixed
-    /// shots per zone: the one-tap grid (0…shots).
-    @ViewBuilder
-    private var keypad: some View {
+    /// Writes the zone; false when made > attempted (nothing written).
+    private func commit(_ zone: Int) -> Bool {
+        guard let who, madeEntry.typed || attEntry.typed else { return true }
+        let v = values(zone)
         if chart {
-            VStack(spacing: 14) {
-                // One floating number pad for both (23 Nov 2026): tap a box,
-                // or → from MADE to ATTEMPTED.
-                PairedNumberPad(
-                    first: .init(title: isChinese ? "命中" : "MADE", range: 0...40, value: $madeWheel,
-                                 tint: .orange, identifier: "shotchart.made"),
-                    second: .init(title: isChinese ? "出手" : "ATTEMPTED", range: 1...50, value: $attWheel,
-                                  tint: .secondary, identifier: "shotchart.att"),
-                    identifier: "shotchart.keys")
-                HStack {
-                    Text(attWheel > 0 ? "\(Int((Double(madeWheel) / Double(attWheel) * 100).rounded()))%" : "—")
-                        .font(.title2.weight(.heavy)).monospacedDigit()
-                        .foregroundStyle(madeWheel > attWheel ? Color.red : Color.primary)
-                    if madeWheel > attWheel {
-                        Text(isChinese ? "命中不能多于出手" : "more made than attempted")
-                            .font(.caption).foregroundStyle(.red)
+            if let m = v.made, let a = v.att, m > a || a == 0 { return false }
+            run.set(v.made, for: who, spot: zone)
+            run.setAttempts(v.made == nil ? nil : v.att, for: who, spot: zone)
+        } else {
+            run.set(v.made, for: who, spot: zone)
+        }
+        return true
+    }
+
+    private func key(_ k: Character) {
+        guard let zone = active else { return }
+        switch k {
+        case "→": typingAttempts = true; attEntry.fresh = true
+        case "✓":
+            guard commit(zone), let who else { return }
+            let next = ((zone + 1)..<10).first(where: { run.makes(who, spot: $0) == nil })
+                ?? (0..<zone).first(where: { run.makes(who, spot: $0) == nil })
+            pendingZone = next
+            active = nil
+        case "⌫": if typingAttempts { attEntry.delete() } else { madeEntry.delete() }
+        default: if typingAttempts { attEntry.press(k) } else { madeEntry.press(k) }
+        }
+    }
+
+    /// The keys, and (chart) the two numbers being typed — nothing else.
+    @ViewBuilder
+    var zonePad: some View {
+        VStack(spacing: 10) {
+            if chart {
+                HStack(spacing: 8) {
+                    numberBox(madeEntry, on: !typingAttempts, id: "shotchart.made") { typingAttempts = false; madeEntry.fresh = true }
+                    Text("/").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
+                    numberBox(attEntry, on: typingAttempts, id: "shotchart.att") { typingAttempts = true; attEntry.fresh = true }
+                }
+                .overlay(alignment: .bottom) {
+                    if invalid {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red).offset(y: 14)
                     }
-                    Spacer()
-                    Button {
-                        run.set(madeWheel, for: student, spot: zone)
-                        run.setAttempts(attWheel, for: student, spot: zone)
-                        moveOn()
-                    } label: {
-                        Text(isChinese ? "记录 \(madeWheel)/\(attWheel)" : "Log \(madeWheel)/\(attWheel)")
-                            .font(.title3.weight(.bold)).monospacedDigit()
-                            .frame(minWidth: 160, minHeight: 50)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .tint(.orange)
-                    .disabled(madeWheel > attWheel)
-                    .accessibilityIdentifier("shotchart.log")
                 }
             }
-            .onAppear(perform: loadWheels)
-            .onChange(of: zone) { _, _ in loadWheels() }
-            .onChange(of: student) { _, _ in loadWheels() }
-        } else {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                ForEach(0...run.setup.shots, id: \.self) { n in
-                    Button { typed(n) } label: {
-                        Text("\(n)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.tertiarySystemFill)))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("shotchart.pad.\(n)")
-                }
-            }
+            FloatingNumberPad(onKey: key, nextKey: chart && !typingAttempts, confirmKey: !chart || typingAttempts,
+                              keyHeight: 56, identifier: "shotchart.keys", chrome: false)
+        }
+        .padding(12)
+        .frame(width: 280)
+        .presentationCompactAdaptation(.popover)
+        .onDisappear {
+            // The next zone opens once this popup has gone.
+            guard let next = pendingZone else { return }
+            pendingZone = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { open(next) }
         }
     }
 
-    /// What is in for this zone, else the athlete's last shot chart here,
-    /// else 4 of 10.
-    private func loadWheels() {
-        if let m = run.makes(student, spot: zone), let a = run.attempts(student, spot: zone) {
-            madeWheel = m; attWheel = a; return
+    private func numberBox(_ e: NumberPadEntry, on: Bool, id: String, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(e.text.isEmpty ? "–" : e.text)
+                .font(.system(size: 26, weight: .bold, design: .rounded)).monospacedDigit()
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.tertiarySystemFill)))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(on ? Color.orange : .clear, lineWidth: 2.5))
         }
-        if let last = last[student]?.shots(at: zone) {
-            madeWheel = last.made; attWheel = last.attempted; return
-        }
-        madeWheel = 4; attWheel = 10
-    }
-
-    private func moveOn() {
-        if let next = ((zone + 1)..<10).first(where: { run.makes(student, spot: $0) == nil })
-            ?? (0..<zone).first(where: { run.makes(student, spot: $0) == nil }) {
-            zone = next
-        }
-    }
-
-    private func typed(_ n: Int) {
-        if chart && pendingMade == nil { pendingMade = n; return }
-        if chart, let m = pendingMade {
-            run.set(m, for: student, spot: zone)
-            run.setAttempts(n, for: student, spot: zone)
-            pendingMade = nil
-        } else {
-            run.set(n, for: student, spot: zone)
-        }
-        // The athlete's next empty zone; none left: stay, the coach moves on.
-        if let next = ((zone + 1)..<10).first(where: { run.makes(student, spot: $0) == nil })
-            ?? (0..<zone).first(where: { run.makes(student, spot: $0) == nil }) {
-            zone = next
-        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("\(id).value")
+        .accessibilityValue(e.text)
     }
 }

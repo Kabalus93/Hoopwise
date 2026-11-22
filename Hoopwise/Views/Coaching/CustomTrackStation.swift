@@ -5,9 +5,12 @@ import Combine
 // THE COACH'S OWN TRACKED DRILLS IN A SESSION (23 Nov 2026 — definition and
 // maths in Models/CustomTracking.swift). Same shape as the built-in shooting
 // drills: one tracker line on the drill's plan row → a station page (summary,
-// table, Log) → a pad that takes one athlete's number and moves on. The pad
-// fits the measure: a grid or wheel for makes and counts, a stopwatch (and
-// wheels to correct it) for a time.
+// table, Log). A tap on a cell (or Log, for the next empty one) pops the
+// floating number pad out of that cell — the keys alone, as on the shooting
+// drills (23 Nov 2026, Luther: "the popup should only be a number pad");
+// ✓ logs and the next cell opens. A time is typed in seconds with tenths; a
+// time-to-finish drill also has a STOPWATCH on the page that drops each time
+// into the next athlete's cell.
 
 /// The one line under a custom tracked drill's plan row.
 struct CustomTrackerLine: View {
@@ -99,15 +102,16 @@ struct CustomTrackStationSheet: View {
     let allSessions: [SessionEvent]
     let canEdit: Bool
 
-    @State private var pad: PadStart?
+    @State private var active: PadCell?
+    @State private var draft = NumberPadEntry(text: "")
+    /// The cell to open once the current popup has gone.
+    @State private var pending: PadCell?
+    /// Stopwatch (time to finish).
+    @State private var startedAt: Date?
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private var def: TrackDefinition { run.definition }
-
-    struct PadStart: Identifiable {
-        let id = UUID()
-        let student: UUID
-        let spot: Int
-    }
 
     private var lastTime: [UUID: Double] {
         var out: [UUID: Double] = [:]
@@ -126,6 +130,7 @@ struct CustomTrackStationSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     summary(last)
+                    if def.measure == .timeToFinish && canEdit && !students.isEmpty { stopwatch }
                     if students.isEmpty {
                         Text(isChinese ? "这节课还没有学员。" : "No athletes on this session yet.")
                             .font(.subheadline).foregroundStyle(.secondary)
@@ -147,12 +152,7 @@ struct CustomTrackStationSheet: View {
                         .accessibilityIdentifier("track.station.done")
                 }
             }
-            .sheet(item: $pad) { start in
-                CustomTrackPad(drillId: drillId, run: $run, students: students, last: last,
-                               student: start.student, spot: start.spot)
-                    .presentationDetents([.large])
-                    .environmentObject(dataManager)
-            }
+            .onReceive(tick) { if startedAt != nil { now = $0 } }
         }
         .environmentObject(dataManager)
     }
@@ -286,265 +286,121 @@ struct CustomTrackStationSheet: View {
 
     private func cell(_ s: Student, spot: Int) -> some View {
         let v = run.value(for: s.id, spot: spot)
+        let here = PadCell(student: s.id, spot: spot)
+        let editing = active == here
         return Button {
             guard canEdit else { return }
-            pad = PadStart(student: s.id, spot: spot)
+            open(here)
         } label: {
-            Text(v.map { def.entryText($0) } ?? "·")
+            Text(editing ? (draft.text.isEmpty ? "·" : draft.text) : (v.map { def.entryText($0) } ?? "·"))
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
                 .frame(width: 64, height: 36)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(v == nil ? Color(.tertiarySystemFill) : Color.orange.opacity(0.22)))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(editing ? Color.orange : .clear, lineWidth: 2.5))
         }
         .buttonStyle(.plain)
+        .cellNumberPad(isPresented: presented(here), draft: $draft, identifier: "track.keys",
+                       onConfirm: { confirm(here) }, onClosed: openPending)
         .accessibilityIdentifier("track.cell")
         .accessibilityLabel("\(s.primaryDisplayName) \(def.spotName(spot, chinese: isChinese)) \(v.map { def.entryText($0) } ?? "—")")
     }
 
+    // MARK: The number pad on a cell
+
+    private func open(_ cell: PadCell) {
+        draft = .cell(run.value(for: cell.student, spot: cell.spot), maximum: Double(def.maxEntry),
+                      decimals: def.measure == .timeToFinish ? 1 : 0)
+        active = cell
+    }
+
+    private func presented(_ cell: PadCell) -> Binding<Bool> {
+        Binding(get: { active == cell }, set: { on in
+            guard !on, active == cell else { return }
+            commit(cell)
+            active = nil
+        })
+    }
+
+    private func commit(_ cell: PadCell) {
+        guard draft.typed else { return }
+        run.set(draft.text.isEmpty ? nil : draft.value, for: cell.student, spot: cell.spot)
+    }
+
+    private func confirm(_ cell: PadCell) {
+        commit(cell)
+        let next = nextEmpty(after: cell)
+        pending = next
+        active = nil
+    }
+
+    private func openPending() {
+        guard let next = pending else { return }
+        pending = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { open(next) }
+    }
+
+    /// This athlete's next empty spot, then the next athlete's.
+    private func nextEmpty(after cell: PadCell?) -> PadCell? {
+        let order = students.map(\.id)
+        if let cell, let i = run.values(for: cell.student).firstIndex(where: { $0 == nil }) {
+            return PadCell(student: cell.student, spot: i)
+        }
+        let start = cell.flatMap { order.firstIndex(of: $0.student) }.map { $0 + 1 } ?? 0
+        let from = min(start, order.count)
+        for id in order[from...] + order[..<from] {
+            if let i = run.values(for: id).firstIndex(where: { $0 == nil }) { return PadCell(student: id, spot: i) }
+        }
+        return nil
+    }
+
     private func openAtNext() {
-        for s in students {
-            for i in 0..<def.spotCount where run.value(for: s.id, spot: i) == nil {
-                pad = PadStart(student: s.id, spot: i); return
-            }
-        }
-        if let first = students.first { pad = PadStart(student: first.id, spot: 0) }
-    }
-}
-
-/// One athlete's number at one spot, then the next.
-struct CustomTrackPad: View {
-    @Environment(\.dismiss) private var dismiss
-    let drillId: UUID
-    @Binding var run: TrackedRun
-    let students: [Student]
-    let last: [UUID: Double]
-    @State var student: UUID
-    @State var spot: Int
-
-    @State private var number = 0
-    @State private var tenths = 0
-    /// Stopwatch (time to finish).
-    @State private var startedAt: Date?
-    @State private var now = Date()
-    private let tick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
-
-    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
-    private var def: TrackDefinition { run.definition }
-    private var useGrid: Bool { def.measure == .madeOf && def.amount <= 10 }
-
-    init(drillId: UUID, run: Binding<TrackedRun>, students: [Student], last: [UUID: Double], student: UUID, spot: Int) {
-        self.drillId = drillId
-        _run = run
-        self.students = students
-        self.last = last
-        _student = State(initialValue: student)
-        _spot = State(initialValue: spot)
+        if let next = nextEmpty(after: nil) { open(next) }
+        else if let first = students.first { open(PadCell(student: first.id, spot: 0)) }
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    athletes
-                    if def.spotCount > 1 { spotChips }
-                    current
-                    entry
-                }
-                .padding(16)
-            }
-            .navigationTitle(def.measure.title(chinese: isChinese))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "完成" : "Done") { dismiss() }
-                        .accessibilityIdentifier("track.pad.done")
-                }
-            }
-            .onAppear(perform: prepare)
-            .onReceive(tick) { if startedAt != nil { now = $0 } }
-        }
-    }
+    // MARK: Stopwatch (time to finish)
 
-    // MARK: Who and where
+    private var elapsed: Double { startedAt.map { now.timeIntervalSince($0) } ?? 0 }
 
-    private var athletes: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(students) { s in
-                    let done = run.result(for: s.id) != nil
-                    Button {
-                        student = s.id
-                        spot = run.values(for: s.id).firstIndex { $0 == nil } ?? 0
-                        prepare()
-                    } label: {
-                        VStack(spacing: 4) {
-                            StudentAvatarView(student: s, size: 48)
-                                .overlay(Circle().strokeBorder(s.id == student ? Color.orange : .clear, lineWidth: 3).padding(-3))
-                                .opacity(done && s.id != student ? 0.45 : 1)
-                            Text(s.primaryDisplayName).font(.caption2).lineLimit(1).frame(width: 64)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("track.pad.athlete")
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-
-    private var spotChips: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<def.spotCount, id: \.self) { i in
-                Button {
-                    spot = i; prepare()
-                } label: {
-                    Text(def.spotName(i, chinese: isChinese))
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12).frame(minHeight: 34)
-                        .background(Capsule().fill(i == spot ? Color.orange : Color(.tertiarySystemFill)))
-                        .foregroundStyle(i == spot ? Color.white : Color.primary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var current: some View {
-        let s = students.first { $0.id == student }
-        return VStack(spacing: 4) {
-            Text(s?.primaryDisplayName ?? "").font(.title2.weight(.bold))
-            HStack(spacing: 6) {
-                if def.spotCount > 1 { Text(def.spotName(spot, chinese: isChinese)) }
-                if let l = last[student] {
-                    Text((isChinese ? "上次 " : "Last time ") + def.text(l, chinese: isChinese))
-                }
-            }
-            .font(.subheadline).foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: Entry
-
-    @ViewBuilder
-    private var entry: some View {
-        switch def.measure {
-        case .timeToFinish: stopwatch
-        default:
-            if useGrid {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
-                    ForEach(0...def.amount, id: \.self) { n in
-                        Button { save(Double(n)) } label: {
-                            Text("\(n)").font(.title2.weight(.bold)).monospacedDigit()
-                                .frame(maxWidth: .infinity, minHeight: 64)
-                                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(run.value(for: student, spot: spot) == Double(n) ? Color.orange : Color(.secondarySystemFill)))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("track.pad.\(n)")
-                    }
-                }
-            } else {
-                VStack(spacing: 14) {
-                    Text("\(number)" + (def.measure == .madeOf ? " / \(def.amount)" : ""))
-                        .font(.system(size: 52, weight: .bold, design: .rounded)).monospacedDigit()
-                        .contentTransition(.numericText())
-                        .accessibilityIdentifier("track.wheel.value")
-                    NumberWheel(range: 0...def.maxEntry, value: $number, identifier: "track.wheel", showsValue: false)
-                    logButton { save(Double(number)) }
-                }
-            }
-        }
-    }
-
-    private var elapsed: Double {
-        guard let startedAt else { return Double(number) + Double(tenths) / 10 }
-        return now.timeIntervalSince(startedAt)
-    }
-
+    /// Start, stop: the time goes into the next athlete's cell (named here).
     private var stopwatch: some View {
-        VStack(spacing: 16) {
-            Text(TrackDefinition.seconds(elapsed))
-                .font(.system(size: 56, weight: .bold, design: .rounded)).monospacedDigit()
-                .accessibilityIdentifier("track.stopwatch.time")
+        let target = active ?? nextEmpty(after: nil)
+        let who = target.flatMap { t in students.first { $0.id == t.student } }
+        return HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(TrackDefinition.seconds(elapsed))
+                    .font(.system(size: 34, weight: .heavy, design: .rounded)).monospacedDigit()
+                    .accessibilityIdentifier("track.stopwatch.time")
+                if let who {
+                    Text((isChinese ? "下一位：" : "Next: ") + who.primaryDisplayName
+                         + (def.spotCount > 1 ? " · \(def.spotName(target?.spot ?? 0, chinese: isChinese))" : ""))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
             Button {
                 if let startedAt {
-                    let t = Date().timeIntervalSince(startedAt)
+                    let t = (Date().timeIntervalSince(startedAt) * 10).rounded() / 10
                     self.startedAt = nil
-                    number = Int(t); tenths = Int(((t - Double(Int(t))) * 10).rounded(.down))
                     AudioServicesPlaySystemSound(1104)
+                    if let target { run.set(t, for: target.student, spot: target.spot); active = nil }
                 } else {
                     startedAt = Date(); now = Date()
                 }
             } label: {
                 Text(startedAt == nil ? (isChinese ? "开始" : "Start") : (isChinese ? "停止" : "Stop"))
-                    .font(.title2.weight(.bold))
-                    .frame(maxWidth: .infinity, minHeight: 72)
-                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(startedAt == nil ? Color.green : Color.red))
+                    .font(.headline)
                     .foregroundStyle(.white)
+                    .frame(minWidth: 110, minHeight: 50)
+                    .background(Capsule().fill(startedAt == nil ? Color.green : Color.red))
             }
             .buttonStyle(.plain)
+            .disabled(target == nil && startedAt == nil)
             .accessibilityIdentifier("track.stopwatch")
-            if startedAt == nil {
-                HStack(spacing: 0) {
-                    Picker(isChinese ? "秒" : "Seconds", selection: $number) {
-                        ForEach(0...def.maxEntry, id: \.self) { Text("\($0)").tag($0) }
-                    }
-                    .pickerStyle(.wheel)
-                    Text(".").font(.title.weight(.bold))
-                    Picker(isChinese ? "十分之一秒" : "Tenths", selection: $tenths) {
-                        ForEach(0...9, id: \.self) { Text("\($0)").tag($0) }
-                    }
-                    .pickerStyle(.wheel)
-                    .frame(width: 80)
-                    Text("s").font(.title3).foregroundStyle(.secondary)
-                }
-                .frame(height: 130)
-                logButton { save(Double(number) + Double(tenths) / 10) }
-            }
         }
-    }
-
-    private func logButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(isChinese ? "记录" : "Log")
-                .font(.headline)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.orange))
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("track.pad.log")
-    }
-
-    /// Starts on what is in, else this athlete's last time, else the
-    /// others' median here today, else half (made of) or 0.
-    private func prepare() {
-        startedAt = nil
-        let others = students.compactMap { run.value(for: $0.id, spot: spot) }.sorted()
-        let median = others.isEmpty ? nil : others[others.count / 2]
-        let v = run.value(for: student, spot: spot)
-            ?? last[student].map { def.measure == .madeOf ? ($0 * Double(def.amount)).rounded() : $0 }
-            ?? median
-            ?? (def.measure == .madeOf ? Double(def.amount / 2) : 0)
-        number = min(def.maxEntry, max(0, Int(v)))
-        tenths = Int(((v - Double(Int(v))) * 10).rounded())
-        if tenths > 9 { tenths = 9 }
-    }
-
-    private func save(_ value: Double) {
-        run.set(value, for: student, spot: spot)
-        // Next: this athlete's next empty spot, then the next athlete's.
-        if let i = run.values(for: student).firstIndex(where: { $0 == nil }) {
-            spot = i; prepare(); return
-        }
-        let order = students.map(\.id)
-        let start = (order.firstIndex(of: student) ?? 0) + 1
-        for id in order[min(start, order.count)...] + order[..<min(start, order.count)] {
-            if let i = run.values(for: id).firstIndex(where: { $0 == nil }) {
-                student = id; spot = i; prepare(); return
-            }
-        }
-        dismiss()
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
     }
 }

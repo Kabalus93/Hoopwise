@@ -2,8 +2,8 @@ import XCTest
 
 /// Tracked shooting in the plan (20 Nov 2026; redesigned 23 Nov 2026): a
 /// tracked drill's plan row carries one tracker line; Log opens the shooting
-/// station (the whole tracker as a page); a number pad writes each athlete's
-/// self-reported makes and moves on.
+/// station (the whole tracker as a page); a tap on a cell pops the floating
+/// number pad out of it — the keys alone — and ✓ logs and opens the next cell.
 final class ShootingAddOnUITests: XCTestCase {
 
     private func launch(_ mode: String) -> XCUIApplication {
@@ -30,6 +30,21 @@ final class ShootingAddOnUITests: XCTestCase {
         return addon
     }
 
+    /// A key of the open number pad (it may be moving to the next cell).
+    private func key(_ app: XCUIApplication, _ pad: String, _ k: String) {
+        let b = app.buttons["\(pad).key.\(k)"]
+        if !b.waitForExistence(timeout: 5) { attach("missing \(k)") }
+        XCTAssertTrue(b.exists, "\(pad) key \(k)")
+        b.tap()
+    }
+
+    /// A tap outside closes the popup.
+    private func closePad(_ app: XCUIApplication) {
+        sleep(1)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.97)).tap()
+        sleep(1)
+    }
+
     private func attach(_ name: String) {
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
     }
@@ -42,14 +57,14 @@ final class ShootingAddOnUITests: XCTestCase {
         let cells = addon.buttons.matching(identifier: "shooting.cell")
         XCTAssertGreaterThan(cells.count, 1, "one cell per athlete")
         cells.element(boundBy: 0).tap()
-        let seven = app.buttons["shooting.pad.7"]
-        XCTAssertTrue(seven.waitForExistence(timeout: 5), "the pad opens")
+        key(app, "shooting.keys", "7")
         attach("pad")
-        seven.tap()
-        // Free throws have one spot: the pad moves to the next athlete.
-        app.buttons["shooting.pad.5"].tap()
-        // After the last athlete the pad closes itself.
-        if app.buttons["shooting.pad.done"].waitForExistence(timeout: 1) { app.buttons["shooting.pad.done"].tap() }
+        XCTAssertFalse(app.buttons["shooting.pad.athlete"].exists, "the popup is the keys alone")
+        key(app, "shooting.keys", "confirm")
+        // Free throws have one spot: the pad opens on the next athlete.
+        key(app, "shooting.keys", "5")
+        key(app, "shooting.keys", "confirm")
+        closePad(app)
         XCTAssertTrue(addon.staticTexts["70%"].waitForExistence(timeout: 5), "7 of 10")
         XCTAssertTrue(addon.staticTexts["50%"].exists, "5 of 10")
         attach("logged")
@@ -65,24 +80,14 @@ final class ShootingAddOnUITests: XCTestCase {
         defer { _ = launch("clear") }
         let addon = openStation(app, "twos")
         addon.buttons["shooting.log"].tap()
-        let grid = app.buttons["shooting.pad.6"], log = app.buttons["shooting.pad.log"]
-        XCTAssertTrue(grid.waitForExistence(timeout: 5) || log.exists, "Log makes opens the pad")
-        attach("pad")
-        // One athlete's five spots, one action each: a grid tap (≤ 10 shots)
-        // or, past ten shots, 3 typed on the floating number pad then Log.
-        for _ in 0..<5 {
-            if grid.exists {
-                grid.tap()
-            } else {
-                let three = app.buttons["shooting.wheel.key.3"]
-                if three.exists { three.tap() }
-                log.tap()
-            }
+        // One athlete's five spots: 3, ✓ — the pad walks the spots.
+        for i in 0..<5 {
+            key(app, "shooting.keys", "3")
+            if i == 0 { attach("pad") }
+            key(app, "shooting.keys", "confirm")
         }
         attach("next athlete")
-        XCTAssertGreaterThan(app.buttons.matching(identifier: "shooting.pad.athlete").count, 1, "everyone as photos")
-        app.buttons["shooting.pad.done"].tap()
-        // Five cells of the first athlete are in.
+        closePad(app)
         let filled = addon.buttons.matching(NSPredicate(format: "identifier == 'shooting.cell' AND label MATCHES '.* [0-9]+$'"))
         XCTAssertGreaterThanOrEqual(filled.count, 5, "five spots logged")
         attach("logged")
@@ -103,15 +108,14 @@ final class ShootingAddOnUITests: XCTestCase {
         let rim = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.0").firstMatch
         for _ in 0..<6 where rim.frame.maxY > window.maxY - 60 { app.swipeUp(velocity: .slow) }
         leftWing.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4)).tap()
-        let four = app.buttons["shotchart.keys.key.4"]
-        XCTAssertTrue(four.waitForExistence(timeout: 5), "tapping a zone opens the number pad")
-        four.tap()                                   // made
-        app.buttons["shotchart.keys.key.next"].tap() // → attempted
-        app.buttons["shotchart.keys.key.9"].tap()    // of 9
-        XCTAssertTrue(app.buttons["shotchart.log"].label.contains("4/9"), app.buttons["shotchart.log"].label)
-        app.buttons["shotchart.log"].tap()
+        key(app, "shotchart.keys", "4")          // made
+        key(app, "shotchart.keys", "next")       // → attempted
+        key(app, "shotchart.keys", "9")          // of 9
         attach("pad")
-        app.buttons["shotchart.pad.done"].tap()
+        key(app, "shotchart.keys", "confirm")
+        // The pad moves on to the athlete's next empty zone.
+        XCTAssertTrue(app.buttons["shotchart.keys.key.4"].waitForExistence(timeout: 5), "the next zone opens")
+        closePad(app)
         let zone = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
         XCTAssertTrue(zone.label.contains("44%"), "4 of 9 in the left wing: \(zone.label)")
         attach("logged")

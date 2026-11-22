@@ -2335,26 +2335,39 @@ moves on. The shot chart pad: MADE and ATTEMPTED wheels side by side (start:
 what is in, else their last chart's zone, else 4/10), the live %, one LOG
 (refused while made > attempted); fixed shots per zone keeps the grid.
 DEBUG HOOPWISE_DEMO_SHOOTING=chart puts the Shot Chart in the demo plan.
-THE FLOATING NUMBER PAD REPLACED THE WHEEL (23 Nov 2026, Luther, markup on a
-phone-style keypad floating over a field: "I prefer this floating number pad to
-strictly enter numerical values through the app. Especially the trackable
-drills."). Views/Components/FloatingNumberPad.swift: `FloatingNumberPad` (1–9,
-then [. / → / nothing] 0 ⌫ on a frosted card; keys "<id>.key.<digit>",
-".key.dot", ".key.next", ".key.delete"), `NumberPadEntry` (pure typing rules:
-the FIRST key after the value was set from outside REPLACES it, later keys
-append, a number past the top starts again from the key pressed, no leading
-zeros, decimals only when asked — NumberPadEntryTests). `NumberWheel` kept its
-name and call but now draws the number in a window over the pad (`showsValue:
-false` where the page shows the number — the custom tracking pad), so every
-tracked entry switched at once (shooting pad past ten shots, custom tracked
-drills up to 200). The shot chart's MADE / ATTEMPTED share ONE pad
-(`PairedNumberPad`: tap a box, → moves to the second; a new zone starts on
-MADE; keys "shotchart.keys.key.<d>"). Number FORM fields open the pad as a
-popover instead of the system keyboard (on the iPad `.numberPad` brings up the
-full keyboard): `NumberPadField` (Double, two decimals) / `NumberPadTextField`
-— the contract sheet's price per session, payment amount and travel fee, and
-SalesView's price, amount paid and jersey number. ≤ 10 shots keeps the one-tap
-grid.
+THE LOG POPUP IS A NUMBER PAD, NOTHING ELSE (23 Nov 2026, Luther, two
+markups: a phone-style keypad floating over a field — "I prefer this floating
+number pad … especially the trackable drills" — then: "the log pad should be as
+clean as in the screenshot, just a number pad. everything else is noise there.
+the spots already appear on the drill screen, and the athletes too … other
+drills still use different views and methods"). Views/Components/
+FloatingNumberPad.swift: `FloatingNumberPad` (1–9, then [✓ / → / .] 0 ⌫; keys
+"<id>.key.<digit>", ".key.confirm", ".key.next", ".key.dot", ".key.delete";
+`chrome: false` inside a popover) and `NumberPadEntry` (pure typing rules: the
+FIRST key replaces what is in the cell, later keys append, past the top starts
+again from the key, no leading zeros, decimals only when asked —
+NumberPadEntryTests). EVERY tracked drill logs the same way: tap a cell in the
+station's table (or Log / Log makes = the next empty cell) → the keys pop out
+of THAT cell (`.cellNumberPad`, `PadCell`); what is typed shows in the cell
+(orange ring); ✓ logs and the next cell opens (made of N: the athlete's next
+spot, then the next athlete; timed / one spot: the next athlete at that spot;
+custom drills: next empty spot); ⌫ to empty + ✓ clears; a tap outside keeps
+what was typed. The next popup opens only when the previous one has GONE
+(`onClosed` = the content's onDisappear) — opening it while the last one is
+still closing is refused by iOS and nothing appears. The SHOT CHART: the keys
+pop out of the tapped ZONE (`ShotChartMap.pad`, anchored on the zone's bounding
+box), with made / attempted as two small boxes (→ moves on; made > attempted
+refuses ✓) and the athlete's next empty zone after ✓. The coach's own
+TIME-TO-FINISH drills: seconds with tenths on the same pad, and a STOPWATCH on
+the station page that drops each stopped time into the next athlete's cell
+("Next: <name>"). Gone: the big pad sheets (ShootingEntryPad, ShotZonePad,
+CustomTrackPad — athlete photos, spot chips, prompts, quick chips), the ≤ 10
+one-tap grid, the wheel (NumberWheel) and the second paired pad. Number FORM
+fields open the same pad as a popover (`NumberPadField` / `NumberPadTextField`):
+the contract sheet's price per session, payment amount and travel fee, and
+SalesView's price, amount paid and jersey number. Tests: ShootingAddOnUITests,
+CustomTrackingUITests (keys by identifier; a tap near the bottom-left corner
+closes the popup).
 RESULTS ARE LIVE DATA (21 Nov 2026, Luther: add-ons with recorded results
 vanished from a session hours later). Causes: (1) Regenerate rebuilt the
 curriculum keeping only notes and plays — results and tracked drills went;

@@ -3,8 +3,9 @@ import SwiftUI
 // THE FLOATING NUMBER PAD (23 Nov 2026, Luther, markup on a phone-style keypad
 // floating over a sign-in field: "I prefer this floating number pad to strictly
 // enter numerical values through the app. Especially the trackable drills.").
-// One keypad — 1–9, then [. or nothing] 0 ⌫ — on a frosted card, used:
-//   · inline in the tracked drills' entry (NumberWheel now draws it), and
+// One keypad — 1–9, then [✓ / → / .] 0 ⌫ — used:
+//   · as the tracked drills' log popup (`cellNumberPad`): the keys alone,
+//     popping out of the tapped table cell or shot-chart zone, and
 //   · as a popover from any number field (`NumberPadField`), in place of the
 //     system keyboard (on the iPad `.numberPad` brings up the full keyboard).
 
@@ -70,9 +71,13 @@ struct FloatingNumberPad: View {
     var allowsDecimal = false
     /// The bottom-left key when there is no decimal point: "→" (next field).
     var nextKey = false
+    /// A ✓ key ("✓"): log and go on (the tracked-drill popup).
+    var confirmKey = false
     var keyHeight: CGFloat = 52
     /// Each key's identifier is "<identifier>.key.<digit>" ("dot", "delete").
     var identifier = "numberPad"
+    /// The frosted card around the keys; off inside a popover, which has its own.
+    var chrome = true
 
     private let rows: [[Character]] = [["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"]]
 
@@ -85,16 +90,9 @@ struct FloatingNumberPad: View {
                 if allowsDecimal {
                     key(".")
                 } else if nextKey {
-                    Button { onKey("→") } label: {
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: keyHeight * 0.38, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(maxWidth: .infinity, minHeight: keyHeight, maxHeight: keyHeight)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(NumberKeyStyle(plain: true))
-                    .accessibilityLabel("Next")
-                    .accessibilityIdentifier("\(identifier).key.next")
+                    actionKey("→", symbol: "arrow.right", name: "next", label: "Next", prominent: false)
+                } else if confirmKey {
+                    actionKey("✓", symbol: "checkmark", name: "confirm", label: "Log", prominent: true)
                 } else {
                     Color.clear.frame(maxWidth: .infinity, maxHeight: keyHeight)
                 }
@@ -110,11 +108,37 @@ struct FloatingNumberPad: View {
                 .accessibilityLabel("Delete")
                 .accessibilityIdentifier("\(identifier).key.delete")
             }
+            // With a decimal point the action gets a row of its own.
+            if allowsDecimal && (nextKey || confirmKey) {
+                if nextKey {
+                    actionKey("→", symbol: "arrow.right", name: "next", label: "Next", prominent: false)
+                } else {
+                    actionKey("✓", symbol: "checkmark", name: "confirm", label: "Log", prominent: true)
+                }
+            }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.regularMaterial))
-        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+        .padding(chrome ? 10 : 0)
+        .background {
+            if chrome { RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.regularMaterial) }
+        }
+        .shadow(color: .black.opacity(chrome ? 0.12 : 0), radius: 14, y: 6)
         .sensoryFeedback(.selection, trigger: taps)
+    }
+
+    private func actionKey(_ k: Character, symbol: String, name: String, label: String, prominent: Bool) -> some View {
+        Button { onKey(k) } label: {
+            Image(systemName: symbol)
+                .font(.system(size: keyHeight * 0.4, weight: .bold))
+                .foregroundStyle(prominent ? Color.white : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: keyHeight, maxHeight: keyHeight)
+                .background {
+                    if prominent { RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange) }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(NumberKeyStyle(plain: true))
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("\(identifier).key.\(name)")
     }
 
     @State private var taps = 0
@@ -214,81 +238,62 @@ struct NumberPadTextField: View {
     }
 }
 
-// MARK: - Two numbers, one pad
+// MARK: - The tracked-drill popup: keys alone, out of the cell
 
-/// Two numbers typed on ONE pad (the shot chart: made, attempted). Tap a box
-/// to type into it; → moves from the first to the second. Each box's first key
-/// replaces its number, as on the single pad.
-struct PairedNumberPad: View {
-    struct Field {
-        var title: String
-        var range: ClosedRange<Int>
-        var value: Binding<Int>
-        var tint: Color
-        var identifier: String
-    }
-    let first: Field
-    let second: Field
-    /// Keys: "<identifier>.key.<digit>", "<identifier>.key.next".
-    var identifier = "pairPad"
+/// What a tracked drill's table cell opens (23 Nov 2026, Luther: "the log pad
+/// should be as clean as in the screenshot, just a number pad … the spots
+/// already appear on the drill screen, and the athletes too"). The keys pop
+/// out of the tapped cell; what is typed shows IN the cell; ✓ logs it and the
+/// next cell opens; a tap outside keeps what was typed and closes.
+struct CellNumberPad: ViewModifier {
+    @Binding var isPresented: Bool
+    @Binding var draft: NumberPadEntry
+    var identifier: String
+    var onConfirm: () -> Void
+    /// The popup has gone (the next cell may open now — opening it while
+    /// this one is still closing is refused by iOS).
+    var onClosed: () -> Void = {}
 
-    @State private var active = 0
-    @State private var entries = [NumberPadEntry(text: ""), NumberPadEntry(text: "")]
-    @State private var written: [Int?] = [nil, nil]
-
-    private var fields: [Field] { [first, second] }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                box(0)
-                box(1)
-            }
-            FloatingNumberPad(onKey: type, nextKey: active == 0, keyHeight: 48, identifier: identifier)
-                .frame(maxWidth: 340)
+    func body(content: Content) -> some View {
+        content.popover(isPresented: $isPresented) {
+            FloatingNumberPad(onKey: { k in
+                switch k {
+                case "✓": onConfirm()
+                case "⌫": draft.delete()
+                default: draft.press(k)
+                }
+            }, allowsDecimal: draft.decimals > 0, confirmKey: true, keyHeight: 56,
+               identifier: identifier, chrome: false)
+                .padding(12)
+                .frame(width: 280)
+                .presentationCompactAdaptation(.popover)
+                .onDisappear(perform: onClosed)
         }
-        .onAppear { reset(0); reset(1) }
-        .onChange(of: first.value.wrappedValue) { _, v in if v != written[0] { reset(0) } }
-        .onChange(of: second.value.wrappedValue) { _, v in if v != written[1] { reset(1) } }
+    }
+}
+
+extension View {
+    func cellNumberPad(isPresented: Binding<Bool>, draft: Binding<NumberPadEntry>, identifier: String,
+                       onConfirm: @escaping () -> Void, onClosed: @escaping () -> Void = {}) -> some View {
+        modifier(CellNumberPad(isPresented: isPresented, draft: draft, identifier: identifier,
+                               onConfirm: onConfirm, onClosed: onClosed))
+    }
+}
+
+/// One cell of a tracked drill's table: which athlete, which spot.
+struct PadCell: Hashable {
+    var student: UUID
+    var spot: Int
+}
+
+extension NumberPadEntry {
+    /// A cell's draft: what is in it (replaced by the first key), at most `maximum`.
+    static func cell(_ value: Double?, maximum: Double, decimals: Int = 0) -> NumberPadEntry {
+        var e = NumberPadEntry(text: "", maximum: maximum, decimals: decimals)
+        if let value { e.reset(to: value) }
+        return e
     }
 
-    private func box(_ i: Int) -> some View {
-        let f = fields[i]
-        let on = active == i
-        return Button { active = i; entries[i].fresh = true } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(f.title).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                Text("\(f.value.wrappedValue)")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.tertiarySystemFill)))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(on ? f.tint : .clear, lineWidth: 2.5))
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("\(f.identifier).value")
-        .accessibilityValue("\(f.value.wrappedValue)")
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private func reset(_ i: Int) {
-        entries[i] = NumberPadEntry(text: "", maximum: Double(fields[i].range.upperBound))
-        entries[i].reset(to: Double(fields[i].value.wrappedValue))
-        written[i] = nil
-        active = 0   // a new zone or athlete starts on the first box
-    }
-
-    private func type(_ key: Character) {
-        if key == "→" { active = 1; entries[1].fresh = true; return }
-        let i = active
-        if key == "⌫" { entries[i].delete() } else { entries[i].press(key) }
-        let r = fields[i].range
-        let v = entries[i].text.isEmpty ? r.lowerBound : max(r.lowerBound, min(r.upperBound, Int(entries[i].value)))
-        written[i] = v
-        withAnimation(.snappy(duration: 0.15)) { fields[i].value.wrappedValue = v }
-    }
+    /// Something was typed (not just opened and confirmed).
+    var typed: Bool { !fresh }
 }

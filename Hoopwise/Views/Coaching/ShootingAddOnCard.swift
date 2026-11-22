@@ -11,10 +11,11 @@ import Combine
 // · a TABLE — spot columns labelled once, each cell tinted by its value (a
 //   heat map), the result and ↑/↓ against last time, a footer with the
 //   group's average per spot; sort by roster, best first or still to log;
-// · LOG MAKES opens the pad on the next empty cell. Athletes self-report in
-//   any order, so the pad shows everyone as photos: tap whoever walked up,
-//   tap their number — it moves on by itself (made of N: that athlete's next
-//   spot; timed: the next athlete at the clock's spot).
+// · TAP A CELL (or LOG MAKES for the next empty one): the floating number
+//   pad pops out of that cell — the keys alone (23 Nov 2026, Luther: "the
+//   popup should only be a number pad"); the number shows in the cell; ✓ logs
+//   it and the next cell opens (made of N: that athlete's next spot; timed:
+//   the next athlete at the clock's spot).
 // Results → SessionCurriculum.shooting (ShootingRun).
 
 struct ShootingAddOnCard: View {
@@ -29,7 +30,11 @@ struct ShootingAddOnCard: View {
     var station = false
 
     @EnvironmentObject private var dataManager: DataManager
-    @State private var pad: PadStart?
+    /// The cell the number pad is open on, and what has been typed there.
+    @State private var active: PadCell?
+    @State private var draft = NumberPadEntry(text: "")
+    /// The cell to open once the current popup has gone.
+    @State private var pending: PadCell?
     @State private var editingSetup = false
     @State private var expanded = true
     @State private var clockSpot = 0
@@ -41,12 +46,6 @@ struct ShootingAddOnCard: View {
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
     enum Sort: String, CaseIterable { case roster, best, toLog }
-
-    struct PadStart: Identifiable {
-        let id = UUID()
-        let student: UUID
-        let spot: Int
-    }
 
     private var setup: ShootingSetup { run.setup }
     private var locked: Bool { !run.entries.isEmpty }
@@ -81,13 +80,6 @@ struct ShootingAddOnCard: View {
             .fill(station ? Color.clear : Color(.secondarySystemGroupedBackground)))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
             .strokeBorder(station ? Color.clear : Color.orange.opacity(0.22), lineWidth: 1))
-        .sheet(item: $pad) { start in
-            ShootingEntryPad(drill: drill, setup: setup, run: $run, students: students, last: lastTime,
-                             student: start.student, spot: start.spot,
-                             timedSpot: setup.mode == .timed ? clockSpot : nil)
-                .presentationDetents([.large])
-                .environmentObject(dataManager)
-        }
         .sheet(isPresented: $editingSetup) {
             ShootingSetupSheet(setup: run.setup) { new in
                 run.setup = new
@@ -257,7 +249,7 @@ struct ShootingAddOnCard: View {
                 if left == 0 {
                     // Time's up: log this spot.
                     let first = students.first { run.makes($0.id, spot: clockSpot) == nil } ?? students.first
-                    if let first { pad = PadStart(student: first.id, spot: clockSpot) }
+                    if let first { open(PadCell(student: first.id, spot: clockSpot)) }
                 } else {
                     if remaining == nil { remaining = total }
                     running.toggle()
@@ -397,18 +389,24 @@ struct ShootingAddOnCard: View {
 
     private func cell(student: UUID, spot: Int) -> some View {
         let value = run.makes(student, spot: spot)
+        let here = PadCell(student: student, spot: spot)
+        let editing = active == here
+        let shown = editing ? (draft.text.isEmpty ? "·" : draft.text) : (value.map(String.init) ?? "·")
         return Button {
             guard canEdit else { return }
-            pad = PadStart(student: student, spot: spot)
+            open(here)
         } label: {
-            Text(value.map(String.init) ?? "·")
+            Text(shown)
                 .font(.system(size: 15, weight: .bold, design: .rounded)).monospacedDigit()
-                .foregroundStyle(value == nil ? Color.secondary : Color.primary)
+                .foregroundStyle(value == nil && !editing ? Color.secondary : Color.primary)
                 .frame(width: cellWidth, height: 32)
                 .background(RoundedRectangle(cornerRadius: 7)
                     .fill(value.map { Color.orange.opacity(0.12 + 0.55 * strength($0)) } ?? Color(.tertiarySystemFill)))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(editing ? Color.orange : .clear, lineWidth: 2.5))
         }
         .buttonStyle(.plain)
+        .cellNumberPad(isPresented: presented(here), draft: $draft, identifier: "shooting.keys",
+                       onConfirm: { confirm(here) }, onClosed: openPending)
         .accessibilityLabel("\(drill.spotName(spot, chinese: isChinese)) \(value.map(String.init) ?? "")")
         .accessibilityIdentifier("shooting.cell")
     }
@@ -439,281 +437,76 @@ struct ShootingAddOnCard: View {
         return isChinese ? name : (name.components(separatedBy: " ").first ?? name)
     }
 
+    // MARK: The number pad on a cell
+
+    /// The most a cell takes: the shots (made of N), else a generous count.
+    private var maximum: Int {
+        setup.mode == .timed ? 200 : max(1, setup.shots)
+    }
+
+    private func open(_ cell: PadCell) {
+        draft = .cell(run.makes(cell.student, spot: cell.spot).map(Double.init), maximum: Double(maximum))
+        active = cell
+    }
+
+    private func presented(_ cell: PadCell) -> Binding<Bool> {
+        Binding(get: { active == cell }, set: { on in
+            guard !on, active == cell else { return }
+            commit(cell)          // a tap outside keeps what was typed
+            active = nil
+        })
+    }
+
+    private func commit(_ cell: PadCell) {
+        guard draft.typed else { return }
+        run.set(draft.text.isEmpty ? nil : Int(draft.value), for: cell.student, spot: cell.spot)
+    }
+
+    /// ✓: log, then the next empty cell opens.
+    private func confirm(_ cell: PadCell) {
+        commit(cell)
+        let next = nextCell(after: cell)
+        pending = next
+        active = nil
+    }
+
+    private func openPending() {
+        guard let next = pending else { return }
+        pending = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { open(next) }
+    }
+
+    /// Made of N: this athlete's next empty spot, then the next athlete's.
+    /// Timed (or one spot): the next athlete at the same spot.
+    private func nextCell(after cell: PadCell) -> PadCell? {
+        let ids = students.map(\.id)
+        guard let i = ids.firstIndex(of: cell.student) else { return nil }
+        let after = Array(ids[(i + 1)...] + ids[..<i])
+        if setup.mode == .timed || drill.spotCount == 1 {
+            return after.first { run.makes($0, spot: cell.spot) == nil }.map { PadCell(student: $0, spot: cell.spot) }
+        }
+        if let s = (0..<drill.spotCount).first(where: { run.makes(cell.student, spot: $0) == nil }) {
+            return PadCell(student: cell.student, spot: s)
+        }
+        for id in after {
+            if let s = (0..<drill.spotCount).first(where: { run.makes(id, spot: $0) == nil }) {
+                return PadCell(student: id, spot: s)
+            }
+        }
+        return nil
+    }
+
     private func openPadAtNext() {
         if setup.mode == .timed {
             let first = students.first { run.makes($0.id, spot: clockSpot) == nil } ?? students.first
-            if let first { pad = PadStart(student: first.id, spot: clockSpot) }
+            if let first { open(PadCell(student: first.id, spot: clockSpot)) }
             return
         }
         for s in students {
             if let spot = (0..<drill.spotCount).first(where: { run.makes(s.id, spot: $0) == nil }) {
-                pad = PadStart(student: s.id, spot: spot); return
+                open(PadCell(student: s.id, spot: spot)); return
             }
         }
-        if let first = students.first { pad = PadStart(student: first.id, spot: 0) }
-    }
-}
-
-// MARK: - The pad
-
-/// Everyone as photos, the spot, and the numbers. Tap whoever is in front of
-/// you, tap their makes — it moves on by itself.
-struct ShootingEntryPad: View {
-    let drill: ShootingDrill
-    let setup: ShootingSetup
-    @Binding var run: ShootingRun
-    let students: [Student]
-    /// Each athlete's result in this test last time — where the wheel starts.
-    let last: [UUID: ShootingResult]
-    /// Timed: the clock's spot — everyone reports that spot.
-    let timedSpot: Int?
-    @State private var student: UUID
-    @State private var spot: Int
-    /// The number on the wheel.
-    @State private var wheel = 0
-    @Environment(\.dismiss) private var dismiss
-    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
-
-    init(drill: ShootingDrill, setup: ShootingSetup, run: Binding<ShootingRun>, students: [Student],
-         last: [UUID: ShootingResult] = [:], student: UUID, spot: Int, timedSpot: Int?) {
-        self.drill = drill; self.setup = setup; _run = run; self.students = students; self.timedSpot = timedSpot
-        self.last = last
-        _student = State(initialValue: student)
-        _spot = State(initialValue: spot)
-    }
-
-    private var maximum: Int {
-        setup.mode == .attempts ? setup.shots : max(20, (run.entries.flatMap { $0.makes.compactMap { $0 } }.max() ?? 0) + 5)
-    }
-
-    private var current: Student? { students.first { $0.id == student } }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 18) {
-                    if drill.spotCount > 1 { spotPicker }
-                    athletes
-                    Text(progressText)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    prompt
-                    if wheelMode { wheelEntry } else { keypad }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-            }
-            .navigationTitle(drill.title(chinese: isChinese))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "完成" : "Done") { dismiss() }
-                        .fontWeight(.semibold)
-                        .accessibilityIdentifier("shooting.pad.done")
-                }
-            }
-        }
-        .sensoryFeedback(.selection, trigger: student)
-        .onAppear { wheel = startValue }
-        .onChange(of: student) { _, _ in wheel = startValue }
-        .onChange(of: spot) { _, _ in wheel = startValue }
-    }
-
-    // MARK: Wheel (21 Nov 2026) — more than ten numbers to choose from
-
-    /// Ten shots or fewer keep the one-tap grid; beyond, the wheel.
-    private var wheelMode: Bool { maximum > 10 }
-
-    /// What is already in, else this athlete's number at this spot last
-    /// time, else half the shots (timed: what the others reported here).
-    private var startValue: Int {
-        if let v = run.makes(student, spot: spot) { return v }
-        if let r = last[student], spot < r.makes.count, let v = r.makes[spot] { return min(v, maximum) }
-        switch setup.mode {
-        case .attempts, .chart: return setup.shots / 2
-        case .timed:
-            let here = students.compactMap { run.makes($0.id, spot: spot) }.sorted()
-            return here.isEmpty ? 5 : here[here.count / 2]
-        }
-    }
-
-    private var wheelEntry: some View {
-        VStack(spacing: 14) {
-            NumberWheel(range: 0...maximum, value: $wheel, identifier: "shooting.wheel")
-            HStack(spacing: 8) {
-                ForEach(quickChips, id: \.self) { n in
-                    Button { commit(n) } label: {
-                        Text("\(n)")
-                            .font(.headline.monospacedDigit())
-                            .frame(minWidth: 52, minHeight: 44)
-                            .background(Capsule().fill(Color(.tertiarySystemFill)))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("shooting.chip.\(n)")
-                }
-                Spacer(minLength: 8)
-                Button { commit(wheel) } label: {
-                    Text(isChinese ? "记录 \(wheel)" : "Log \(wheel)")
-                        .font(.title3.weight(.bold))
-                        .monospacedDigit()
-                        .frame(minWidth: 150, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .tint(.orange)
-                .accessibilityIdentifier("shooting.pad.log")
-            }
-        }
-    }
-
-    /// One tap, saved: none, half and all (made of N); none and last time
-    /// (timed).
-    private var quickChips: [Int] {
-        switch setup.mode {
-        case .attempts, .chart:
-            return Array(Set([0, setup.shots / 2, setup.shots])).sorted()
-        case .timed:
-            var out = [0]
-            if let r = last[student], spot < r.makes.count, let v = r.makes[spot], v > 0 { out.append(v) }
-            return out
-        }
-    }
-
-    private func commit(_ n: Int) {
-        run.set(n, for: student, spot: spot)
-        advance()
-    }
-
-    private var spotPicker: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<drill.spotCount, id: \.self) { i in
-                let on = spot == i
-                Button { spot = i } label: {
-                    Text(drill.spotName(i, chinese: isChinese))
-                        .font(.footnote.weight(.semibold))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: 34)
-                        .foregroundStyle(on ? Color.white : Color.primary)
-                        .background(Capsule().fill(on ? Color.orange : Color(.tertiarySystemFill)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("shooting.pad.spot.\(i)")
-            }
-        }
-    }
-
-    /// Everyone, as they come: a number badge when this spot is in.
-    private var athletes: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 68), spacing: 10)], spacing: 12) {
-            ForEach(students) { s in
-                let value = run.makes(s.id, spot: spot)
-                let on = s.id == student
-                Button { student = s.id } label: {
-                    VStack(spacing: 4) {
-                        StudentAvatarView(student: s, size: 52)
-                            .overlay(Circle().strokeBorder(on ? Color.orange : .clear, lineWidth: 3).padding(-4))
-                            .overlay(alignment: .topTrailing) {
-                                if let value {
-                                    Text("\(value)")
-                                        .font(.system(size: 12, weight: .heavy, design: .rounded))
-                                        .foregroundStyle(.white)
-                                        .frame(minWidth: 22, minHeight: 22)
-                                        .background(Circle().fill(Color.green))
-                                        .offset(x: 6, y: -6)
-                                }
-                            }
-                            .opacity(value != nil && !on ? 0.55 : 1)
-                        Text(firstName(s))
-                            .font(.caption2.weight(on ? .bold : .medium))
-                            .lineLimit(1)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("shooting.pad.athlete")
-            }
-        }
-    }
-
-    private var prompt: some View {
-        HStack(spacing: 8) {
-            if let current {
-                Text(current.primaryDisplayName).font(.headline).lineLimit(1)
-            }
-            Text("·").foregroundStyle(.secondary)
-            Text(question).font(.subheadline).foregroundStyle(.secondary)
-            Spacer()
-            Button(role: .destructive) {
-                run.set(nil, for: student, spot: spot)
-            } label: {
-                Image(systemName: "delete.left")
-            }
-            .disabled(run.makes(student, spot: spot) == nil)
-            .accessibilityLabel(isChinese ? "清除" : "Clear")
-        }
-    }
-
-    private var question: String {
-        let at = drill.spotCount > 1 ? drill.spotName(spot, chinese: isChinese) + " · " : ""
-        switch setup.mode {
-        case .attempts, .chart: return at + (isChinese ? "\(setup.shots) 投中几个？" : "made of \(setup.shots)?")
-        case .timed: return at + (isChinese ? "\(ShootingSetup.time(setup.seconds, chinese: true)) 进了几个？"
-                                            : "makes in \(ShootingSetup.time(setup.seconds, chinese: false))?")
-        }
-    }
-
-    private var keypad: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-            ForEach(0...maximum, id: \.self) { n in
-                let chosen = run.makes(student, spot: spot) == n
-                Button {
-                    run.set(n, for: student, spot: spot)
-                    advance()
-                } label: {
-                    Text("\(n)")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                        .foregroundStyle(chosen ? Color.white : Color.primary)
-                        .background(RoundedRectangle(cornerRadius: 12)
-                            .fill(chosen ? Color.orange : Color(.tertiarySystemFill)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("shooting.pad.\(n)")
-            }
-        }
-    }
-
-    private var progressText: String {
-        let filled = students.reduce(0) { sum, s in
-            sum + (0..<drill.spotCount).filter { run.makes(s.id, spot: $0) != nil }.count
-        }
-        return isChinese ? "已记 \(filled)/\(students.count * drill.spotCount)" : "\(filled) of \(students.count * drill.spotCount) logged"
-    }
-
-    /// Made of N: this athlete's next empty spot, then the next athlete with
-    /// one. Timed: the next athlete without this spot. Nothing left: close.
-    private func advance() {
-        let ids = students.map(\.id)
-        guard let i = ids.firstIndex(of: student) else { dismiss(); return }
-        let after = Array(ids[(i + 1)...] + ids[..<i])
-        if timedSpot == nil, setup.mode == .attempts,
-           let next = (0..<drill.spotCount).first(where: { run.makes(student, spot: $0) == nil }) {
-            spot = next
-            return
-        }
-        if setup.mode == .timed || drill.spotCount == 1 {
-            if let next = after.first(where: { run.makes($0, spot: spot) == nil }) { student = next } else { dismiss() }
-            return
-        }
-        for id in after {
-            if let s = (0..<drill.spotCount).first(where: { run.makes(id, spot: $0) == nil }) {
-                student = id; spot = s; return
-            }
-        }
-        dismiss()
-    }
-
-    private func firstName(_ s: Student) -> String {
-        let name = s.primaryDisplayName
-        return isChinese ? name : (name.components(separatedBy: " ").first ?? name)
+        if let first = students.first { open(PadCell(student: first.id, spot: 0)) }
     }
 }

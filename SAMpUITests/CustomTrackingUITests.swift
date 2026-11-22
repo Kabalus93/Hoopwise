@@ -32,21 +32,20 @@ final class CustomTrackingUITests: XCTestCase {
         let log = app.buttons["track.log"]
         XCTAssertTrue(log.waitForExistence(timeout: 5), "the station opens")
         attach("station")
+        let athletes = app.buttons.matching(identifier: "track.cell").count
         log.tap()
-        let save = app.buttons["track.pad.log"]
-        XCTAssertTrue(save.waitForExistence(timeout: 5), "the pad opens with the number pad")
-        // 30 seconds of passes: type 12 on the floating number pad, then Log.
-        let one = app.buttons["track.wheel.key.1"]
-        if one.exists {
-            one.tap()
-            app.buttons["track.wheel.key.2"].tap()
-            XCTAssertTrue(app.staticTexts["track.wheel.value"].label.hasPrefix("12"), "the first key replaces, the next appends")
+        // 30 seconds of passes: 1, 2, ✓ for each athlete — the pad pops out of
+        // each cell in turn, the keys alone.
+        for i in 0..<athletes {
+            for k in ["1", "2", "confirm"] {
+                let b = app.buttons["track.keys.key.\(k)"]
+                XCTAssertTrue(b.waitForExistence(timeout: 5), "key \(k)")
+                b.tap()
+                if i == 0 && k == "2" { attach("pad") }
+            }
         }
-        attach("pad")
-        let athletes = app.buttons.matching(identifier: "track.pad.athlete").count
-        for _ in 0..<athletes where save.exists { save.tap(); sleep(1) }
-        if app.buttons["track.pad.done"].exists { app.buttons["track.pad.done"].tap() }
-        let filled = app.buttons.matching(NSPredicate(format: "identifier == 'track.cell' AND NOT (label ENDSWITH '—')"))
+        sleep(1)
+        let filled = app.buttons.matching(NSPredicate(format: "identifier == 'track.cell' AND label ENDSWITH '12'"))
         XCTAssertTrue(filled.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(filled.count, athletes, "everyone logged")
         attach("logged")

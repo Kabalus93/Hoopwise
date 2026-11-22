@@ -135,6 +135,14 @@ struct ShotChartMap: View {
     /// Light, for the shared image.
     var forImage = false
     var onTap: ((Int) -> Void)? = nil
+    /// The number pad popping out of a zone (23 Nov 2026): which zone shows
+    /// it, and what it holds.
+    var pad: ZonePad? = nil
+
+    struct ZonePad {
+        var isPresented: (Int) -> Binding<Bool>
+        var content: () -> AnyView
+    }
 
     @Environment(\.colorScheme) private var scheme
 
@@ -186,6 +194,10 @@ struct ShotChartMap: View {
                                             + (zones[i].map { " \(Int(($0.share * 100).rounded()))%" } ?? ""))
                         .accessibilityAddTraits(onTap == nil ? [] : .isButton)
                         .accessibilityIdentifier("shotchart.zone.\(i)")
+                        .popover(isPresented: pad?.isPresented(i) ?? .constant(false),
+                                 attachmentAnchor: .rect(.rect(ZoneShape(index: i).path(in: rect).boundingRect))) {
+                            pad?.content()
+                        }
                 }
                 CourtLinesShape()
                     .stroke((forImage ? Color.black : Color.primary).opacity(0.35), lineWidth: 1)
