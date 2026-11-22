@@ -306,24 +306,47 @@ struct DrillPlanGenerator {
         return (types.filter { seen.insert($0).inserted }, notes)
     }
 
-    /// "tracked:<skill>:<share>" for each skill linked to a coach's made-of
-    /// drill whose roster average (latest result each, ≥ 3 athletes) is
-    /// under 35 %. Other measures have no common yardstick and stay silent.
+    /// What the coach's own tracked drills say about the roster (runs
+    /// oldest first), per MAIN skill of the drill:
+    /// · "tracked:<skill>:<share>" — a made-of drill the roster makes under
+    ///   35 % (latest result each, ≥ 3 athletes);
+    /// · "trackedDown:<skill>:<percent>" — any measure: ≥ 3 athletes with a
+    ///   latest and a previous result under the same setup, and the group is
+    ///   10 % or more worse than last time (slower, fewer, a lower share).
+    /// One signal a skill, the low share first.
     static func trackedSignals(runs: [TrackedRun], roster: Set<UUID>) -> [(DrillAttribute, String)] {
-        var latest: [UUID: (TrackDefinition, [UUID: Double])] = [:]
-        for run in runs where run.definition.measure == .madeOf {
-            var entry = latest[run.drillId] ?? (run.definition, [:])
+        // drill|key → the definition and each athlete's results in order.
+        var series: [String: (TrackDefinition, [UUID: [Double]])] = [:]
+        for run in runs {
+            let k = "\(run.drillId)|\(run.definition.key)"
+            var entry = series[k] ?? (run.definition, [:])
             entry.0 = run.definition
-            for id in roster { if let v = run.result(for: id) { entry.1[id] = v } }
-            latest[run.drillId] = entry
+            for id in roster { if let v = run.result(for: id) { entry.1[id, default: []].append(v) } }
+            series[k] = entry
         }
         var out: [(DrillAttribute, String)] = []
-        for (_, (def, values)) in latest where values.count >= 3 {
-            let avg = values.values.reduce(0, +) / Double(values.count)
-            guard avg < 0.35 else { continue }
-            for axis in def.attributes where !out.contains(where: { $0.0 == axis }) {
-                out.append((axis, "tracked:\(axis.rawValue):\(Int((avg * 100).rounded()))%"))
+        func add(_ def: TrackDefinition, _ note: (DrillAttribute) -> String) {
+            for axis in def.mainAttributes where !out.contains(where: { $0.0 == axis }) {
+                out.append((axis, note(axis)))
             }
+        }
+        let ordered = series.values.sorted { $0.0.key < $1.0.key }
+        for (def, values) in ordered where def.measure == .madeOf && values.count >= 3 {
+            let latest = values.values.compactMap(\.last)
+            let avg = latest.reduce(0, +) / Double(latest.count)
+            if avg < 0.35 { add(def) { "tracked:\($0.rawValue):\(Int((avg * 100).rounded()))%" } }
+        }
+        for (def, values) in ordered {
+            let pairs = values.values.compactMap { v -> (Double, Double)? in
+                v.count >= 2 ? (v[v.count - 2], v[v.count - 1]) : nil
+            }
+            guard pairs.count >= 3 else { continue }
+            let before = pairs.reduce(0) { $0 + $1.0 } / Double(pairs.count)
+            let now = pairs.reduce(0) { $0 + $1.1 } / Double(pairs.count)
+            guard before > 0 else { continue }
+            // Worse = lower when higher is better, higher when lower is.
+            let worse = def.lowerIsBetter ? (now - before) / before : (before - now) / before
+            if worse >= 0.10 { add(def) { "trackedDown:\($0.rawValue):\(Int((worse * 100).rounded()))%" } }
         }
         return out
     }
@@ -597,6 +620,11 @@ extension DrillPlanGenerator.PlanRationale {
             guard bits.count == 2, let axis = DrillAttribute(rawValue: bits[0]) else { return nil }
             return zh ? "训练成绩偏低：\(axis.title(chinese: true))（平均 \(bits[1])）"
                       : "low tracked-drill results: \(axis.title(chinese: false)) (\(bits[1]) average)"
+        case "trackedDown":
+            let bits = parts[1].split(separator: ":", maxSplits: 1).map(String.init)
+            guard bits.count == 2, let axis = DrillAttribute(rawValue: bits[0]) else { return nil }
+            return zh ? "训练成绩比上次下降 \(bits[1])：\(axis.title(chinese: true))"
+                      : "tracked-drill results down \(bits[1]) on last time: \(axis.title(chinese: false))"
         case "stocks":
             return zh ? "比赛中抢断盖帽偏少（人均每场 \(parts[1])）" : "few steals and blocks in games (\(parts[1]) per player-game)"
         default:

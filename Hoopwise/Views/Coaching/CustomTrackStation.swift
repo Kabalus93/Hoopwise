@@ -102,6 +102,9 @@ struct CustomTrackStationSheet: View {
     let allSessions: [SessionEvent]
     let canEdit: Bool
 
+    /// A shooting drill on the shot map: whose map shows (nil = the group).
+    @State private var chosen: UUID?
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var active: PadCell?
     @State private var draft = NumberPadEntry(text: "")
     /// The cell to open once the current popup has gone.
@@ -135,7 +138,15 @@ struct CustomTrackStationSheet: View {
                         Text(isChinese ? "这节课还没有学员。" : "No athletes on this session yet.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     } else {
-                        table(last)
+                        if def.onShotMap && def.measure == .madeOf { zoneMap }
+                        if sizeClass == .compact && def.spotCount > 3 {
+                            // Many spots on a phone: the table scrolls sideways.
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                table(last).frame(width: 150 + CGFloat(def.spotCount) * (cellWidth + 6) + 96)
+                            }
+                        } else {
+                            table(last)
+                        }
                     }
                 }
                 .frame(maxWidth: 900, alignment: .leading)
@@ -165,7 +176,8 @@ struct CustomTrackStationSheet: View {
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(Color.orange.opacity(0.14)))
             VStack(alignment: .leading, spacing: 2) {
-                Text(def.measure.title(chinese: isChinese).uppercased())
+                Text((def.kind == .other ? def.measure.title(chinese: isChinese)
+                      : def.kind.title(chinese: isChinese) + " · " + def.kind.measureTitle(def.measure, chinese: isChinese)).uppercased())
                     .font(.subheadline.weight(.bold))
                 Text(def.summary(chinese: isChinese))
                     .font(.caption).foregroundStyle(.secondary)
@@ -227,6 +239,61 @@ struct CustomTrackStationSheet: View {
         }
     }
 
+    // MARK: The shot map (a shooting drill that names its zones)
+
+    private var cellWidth: CGFloat { def.spotCount > 6 ? 42 : (def.spotCount > 3 ? 52 : 64) }
+
+    /// The drill's zones for one athlete, or everyone pooled.
+    private func zoneValues(for student: UUID?) -> [ShotZoneValue?] {
+        var out = [ShotZoneValue?](repeating: nil, count: 10)
+        for s in students where student == nil || s.id == student {
+            for (i, z) in ShootingHistory.zones(of: run, student: s.id).enumerated() {
+                guard let z else { continue }
+                var cur = out[i] ?? ShotZoneValue(made: 0, attempted: 0)
+                cur.made += z.made; cur.attempted += z.attempted
+                out[i] = cur
+            }
+        }
+        return out
+    }
+
+    /// Group or one athlete on the court; a tap on one of the drill's zones
+    /// opens that cell's number pad (the chosen athlete's, else the next
+    /// athlete without a number there).
+    private var zoneMap: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    mapChip(nil, isChinese ? "全组" : "Group")
+                    ForEach(students) { s in mapChip(s.id, s.primaryDisplayName) }
+                }
+            }
+            ShotChartMap(zones: zoneValues(for: chosen),
+                         selected: active.flatMap { def.zones.indices.contains($0.spot) ? def.zones[$0.spot] : nil },
+                         onTap: canEdit ? { zone in
+                             guard let spot = def.zones.firstIndex(of: zone) else { return }
+                             let who = chosen ?? students.first { run.value(for: $0.id, spot: spot) == nil }?.id ?? students.first?.id
+                             if let who { open(PadCell(student: who, spot: spot)) }
+                         } : nil,
+                         dimmed: Set(0..<10).subtracting(def.zones))
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("track.zoneMap")
+    }
+
+    private func mapChip(_ id: UUID?, _ label: String) -> some View {
+        Button { chosen = id } label: {
+            Text(label)
+                .font(.subheadline.weight(.semibold)).lineLimit(1)
+                .padding(.horizontal, 12).frame(minHeight: 32)
+                .background(Capsule().fill(chosen == id ? Color.orange : Color(.tertiarySystemFill)))
+                .foregroundStyle(chosen == id ? Color.white : Color.primary)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func caption(_ s: String) -> some View {
         Text(s.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
     }
@@ -246,9 +313,11 @@ struct CustomTrackStationSheet: View {
             HStack(spacing: 6) {
                 caption(isChinese ? "学员" : "Athlete")
                 Spacer()
-                if def.spots.count > 1 {
+                if def.spotCount > 1 {
                     ForEach(0..<def.spotCount, id: \.self) { i in
-                        caption(def.spotName(i, chinese: isChinese)).frame(width: 64)
+                        caption(def.spotName(i, chinese: isChinese))
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .frame(width: cellWidth)
                     }
                 }
                 caption(isChinese ? "结果" : "Result").frame(width: 90, alignment: .trailing)
@@ -294,7 +363,7 @@ struct CustomTrackStationSheet: View {
         } label: {
             Text(editing ? (draft.text.isEmpty ? "·" : draft.text) : (v.map { def.entryText($0) } ?? "·"))
                 .font(.subheadline.weight(.semibold)).monospacedDigit()
-                .frame(width: 64, height: 36)
+                .frame(width: cellWidth, height: 36)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(v == nil ? Color(.tertiarySystemFill) : Color.orange.opacity(0.22)))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)

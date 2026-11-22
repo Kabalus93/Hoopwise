@@ -308,6 +308,34 @@ struct DrillsLibraryView: View {
                 Text(isChinese ? "投篮测试 · 自动记录" : "Tracked shooting")
             }
         }
+        // The coach's own tracked drills (24 Nov 2026).
+        let mine = visibleDrills
+            .filter { $0.tracking != nil && $0.trackedShooting == nil }
+            .filter { skill == nil || ($0.tracking?.weight(for: skill!) ?? 0) > 0 || $0.attributes[skill!] >= 2 }
+            .sorted { $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName) == .orderedAscending }
+        if !mine.isEmpty {
+            Section {
+                ForEach(mine) { drill in
+                    drillLink(drill) {
+                        HStack(spacing: 12) {
+                            Image(systemName: drill.tracking?.kind.symbol ?? "chart.bar.xaxis")
+                                .font(.title3)
+                                .foregroundStyle(Color.orange)
+                                .frame(width: 30)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(drill.localizedName).font(.body.weight(.semibold))
+                                Text([drill.tracking?.kind == .other ? nil : drill.tracking?.kind.title(chinese: isChinese),
+                                      drill.tracking?.summary(chinese: isChinese)].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("library.myTracked")
+                }
+            } header: {
+                Text(isChinese ? "我的记录训练" : "My tracked drills")
+            }
+        }
     }
 
     private func trackedSubtitle(_ drill: DrillItem) -> String {
@@ -2343,6 +2371,8 @@ struct AddDrillView: View {
     }
     /// "Track results" (23 Nov 2026, Luther): nil = not tracked.
     @State private var tracking: TrackDefinition?
+    /// What Claude proposes to track, from the description (Return).
+    @State private var suggestedTracking: TrackDefinition?
     /// A court drawing made while creating the drill (Luther, November
     /// 2026): saved as the drill's first visual on Create.
     @State private var drawing: DrillDrawing?
@@ -2447,6 +2477,7 @@ struct AddDrillView: View {
                 let log = Logger(subsystem: "hoopwise.mac", category: "drillWriter")
                 log.notice("drillWriter steps: \(instructions.joined(separator: " | "), privacy: .public)")
                 log.notice("drillWriter points: \(keyPoints.joined(separator: " | "), privacy: .public)")
+                log.notice("drillWriter tracking: \(suggestedTracking.map { "\($0.kind.rawValue) · \($0.summary(chinese: false)) · main \($0.mainAttributes.map(\.rawValue)) · some \($0.some) · zones \($0.zones)" } ?? "none", privacy: .public)")
             }
             #endif
             .navigationTitle(editing == nil ? (isChinese ? "新训练" : "New Drill") : (isChinese ? "编辑训练" : "Edit Drill"))
@@ -2465,27 +2496,92 @@ struct AddDrillView: View {
         }
     }
     
-    /// TRACK RESULTS (23 Nov 2026): what is measured, how much, the spots,
-    /// and which octagon skills a result speaks for.
+    /// TRACK RESULTS (23 Nov 2026; the TYPE drives it since 24 Nov 2026):
+    /// the kind of drill first — it fills in how it is measured, the amount,
+    /// the sides and the skills (main / some) — then what the coach changes:
+    /// the shot-map zones of a shooting drill, the course of a timed one.
     @ViewBuilder
     private func trackSection(isChinese: Bool) -> some View {
         Section {
             Toggle(isOn: Binding(get: { tracking != nil },
-                                 set: { tracking = $0 ? (tracking ?? TrackDefinition(skills: [])) : nil })) {
+                                 set: { on in
+                                     if on { tracking = tracking ?? suggestedTracking ?? guessedKind.preset(chinese: isChinese) }
+                                     else { tracking = nil }
+                                 })) {
                 Label(isChinese ? "记录成绩" : "Track results", systemImage: "chart.bar.xaxis")
             }
             .accessibilityIdentifier("newDrill.track")
+            if tracking == nil, let suggested = suggestedTracking {
+                // Claude read the description (Return) and proposes a setup.
+                Button {
+                    tracking = suggested
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "sparkles").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(isChinese ? "Claude 建议记录：\(suggested.kind.title(chinese: true))"
+                                           : "Claude suggests tracking: \(suggested.kind.title(chinese: false))")
+                                .font(.subheadline.weight(.semibold))
+                            Text(suggested.summary(chinese: isChinese)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(isChinese ? "采用" : "Use").font(.subheadline.weight(.semibold))
+                    }
+                }
+                .accessibilityIdentifier("newDrill.track.useSuggestion")
+            }
             if let def = tracking {
-                Picker(isChinese ? "记录什么" : "What it measures", selection: trackBinding(\.measure)) {
-                    ForEach(TrackMeasure.allCases) { m in
-                        Label(m.title(chinese: isChinese), systemImage: m.symbol).tag(m)
+                // 1. The kind.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(isChinese ? "训练类型" : "Type of drill").font(.subheadline)
+                    FlowLayout(spacing: 8) {
+                        ForEach(TrackKind.allCases) { kind in
+                            let on = def.kind == kind
+                            Button {
+                                guard !on else { return }
+                                tracking = kind.preset(chinese: isChinese)
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: kind.symbol).font(.caption)
+                                    Text(kind.title(chinese: isChinese)).font(.subheadline.weight(.medium))
+                                }
+                                .padding(.horizontal, 11).frame(minHeight: 34)
+                                .background(Capsule().fill(on ? Color.orange : Color(.tertiarySystemFill)))
+                                .foregroundStyle(on ? Color.white : Color.primary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("newDrill.track.kind.\(kind.rawValue)")
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+
+                // 2. How it is measured (this kind's measures, in its words).
+                Picker(isChinese ? "怎么记录" : "How it's measured", selection: Binding(
+                    get: { def.measure },
+                    set: { m in
+                        guard m != def.measure else { return }
+                        // The kind's defaults for that measure; the skills,
+                        // zones and sides the coach set stay.
+                        var next = def.kind.preset(measure: m, chinese: isChinese)
+                        next.skills = def.skills; next.some = def.some
+                        next.zones = def.zones
+                        if !def.spots.isEmpty { next.spots = def.spots }
+                        tracking = next
+                    })) {
+                    ForEach(def.kind.measures) { m in
+                        Label(def.kind.measureTitle(m, chinese: isChinese), systemImage: m.symbol).tag(m)
                     }
                 }
                 .accessibilityIdentifier("newDrill.track.measure")
+
+                // 3. How much.
                 switch def.measure {
                 case .madeOf:
                     Stepper(value: trackBinding(\.amount), in: 1...100) {
-                        Text(isChinese ? "每点出手：\(def.amount)" : "Attempts\(def.spots.count > 1 ? " a spot" : ""): \(def.amount)")
+                        Text((isChinese ? "次数" : "Attempts")
+                             + (def.onShotMap ? (isChinese ? "（每区）" : " a zone") : (def.spotCount > 1 ? (isChinese ? "（每点）" : " a spot") : ""))
+                             + ": \(def.amount)")
                             .monospacedDigit()
                     }
                     .accessibilityIdentifier("newDrill.track.amount")
@@ -2511,29 +2607,85 @@ struct AddDrillView: View {
                     }
                     .pickerStyle(.segmented)
                 }
-                spotRows(def, isChinese: isChinese)
+
+                // 4. The kind's own tool: the course, or the shot map.
+                if def.kind.usesCourse, def.measure != .count {
+                    Picker(isChinese ? "距离 / 路线" : "Course", selection: trackBinding(\.course)) {
+                        Text(isChinese ? "未指定" : "Not set").tag(TrackCourse?.none)
+                        ForEach(TrackCourse.allCases) { c in Text(c.title(chinese: isChinese)).tag(Optional(c)) }
+                    }
+                    .accessibilityIdentifier("newDrill.track.course")
+                }
+                if def.kind.usesShotMap {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(isChinese ? "投篮位置" : "Where it's shot from").font(.subheadline)
+                            Spacer()
+                            if !def.zones.isEmpty {
+                                Button(isChinese ? "清除" : "Clear") { tracking?.zones = [] }
+                                    .font(.caption.weight(.semibold))
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        ShotZonePicker(zones: trackBinding(\.zones))
+                            .frame(maxWidth: 420)
+                            .frame(maxWidth: .infinity)
+                        Text(def.zones.isEmpty
+                             ? (isChinese ? "点选这个训练的投篮区域。成绩会进入学员的投篮热区图。" : "Tap the zones this drill is shot from. Results join the athlete's shot chart.")
+                             : (def.measure == .madeOf
+                                ? (isChinese ? "每个区域记录一次（\(def.zones.count) 个）；成绩进入学员的投篮热区图。" : "One number a zone (\(def.zones.count)); results join the athlete's shot chart.")
+                                : (isChinese ? "每个区域记录一次。限时成绩没有出手数，不进入热区图。" : "One number a zone. Timed results have no attempts, so they stay off the shot chart.")))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("newDrill.track.zones")
+                }
+                if !def.onShotMap { spotRows(def, isChinese: isChinese) }
+
+                // 5. What it says about the athlete: main or some.
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(isChinese ? "代表哪些技能" : "Shows in the evaluation under")
+                    Text(isChinese ? "对评估的影响" : "What it says in the evaluation")
                         .font(.subheadline)
                     FlowLayout(spacing: 8) {
                         ForEach(DrillAttribute.allCases, id: \.self) { axis in
-                            let on = def.skills.contains(axis.rawValue)
+                            let weight = def.weight(for: axis)
                             Button {
-                                if on { tracking?.skills.removeAll { $0 == axis.rawValue } }
-                                else { tracking?.skills.append(axis.rawValue) }
+                                // off → main → some → off
+                                if weight == 0 {
+                                    tracking?.skills.append(axis.rawValue)
+                                } else if weight == 1 {
+                                    tracking?.some.append(axis.rawValue)
+                                } else {
+                                    tracking?.skills.removeAll { $0 == axis.rawValue }
+                                    tracking?.some.removeAll { $0 == axis.rawValue }
+                                }
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: axis.icon).font(.caption)
                                     Text(axis.title(chinese: isChinese)).font(.subheadline.weight(.medium))
+                                    if weight > 0 {
+                                        Text(weight == 1 ? (isChinese ? "主要" : "MAIN") : (isChinese ? "次要" : "SOME"))
+                                            .font(.system(size: 9, weight: .bold))
+                                            .padding(.horizontal, 5).padding(.vertical, 2)
+                                            .background(Capsule().fill(weight == 1 ? Color.white.opacity(0.25) : Color.accentColor.opacity(0.18)))
+                                    }
                                 }
                                 .padding(.horizontal, 10).frame(minHeight: 32)
-                                .background(Capsule().fill(on ? Color.accentColor : Color(.tertiarySystemFill)))
-                                .foregroundStyle(on ? Color.white : Color.primary)
+                                .background(Capsule().fill(weight == 1 ? Color.accentColor : Color(.tertiarySystemFill)))
+                                .overlay(Capsule().strokeBorder(weight == 0.5 ? Color.accentColor : .clear, lineWidth: 1.5))
+                                .foregroundStyle(weight == 1 ? Color.white : (weight == 0.5 ? Color.accentColor : Color.primary))
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("newDrill.track.skill.\(axis.rawValue)")
+                            .accessibilityValue(weight == 1 ? "main" : (weight == 0.5 ? "some" : "off"))
                         }
                     }
+                    Text(isChinese ? "点一下：主要；再点：次要；再点：取消。主要的训练更能影响建议评分。"
+                                   : "Tap once for Main, again for Some, again to remove. Main drills weigh more in the suggested rating.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
             }
@@ -2541,13 +2693,39 @@ struct AddDrillView: View {
             Text(isChinese ? "成绩记录" : "Tracking")
         } footer: {
             if let def = tracking {
-                Text(isChinese
-                     ? "加入课程计划后，在训练那一行记录每位学员的成绩（\(def.summary(chinese: true))）。成绩会和他以前的成绩、同年级学员比较，显示在所选技能下，并给出建议评分。"
-                     : "In a plan, the drill's row logs each athlete (\(def.summary(chinese: false))). Results are compared with their own history and athletes in the same grade, show under the chosen skills in the evaluation, and suggest a rating.")
+                Text(trackFooter(def, isChinese: isChinese))
             } else {
-                Text(isChinese ? "可选。记录命中、限时次数、用时或计数，作为学员数据。"
-                               : "Optional. Log makes, a count in a time, a time or a number for each athlete.")
+                Text(isChinese ? "可选。选一个类型，其余自动设置好：怎么记录、记多少、影响哪些技能。"
+                               : "Optional. Pick the type of drill and the rest is set up for you: how it is measured, how much, and which skills it speaks for.")
             }
+        }
+    }
+
+    /// What will happen with this drill's results, in one paragraph.
+    private func trackFooter(_ def: TrackDefinition, isChinese: Bool) -> String {
+        var lines: [String] = []
+        lines.append(isChinese ? "加入课程计划后，在训练那一行记录每位学员（\(def.summary(chinese: true))）。"
+                               : "In a plan, the drill's row logs each athlete (\(def.summary(chinese: false))).")
+        if (0..<def.spotCount).contains(where: { def.zone(forSpot: $0) != nil }) {
+            lines.append(isChinese ? "成绩进入学员的投篮热区图。" : "Results join the athlete's shot chart.")
+        }
+        let main = def.mainAttributes.map { $0.title(chinese: isChinese) }
+        if main.isEmpty {
+            lines.append(isChinese ? "还没有选择技能：成绩只显示在学员的训练成绩里。" : "No skill chosen yet: results show only under the athlete's tracked drills.")
+        } else {
+            lines.append(isChinese ? "和他以前的成绩、同年级学员比较，显示在\(main.joined(separator: "、"))下，并给出建议评分。"
+                                   : "Compared with their own history and athletes in the same grade, shown under \(main.joined(separator: ", ")), with a suggested rating.")
+        }
+        return lines.joined(separator: isChinese ? "" : " ")
+    }
+
+    /// The kind the drill's category points to, for the first switch-on.
+    private var guessedKind: TrackKind {
+        switch category {
+        case .shooting: .shooting
+        case .defense: .defense
+        case .conditioning: .conditioning
+        default: .other
         }
     }
 
@@ -2573,7 +2751,9 @@ struct AddDrillView: View {
         }
         Button {
             if tracking?.spots.isEmpty == true {
-                tracking?.spots = isChinese ? ["左", "右"] : ["Left", "Right"]
+                tracking?.spots = def.kind == .finishing || def.kind == .ballHandling
+                    ? (isChinese ? ["右手", "左手"] : ["Right hand", "Left hand"])
+                    : (isChinese ? ["左", "右"] : ["Left", "Right"])
             } else {
                 tracking?.spots.append("")
             }
@@ -2687,6 +2867,7 @@ struct AddDrillView: View {
             }
             lastWritten = result
             if let scores = result.attributes { writtenAttributes = AttributeProfile(array: scores) }
+            suggestedTracking = result.tracking?.definition(chinese: LocalizationManager.shared.currentLanguage == .chinese)
         }
     }
 
@@ -2695,6 +2876,10 @@ struct AddDrillView: View {
         guard var t = tracking else { return nil }
         t.spots = t.spots.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if t.spots.count == 1 { t.spots = [] }
+        if !t.kind.usesShotMap { t.zones = [] }
+        if t.onShotMap { t.spots = [] }
+        if !t.kind.usesCourse || t.measure == .count { t.course = nil }
+        t.some = t.some.filter { t.skills.contains($0) }
         t.unit = t.unit.trimmingCharacters(in: .whitespaces)
         return t
     }
@@ -2761,13 +2946,27 @@ struct DrillTrackingCard: View {
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(Color.orange.opacity(0.14)))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(tracking.measure.title(chinese: isChinese)).font(.subheadline.weight(.semibold))
+                    Text(tracking.kind == .other ? tracking.measure.title(chinese: isChinese)
+                         : tracking.kind.title(chinese: isChinese) + " · " + tracking.kind.measureTitle(tracking.measure, chinese: isChinese))
+                        .font(.subheadline.weight(.semibold))
                     Text(tracking.summary(chinese: isChinese)).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if tracking.onShotMap {
+                ShotZonePicker(zones: .constant(tracking.zones))
+                    .allowsHitTesting(false)
+                    .frame(maxWidth: 300)
+            }
             if !tracking.attributes.isEmpty {
-                Text((isChinese ? "显示在评估中：" : "Shows in the evaluation under ")
-                     + tracking.attributes.map { $0.title(chinese: isChinese) }.joined(separator: isChinese ? "、" : ", "))
+                let main = tracking.mainAttributes.map { $0.title(chinese: isChinese) }
+                let some = tracking.attributes.filter { tracking.weight(for: $0) < 1 }.map { $0.title(chinese: isChinese) }
+                let sep = isChinese ? "、" : ", "
+                Text((isChinese ? "评估：主要 " : "In the evaluation: mainly ") + (main.isEmpty ? "—" : main.joined(separator: sep))
+                     + (some.isEmpty ? "" : (isChinese ? "；次要 " : "; some ") + some.joined(separator: sep)))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if (0..<tracking.spotCount).contains(where: { tracking.zone(forSpot: $0) != nil }) {
+                Label(isChinese ? "成绩进入学员的投篮热区图" : "Results join the athlete's shot chart", systemImage: "circle.grid.cross")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

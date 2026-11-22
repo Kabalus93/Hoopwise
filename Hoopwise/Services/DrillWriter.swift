@@ -10,6 +10,41 @@ nonisolated struct DrillWriterResult: Equatable {
     let keyPoints: [String]
     /// What the drill develops on the eight axes (DrillAttribute order).
     var attributes: [Int]? = nil
+    /// How the drill could be tracked, when it has a result worth logging
+    /// (24 Nov 2026). Offered in the form; the coach takes it or not.
+    var tracking: DrillWriterTracking? = nil
+}
+
+/// Claude's proposal for tracking a drill, as it answers it.
+nonisolated struct DrillWriterTracking: Equatable {
+    var kind: TrackKind
+    var measure: TrackMeasure
+    var amount: Int
+    var unit: String
+    var main: [DrillAttribute]
+    var some: [DrillAttribute]
+    var zones: [Int]
+    var course: TrackCourse? = nil
+
+    /// The kind's preset with what Claude read from the description on top.
+    func definition(chinese: Bool) -> TrackDefinition {
+        var d = kind.preset(measure: measure, chinese: chinese)
+        if d.measure == .madeOf { d.amount = min(100, max(1, amount)) }
+        if d.measure == .inTime { d.amount = min(1200, max(5, amount)) }
+        let u = unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !u.isEmpty, d.measure == .inTime || d.measure == .count { d.unit = u }
+        let m = main.filter { !some.contains($0) }
+        if !m.isEmpty {
+            d.skills = (m + some).map(\.rawValue)
+            d.some = some.map(\.rawValue)
+        }
+        if kind.usesCourse, d.measure != .count, let course { d.course = course }
+        if kind.usesShotMap {
+            var seen = Set<Int>()
+            d.zones = zones.filter { (0..<10).contains($0) && seen.insert($0).inserted }
+        }
+        return d
+    }
 }
 
 nonisolated enum DrillWriter {
@@ -28,6 +63,26 @@ nonisolated enum DrillWriter {
     shooting, finishing, playmaking, gameIQ, defense, footwork. Most drills have one or two 3s and zeros \
     elsewhere. The attributes:
     \(DrillAttribute.rubric)
+    "tracking": how the coach could LOG a result for each athlete, or kind "none" when the drill has no \
+    number worth recording (a game, a walkthrough, free play). Only what the description supports:
+    - "kind": shooting (shots from the floor), finishing (lay-ups and shots at the rim), ballHandling, \
+    passing, conditioning (running, sprints, laps), defense, other, or none.
+    - "measure": madeOf (makes out of a fixed number of attempts), inTime (how many in a set time), \
+    timeToFinish (a stopwatch time, faster is better), count (a plain number such as points or errors).
+    - "amount": attempts for madeOf, seconds for inTime, else 0. Use the description's number; if it gives \
+    none, 10 attempts or 60 seconds. When the shots are split over zones, the amount is PER ZONE ("20 \
+    threes, 10 from each corner" is 10).
+    - "unit": what is counted for inTime or count, one or two lower-case words in the description's \
+    language ("passes", "laps"); "" otherwise.
+    - "main": the one or two attributes (names from the list above) a result mainly measures; "some": at \
+    most two it measures a little. Never the same attribute in both.
+    - "zones": for kind shooting only, the shot-map zones the description names, as numbers: 0 at the rim, \
+    1 left baseline mid-range, 2 left elbow, 3 right elbow, 4 right baseline mid-range, 5 left corner \
+    three, 6 left wing three, 7 top three, 8 right wing three, 9 right corner three. [] when it names none.
+    - "course": for kind conditioning or ballHandling, the distance the description names: halfCourt (to \
+    half court, 14 m), fullCourt (baseline to baseline, 28 m), downAndBack (the full court and back), \
+    lineDrill (suicides: to each line and back), seventeens (sideline to sideline 17 times), lap (around \
+    the court); "none" when it names no such distance or for any other kind.
     """
 
     static func requestBody(name: String, description: String, minPlayers: Int, minutes: Int) -> [String: Any] {
@@ -37,8 +92,23 @@ nonisolated enum DrillWriter {
                 "instructions": ["type": "array", "items": ["type": "string"]],
                 "keyPoints": ["type": "array", "items": ["type": "string"]],
                 "attributes": ["type": "array", "items": ["type": "integer"]],
+                "tracking": [
+                    "type": "object",
+                    "properties": [
+                        "kind": ["type": "string", "enum": TrackKind.allCases.map(\.rawValue) + ["none"]],
+                        "measure": ["type": "string", "enum": TrackMeasure.allCases.map(\.rawValue)],
+                        "amount": ["type": "integer"],
+                        "unit": ["type": "string"],
+                        "main": ["type": "array", "items": ["type": "string", "enum": DrillAttribute.allCases.map(\.rawValue)]],
+                        "some": ["type": "array", "items": ["type": "string", "enum": DrillAttribute.allCases.map(\.rawValue)]],
+                        "zones": ["type": "array", "items": ["type": "integer"]],
+                        "course": ["type": "string", "enum": TrackCourse.allCases.map(\.rawValue) + ["none"]],
+                    ],
+                    "required": ["kind", "measure", "amount", "unit", "main", "some", "zones", "course"],
+                    "additionalProperties": false,
+                ] as [String: Any],
             ],
-            "required": ["instructions", "keyPoints", "attributes"],
+            "required": ["instructions", "keyPoints", "attributes", "tracking"],
             "additionalProperties": false,
         ]
         var context = "Description:\n\(description)"
@@ -67,7 +137,20 @@ nonisolated enum DrillWriter {
                 .filter { !$0.isEmpty }
         }
         let scores = (answer["attributes"] as? [Int]).flatMap { $0.count == DrillAttribute.allCases.count ? $0.map { max(0, min(3, $0)) } : nil }
-        return DrillWriterResult(instructions: lines("instructions"), keyPoints: lines("keyPoints"), attributes: scores)
+        var tracking: DrillWriterTracking?
+        if let t = answer["tracking"] as? [String: Any],
+           let kind = (t["kind"] as? String).flatMap(TrackKind.init(rawValue:)),
+           let measure = (t["measure"] as? String).flatMap(TrackMeasure.init(rawValue:)) {
+            func axes(_ key: String) -> [DrillAttribute] {
+                (t[key] as? [String] ?? []).compactMap(DrillAttribute.init(rawValue:))
+            }
+            tracking = DrillWriterTracking(kind: kind, measure: measure, amount: t["amount"] as? Int ?? 0,
+                                           unit: t["unit"] as? String ?? "", main: axes("main"), some: axes("some"),
+                                           zones: t["zones"] as? [Int] ?? [],
+                                           course: (t["course"] as? String).flatMap(TrackCourse.init(rawValue:)))
+        }
+        return DrillWriterResult(instructions: lines("instructions"), keyPoints: lines("keyPoints"), attributes: scores,
+                                 tracking: tracking)
     }
 
     static func write(name: String, description: String, minPlayers: Int, minutes: Int, key: String) async throws -> DrillWriterResult {

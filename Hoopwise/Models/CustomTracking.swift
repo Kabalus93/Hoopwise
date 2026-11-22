@@ -19,6 +19,152 @@ import Foundation
 //   `CustomTrackHistory.suggestion` turns the athlete's standing into a 1–10
 //   hint the coach can take. It never sets a rating by itself.
 
+// THE TYPE DRIVES IT (24 Nov 2026, Luther: "the kind of tracking should
+// determine the setup, how it integrates with the app … shooting: how it's
+// measured, what it impacts in the eval — how much of Shooting plus how much
+// of athleticism — needs a shot map? … conditioning: laps in how long,
+// sprints on a distance"). `TrackKind` is chosen first; its `Preset` fills
+// the measure, amount, unit, sides and the skills as MAIN or SOME; the
+// coach can change any of it. Shooting drills name the SHOT-MAP ZONES they
+// are taken from (results join the athlete's shot chart); finishing drills
+// land at the rim; conditioning and ball-handling drills name the COURSE
+// (so a time compares only with the same distance).
+
+/// What kind of drill is tracked — picked first, it sets the rest up.
+nonisolated enum TrackKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case shooting, finishing, ballHandling, passing, conditioning, defense, other
+
+    var id: String { rawValue }
+
+    func title(chinese: Bool) -> String {
+        switch self {
+        case .shooting: chinese ? "投篮" : "Shooting"
+        case .finishing: chinese ? "终结" : "Finishing"
+        case .ballHandling: chinese ? "运球" : "Ball handling"
+        case .passing: chinese ? "传球" : "Passing"
+        case .conditioning: chinese ? "体能" : "Conditioning"
+        case .defense: chinese ? "防守" : "Defense"
+        case .other: chinese ? "其他" : "Other"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .shooting: "scope"
+        case .finishing: "arrow.up.right.circle"
+        case .ballHandling: "basketball"
+        case .passing: "arrow.left.arrow.right"
+        case .conditioning: "figure.run"
+        case .defense: "shield.lefthalf.filled"
+        case .other: "slider.horizontal.3"
+        }
+    }
+
+    /// The measures that make sense for this kind, the usual one first.
+    var measures: [TrackMeasure] {
+        switch self {
+        case .shooting: [.madeOf, .inTime, .count]
+        case .finishing: [.madeOf, .inTime]
+        case .ballHandling: [.timeToFinish, .inTime, .count]
+        case .passing: [.inTime, .madeOf, .count]
+        case .conditioning: [.timeToFinish, .inTime, .count]
+        case .defense: [.inTime, .madeOf, .count]
+        case .other: TrackMeasure.allCases
+        }
+    }
+
+    /// Whether a course (distance) belongs to this kind's drills.
+    var usesCourse: Bool { self == .conditioning || self == .ballHandling }
+    /// Whether the drill's shots have a place on the shot map.
+    var usesShotMap: Bool { self == .shooting }
+
+    /// What this kind calls a measure ("Time over a distance" for a sprint).
+    func measureTitle(_ m: TrackMeasure, chinese: Bool) -> String {
+        switch (self, m) {
+        case (.conditioning, .timeToFinish): chinese ? "完成距离用时" : "Time over a distance"
+        case (.conditioning, .inTime): chinese ? "限时圈数 / 次数" : "Laps or reps in a time"
+        case (.ballHandling, .timeToFinish): chinese ? "完成路线用时" : "Time through the course"
+        case (.ballHandling, .count): chinese ? "失误次数" : "Errors (fewer is better)"
+        case (.shooting, .inTime), (.finishing, .inTime): chinese ? "限时命中" : "Makes in a time"
+        case (.defense, .madeOf): chinese ? "防守成功 / 回合" : "Stops of attempts"
+        case (.passing, .madeOf): chinese ? "到位 / 传球" : "On target of attempts"
+        default: m.title(chinese: chinese)
+        }
+    }
+
+    /// The definition this kind starts from with `measure` (nil = its usual
+    /// one). The coach's own drill name and text are not touched.
+    func preset(measure: TrackMeasure? = nil, chinese: Bool) -> TrackDefinition {
+        let m = measure.flatMap { measures.contains($0) ? $0 : nil } ?? measures[0]
+        var d = TrackDefinition(measure: m)
+        d.kind = self
+        switch self {
+        case .shooting:
+            d.skills = ["shooting", "footwork"]; d.some = ["footwork"]
+            d.amount = m == .inTime ? 60 : 10
+        case .finishing:
+            d.skills = ["finishing", "footwork"]; d.some = ["footwork"]
+            d.amount = m == .inTime ? 60 : 10
+            // Each hand its own makes-of-N; a timed run is one number.
+            if m == .madeOf { d.spots = chinese ? ["右手", "左手"] : ["Right hand", "Left hand"] }
+        case .ballHandling:
+            d.skills = ["ballHandling", "footwork"]; d.some = ["footwork"]
+            d.amount = m == .inTime ? 30 : 10
+            if m == .count { d.unit = chinese ? "次失误" : "errors"; d.higherIsBetter = false }
+            if m == .inTime { d.unit = chinese ? "次" : "reps" }
+            if m == .timeToFinish { d.course = .fullCourt }
+        case .passing:
+            d.skills = ["passing", "gameIQ"]; d.some = ["gameIQ"]
+            d.amount = m == .inTime ? 30 : 10
+            if m != .madeOf { d.unit = chinese ? "次传球" : "passes" }
+        case .conditioning:
+            d.skills = ["footwork", "defense"]; d.some = ["defense"]
+            d.amount = m == .inTime ? 60 : 10
+            if m == .timeToFinish { d.course = .downAndBack }
+            if m == .inTime { d.unit = chinese ? "圈" : "laps"; d.course = .lap }
+            if m == .count { d.unit = chinese ? "次" : "reps" }
+        case .defense:
+            d.skills = ["defense", "footwork"]; d.some = ["footwork"]
+            d.amount = m == .inTime ? 30 : 10
+            if m == .inTime { d.unit = chinese ? "次滑步" : "slides" }
+            if m == .count { d.unit = chinese ? "次" : "stops" }
+        case .other:
+            d.amount = m == .inTime ? 60 : 10
+        }
+        return d
+    }
+}
+
+/// The distance a timed drill covers — part of what makes two results
+/// comparable.
+nonisolated enum TrackCourse: String, Codable, CaseIterable, Identifiable, Sendable {
+    case halfCourt, fullCourt, downAndBack, lineDrill, seventeens, lap
+
+    var id: String { rawValue }
+
+    func title(chinese: Bool) -> String {
+        switch self {
+        case .halfCourt: chinese ? "半场（14 米）" : "Half court (14 m)"
+        case .fullCourt: chinese ? "全场（28 米）" : "Full court (28 m)"
+        case .downAndBack: chinese ? "全场往返（56 米）" : "Down and back (56 m)"
+        case .lineDrill: chinese ? "折返跑（各线）" : "Line drill (suicide)"
+        case .seventeens: chinese ? "边线 17 趟" : "17s (sideline × 17)"
+        case .lap: chinese ? "绕场一圈" : "A lap of the court"
+        }
+    }
+
+    func short(chinese: Bool) -> String {
+        switch self {
+        case .halfCourt: chinese ? "半场" : "Half court"
+        case .fullCourt: chinese ? "全场" : "Full court"
+        case .downAndBack: chinese ? "全场往返" : "Down and back"
+        case .lineDrill: chinese ? "折返跑" : "Line drill"
+        case .seventeens: chinese ? "17 趟" : "17s"
+        case .lap: chinese ? "绕场圈" : "Court laps"
+        }
+    }
+}
+
 /// What a custom tracked drill measures.
 nonisolated enum TrackMeasure: String, Codable, CaseIterable, Identifiable, Sendable {
     /// Makes of a fixed number of attempts → a share.
@@ -74,11 +220,42 @@ nonisolated struct TrackDefinition: Codable, Hashable, Sendable {
     var higherIsBetter: Bool = true
     /// The octagon skills a result speaks for (DrillAttribute raw values).
     var skills: [String] = []
+    /// Which of `skills` count as SOME rather than MAIN (half weight).
+    var some: [String] = []
+    /// The kind of drill — it set the rest up. Definitions from before
+    /// kinds read as `.other`.
+    var kind: TrackKind = .other
+    /// Shooting: the shot-map zones (0…9, ShootingDrill.shotChart's order)
+    /// the drill is shot from — one number a zone, in this order. Empty =
+    /// no place on the map.
+    var zones: [Int] = []
+    /// Conditioning / ball handling: the distance covered.
+    var course: TrackCourse?
 
     init(measure: TrackMeasure = .madeOf, amount: Int = 10, spots: [String] = [], unit: String = "",
          higherIsBetter: Bool = true, skills: [String] = []) {
         self.measure = measure; self.amount = amount; self.spots = spots; self.unit = unit
         self.higherIsBetter = higherIsBetter; self.skills = skills
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case measure, amount, spots, unit, higherIsBetter, skills, some, kind, zones, course
+    }
+
+    /// Only what is set is written, so a plain definition's JSON (and tag)
+    /// is what it was before kinds.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(measure, forKey: .measure)
+        try c.encode(amount, forKey: .amount)
+        try c.encode(spots, forKey: .spots)
+        try c.encode(unit, forKey: .unit)
+        try c.encode(higherIsBetter, forKey: .higherIsBetter)
+        try c.encode(skills, forKey: .skills)
+        if !some.isEmpty { try c.encode(some, forKey: .some) }
+        if kind != .other { try c.encode(kind, forKey: .kind) }
+        if !zones.isEmpty { try c.encode(zones, forKey: .zones) }
+        if let course { try c.encode(course, forKey: .course) }
     }
 
     init(from decoder: Decoder) throws {
@@ -89,13 +266,42 @@ nonisolated struct TrackDefinition: Codable, Hashable, Sendable {
         unit = (try? c.decode(String.self, forKey: .unit)) ?? ""
         higherIsBetter = (try? c.decode(Bool.self, forKey: .higherIsBetter)) ?? true
         skills = (try? c.decode([String].self, forKey: .skills)) ?? []
+        some = (try? c.decode([String].self, forKey: .some)) ?? []
+        kind = (try? c.decode(TrackKind.self, forKey: .kind)) ?? .other
+        zones = ((try? c.decode([Int].self, forKey: .zones)) ?? []).filter { (0..<10).contains($0) }
+        course = try? c.decode(TrackCourse.self, forKey: .course)
     }
 
-    var spotCount: Int { max(1, spots.count) }
+    /// Shot-map zones are in play: a shooting drill that names them.
+    var onShotMap: Bool { kind.usesShotMap && !zones.isEmpty }
+    var spotCount: Int { onShotMap ? zones.count : max(1, spots.count) }
     var attributes: [DrillAttribute] { skills.compactMap(DrillAttribute.init(rawValue:)) }
+    /// The skills it mainly speaks for.
+    var mainAttributes: [DrillAttribute] { attributes.filter { !some.contains($0.rawValue) } }
 
-    /// Results compare only under the same measure, amount and spots.
-    var key: String { "\(measure.rawValue)|\(measure == .madeOf || measure == .inTime ? amount : 0)|\(spotCount)" }
+    /// How much a result says about a skill: 1 main, 0.5 some, 0 not linked.
+    func weight(for axis: DrillAttribute) -> Double {
+        guard skills.contains(axis.rawValue) else { return 0 }
+        return some.contains(axis.rawValue) ? 0.5 : 1
+    }
+
+    /// The shot-map zone a spot's makes belong to (made-of only — a
+    /// percentage needs attempts): a shooting drill's own zones, a
+    /// finishing drill at the rim.
+    func zone(forSpot i: Int) -> Int? {
+        guard measure == .madeOf else { return nil }
+        if onShotMap { return zones.indices.contains(i) ? zones[i] : nil }
+        return kind == .finishing ? 0 : nil
+    }
+
+    /// Results compare only under the same measure, amount, spots, zones
+    /// and course.
+    var key: String {
+        var k = "\(measure.rawValue)|\(measure == .madeOf || measure == .inTime ? amount : 0)|\(spotCount)"
+        if onShotMap { k += "|z" + zones.map(String.init).joined(separator: ".") }
+        if let course { k += "|" + course.rawValue }
+        return k
+    }
 
     var lowerIsBetter: Bool {
         switch measure {
@@ -116,8 +322,15 @@ nonisolated struct TrackDefinition: Codable, Hashable, Sendable {
     }
 
     func spotName(_ i: Int, chinese: Bool) -> String {
-        spots.indices.contains(i) ? spots[i] : (chinese ? "结果" : "Result")
+        if onShotMap, zones.indices.contains(i) { return Self.zoneShort[chinese ? 1 : 0][zones[i]] }
+        return spots.indices.contains(i) ? spots[i] : (chinese ? "结果" : "Result")
     }
+
+    /// The ten shot-map zones' short names (ShootingDrill.shotChart's order).
+    static let zoneShort: [[String]] = [
+        ["Rim", "L base", "L elbow", "R elbow", "R base", "L corner", "L wing", "Top", "R wing", "R corner"],
+        ["篮下", "左底线", "左肘区", "右肘区", "右底线", "左底角", "左翼", "弧顶", "右翼", "右底角"],
+    ]
 
     func unitWord(chinese: Bool) -> String {
         if !unit.trimmingCharacters(in: .whitespaces).isEmpty { return unit }
@@ -128,9 +341,15 @@ nonisolated struct TrackDefinition: Codable, Hashable, Sendable {
     func summary(chinese: Bool) -> String {
         var parts: [String] = []
         switch measure {
-        case .madeOf: parts.append(chinese ? "每点 \(amount) 次出手" : (spots.count > 1 ? "\(amount) shots a spot" : "\(amount) attempts"))
+        case .madeOf:
+            if onShotMap {
+                parts.append(chinese ? "每区 \(amount) 次" : "\(amount) shots a zone")
+            } else {
+                parts.append(chinese ? (spotCount > 1 ? "每点 \(amount) 次" : "\(amount) 次")
+                                     : (spotCount > 1 ? "\(amount) a spot" : "\(amount) attempts"))
+            }
         case .inTime:
-            parts.append(ShootingSetup.time(amount, chinese: chinese) + (spots.count > 1 ? (chinese ? "／点" : " a spot") : ""))
+            parts.append(ShootingSetup.time(amount, chinese: chinese) + (spotCount > 1 ? (chinese ? "／点" : " a spot") : ""))
             let w = unitWord(chinese: chinese); if !w.isEmpty { parts.append(w) }
         case .timeToFinish: parts.append(chinese ? "计时，越快越好" : "Timed, faster is better")
         case .count:
@@ -138,7 +357,12 @@ nonisolated struct TrackDefinition: Codable, Hashable, Sendable {
             parts.append(w.isEmpty ? (chinese ? "计数" : "Count") : w)
             parts.append(higherIsBetter ? (chinese ? "越多越好" : "higher is better") : (chinese ? "越少越好" : "lower is better"))
         }
-        if spots.count > 1 { parts.append(spots.joined(separator: " / ")) }
+        if let course { parts.append(course.short(chinese: chinese)) }
+        if onShotMap {
+            parts.append(chinese ? "\(zones.count) 个区域" : (zones.count == 1 ? spotName(0, chinese: false) : "\(zones.count) zones"))
+        } else if spots.count > 1 {
+            parts.append(spots.joined(separator: " / "))
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -311,12 +535,19 @@ nonisolated enum CustomTrackHistory {
     }
 
     /// The rating the results point to for one skill: the standings linked
-    /// to it, as percentiles averaged and mapped onto 1–10 (bottom 2, top
-    /// 9 — no drill alone says "perfect"). Nil without a peer comparison.
+    /// to it as percentiles, weighted MAIN 1 / SOME 0.5, mapped onto 1–10
+    /// (bottom 2, top 9 — no drill alone says "perfect"). Nil without a peer
+    /// comparison, and nil when the links add up to less than one main drill
+    /// (a single "some" link is a hint, not enough to move a rating).
     static func suggestion(for axis: DrillAttribute, standings: [Standing]) -> Int? {
-        let ps = standings.filter { $0.definition.attributes.contains(axis) }.compactMap(\.percentile)
-        guard !ps.isEmpty else { return nil }
-        let p = ps.reduce(0, +) / Double(ps.count)
+        let linked = standings.compactMap { st -> (Double, Double)? in
+            let w = st.definition.weight(for: axis)
+            guard w > 0, let p = st.percentile else { return nil }
+            return (p, w)
+        }
+        let total = linked.reduce(0) { $0 + $1.1 }
+        guard total >= 1 else { return nil }
+        let p = linked.reduce(0) { $0 + $1.0 * $1.1 } / total
         return min(9, max(2, Int((2 + p * 7).rounded())))
     }
 
@@ -336,5 +567,82 @@ nonisolated enum CustomTrackHistory {
     static func ordinal(_ n: Int) -> String {
         let suffix = (11...13).contains(n % 100) ? "th" : (["th", "st", "nd", "rd"] + Array(repeating: "th", count: 6))[n % 10]
         return "\(n)\(suffix)"
+    }
+}
+
+// MARK: - From plain values (the Claude Desktop connector)
+
+nonisolated extension TrackDefinition {
+    struct ParseError: Error, Equatable { let message: String }
+
+    /// A definition from a tool's `tracking` object: the kind's preset with
+    /// what was sent on top. A bad field names itself; nothing is guessed.
+    static func parsed(_ args: [String: Any], chinese: Bool) throws -> TrackDefinition {
+        guard let kindRaw = args["kind"] as? String, let kind = TrackKind(rawValue: kindRaw) else {
+            throw ParseError(message: "tracking.kind: " + TrackKind.allCases.map(\.rawValue).joined(separator: ", "))
+        }
+        var measure: TrackMeasure?
+        if let raw = args["measure"] as? String {
+            guard let m = TrackMeasure(rawValue: raw), kind.measures.contains(m) else {
+                throw ParseError(message: "tracking.measure for \(kind.rawValue): " + kind.measures.map(\.rawValue).joined(separator: ", "))
+            }
+            measure = m
+        }
+        var d = kind.preset(measure: measure, chinese: chinese)
+        if let n = args["amount"] as? Int {
+            switch d.measure {
+            case .madeOf: guard (1...100).contains(n) else { throw ParseError(message: "tracking.amount: 1–100 attempts") }
+            case .inTime: guard (5...1200).contains(n) else { throw ParseError(message: "tracking.amount: 5–1200 seconds") }
+            default: break
+            }
+            d.amount = n
+        }
+        if let unit = args["unit"] as? String { d.unit = unit.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let higher = args["higher_is_better"] as? Bool, d.measure == .count { d.higherIsBetter = higher }
+        func axes(_ key: String) throws -> [String]? {
+            guard let list = args[key] as? [String] else { return nil }
+            for name in list where DrillAttribute(rawValue: name) == nil {
+                throw ParseError(message: "tracking.\(key): \"\(name)\" is not a skill — " + DrillAttribute.allCases.map(\.rawValue).joined(separator: ", "))
+            }
+            return list
+        }
+        let main = try axes("main"), some = try axes("some")
+        if main != nil || some != nil {
+            let s = (some ?? []).filter { !(main ?? []).contains($0) }
+            d.skills = (main ?? []) + s
+            d.some = s
+        }
+        if let sides = args["sides"] as? [String] {
+            d.spots = sides.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            if d.spots.count == 1 { d.spots = [] }
+        }
+        if let zones = args["zones"] as? [Int] {
+            guard kind.usesShotMap else { throw ParseError(message: "tracking.zones: only a shooting drill has shot-map zones") }
+            guard zones.allSatisfy({ (0..<10).contains($0) }), Set(zones).count == zones.count else {
+                throw ParseError(message: "tracking.zones: distinct numbers 0–9 (0 rim, 1 left baseline, 2 left elbow, 3 right elbow, 4 right baseline, 5 left corner, 6 left wing, 7 top, 8 right wing, 9 right corner)")
+            }
+            d.zones = zones
+            if !zones.isEmpty { d.spots = [] }
+        }
+        if let raw = args["course"] as? String {
+            guard kind.usesCourse, let course = TrackCourse(rawValue: raw) else {
+                throw ParseError(message: "tracking.course (conditioning and ballHandling only): " + TrackCourse.allCases.map(\.rawValue).joined(separator: ", "))
+            }
+            d.course = course
+        }
+        return d
+    }
+
+    /// The same shape back, for a tool's answer.
+    var asValues: [String: Any] {
+        var out: [String: Any] = ["kind": kind.rawValue, "measure": measure.rawValue,
+                                  "main": mainAttributes.map(\.rawValue), "some": some,
+                                  "summary": summary(chinese: false)]
+        if measure == .madeOf || measure == .inTime { out["amount"] = amount }
+        if !unit.isEmpty { out["unit"] = unit }
+        if measure == .count { out["higher_is_better"] = higherIsBetter }
+        if onShotMap { out["zones"] = zones } else if !spots.isEmpty { out["sides"] = spots }
+        if let course { out["course"] = course.rawValue }
+        return out
     }
 }

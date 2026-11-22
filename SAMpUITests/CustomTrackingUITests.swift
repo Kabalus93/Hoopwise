@@ -55,7 +55,9 @@ final class CustomTrackingUITests: XCTestCase {
         attach("plan after")
     }
 
-    func testTheNewDrillFormSetsUpTracking() {
+    /// The type drives the form (24 Nov 2026): Shooting sets made-of-10 with
+    /// Shooting MAIN and Footwork SOME, and offers the shot map.
+    func testTheNewDrillFormIsDrivenByTheType() {
         let app = XCUIApplication()
         app.launchEnvironment["HOOPWISE_SHOT"] = "newDrill"
         app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
@@ -66,15 +68,65 @@ final class CustomTrackingUITests: XCTestCase {
         for _ in 0..<8 where !toggle.exists || !toggle.isHittable { app.swipeUp() }
         XCTAssertTrue(toggle.waitForExistence(timeout: 10), "Tracking section")
         toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        let measure = app.buttons["newDrill.track.measure"]
-        XCTAssertTrue(measure.waitForExistence(timeout: 5), "turned on, the measure appears")
-        measure.tap()
-        app.buttons["Time to finish"].firstMatch.tap()
-        let passing = app.buttons["newDrill.track.skill.ballHandling"]
-        for _ in 0..<4 where !passing.isHittable { app.swipeUp() }
-        passing.tap()
-        let footer = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'faster is better'")).firstMatch
-        XCTAssertTrue(footer.waitForExistence(timeout: 5), "the footer says how it will be logged")
-        attach("tracking")
+        let shooting = app.buttons["newDrill.track.kind.shooting"]
+        XCTAssertTrue(shooting.waitForExistence(timeout: 5), "turned on, the types appear")
+        shooting.tap()
+        let skill = app.buttons["newDrill.track.skill.shooting"]
+        for _ in 0..<5 where !skill.exists || !skill.isHittable { app.swipeUp(velocity: .slow) }
+        XCTAssertEqual(skill.value as? String, "main", "Shooting is the main skill")
+        XCTAssertEqual(app.buttons["newDrill.track.skill.footwork"].value as? String, "some")
+        XCTAssertEqual(app.buttons["newDrill.track.skill.passing"].value as? String, "off")
+        attach("shooting")
+        // Two zones on the shot map.
+        let corner = app.descendants(matching: .any).matching(identifier: "zonepicker.zone.7").firstMatch
+        for _ in 0..<4 where !corner.exists || !corner.isHittable { app.swipeDown(velocity: .slow) }
+        XCTAssertTrue(corner.waitForExistence(timeout: 5), "the shot map")
+        corner.tap()
+        app.descendants(matching: .any).matching(identifier: "zonepicker.zone.0").firstMatch
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'One number a zone (2)'")).firstMatch
+            .waitForExistence(timeout: 5), "two zones chosen")
+        attach("zones")
+        // Conditioning: a time over a course, athleticism mainly.
+        let conditioning = app.buttons["newDrill.track.kind.conditioning"]
+        for _ in 0..<4 where !conditioning.exists || !conditioning.isHittable { app.swipeDown(velocity: .slow) }
+        conditioning.tap()
+        XCTAssertTrue(app.buttons["newDrill.track.course"].waitForExistence(timeout: 5), "a course to run")
+        let footwork = app.buttons["newDrill.track.skill.footwork"]
+        for _ in 0..<5 where !footwork.exists || !footwork.isHittable { app.swipeUp(velocity: .slow) }
+        XCTAssertEqual(footwork.value as? String, "main")
+        XCTAssertEqual(app.buttons["newDrill.track.skill.defense"].value as? String, "some")
+        // A tap moves Defense from Some to off; another to Main.
+        app.buttons["newDrill.track.skill.defense"].tap()
+        XCTAssertEqual(app.buttons["newDrill.track.skill.defense"].value as? String, "off")
+        app.buttons["newDrill.track.skill.defense"].tap()
+        XCTAssertEqual(app.buttons["newDrill.track.skill.defense"].value as? String, "main")
+        attach("conditioning")
+    }
+
+    /// A shooting drill that names its zones shows the court in its station;
+    /// a zone opens that cell's pad, and the result colours the zone.
+    func testAShootingDrillLogsOnTheShotMap() {
+        let app = launchSession("zones")
+        defer { _ = launchSession("clear") }
+        let line = app.buttons["track.line"]
+        for _ in 0..<10 where !line.exists || !line.isHittable { app.swipeUp() }
+        XCTAssertTrue(line.waitForExistence(timeout: 10))
+        XCTAssertTrue(line.label.contains("3 zones"), line.label)
+        line.tap()
+        let top = app.descendants(matching: .any).matching(identifier: "shotchart.zone.7").firstMatch
+        XCTAssertTrue(top.waitForExistence(timeout: 5), "the court shows in the station")
+        attach("station")
+        top.tap()
+        for k in ["6", "confirm"] {
+            let b = app.buttons["track.keys.key.\(k)"]
+            XCTAssertTrue(b.waitForExistence(timeout: 5), "key \(k)")
+            b.tap()
+        }
+        sleep(1)
+        // The pad moves on to the athlete's next zone; close it.
+        if app.buttons["track.keys.key.confirm"].exists { app.buttons["track.keys.key.confirm"].tap(); sleep(1) }
+        XCTAssertTrue(top.label.contains("60%"), "6 of 10 from the top: \(top.label)")
+        attach("logged")
     }
 }

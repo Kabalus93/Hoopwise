@@ -135,6 +135,9 @@ struct ShotChartMap: View {
     /// Light, for the shared image.
     var forImage = false
     var onTap: ((Int) -> Void)? = nil
+    /// Zones outside the drill being logged: drawn faint (a coach's shooting
+    /// drill uses only the zones it names).
+    var dimmed: Set<Int> = []
     /// The number pad popping out of a zone (23 Nov 2026): which zone shows
     /// it, and what it holds.
     var pad: ZonePad? = nil
@@ -184,7 +187,7 @@ struct ShotChartMap: View {
             ZStack {
                 ForEach(0..<10, id: \.self) { i in
                     ZoneShape(index: i)
-                        .fill(fill(i))
+                        .fill(fill(i).opacity(dimmed.contains(i) ? 0.3 : 1))
                         .overlay(ZoneShape(index: i).stroke(forImage ? Color.white : Color(.systemBackground), lineWidth: 1.5))
                         .overlay(ZoneShape(index: i).stroke(selected == i ? Color.accentColor : .clear, lineWidth: 3))
                         .contentShape(ZoneShape(index: i))
@@ -265,5 +268,50 @@ struct ShotChartLegend: View {
             }
             Text("%").font(.system(size: 9, weight: .medium)).foregroundStyle(forImage ? Color.black.opacity(0.6) : Color.secondary)
         }
+    }
+}
+
+/// Choosing the zones a shooting drill is shot from (24 Nov 2026): the same
+/// ten-zone court; a tap adds a zone (numbered in the order it is logged)
+/// or takes it out.
+struct ShotZonePicker: View {
+    @Binding var zones: [Int]
+
+    var body: some View {
+        GeometryReader { geo in
+            let rect = CGRect(origin: .zero, size: geo.size)
+            let t = ShotChartGeometry.transform(in: rect)
+            ZStack {
+                ForEach(0..<10, id: \.self) { i in
+                    let order = zones.firstIndex(of: i)
+                    ZoneShape(index: i)
+                        .fill(order == nil ? Color(.tertiarySystemFill) : Color.orange.opacity(0.8))
+                        .overlay(ZoneShape(index: i).stroke(Color(.systemBackground), lineWidth: 1.5))
+                        .contentShape(ZoneShape(index: i))
+                        .onTapGesture {
+                            if let order { zones.remove(at: order) } else { zones.append(i) }
+                        }
+                        .accessibilityElement()
+                        .accessibilityLabel(TrackDefinition.zoneShort[LocalizationManager.shared.currentLanguage == .chinese ? 1 : 0][i]
+                                            + (order == nil ? "" : " ✓"))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityIdentifier("zonepicker.zone.\(i)")
+                }
+                CourtLinesShape()
+                    .stroke(Color.primary.opacity(0.35), lineWidth: 1)
+                    .allowsHitTesting(false)
+                ForEach(Array(zones.enumerated()), id: \.element) { order, zone in
+                    let at = ShotChartGeometry.labels[zone].0.applying(t)
+                    Text("\(order + 1)")
+                        .font(.caption.weight(.bold)).monospacedDigit()
+                        .foregroundStyle(.white)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(Color.black.opacity(0.55)))
+                        .position(at)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+        .aspectRatio(ShotChartGeometry.aspect, contentMode: .fit)
     }
 }

@@ -124,6 +124,22 @@ enum ShootingHistory {
         var out = [ShotZoneValue?](repeating: nil, count: 10)
         for s in sessions where !SessionLifecycle.didNotHappen(s) && (before.map { s.startTime < $0 } ?? true) {
             for run in s.curriculum.shooting { out = merge(out, zones(of: run, student: student)) }
+            // The coach's own shooting / finishing drills (24 Nov 2026).
+            for run in s.curriculum.tracked { out = merge(out, zones(of: run, student: student)) }
+        }
+        return out
+    }
+
+    /// A coach's tracked drill on the ten zones: a made-of shooting drill
+    /// at the zones it names, a made-of finishing drill at the rim.
+    static func zones(of run: TrackedRun, student: UUID) -> [ShotZoneValue?] {
+        var out = [ShotZoneValue?](repeating: nil, count: 10)
+        let def = run.definition
+        for (spot, value) in run.values(for: student).enumerated() {
+            guard let value, let zone = def.zone(forSpot: spot) else { continue }
+            var z = out[zone] ?? ShotZoneValue(made: 0, attempted: 0)
+            z.made += value; z.attempted += Double(def.amount)
+            out[zone] = z
         }
         return out
     }
@@ -132,7 +148,8 @@ enum ShootingHistory {
     static func latestMapSession(for student: UUID, sessions: [SessionEvent]) -> SessionEvent? {
         sessions
             .filter { s in !SessionLifecycle.didNotHappen(s)
-                && s.curriculum.shooting.contains { zones(of: $0, student: student).contains { $0 != nil } } }
+                && (s.curriculum.shooting.contains { zones(of: $0, student: student).contains { $0 != nil } }
+                    || s.curriculum.tracked.contains { zones(of: $0, student: student).contains { $0 != nil } }) }
             .max { $0.startTime < $1.startTime }
     }
 

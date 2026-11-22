@@ -363,11 +363,28 @@ enum SheetGalleryDebug {
                             measure: .inTime, amount: 30, unit: "passes", skills: ["passing"]))
                         dm.addDrill(drill)
                     }
+                    // =zones: a shooting drill on the shot map — both corners
+                    // and the top, 10 shots each (24 Nov 2026).
+                    let zonesId = DemoTrackedOnce.zonesDrillId
+                    if dm.drills.first(where: { $0.id == zonesId }) == nil {
+                        var def = TrackKind.shooting.preset(chinese: false)
+                        def.zones = [5, 7, 9]
+                        var drill = DrillItem(id: zonesId, name: "Corner and Top Threes", category: .shooting,
+                                              description: "Ten threes from each corner and the top.")
+                        drill.tags = DrillItem.tags(["visibility:private"], tracking: def)
+                        dm.addDrill(drill)
+                    }
                     var copy = dm.sessionEvents.first { $0.id == session.id } ?? session
-                    copy.curriculum.skillDrillIds.removeAll { $0 == id }
-                    if mode != "clear" { copy.curriculum.skillDrillIds.append(id) }
+                    copy.curriculum.skillDrillIds.removeAll { $0 == id || $0 == zonesId }
+                    if mode == "zones" { copy.curriculum.skillDrillIds.append(zonesId) }
+                    else if mode != "clear" { copy.curriculum.skillDrillIds.append(id) }
                     dm.updateSessionEvent(copy, keepLiveFields: true)
                     dm.setSessionTracking(sessionId: session.id, runs: [])
+                    // clear also takes the demo drills out of the library
+                    // (they push its rows down for other tests).
+                    if mode == "clear" {
+                        for demo in dm.drills where demo.id == id || demo.id == zonesId { dm.deleteDrill(demo) }
+                    }
                 }()
                 NavigationStack {
                     // Re-read: a demo hook above may just have written it.
@@ -853,6 +870,7 @@ private enum DemoShootingOnce { static var done = false }
 private enum DemoTrackedOnce {
     static var done = false
     static let drillId = UUID(uuidString: "7AC4ED00-0000-4000-8000-00000000BA55")!
+    static let zonesDrillId = UUID(uuidString: "7AC4ED00-0000-4000-8000-0000000020E5")!
 }
 
 private struct LiveGameGalleryHost: View {

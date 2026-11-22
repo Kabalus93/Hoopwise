@@ -19,6 +19,21 @@ final class ActivityLibraryUITests: XCTestCase {
 
     private var rows: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "library.row") }
 
+    /// The page is up. (Not "a library row exists": the list is lazy and the
+    /// rows sit under the Tracked shooting section — 24 Nov 2026.)
+    private func waitForPage() {
+        XCTAssertTrue(app.buttons["Add Drill"].firstMatch.waitForExistence(timeout: 30), "the drills page")
+    }
+
+    /// Scrolls the list until one of the elements is built.
+    @discardableResult
+    private func reach(_ elements: XCUIElement...) -> Bool {
+        for _ in 0..<12 where !elements.contains(where: \.exists) {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        return elements.contains(where: \.exists)
+    }
+
     /// U8 alone has 22 routine activities; with U6 and U7 included, 51. The
     /// switch lives in the ⓘ guidance sheet and is remembered, so start from
     /// whichever state it is in.
@@ -30,10 +45,10 @@ final class ActivityLibraryUITests: XCTestCase {
     }
 
     func testAgeBlockAndEarlierAges() {
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        waitForPage()
         choose("library.filter.block", "Routine")
         let alone = app.staticTexts["Routine · 22"], together = app.staticTexts["Routine · 51"]
-        XCTAssertTrue(alone.exists || together.exists, "U8 routine: 22 alone, 51 with earlier ages")
+        XCTAssertTrue(reach(alone, together), "U8 routine: 22 alone, 51 with earlier ages")
         let wasAlone = alone.exists
         app.buttons["library.info"].tap()
         let toggle = app.switches["library.includeEarlier"]
@@ -43,21 +58,26 @@ final class ActivityLibraryUITests: XCTestCase {
         XCTAssertTrue((wasAlone ? together : alone).waitForExistence(timeout: 5),
                       "the switch adds or removes U6 and U7")
         let note = app.descendants(matching: .any).matching(identifier: "library.earlierNote").firstMatch
+        // The note sits with the filters at the top of the list.
+        for _ in 0..<12 where !app.buttons["library.filter.block"].firstMatch.isHittable {
+            app.collectionViews.firstMatch.swipeDown(velocity: .fast)
+        }
         XCTAssertEqual(note.exists, wasAlone, "a visible note says when earlier ages are included")
     }
 
     func testRuleOptionsLiveUnderGame() {
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        waitForPage()
         choose("library.filter.block", "Game")
         choose("library.filter.type", "Rule options")
         let rule = app.descendants(matching: .any).matching(identifier: "library.rule").firstMatch
-        XCTAssertTrue(rule.waitForExistence(timeout: 5), "rule options are listed under Game")
+        XCTAssertTrue(reach(rule), "rule options are listed under Game")
         rule.tap()
         XCTAssertTrue(app.staticTexts["SOURCE"].waitForExistence(timeout: 5) || app.staticTexts["Source"].exists)
     }
 
     func testDetailShowsHowItRunsAndSource() {
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        waitForPage()
+        XCTAssertTrue(reach(rows.firstMatch), "a library drill")
         rows.firstMatch.tap()
         XCTAssertTrue(app.staticTexts["HOW IT RUNS"].waitForExistence(timeout: 8)
                       || app.staticTexts["How it runs"].exists)
@@ -66,7 +86,7 @@ final class ActivityLibraryUITests: XCTestCase {
     /// Searching covers the WHOLE library, not the chosen age and block: from
     /// U8 · Routine, "keeping off" finds the U7 small game, words in any order.
     func testSearchCoversTheWholeLibrary() {
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        waitForPage()
         let field = app.searchFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
@@ -88,20 +108,26 @@ final class ActivityLibraryUITests: XCTestCase {
         app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
         app.launchArguments += ["-app_language", "en"]
         app.launch()
-        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 30))
+        waitForPage()
         let clear = app.buttons["library.filter.clear"].firstMatch
         if clear.exists { clear.tap() }
         choose("library.filter.age", "U8")
 
         app.buttons["library.skill.passing"].firstMatch.tap()
         let header = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Strong on passing · '")).firstMatch
-        XCTAssertTrue(header.waitForExistence(timeout: 5), "Passing lists the drills strong on it")
+        XCTAssertTrue(reach(header), "Passing lists the drills strong on it")
         let atU8 = header.label
+        for _ in 0..<12 where !app.buttons["library.filter.age.clear"].firstMatch.isHittable {
+            app.collectionViews.firstMatch.swipeDown(velocity: .fast)
+        }
         app.buttons["library.filter.age.clear"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Strong on passing · ' AND label != %@", atU8))
-            .firstMatch.waitForExistence(timeout: 5), "every age has more passing drills than U8 alone")
+        XCTAssertTrue(reach(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Strong on passing · ' AND label != %@", atU8))
+            .firstMatch), "every age has more passing drills than U8 alone")
+        for _ in 0..<12 where !app.buttons["library.filter.clear"].firstMatch.isHittable {
+            app.collectionViews.firstMatch.swipeDown(velocity: .fast)
+        }
         app.buttons["library.filter.clear"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Drills · '")).firstMatch
-            .waitForExistence(timeout: 5), "Clear all shows every drill")
+        XCTAssertTrue(reach(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Drills · '")).firstMatch),
+                      "Clear all shows every drill")
     }
 }

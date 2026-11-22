@@ -32,6 +32,36 @@ extension ConnectorToolRegistry {
             "equipment": ["type": "array", "items": ["type": "string"]],
             "min_players": ["type": "integer"],
             "max_players": ["type": "integer"],
+            "tracking": [
+                "type": "object",
+                "description": """
+                Makes the drill TRACKED: in a session plan its row logs one result per athlete, compared with their \
+                history and same-grade peers, shown in the evaluation under its skills with a suggested rating. \
+                kind sets sensible defaults — send only what differs. kind: shooting | finishing | ballHandling | \
+                passing | conditioning | defense | other. measure: madeOf (makes of `amount` attempts) | inTime (how \
+                many in `amount` seconds; `unit` says what) | timeToFinish (stopwatch, faster is better) | count (a \
+                number with `unit`; higher_is_better). main / some: the skills a result measures mainly / a little \
+                (ballHandling, passing, shooting, finishing, playmaking, gameIQ, defense, footwork). zones (shooting \
+                only): the shot-map zones it is shot from, one number each — 0 rim, 1 left baseline, 2 left elbow, 3 \
+                right elbow, 4 right baseline, 5 left corner, 6 left wing, 7 top, 8 right wing, 9 right corner; made-of \
+                results then join the athlete's shot chart. sides: names when logged per side or spot (e.g. Right \
+                hand, Left hand). course (conditioning, ballHandling): halfCourt | fullCourt | downAndBack | \
+                lineDrill | seventeens | lap. Send {"off": true} to stop tracking.
+                """,
+                "properties": [
+                    "off": ["type": "boolean"],
+                    "kind": ["type": "string", "enum": TrackKind.allCases.map(\.rawValue)],
+                    "measure": ["type": "string", "enum": TrackMeasure.allCases.map(\.rawValue)],
+                    "amount": ["type": "integer"],
+                    "unit": ["type": "string"],
+                    "higher_is_better": ["type": "boolean"],
+                    "main": ["type": "array", "items": ["type": "string"]],
+                    "some": ["type": "array", "items": ["type": "string"]],
+                    "zones": ["type": "array", "items": ["type": "integer"]],
+                    "sides": ["type": "array", "items": ["type": "string"]],
+                    "course": ["type": "string", "enum": TrackCourse.allCases.map(\.rawValue)],
+                ],
+            ] as [String: Any],
         ]
     }
 
@@ -91,12 +121,25 @@ extension ConnectorToolRegistry {
         if let list = strings(args["equipment"]) { drill.equipmentNeeded = list }
         if let n = args["min_players"] as? Int { drill.minPlayers = max(1, n) }
         if let n = args["max_players"] as? Int { drill.maxPlayers = n > 0 ? n : nil }
+        if let tracking = args["tracking"] as? [String: Any] {
+            if tracking["off"] as? Bool == true {
+                drill.tags = DrillItem.tags(drill.tags, tracking: nil)
+            } else {
+                do {
+                    drill.tags = DrillItem.tags(drill.tags, tracking: try TrackDefinition.parsed(tracking, chinese: false))
+                } catch let error as TrackDefinition.ParseError {
+                    throw ConnectorToolError.badArguments(error.message)
+                }
+            }
+        }
         drill.updatedAt = Date()
     }
 
     private func drillBrief(_ drill: DrillItem) -> [String: Any] {
-        ["drill_id": Self.ref(drill.id), "name": drill.localizedName, "category": drill.category.rawValue,
-         "duration_minutes": drill.durationMinutes, "personal": !drill.isLibraryDrill]
+        var out: [String: Any] = ["drill_id": Self.ref(drill.id), "name": drill.localizedName, "category": drill.category.rawValue,
+                                  "duration_minutes": drill.durationMinutes, "personal": !drill.isLibraryDrill]
+        if let tracking = drill.tracking { out["tracked"] = tracking.summary(chinese: false) }
+        return out
     }
 
     private func drillDetail(_ drill: DrillItem) -> [String: Any] {
@@ -109,6 +152,7 @@ extension ConnectorToolRegistry {
         out["equipment"] = drill.equipmentNeeded
         out["min_players"] = drill.minPlayers
         if let max = drill.maxPlayers { out["max_players"] = max }
+        if let tracking = drill.tracking { out["tracking"] = tracking.asValues }
         return out
     }
 
@@ -157,6 +201,7 @@ extension ConnectorToolRegistry {
                 ordered steps (one per item), key points, duration and category. It can then go in session plans \
                 (add_drill_to_session). PROGRESSIONS of one skill (stationary dribble → moving → two balls) are a \
                 SERIES: create each level as its own drill here, then create_drill_series with them easiest first. \
+                When the drill has a number worth logging per athlete (makes, a time, a count), set `tracking`. \
                 Check list_drills first so you do not make a duplicate — update_drill an existing one instead.
                 """,
                 schema: drillSchema(drillFields, ["name"]),

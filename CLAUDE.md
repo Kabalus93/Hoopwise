@@ -2448,8 +2448,65 @@ makes under 35 % (≥ 3 athletes, latest each) puts its linked skills in focus,
 rationale "low tracked-drill results: <skill>". DEBUG HOOPWISE_DEMO_TRACKED=
 1|clear on sessionPage (demo drill "Wall Passes", 30 s, passes, Passing).
 HOOPWISE_DEMO_SHOOTING also resets remembered shooting setups. Tests:
-CustomTrackingTests, CustomTrackingUITests (iPad mini). NOT YET: the
-connector's create_drill cannot set tracking; DrillWriter does not suggest it.
+CustomTrackingTests, CustomTrackingUITests (iPad mini).
+THE TYPE DRIVES IT (24 Nov 2026, Luther: "the kind of tracking should
+determine the setup … shooting: how it's measured, what it impacts in the
+eval — how much of Shooting plus how much of athleticism — needs a shot map?
+… conditioning: laps in how long, sprints on a distance … not an incomplete
+pain point"). `TrackKind` (shooting · finishing · ballHandling · passing ·
+conditioning · defense · other) is chosen FIRST in New / Edit Drill →
+Tracking; `kind.preset(measure:)` fills the measure (each kind lists only its
+own, in its words — "Time over a distance"), amount, unit, sides and the
+skills; picking another kind re-applies its preset, changing the measure
+keeps the coach's skills / zones / sides. Definitions from before kinds read
+as `.other` and their JSON, tag and comparison key are unchanged (new fields
+are written only when set).
+· MAIN / SOME: `TrackDefinition.some` ⊂ `skills`; a skill chip cycles off →
+  Main → Some → off; `weight(for:)` 1 / 0.5. `suggestion` = percentiles
+  weighted, and NIL unless the links add up to ≥ 1 (a lone "some" link never
+  moves a rating). The plan engine reads MAIN skills only.
+· SHOT MAP (shooting): `zones` = the ten ShotChart zones the drill is shot
+  from, picked on `ShotZonePicker` (ShotChartMap.swift; numbered in logging
+  order); spots ARE the zones (`onShotMap`, names `zoneShort`). Made-of
+  results join the athlete's shot chart — `ShootingHistory.zones(of:
+  TrackedRun…)` in `zoneMap` / `latestMapSession`; a FINISHING made-of drill
+  lands at the rim (zone 0, both hands pooled); timed results have no
+  attempts and stay off. The station shows the court for such a drill
+  (Group | each athlete; the drill's other zones dimmed — ShotChartMap
+  `dimmed`); a zone opens that cell's pad. On a phone a table with > 3 spots
+  scrolls sideways.
+· COURSE (conditioning, ball handling; not for a plain count): `TrackCourse`
+  halfCourt · fullCourt · downAndBack · lineDrill · seventeens · lap — in the
+  comparison key, so a time compares only over the same distance. No court
+  map for conditioning (decided: the place is not the data, the distance is).
+· PLAN ENGINE: `trackedSignals(runs oldest first)` — the < 35 % made-of
+  signal, plus "trackedDown:<skill>:<percent>" for ANY measure: ≥ 3 athletes
+  with a latest and a previous result under the same key, the group ≥ 10 %
+  worse (slower / fewer / lower).
+· CLAUDE PRE-FILLS (Mac — the key lives there): DrillWriter's answer gained
+  `tracking` {kind | none, measure, amount (PER ZONE when split), unit, main,
+  some, zones, course | none}; the form shows "Claude suggests tracking:
+  <kind> — Use" and switching Track results on starts from it; never applied
+  by itself. VERIFIED LIVE 24 Nov 2026 on the Mac demo copy: corners threes →
+  shooting, 10 a zone, zones [5, 9]; suicides → conditioning, timed, Line
+  drill; 45 s weak-hand lengths → full court, ball handling main; Mikan 30 s
+  → finishing, makes in a time; a walkthrough → none. (A wrong strict schema
+  would break Return-writes-the-steps too — rerun HOOPWISE_SHOT=newDrill +
+  HOOPWISE_NEWDRILL_DESCRIPTION after touching it; the log line is
+  "drillWriter tracking:".)
+· CONNECTOR: create_drill / update_drill take `tracking` (same shape, plus
+  sides, higher_is_better, {"off": true}); `TrackDefinition.parsed` names a
+  bad field; get_drill returns it, list_drills says "tracked". NOT verified
+  over HTTP.
+· LIBRARY: "My tracked drills" section under Tracked shooting; the drill
+  page's Tracked card shows kind, zones, main / some.
+DEBUG HOOPWISE_DEMO_TRACKED=zones (a shooting drill on corners + top);
+clear now deletes the demo drills. Tests: CustomTrackingTests (14),
+CustomTrackingUITests (form driven by the type; logging on the shot map).
+ActivityLibraryUITests had been failing on the mini since the Tracked
+shooting rows pushed the lazy library rows out of reach — they scroll now.
+DrillPreferenceTests.testTheEngineFollowsTheCoach is order-dependent (picks
+from an unordered set): fails now and then in a full run, passes alone.
 THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
 the evidence lines between the bars "create chaos"). The eight ratings are an
 even column with NOTHING between the rows; a suggested rating is a short
