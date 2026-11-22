@@ -473,20 +473,24 @@ struct StudentQuickPeepView: View {
         HStack(alignment: .top, spacing: 20) {
             // Left column: Profile card
             // The card that is shared and printed (AthleteCardFlip).
-            AthleteCardFlip(student: student)
-            .frame(maxWidth: .infinity)
-            
-            // Right column: Skills + Notes + Insights + Contract
+            // Left: the card, then the evaluation and the coach's notes under
+            // it (24 Nov 2026, Luther: the space under the card was empty
+            // while the right column ran long).
             VStack(spacing: 16) {
+                AthleteCardFlip(student: student)
                 skillsSection
-
-                // Tracked shooting, as on the profile (21 Nov 2026).
-                ShootingProfileSection(studentId: student.id)
-                CustomTrackProfileSection(student: student)
-
                 if let notes = player?.coachNotes, !notes.isEmpty {
                     coachNotesSection(notes)
                 }
+                AboutAthleteCard(studentId: student.id)
+            }
+            .frame(maxWidth: .infinity)
+            
+            // Right column: results, insights, reminders, contract
+            VStack(spacing: 16) {
+                // Tracked shooting, as on the profile (21 Nov 2026).
+                ShootingProfileSection(studentId: student.id)
+                CustomTrackProfileSection(student: student)
 
                 if !insights.isEmpty {
                     insightsSection
@@ -495,9 +499,6 @@ struct StudentQuickPeepView: View {
                 StudentRemindersCard(student: student)
 
                 contractInfoSection
-
-                // About this athlete — provenance footer (Phase 1 of export/import)
-                AboutAthleteCard(studentId: student.id)
             }
             .frame(maxWidth: .infinity)
         }

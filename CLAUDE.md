@@ -2475,7 +2475,9 @@ release above halfway = full, else peep, below 55 % of the peep = gone; a tap
 on the handle toggles; tap outside, Done (env `peepClose`) or the drag down
 closes it. The page's layout follows its OWN width (onGeometryChange): < 700
 one column, ≥ 700 card | the rest, ≥ 1100 three columns (card | evaluation +
-results | notes, insights, reminders, contract). Tests: QuickPeepSheetUITests
+results | notes, insights, reminders, contract). TWO COLUMNS (same day,
+Luther, markup "use this space too"): left = card, Skills Evaluation, coach
+notes, About; right = shooting, tracked drills, insights, reminders, contract. Tests: QuickPeepSheetUITests
 (iPad mini, sessionPage Attend tab; skips on a phone). Not checked on the Mac.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
