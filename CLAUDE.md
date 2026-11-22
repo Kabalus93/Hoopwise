@@ -1315,8 +1315,7 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Verified on the iPad Air 13 simulator: a finger-drawn cut, two-finger
   undo; PlayEditorWorkspaceUITests, PlaysUITests, PlayDefenseUITests pass.
   Pencil touches, hover, double-tap and squeeze cannot be simulated — they
-  need a real iPad. (DrillVisualUITests.testNewDrillCanBeDrawnWith…
-  fails before the editor: it never finds "newDrill.draw" — unrelated.)
+  need a real iPad.
 - DRILLS PAGE FILTERS REDONE (16 November 2026, Luther: "I still need to
   know which are ball handling, passing or shooting … then optionally if I
   need to go by age group"; age must be removable; "a way to order drills by
@@ -2534,6 +2533,19 @@ ADDED TO THE BOARD'S EDITOR (19 Nov 2026, Luther), board and drill drawings:
   The simulator's synthetic touches draw near-invisible pen strokes (no
   touch size); the highlighter shows — real fingers/Pencil need a device.
 Tests: BoardDrawingExtrasTests, BoardExtrasUITests (iPad mini).
+ON THE PHONE (23 Nov 2026, found fixing DrillVisualUITests): the board
+layout's top-bar controls (Court, Lanes, Annotate, Clear, Save) as a row
+pushed DONE into the iPhone's overflow "•••" — in the drill-drawing editor
+and the Coach board alike. In compact width they are now ONE menu at the top
+left (`board.more`, "More"), so Cancel, undo, redo and Done stay in sight;
+the iPad / Mac keep the row. DrillVisualUITests run again: the first drill
+row sits under the skill chips, filters and nine Tracked shooting rows, so
+`firstLibraryRow()` scrolls to it; the test starts by deleting drawings an
+earlier failed run left on that demo drill (on a phone the page shows ONE
+drawing at a time); steps are added by the board's + (iPad) or the phone
+bar's "+ Add a step" tapped directly; the phone test puts the keyboard away
+(Return) before scrolling the New Drill form, and skips on an iPad (it draws
+in the board editor there).
 CLEAR WIPES IT, STEPS IN THE RAIL, OFFENSE PRESETS (22 Nov 2026, Luther,
 markup: Clear "is not functioning as intended … it should wipe the board
 clean"; "move [Step] in the side bar and replace it with offense option &

@@ -21,6 +21,10 @@ final class DrillVisualUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: id).firstMatch
     }
 
+    private func stepLabel(_ words: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", words)).firstMatch
+    }
+
     private func attach(_ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name
@@ -28,13 +32,37 @@ final class DrillVisualUITests: XCTestCase {
         add(shot)
     }
 
-    func testAddAVisualOpensTheEditorWithPlayersAndCones() {
+    /// The drills page's first regular drill. Since 21 Nov 2026 the skill
+    /// chips, the filters and the nine Tracked shooting rows come first, so
+    /// on an iPad mini the first `library.row` is below the fold of a lazy
+    /// list and not built until the list scrolls.
+    private func firstLibraryRow() -> XCUIElement {
+        XCTAssertTrue(app.buttons["Add Drill"].firstMatch.waitForExistence(timeout: 30), "the drills page")
         let row = element("library.row")
-        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        for _ in 0..<10 where !(row.exists && row.isHittable) {
+            app.collectionViews.firstMatch.swipeUp(velocity: .slow)
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "a library drill under Tracked shooting")
+        return row
+    }
+
+    func testAddAVisualOpensTheEditorWithPlayersAndCones() {
+        let row = firstLibraryRow()
         row.tap()
 
         let cta = element("drill.addVisual"), addTile = element("drill.visual.add")
         XCTAssertTrue(cta.waitForExistence(timeout: 8) || addTile.exists, "the drill offers Add a visual")
+        // Start from no drawings (demo store): a run that failed before its
+        // clean-up left one, and on a phone the page shows one drawing at a
+        // time behind a toggle, so the new one would not be on screen.
+        let leftover = app.buttons.matching(identifier: "drill.drawing.more")
+        for _ in 0..<5 where leftover.firstMatch.exists {
+            leftover.firstMatch.tap()
+            guard app.buttons["Delete Drawing"].waitForExistence(timeout: 3) else { break }
+            app.buttons["Delete Drawing"].tap()
+            if app.buttons["Delete"].waitForExistence(timeout: 3) { app.buttons["Delete"].tap() }
+            sleep(1)
+        }
         let cards = app.buttons.matching(identifier: "drill.drawing.edit")
         let before = cards.count
         (cta.exists ? cta : addTile).tap()
@@ -52,16 +80,25 @@ final class DrillVisualUITests: XCTestCase {
         court.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
         element("plays.editor.tool.defender").tap()
         court.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).tap()
-        // A second step.
-        element("plays.editor.steps").tap()
-        app.buttons["Add a step after this one"].tap()
+        // A second step (the old "Add a step after this one" button went with
+        // the steps panel's 17 Nov 2026 redesign): the board layout's + on an
+        // iPad, else the phone's steps bar "+ Add a step", tapped directly —
+        // opening the bar's step menu first made that tap only close the menu.
+        if element("board.addStep").exists {
+            element("board.addStep").tap()
+        } else {
+            XCTAssertTrue(element("plays.editor.addStep").waitForExistence(timeout: 5), "the phone's steps bar")
+            element("plays.editor.addStep").tap()
+        }
         attach("drill editor, step 2")
 
         app.buttons["Done"].tap()
         XCTAssertTrue(cards.element(boundBy: before).waitForExistence(timeout: 8), "the drawing plays on the drill page")
-        XCTAssertTrue(app.staticTexts["Step 1 of 2"].exists, "every step is reachable on the page")
+        // The card's header is one element on the phone ("<caption>, Step 1
+        // of 2"), its own text on the iPad: look for the words in a label.
+        XCTAssertTrue(stepLabel("Step 1 of 2").waitForExistence(timeout: 4), "every step is reachable on the page")
         app.buttons["Next step"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Step 2 of 2"].waitForExistence(timeout: 4))
+        XCTAssertTrue(stepLabel("Step 2 of 2").waitForExistence(timeout: 4))
         attach("drill page playing the drawing")
 
         // Edit opens it in the editor again.
@@ -84,16 +121,24 @@ final class DrillVisualUITests: XCTestCase {
     /// New Drill offers "Draw on the court"; on the iPhone the editor's steps
     /// bar adds, moves and deletes steps; Create saves the drawing as the
     /// drill's first visual. Deletes the drill afterwards.
-    func testNewDrillCanBeDrawnWithStepsOrganisedOnThePhone() {
-        XCTAssertTrue(element("library.row").waitForExistence(timeout: 30))
+    func testNewDrillCanBeDrawnWithStepsOrganisedOnThePhone() throws {
+        // The phone's steps bar. On an iPad, Draw opens the board-style
+        // editor (steps at the foot of the rail) — CoachBoardUITests and
+        // BoardExtrasUITests cover that.
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            throw XCTSkip("the iPhone's steps bar; the iPad draws in the board editor")
+        }
+        XCTAssertTrue(app.buttons["Add Drill"].firstMatch.waitForExistence(timeout: 30), "the drills page")
         app.buttons["Add Drill"].firstMatch.tap()
         let name = app.textFields["Drill Name"]
         XCTAssertTrue(name.waitForExistence(timeout: 8))
         name.tap()
         name.typeText("UITest drawn drill")
-
+        // The keyboard stays up after the name, and a swipe over it scrolls
+        // nothing: put it away first, then scroll the form to the Visual.
+        name.typeText("\n")
         let draw = element("newDrill.draw")
-        for _ in 0..<6 where !draw.isHittable { app.swipeUp() }
+        for _ in 0..<8 where !(draw.exists && draw.isHittable) { app.collectionViews.firstMatch.swipeUp(velocity: .slow) }
         draw.tap()
 
         // Three steps; the third moves to second, then the first is deleted.
@@ -141,7 +186,7 @@ final class DrillVisualUITests: XCTestCase {
         app.terminate()
         app.launchEnvironment["HOOPWISE_DELETE_DRILLS_NAMED"] = "UITest drawn drill"
         app.launch()
-        XCTAssertTrue(element("library.row").waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["Add Drill"].firstMatch.waitForExistence(timeout: 30), "the drills page")
         let field = app.searchFields.firstMatch
         field.tap()
         field.typeText("UITest drawn drill")

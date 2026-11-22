@@ -633,7 +633,19 @@ struct JournalPlayStepEditor: View {
                     ToolbarItem(placement: .principal) {
                         JText(board.title).font(.headline)
                     }
-                    ToolbarItemGroup(placement: .topBarLeading) { boardControls(board) }
+                    if isWorkspace {
+                        ToolbarItemGroup(placement: .topBarLeading) { boardControls(board) }
+                    } else {
+                        // On a phone the row of controls pushed Done into the
+                        // overflow (22 Nov 2026): one menu keeps Cancel, undo,
+                        // redo and Done in sight.
+                        ToolbarItem(placement: .topBarLeading) {
+                            Menu { boardControls(board) } label: {
+                                Label { JText("More") } icon: { Image(systemName: "ellipsis.circle") }
+                            }
+                            .accessibilityIdentifier("board.more")
+                        }
+                    }
                 }
                 // The Coach board keeps every change as it is made, so there
                 // is nothing to cancel there: Done alone closes it.
