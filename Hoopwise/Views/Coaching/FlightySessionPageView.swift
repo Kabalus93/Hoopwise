@@ -124,6 +124,9 @@ struct FlightySessionPageView: View {
     @State private var expandedDrillId: UUID?
     /// The tracked drill whose shooting station is open (23 Nov 2026).
     @State private var stationDrill: ShootingDrill?
+    /// The coach's own tracked drill whose station is open (23 Nov 2026).
+    @State private var customStation: CustomStation?
+    struct CustomStation: Identifiable { let id: UUID; let name: String }
     @State private var showAddOptionsFor: CurriculumSection?
     @State private var draggingDrillId: UUID?
     @AppStorage("recentlyUsedDrillIds") private var recentlyUsedDrillIdsData: Data = Data()
@@ -497,6 +500,7 @@ struct FlightySessionPageView: View {
         if session.unexcusedAbsences != fresh.unexcusedAbsences { session.unexcusedAbsences = fresh.unexcusedAbsences }
         if session.attendancePhotoPath != fresh.attendancePhotoPath { session.attendancePhotoPath = fresh.attendancePhotoPath }
         if session.curriculum.shooting != fresh.curriculum.shooting { session.curriculum.shooting = fresh.curriculum.shooting }
+        if session.curriculum.tracked != fresh.curriculum.tracked { session.curriculum.tracked = fresh.curriculum.tracked }
 
         // Bail early when nothing else has changed downstream.
         guard fresh.updatedAt > session.updatedAt else { return }
@@ -955,7 +959,8 @@ struct FlightySessionPageView: View {
     private var shootingAddOns: some View {
         let inPlan = Set(session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds)
         let orphans = trackedDrillsInPlan.filter { !inPlan.contains($0.drillId) }
-        if !orphans.isEmpty {
+        let customOrphans = session.curriculum.tracked.filter { $0.hasResults && !inPlan.contains($0.drillId) }
+        if !orphans.isEmpty || !customOrphans.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text(LocalizationManager.shared.currentLanguage == .chinese ? "投篮记录（已不在计划中）" : "SHOOTING RESULTS")
                     .font(.caption.weight(.bold))
@@ -970,7 +975,47 @@ struct FlightySessionPageView: View {
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
                 }
+                ForEach(customOrphans) { run in
+                    let name = dataManager.drills.first { $0.id == run.drillId }?.localizedName ?? ""
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(name).font(.subheadline.weight(.medium))
+                        customTracker(run.drillId, name: name)
+                    }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                }
             }
+        }
+    }
+
+    // MARK: The coach's own tracked drills (23 Nov 2026)
+
+    /// The run for a custom tracked drill: the stored one, else a fresh one
+    /// with the drill's CURRENT definition.
+    private func trackedRunBinding(_ drillId: UUID) -> Binding<TrackedRun> {
+        Binding(
+            get: {
+                session.curriculum.tracked.first { $0.drillId == drillId }
+                    ?? TrackedRun(drillId: drillId,
+                                  definition: dataManager.drills.first { $0.id == drillId }?.tracking ?? TrackDefinition())
+            },
+            set: { updated in
+                if let i = session.curriculum.tracked.firstIndex(where: { $0.drillId == drillId }) {
+                    session.curriculum.tracked[i] = updated
+                } else {
+                    session.curriculum.tracked.append(updated)
+                }
+                session.curriculum.tracked.removeAll { !$0.hasResults }
+                dataManager.setSessionTracking(sessionId: session.id, runs: session.curriculum.tracked)
+            })
+    }
+
+    private func customTracker(_ drillId: UUID, name: String) -> some View {
+        CustomTrackerLine(drillId: drillId, run: trackedRunBinding(drillId).wrappedValue, students: shootingRoster,
+                          sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
+                          canEdit: accessMode.canEdit) {
+            HapticFeedback.impact(.light)
+            customStation = CustomStation(id: drillId, name: name)
         }
     }
 
@@ -1069,6 +1114,13 @@ struct FlightySessionPageView: View {
                 DrillDetailView(drill: drill)
                     .environmentObject(dataManager)
             }
+        }
+        .sheet(item: $customStation) { station in
+            CustomTrackStationSheet(drillId: station.id, drillName: station.name, run: trackedRunBinding(station.id),
+                                    students: shootingRoster, sessionDate: session.startTime,
+                                    allSessions: dataManager.sessionEvents, canEdit: accessMode.canEdit)
+                .environmentObject(dataManager)
+                .presentationSizing(.page)
         }
         .sheet(item: $stationDrill) { drill in
             ShootingStationSheet(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
@@ -1215,6 +1267,7 @@ struct FlightySessionPageView: View {
         // Tracked shooting drills stay in the plan, and their results stay
         // (the old Regenerate dropped both).
         let tracked = Set(ShootingDrill.allCases.map(\.drillId))
+            .union(dataManager.drills.filter { $0.tracking != nil }.map(\.id))
         for id in session.curriculum.warmupDrillIds where tracked.contains(id) && !merged.warmupDrillIds.contains(id) {
             merged.warmupDrillIds.append(id)
         }
@@ -1222,6 +1275,7 @@ struct FlightySessionPageView: View {
             merged.skillDrillIds.append(id)
         }
         merged.shooting = session.curriculum.shooting
+        merged.tracked = session.curriculum.tracked
         session.curriculum = merged
         planRationale = result.rationale
         saveSession()
@@ -1571,6 +1625,11 @@ struct FlightySessionPageView: View {
             // A tracked shooting drill carries its tracker on its own row.
             if let tracked = ShootingDrill.allCases.first(where: { $0.drillId == drill.id }) {
                 shootingTracker(tracked)
+                    .padding(.leading, accessMode.canEdit ? 58 : 64)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 10)
+            } else if drill.tracking != nil || session.curriculum.tracked.contains(where: { $0.drillId == drill.id }) {
+                customTracker(drill.id, name: drill.localizedName)
                     .padding(.leading, accessMode.canEdit ? 58 : 64)
                     .padding(.trailing, 12)
                     .padding(.bottom, 10)

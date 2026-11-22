@@ -328,6 +328,11 @@ enum SheetGalleryDebug {
                     guard ScreenshotStore.isActive, !DemoShootingOnce.done,
                           let mode = env["HOOPWISE_DEMO_SHOOTING"] else { return }
                     DemoShootingOnce.done = true
+                    // Every run starts on the drills' default setups (a
+                    // remembered setup from an earlier run would change the pad).
+                    for drill in ShootingDrill.allCases {
+                        UserDefaults.standard.removeObject(forKey: "shooting.setup.\(drill.rawValue)")
+                    }
                     var copy = session
                     // =chart: the Shot Chart instead.
                     let all = ShootingDrill.allCases.map(\.drillId)
@@ -341,6 +346,28 @@ enum SheetGalleryDebug {
                     // Results are live data (kept by whole-session saves):
                     // clear them through their own writer.
                     dm.setSessionShooting(sessionId: session.id, runs: [])
+                }()
+                // HOOPWISE_DEMO_TRACKED=1 | clear (demo store only): the
+                // coach's own tracked drill "Wall Passes" (count, passes,
+                // Passing) in this session's Skills with no results, or out
+                // again (23 Nov 2026).
+                let _ = {
+                    guard ScreenshotStore.isActive, !DemoTrackedOnce.done,
+                          let mode = env["HOOPWISE_DEMO_TRACKED"] else { return }
+                    DemoTrackedOnce.done = true
+                    let id = DemoTrackedOnce.drillId
+                    if dm.drills.first(where: { $0.id == id }) == nil {
+                        var drill = DrillItem(id: id, name: "Wall Passes", category: .skills,
+                                              description: "Chest passes against the wall for 30 seconds.")
+                        drill.tags = DrillItem.tags(["visibility:private"], tracking: TrackDefinition(
+                            measure: .inTime, amount: 30, unit: "passes", skills: ["passing"]))
+                        dm.addDrill(drill)
+                    }
+                    var copy = dm.sessionEvents.first { $0.id == session.id } ?? session
+                    copy.curriculum.skillDrillIds.removeAll { $0 == id }
+                    if mode != "clear" { copy.curriculum.skillDrillIds.append(id) }
+                    dm.updateSessionEvent(copy, keepLiveFields: true)
+                    dm.setSessionTracking(sessionId: session.id, runs: [])
                 }()
                 NavigationStack {
                     // Re-read: a demo hook above may just have written it.
@@ -817,6 +844,10 @@ enum SheetGalleryDebug {
 /// HOOPWISE_DEMO_READY_GAMES writes once per launch.
 private enum DemoGamesOnce { static var done = false }
 private enum DemoShootingOnce { static var done = false }
+private enum DemoTrackedOnce {
+    static var done = false
+    static let drillId = UUID(uuidString: "7AC4ED00-0000-4000-8000-00000000BA55")!
+}
 
 private struct LiveGameGalleryHost: View {
     /// Kept with the game: the scratch players are rebuilt (new ids) on

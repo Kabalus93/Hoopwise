@@ -2379,6 +2379,44 @@ with the same tracker line. HOOPWISE_DEMO_SHOOTING now clears results through
 setSessionShooting (whole-session saves keep them). Tests:
 ShootingAddOnUITests (all four through the tracker → station, plus
 testSetupSheetTakesLongTimes).
+THE COACH'S OWN TRACKED DRILLS (23 Nov 2026, Luther: "be able to create my
+own trackable drill … control the variables … what the result would mean on
+the player's oct evaluation"; decided: all four measures, ONE number per
+drill, compared with own history + same-grade peers, the octagon SUGGESTS a
+rating taken with one tap). Models/CustomTracking.swift (pure):
+`TrackMeasure` madeOf (makes of N → share) · inTime (how many in N s, unit
+default "makes") · timeToFinish (stopwatch, lower better) · count (unit,
+higher or lower better); `TrackDefinition` (amount, optional named spots,
+unit, direction, linked octagon skills; `key` = measure|amount|spots —
+results compare only under the same key). DEFINITION = ONE drill tag
+`track:<base64 JSON>` (no schema change; syncs; kept by syncActivityLibrary;
+hidden from the tag chips) — New / Edit Drill → "Tracking" (toggle, measure,
+amount, unit / direction, "Log by spot or side", skill chips, footer saying
+what happens); writer for tag-only changes `setDrillTracking`. RESULTS =
+`SessionCurriculum.tracked: [TrackedRun]` (its own JSON key; a run keeps the
+definition it was taken with; entries athlete → one value a spot), THE writer
+`setSessionTracking`, kept by keepLiveFields saves, Regenerate keeps tracked
+drills and results. SESSION: the drill's plan row carries `CustomTrackerLine`
+(`track.line`) → `CustomTrackStationSheet` (summary, table, Log `track.log`)
+→ `CustomTrackPad` (athlete photos, spot chips; grid ≤ 10 shots, else the
+number control; a stopwatch Start/Stop + seconds.tenths wheels for a time;
+starts on what is in, else last time, else the others' median today).
+Results of a drill that left the plan show under "Shooting results".
+ATHLETE: `CustomTrackHistory.standings` (last-3 average, sessions, trend,
+rank and percentile among same-grade peers — ≥ 3 with results for a
+percentile; skipped sessions out); profile + Quick Peep "Tracked drills"
+(CustomTrackProfileSection: last 3, best, sessions, same-grade rank, chart —
+reversed for lower-is-better, linked skills); Quick Peep evaluation: the
+lines under each linked skill and "Results suggest N · Use"
+(`suggestion` = linked percentiles averaged → 2…9; Use writes the rating at
+once, or into the draft while editing) — never set automatically. Drill page:
+DrillTrackingCard. PLAN ENGINE: `trackedSignals` — a made-of drill the roster
+makes under 35 % (≥ 3 athletes, latest each) puts its linked skills in focus,
+rationale "low tracked-drill results: <skill>". DEBUG HOOPWISE_DEMO_TRACKED=
+1|clear on sessionPage (demo drill "Wall Passes", 30 s, passes, Passing).
+HOOPWISE_DEMO_SHOOTING also resets remembered shooting setups. Tests:
+CustomTrackingTests, CustomTrackingUITests (iPad mini). NOT YET: the
+connector's create_drill cannot set tracking; DrillWriter does not suggest it.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan

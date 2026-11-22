@@ -100,7 +100,8 @@ struct DrillPlanGenerator {
         let window = ageWeights(age: age, level: level)
         let focus = focusTypes(phase: ctx.phase, students: ctx.enrolledStudents, players: ctx.players,
                                games: ctx.programHistory.flatMap(\.games),
-                               shooting: ctx.programHistory.sorted { $0.startTime < $1.startTime }.flatMap(\.curriculum.shooting))
+                               shooting: ctx.programHistory.sorted { $0.startTime < $1.startTime }.flatMap(\.curriculum.shooting),
+                               tracked: ctx.programHistory.sorted { $0.startTime < $1.startTime }.flatMap(\.curriculum.tracked))
         var history = History(sessions: ctx.programHistory, before: ctx.session)
         if !options.avoidLastSession { history.forgetLastSession() }
         var gaps = phaseGaps(ctx)
@@ -261,7 +262,8 @@ struct DrillPlanGenerator {
     // MARK: - Focus
 
     private static func focusTypes(phase: MicroCycle?, students: [Student], players: [Player],
-                                   games: [SessionGame] = [], shooting: [ShootingRun] = [])
+                                   games: [SessionGame] = [], shooting: [ShootingRun] = [],
+                                   tracked: [TrackedRun] = [])
         -> (types: [ActivityType], notes: [String]) {
         var types: [ActivityType] = []
         var notes: [String] = []
@@ -293,8 +295,37 @@ struct DrillPlanGenerator {
             notes.append(signal)
         }
 
+        // The coach's own tracked drills (23 Nov 2026): a made-of drill the
+        // group makes under 35 % puts its linked skills in focus.
+        for (axis, signal) in trackedSignals(runs: tracked, roster: Set(students.map(\.id))) {
+            types += activityTypes(for: axis)
+            notes.append(signal)
+        }
+
         var seen = Set<ActivityType>()
         return (types.filter { seen.insert($0).inserted }, notes)
+    }
+
+    /// "tracked:<skill>:<share>" for each skill linked to a coach's made-of
+    /// drill whose roster average (latest result each, ≥ 3 athletes) is
+    /// under 35 %. Other measures have no common yardstick and stay silent.
+    static func trackedSignals(runs: [TrackedRun], roster: Set<UUID>) -> [(DrillAttribute, String)] {
+        var latest: [UUID: (TrackDefinition, [UUID: Double])] = [:]
+        for run in runs where run.definition.measure == .madeOf {
+            var entry = latest[run.drillId] ?? (run.definition, [:])
+            entry.0 = run.definition
+            for id in roster { if let v = run.result(for: id) { entry.1[id] = v } }
+            latest[run.drillId] = entry
+        }
+        var out: [(DrillAttribute, String)] = []
+        for (_, (def, values)) in latest where values.count >= 3 {
+            let avg = values.values.reduce(0, +) / Double(values.count)
+            guard avg < 0.35 else { continue }
+            for axis in def.attributes where !out.contains(where: { $0.0 == axis }) {
+                out.append((axis, "tracked:\(axis.rawValue):\(Int((avg * 100).rounded()))%"))
+            }
+        }
+        return out
     }
 
     /// The emphasis the DATA asks for — weakest evaluated area, and passing
@@ -561,6 +592,11 @@ extension DrillPlanGenerator.PlanRationale {
             return zh ? "比赛中助攻偏少（每球 \(parts[1])）" : "few assists in games (\(parts[1]) per basket)"
         case "shooting":
             return zh ? "投篮测试命中偏低（平均 \(parts[1])）" : "low shooting-drill results (\(parts[1]) average)"
+        case "tracked":
+            let bits = parts[1].split(separator: ":", maxSplits: 1).map(String.init)
+            guard bits.count == 2, let axis = DrillAttribute(rawValue: bits[0]) else { return nil }
+            return zh ? "训练成绩偏低：\(axis.title(chinese: true))（平均 \(bits[1])）"
+                      : "low tracked-drill results: \(axis.title(chinese: false)) (\(bits[1]) average)"
         case "stocks":
             return zh ? "比赛中抢断盖帽偏少（人均每场 \(parts[1])）" : "few steals and blocks in games (\(parts[1]) per player-game)"
         default:

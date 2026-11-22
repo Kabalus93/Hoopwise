@@ -68,6 +68,7 @@ struct StudentDetailView: View {
 
                     // Tracked shooting drills (20 Nov 2026).
                     ShootingProfileSection(studentId: student.id)
+                    CustomTrackProfileSection(student: student)
 
                     // Team workout (Hub → Teams): drills from the roles
                     // this athlete plays in a team's play breakdowns.

@@ -1185,7 +1185,8 @@ struct DrillDetailView: View {
             // The skill ratings (attr:<axis>=n, attr:by:coach — shown on the
             // octagon card) and who made it (by:claude) are bookkeeping too
             // (18 Nov 2026, Luther: "what are those tags???").
-            .filter { !$0.hasPrefix(AttributeProfile.tagPrefix) && !$0.hasPrefix("by:") && !$0.hasPrefix(DrillItem.preferencePrefix) }
+            .filter { !$0.hasPrefix(AttributeProfile.tagPrefix) && !$0.hasPrefix("by:") && !$0.hasPrefix(DrillItem.preferencePrefix)
+                && !$0.hasPrefix(DrillItem.trackPrefix) }
             .map { raw in
                 raw.replacingOccurrences(of: "-", with: " ")
                    .replacingOccurrences(of: "_", with: " ")
@@ -1275,6 +1276,11 @@ struct DrillDetailView: View {
 
                         // How the plan engine should use it (19 Nov 2026).
                         DrillPreferenceCard(drill: currentDrill)
+
+                        // The coach's tracking (23 Nov 2026).
+                        if let tracking = currentDrill.tracking {
+                            DrillTrackingCard(tracking: tracking)
+                        }
                         
                         // Instructions (with placeholder for empty)
                         instructionsSection
@@ -2333,7 +2339,10 @@ struct AddDrillView: View {
         _instructions = State(initialValue: (editing?.instructions).flatMap { $0.isEmpty ? nil : $0 } ?? [""])
         _keyPoints = State(initialValue: (editing?.keyPoints).flatMap { $0.isEmpty ? nil : $0 } ?? [""])
         _minPlayers = State(initialValue: editing?.minPlayers ?? 1)
+        _tracking = State(initialValue: editing?.tracking)
     }
+    /// "Track results" (23 Nov 2026, Luther): nil = not tracked.
+    @State private var tracking: TrackDefinition?
     /// A court drawing made while creating the drill (Luther, November
     /// 2026): saved as the drill's first visual on Create.
     @State private var drawing: DrillDrawing?
@@ -2411,6 +2420,8 @@ struct AddDrillView: View {
                     }
                 }
 
+                trackSection(isChinese: isChinese)
+
                 seriesSection(isChinese: isChinese)
 
                 // A drill's visuals are managed on its page once it exists.
@@ -2454,6 +2465,125 @@ struct AddDrillView: View {
         }
     }
     
+    /// TRACK RESULTS (23 Nov 2026): what is measured, how much, the spots,
+    /// and which octagon skills a result speaks for.
+    @ViewBuilder
+    private func trackSection(isChinese: Bool) -> some View {
+        Section {
+            Toggle(isOn: Binding(get: { tracking != nil },
+                                 set: { tracking = $0 ? (tracking ?? TrackDefinition(skills: [])) : nil })) {
+                Label(isChinese ? "记录成绩" : "Track results", systemImage: "chart.bar.xaxis")
+            }
+            .accessibilityIdentifier("newDrill.track")
+            if let def = tracking {
+                Picker(isChinese ? "记录什么" : "What it measures", selection: trackBinding(\.measure)) {
+                    ForEach(TrackMeasure.allCases) { m in
+                        Label(m.title(chinese: isChinese), systemImage: m.symbol).tag(m)
+                    }
+                }
+                .accessibilityIdentifier("newDrill.track.measure")
+                switch def.measure {
+                case .madeOf:
+                    Stepper(value: trackBinding(\.amount), in: 1...100) {
+                        Text(isChinese ? "每点出手：\(def.amount)" : "Attempts\(def.spots.count > 1 ? " a spot" : ""): \(def.amount)")
+                            .monospacedDigit()
+                    }
+                    .accessibilityIdentifier("newDrill.track.amount")
+                case .inTime:
+                    Stepper(value: Binding(get: { def.amount },
+                                           set: { tracking?.amount = ShootingSetupSheet.clamped($0) }),
+                            in: 5...ShootingSetupSheet.maxSeconds, step: def.amount < 60 ? 5 : 15) {
+                        Text((isChinese ? "时间：" : "Time: ") + ShootingSetup.time(def.amount, chinese: isChinese))
+                            .monospacedDigit()
+                    }
+                    .accessibilityIdentifier("newDrill.track.amount")
+                    TextField(isChinese ? "计什么，如“传球”（默认：命中）" : "What is counted, like “passes” (default: makes)",
+                              text: trackBinding(\.unit))
+                case .timeToFinish:
+                    Text(isChinese ? "在课上用秒表计时，越快越好。" : "Timed with a stopwatch in class; faster is better.")
+                        .foregroundStyle(.secondary)
+                case .count:
+                    TextField(isChinese ? "单位，如“次触球”“分”" : "Unit, like “touches” or “points”", text: trackBinding(\.unit))
+                        .accessibilityIdentifier("newDrill.track.unit")
+                    Picker(isChinese ? "更好的是" : "Better is", selection: trackBinding(\.higherIsBetter)) {
+                        Text(isChinese ? "越多越好" : "Higher").tag(true)
+                        Text(isChinese ? "越少越好" : "Lower").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                spotRows(def, isChinese: isChinese)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(isChinese ? "代表哪些技能" : "Shows in the evaluation under")
+                        .font(.subheadline)
+                    FlowLayout(spacing: 8) {
+                        ForEach(DrillAttribute.allCases, id: \.self) { axis in
+                            let on = def.skills.contains(axis.rawValue)
+                            Button {
+                                if on { tracking?.skills.removeAll { $0 == axis.rawValue } }
+                                else { tracking?.skills.append(axis.rawValue) }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: axis.icon).font(.caption)
+                                    Text(axis.title(chinese: isChinese)).font(.subheadline.weight(.medium))
+                                }
+                                .padding(.horizontal, 10).frame(minHeight: 32)
+                                .background(Capsule().fill(on ? Color.accentColor : Color(.tertiarySystemFill)))
+                                .foregroundStyle(on ? Color.white : Color.primary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("newDrill.track.skill.\(axis.rawValue)")
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        } header: {
+            Text(isChinese ? "成绩记录" : "Tracking")
+        } footer: {
+            if let def = tracking {
+                Text(isChinese
+                     ? "加入课程计划后，在训练那一行记录每位学员的成绩（\(def.summary(chinese: true))）。成绩会和他以前的成绩、同年级学员比较，显示在所选技能下，并给出建议评分。"
+                     : "In a plan, the drill's row logs each athlete (\(def.summary(chinese: false))). Results are compared with their own history and athletes in the same grade, show under the chosen skills in the evaluation, and suggest a rating.")
+            } else {
+                Text(isChinese ? "可选。记录命中、限时次数、用时或计数，作为学员数据。"
+                               : "Optional. Log makes, a count in a time, a time or a number for each athlete.")
+            }
+        }
+    }
+
+    private func trackBinding<T>(_ path: WritableKeyPath<TrackDefinition, T>) -> Binding<T> {
+        Binding(get: { (tracking ?? TrackDefinition())[keyPath: path] },
+                set: { tracking?[keyPath: path] = $0 })
+    }
+
+    /// Named spots or sides — none means one number for the drill.
+    @ViewBuilder
+    private func spotRows(_ def: TrackDefinition, isChinese: Bool) -> some View {
+        ForEach(def.spots.indices, id: \.self) { i in
+            HStack {
+                TextField(isChinese ? "点位 \(i + 1)" : "Spot \(i + 1)", text: Binding(
+                    get: { tracking?.spots.indices.contains(i) == true ? tracking!.spots[i] : "" },
+                    set: { if tracking?.spots.indices.contains(i) == true { tracking?.spots[i] = $0 } }))
+                    .accessibilityIdentifier("newDrill.track.spot.\(i)")
+                Button(role: .destructive) {
+                    tracking?.spots.remove(at: i)
+                } label: { Image(systemName: "minus.circle.fill").foregroundStyle(.red) }
+                .buttonStyle(.plain)
+            }
+        }
+        Button {
+            if tracking?.spots.isEmpty == true {
+                tracking?.spots = isChinese ? ["左", "右"] : ["Left", "Right"]
+            } else {
+                tracking?.spots.append("")
+            }
+        } label: {
+            Label(def.spots.isEmpty ? (isChinese ? "分点位或左右记录" : "Log by spot or side")
+                                    : (isChinese ? "添加点位" : "Add a spot"), systemImage: "plus.circle")
+        }
+        .accessibilityIdentifier("newDrill.track.addSpot")
+    }
+
     @ViewBuilder
     /// Join a series as its next level, or start one with this drill as
     /// level 1. Leaving a series happens on the series page.
@@ -2560,6 +2690,15 @@ struct AddDrillView: View {
         }
     }
 
+    /// Tracking as saved: blank spot names dropped, one spot = none.
+    private var cleanedTracking: TrackDefinition? {
+        guard var t = tracking else { return nil }
+        t.spots = t.spots.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if t.spots.count == 1 { t.spots = [] }
+        t.unit = t.unit.trimmingCharacters(in: .whitespaces)
+        return t
+    }
+
     private func saveEdits() {
         guard var updated = editing else { return }
         updated.name = name
@@ -2570,6 +2709,7 @@ struct AddDrillView: View {
         updated.instructions = instructions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         updated.keyPoints = keyPoints.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         updated.minPlayers = minPlayers
+        updated.tags = DrillItem.tags(updated.tags, tracking: cleanedTracking)
         if let writtenAttributes, !updated.tags.contains(AttributeProfile.coachTag) {
             updated.tags = writtenAttributes.replacing(in: updated.tags, byCoach: false)
         }
@@ -2598,9 +2738,44 @@ struct AddDrillView: View {
             media: media
         )
         if let writtenAttributes { drill.tags = writtenAttributes.replacing(in: drill.tags, byCoach: false) }
+        drill.tags = DrillItem.tags(drill.tags, tracking: cleanedTracking)
         dataManager.addDrill(drill)
         joinSeries(id)
         dismiss()
+    }
+}
+
+/// What a tracked drill records and what it means (23 Nov 2026). Edited in
+/// Edit Drill → Tracking.
+struct DrillTrackingCard: View {
+    let tracking: TrackDefinition
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(isChinese ? "记录成绩" : "Tracked", systemImage: "chart.bar.xaxis")
+                .font(.headline)
+            HStack(spacing: 10) {
+                Image(systemName: tracking.measure.symbol)
+                    .foregroundStyle(.orange)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.orange.opacity(0.14)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tracking.measure.title(chinese: isChinese)).font(.subheadline.weight(.semibold))
+                    Text(tracking.summary(chinese: isChinese)).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if !tracking.attributes.isEmpty {
+                Text((isChinese ? "显示在评估中：" : "Shows in the evaluation under ")
+                     + tracking.attributes.map { $0.title(chinese: isChinese) }.joined(separator: isChinese ? "、" : ", "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drill.tracking")
     }
 }
 

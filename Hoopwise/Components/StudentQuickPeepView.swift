@@ -442,6 +442,7 @@ struct StudentQuickPeepView: View {
 
                 // Tracked shooting, as on the profile (21 Nov 2026).
                 ShootingProfileSection(studentId: student.id)
+                CustomTrackProfileSection(student: student)
 
                 if let notes = player?.coachNotes, !notes.isEmpty {
                     coachNotesSection(notes)
@@ -475,6 +476,7 @@ struct StudentQuickPeepView: View {
 
             // Tracked shooting, as on the profile (21 Nov 2026).
             ShootingProfileSection(studentId: student.id)
+            CustomTrackProfileSection(student: student)
             
             // Coach notes (only show if has custom notes)
             if let notes = player?.coachNotes, !notes.isEmpty {
@@ -801,9 +803,65 @@ struct StudentQuickPeepView: View {
             .map { ShootingHistory.text($0, chinese: isChinese) }
     }
 
+    /// The coach's own tracked drills (23 Nov 2026): the athlete's standing
+    /// in each, ranked among the same grade. Shown under the skills each
+    /// drill is linked to, with the rating they suggest.
+    private var trackStandings: [CustomTrackHistory.Standing] {
+        let grade = student.currentSchoolGrade()
+        let peers = grade == nil ? [] : dataManager.students.filter { $0.currentSchoolGrade() == grade }.map(\.id)
+        return CustomTrackHistory.standings(for: student.id, peers: peers, drills: dataManager.drills,
+                                            sessions: dataManager.sessionEvents)
+    }
+
+    /// Takes the suggested rating: into the draft while editing, else
+    /// saved at once (one tap).
+    private func takeSuggestion(_ rating: Int, for axis: DrillAttribute) {
+        if isEditingSkills {
+            editedSkills.setRating(rating, for: axis)
+        } else {
+            editedSkills = skills
+            editedSkills.setRating(rating, for: axis)
+            saveSkills()
+        }
+        HapticFeedback.impact(.light)
+    }
+
+    @ViewBuilder
+    private func trackLines(_ axis: DrillAttribute, standings: [CustomTrackHistory.Standing]) -> some View {
+        let mine = standings.filter { $0.definition.attributes.contains(axis) }
+        ForEach(mine, id: \.self) { st in
+            Label(CustomTrackHistory.text(st, chinese: isChinese), systemImage: st.definition.measure.symbol)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .padding(.leading, 24)
+                .accessibilityIdentifier("peep.trackEvidence")
+        }
+        if let suggested = CustomTrackHistory.suggestion(for: axis, standings: standings),
+           suggested != (isEditingSkills ? editedSkills.rating(axis) : skills.rating(axis)) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles").font(.system(size: 9))
+                Text(isChinese ? "成绩建议 \(suggested) 分" : "Results suggest \(suggested)")
+                    .font(.system(size: 10, weight: .semibold))
+                Button {
+                    takeSuggestion(suggested, for: axis)
+                } label: {
+                    Text(isChinese ? "采用" : "Use")
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(Color.orange.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("peep.useSuggestion.\(axis.rawValue)")
+            }
+            .foregroundColor(.orange)
+            .padding(.leading, 24)
+        }
+    }
+
     private var skillsSection: some View {
         let evidence = skillEvidence
         let shooting = shootingEvidence
+        let standings = trackStandings
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(isChinese ? "技能评估" : "Skills Evaluation")
@@ -855,6 +913,7 @@ struct StudentQuickPeepView: View {
                                 .foregroundColor(.secondary)
                                 .padding(.leading, 24)
                         }
+                        trackLines(axis, standings: standings)
                         if axis == .shooting {
                             ForEach(shooting, id: \.self) { line in
                                 Label(line, systemImage: "gauge.with.dots.needle.67percent")

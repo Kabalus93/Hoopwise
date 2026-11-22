@@ -2063,6 +2063,7 @@ class SwiftDataManager: ObservableObject {
                     // Tracked shooting results are live data too (21 Nov
                     // 2026): only setSessionShooting writes them.
                     event.curriculum.shooting = sdSession.curriculum.shooting
+                    event.curriculum.tracked = sdSession.curriculum.tracked
                     event.games = sdSession.games
                     event.actualAttendeeIds = sdSession.actualAttendeeIds
                     event.excusedAbsences = sdSession.excusedAbsences
@@ -2172,6 +2173,37 @@ class SwiftDataManager: ObservableObject {
             var c = sd.curriculum
             c.shooting = runs
             sd.curriculum = c
+        }
+    }
+
+    /// THE writer of a session's custom tracked-drill results (23 Nov 2026),
+    /// field-level like setSessionShooting.
+    func setSessionTracking(sessionId: UUID, runs: [TrackedRun]) {
+        do {
+            let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == sessionId })
+            guard let sd = try modelContext.fetch(descriptor).first, sd.curriculum.tracked != runs else { return }
+        } catch { return }
+        mutateSession(id: sessionId, reason: .manualEdit) { sd in
+            var c = sd.curriculum
+            c.tracked = runs
+            sd.curriculum = c
+        }
+    }
+
+    /// Sets (or clears) a drill's tracking — only its `track:` tag, like a
+    /// preference, so a library drill's text still refreshes.
+    func setDrillTracking(_ drillId: UUID, _ tracking: TrackDefinition?) {
+        do {
+            let descriptor = FetchDescriptor<SDDrill>(predicate: #Predicate { $0.id == drillId })
+            if let sdDrill = try modelContext.fetch(descriptor).first {
+                let tags = DrillItem.tags(sdDrill.tags, tracking: tracking)
+                guard tags != sdDrill.tags else { return }
+                sdDrill.tags = tags
+                sdDrill.updatedAt = Date()
+                saveAndRefresh()
+            }
+        } catch {
+            debugLog("❌ Failed to set drill tracking: \(error)")
         }
     }
 
@@ -2600,6 +2632,8 @@ class SwiftDataManager: ObservableObject {
                     fresh.tags += sd.tags.filter { $0.hasPrefix(AttributeProfile.tagPrefix) }
                     // So does how the coach uses it (DrillPreference).
                     fresh.tags += sd.tags.filter { $0.hasPrefix(DrillItem.preferencePrefix) }
+                    // And a coach's tracking (CustomTracking).
+                    fresh.tags += sd.tags.filter { $0.hasPrefix(DrillItem.trackPrefix) }
                     guard sd.lastModifiedAt == nil,
                           sd.name != fresh.name || sd.drillDescription != fresh.description
                             || sd.categoryRaw != fresh.category.rawValue || sd.tags != fresh.tags else { continue }
