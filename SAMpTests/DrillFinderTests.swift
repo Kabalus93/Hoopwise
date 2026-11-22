@@ -55,10 +55,19 @@ struct DrillFinderTests {
         #expect(throws: DrillFinderError.self) { try DrillFinder.parse(Data("{}".utf8), entries: entries) }
     }
 
+    /// The answer must be the right KIND of drill — a dribbling race around
+    /// cones — not one fixed name: the sentence embedding differs between OS
+    /// versions, and iOS 27 ranks "Dribble races" ("in and out of cones … as
+    /// a relay") above "Dribble Slalom Relay Races" (iOS 26 the other way
+    /// round). Both are right; an unrelated drill still fails.
     @Test func onDeviceFindsDrillsDescribedByTheirWords() {
         let result = DrillFinder.rankOnDevice("dribble around cones and race back", entries: Self.entries())
-        let names = result.matches.prefix(3).compactMap { m in Self.library.first { $0.id == m.drillId }?.name }
-        #expect(names.contains("Dribble Slalom Relay Races"), "\(names)")
+        let top = result.matches.prefix(3).compactMap { m in Self.library.first { $0.id == m.drillId } }
+        let dribbleRaces = top.filter { item in
+            let text = (item.name + " " + item.howItRuns).lowercased()
+            return text.contains("dribbl") && text.contains("cone") && (text.contains("race") || text.contains("relay"))
+        }
+        #expect(!dribbleRaces.isEmpty, "\(top.map(\.name))")
         #expect(result.source == .onDevice)
     }
 
