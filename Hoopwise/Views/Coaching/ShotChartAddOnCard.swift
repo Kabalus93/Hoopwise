@@ -13,9 +13,13 @@ struct ShotChartAddOnCard: View {
     let sessionDate: Date
     let allSessions: [SessionEvent]
     let canEdit: Bool
+    /// In the shooting station: no fold, no card frame.
+    var station = false
 
+    @EnvironmentObject private var dataManager: DataManager
     @State private var chosen: UUID?
     @State private var pad: PadStart?
+    @State private var editingSetup = false
     @State private var expanded = true
     @AppStorage("shotChart.colour") private var colourRaw = ShotChartColour.bands.rawValue
     @AppStorage("shotChart.vsLast") private var vsLast = true
@@ -49,7 +53,7 @@ struct ShotChartAddOnCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            if expanded {
+            if expanded || station {
                 if students.isEmpty {
                     Text(isChinese ? "这节课还没有学员。" : "No athletes on this session yet.")
                         .font(.subheadline).foregroundStyle(.secondary)
@@ -61,15 +65,21 @@ struct ShotChartAddOnCard: View {
                 }
             }
         }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.orange.opacity(0.22), lineWidth: 1))
+        .padding(station ? 0 : 16)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(station ? Color.clear : Color(.secondarySystemGroupedBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(station ? Color.clear : Color.orange.opacity(0.22), lineWidth: 1))
+        .sheet(isPresented: $editingSetup) {
+            ShootingSetupSheet(setup: run.setup) { run.setup = $0 }
+        }
         .sheet(item: $pad) { start in
             ShotZonePad(run: $run, students: students,
                         last: Dictionary(uniqueKeysWithValues: students.compactMap { s in
                             ShootingHistory.previous(s.id, setup: setup, before: sessionDate, sessions: allSessions).map { (s.id, $0) } }),
                         student: start.student, zone: start.zone)
                 .presentationDetents([.large])
+                .environmentObject(dataManager)
         }
         .onAppear { if chosen == nil { chosen = students.first?.id } }
         .accessibilityElement(children: .contain)
@@ -92,37 +102,29 @@ struct ShotChartAddOnCard: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 6)
-            Button {
-                withAnimation(.snappy) { expanded.toggle() }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(.footnote.weight(.bold))
-                    .rotationEffect(.degrees(expanded ? 0 : -90))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(.tertiarySystemFill)))
+            if !station {
+                Button {
+                    withAnimation(.snappy) { expanded.toggle() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.footnote.weight(.bold))
+                        .rotationEffect(.degrees(expanded ? 0 : -90))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color(.tertiarySystemFill)))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
     private var setupMenu: some View {
-        Menu {
-            Picker(isChinese ? "计分方式" : "Scoring", selection: Binding(
-                get: { run.setup.mode }, set: { run.setup.mode = $0; run.setup.remember() })) {
-                Text(isChinese ? "每区命中 / 出手" : "Made / attempted per zone").tag(ShootingMode.chart)
-                Text(isChinese ? "每区固定出手" : "Same shots in every zone").tag(ShootingMode.attempts)
-            }
-            if setup.mode == .attempts {
-                Picker(isChinese ? "每区出手" : "Shots a zone", selection: Binding(
-                    get: { run.setup.shots }, set: { run.setup.shots = $0; run.setup.remember() })) {
-                    ForEach([5, 10, 15, 20], id: \.self) { Text("\($0)").tag($0) }
-                }
-            }
-        } label: {
+        Button { editingSetup = true } label: {
             Label(isChinese ? "更改" : "Change", systemImage: "slider.horizontal.3")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.accentColor)
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("shooting.setup")
     }
 
     /// Group first, then everyone — each with their percentage today.

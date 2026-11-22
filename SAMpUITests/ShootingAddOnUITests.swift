@@ -1,8 +1,9 @@
 import XCTest
 
-/// Tracked shooting in the plan (20 Nov 2026): Free Throws and 5-Spot Twos
-/// in a session's Skills show their add-ons; a number pad writes each
-/// athlete's self-reported makes and moves on.
+/// Tracked shooting in the plan (20 Nov 2026; redesigned 23 Nov 2026): a
+/// tracked drill's plan row carries one tracker line; Log opens the shooting
+/// station (the whole tracker as a page); a number pad writes each athlete's
+/// self-reported makes and moves on.
 final class ShootingAddOnUITests: XCTestCase {
 
     private func launch(_ mode: String) -> XCUIApplication {
@@ -17,6 +18,18 @@ final class ShootingAddOnUITests: XCTestCase {
         return app
     }
 
+    /// The tracker line on the drill's plan row → the station.
+    private func openStation(_ app: XCUIApplication, _ drill: String) -> XCUIElement {
+        let line = app.buttons["shooting.tracker.\(drill)"]
+        for _ in 0..<8 where !line.exists || !line.isHittable { app.swipeUp() }
+        XCTAssertTrue(line.waitForExistence(timeout: 10), "the tracker line shows on the plan row")
+        attach("plan")
+        line.tap()
+        let addon = app.descendants(matching: .any).matching(identifier: "shooting.addon.\(drill)").firstMatch
+        XCTAssertTrue(addon.waitForExistence(timeout: 5), "the station opens")
+        return addon
+    }
+
     private func attach(_ name: String) {
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a)
     }
@@ -24,10 +37,8 @@ final class ShootingAddOnUITests: XCTestCase {
     func testFreeThrowsLogFromThePad() {
         let app = launch("1")
         defer { _ = launch("clear") }
-        let addon = app.descendants(matching: .any).matching(identifier: "shooting.addon.freeThrows").firstMatch
-        for _ in 0..<6 where !addon.exists { app.swipeUp() }
-        XCTAssertTrue(addon.waitForExistence(timeout: 10), "the add-on shows in the plan")
-        attach("addon")
+        let addon = openStation(app, "freeThrows")
+        attach("station")
         let cells = addon.buttons.matching(identifier: "shooting.cell")
         XCTAssertGreaterThan(cells.count, 1, "one cell per athlete")
         cells.element(boundBy: 0).tap()
@@ -42,14 +53,17 @@ final class ShootingAddOnUITests: XCTestCase {
         XCTAssertTrue(addon.staticTexts["70%"].waitForExistence(timeout: 5), "7 of 10")
         XCTAssertTrue(addon.staticTexts["50%"].exists, "5 of 10")
         attach("logged")
+        app.buttons["shooting.station.done"].tap()
+        let line = app.buttons["shooting.tracker.freeThrows"]
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        XCTAssertTrue(line.label.contains("2/") || line.label.contains("logged"), line.label)
+        attach("plan after")
     }
 
     func testFiveSpotsLogAthleteByAthleteFromLogMakes() {
         let app = launch("1")
         defer { _ = launch("clear") }
-        let addon = app.descendants(matching: .any).matching(identifier: "shooting.addon.twos").firstMatch
-        for _ in 0..<8 where !addon.exists || !addon.isHittable { app.swipeUp() }
-        XCTAssertTrue(addon.waitForExistence(timeout: 10))
+        let addon = openStation(app, "twos")
         addon.buttons["shooting.log"].tap()
         let grid = app.buttons["shooting.pad.6"], log = app.buttons["shooting.pad.log"]
         XCTAssertTrue(grid.waitForExistence(timeout: 5) || log.exists, "Log makes opens the pad")
@@ -78,9 +92,7 @@ final class ShootingAddOnUITests: XCTestCase {
     func testShotChartLogsAZoneFromTheMap() {
         let app = launch("chart")
         defer { _ = launch("clear") }
-        let addon = app.descendants(matching: .any).matching(identifier: "shooting.addon.shotChart").firstMatch
-        for _ in 0..<8 where !addon.exists || !addon.isHittable { app.swipeUp() }
-        XCTAssertTrue(addon.waitForExistence(timeout: 10), "the shot chart add-on shows")
+        let addon = openStation(app, "shotChart")
         let leftWing = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
         XCTAssertTrue(leftWing.exists)
         attach("map")
@@ -105,5 +117,25 @@ final class ShootingAddOnUITests: XCTestCase {
         let zone = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
         XCTAssertTrue(zone.label.contains("44%"), "4 of 9 in the left wing: \(zone.label)")
         attach("logged")
+    }
+
+    /// The setup sheet goes past the old 3-minute cap.
+    func testSetupSheetTakesLongTimes() {
+        let app = launch("1")
+        defer { _ = launch("clear") }
+        let addon = openStation(app, "twos")
+        addon.buttons["shooting.setup"].tap()
+        let mode = app.segmentedControls["shootingSetup.mode"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5), "the setup sheet opens")
+        mode.buttons.element(boundBy: 1).tap()           // makes in a time
+        app.buttons["shootingSetup.chip.300"].tap()      // 5 min
+        let summary = app.descendants(matching: .any).matching(identifier: "shootingSetup.summary").firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 3))
+        XCTAssertTrue(summary.label.contains("5 min"), summary.label)
+        attach("setup")
+        app.buttons["shootingSetup.done"].tap()
+        XCTAssertTrue(addon.staticTexts.matching(NSPredicate(format: "label CONTAINS '5 min'")).firstMatch
+            .waitForExistence(timeout: 5), "the station shows the new setup")
+        attach("station after")
     }
 }

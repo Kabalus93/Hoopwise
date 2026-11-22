@@ -24,8 +24,13 @@ struct ShootingAddOnCard: View {
     let sessionDate: Date
     let allSessions: [SessionEvent]
     let canEdit: Bool
+    /// In the shooting station (23 Nov 2026): no fold, no card frame — the
+    /// station is the page. The plan shows a one-line tracker instead.
+    var station = false
 
+    @EnvironmentObject private var dataManager: DataManager
     @State private var pad: PadStart?
+    @State private var editingSetup = false
     @State private var expanded = true
     @State private var clockSpot = 0
     @State private var remaining: Int?
@@ -61,7 +66,7 @@ struct ShootingAddOnCard: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             summary(last)
-            if expanded {
+            if expanded || station {
                 if setup.mode == .timed && canEdit { clock }
                 if students.isEmpty {
                     Text(isChinese ? "这节课还没有学员。" : "No athletes on this session yet.")
@@ -71,14 +76,24 @@ struct ShootingAddOnCard: View {
                 }
             }
         }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Color.orange.opacity(0.22), lineWidth: 1))
+        .padding(station ? 0 : 16)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(station ? Color.clear : Color(.secondarySystemGroupedBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .strokeBorder(station ? Color.clear : Color.orange.opacity(0.22), lineWidth: 1))
         .sheet(item: $pad) { start in
             ShootingEntryPad(drill: drill, setup: setup, run: $run, students: students, last: lastTime,
                              student: start.student, spot: start.spot,
                              timedSpot: setup.mode == .timed ? clockSpot : nil)
                 .presentationDetents([.large])
+                .environmentObject(dataManager)
+        }
+        .sheet(isPresented: $editingSetup) {
+            ShootingSetupSheet(setup: run.setup) { new in
+                run.setup = new
+                remaining = nil
+                running = false
+            }
         }
         .onReceive(tick) { _ in
             guard running, let r = remaining else { return }
@@ -127,59 +142,33 @@ struct ShootingAddOnCard: View {
                 .tint(.orange)
                 .accessibilityIdentifier("shooting.log")
             }
-            Button {
-                withAnimation(.snappy) { expanded.toggle() }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(.footnote.weight(.bold))
-                    .rotationEffect(.degrees(expanded ? 0 : -90))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(.tertiarySystemFill)))
+            if !station {
+                Button {
+                    withAnimation(.snappy) { expanded.toggle() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.footnote.weight(.bold))
+                        .rotationEffect(.degrees(expanded ? 0 : -90))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color(.tertiarySystemFill)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(expanded ? (isChinese ? "收起" : "Fold") : (isChinese ? "展开" : "Unfold"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(expanded ? (isChinese ? "收起" : "Fold") : (isChinese ? "展开" : "Unfold"))
         }
     }
 
+    /// The setup opens a sheet (23 Nov 2026 — a menu of fixed values capped
+    /// the time at 3 minutes).
     private var setupMenu: some View {
-        Menu {
-            Picker(isChinese ? "计分方式" : "Scoring", selection: setupBinding(\.mode)) {
-                Text(isChinese ? "命中 / 出手" : "Made out of shots").tag(ShootingMode.attempts)
-                Text(isChinese ? "限时命中" : "Makes in a set time").tag(ShootingMode.timed)
-            }
-            if setup.mode == .attempts {
-                Picker(drill.spotCount > 1 ? (isChinese ? "每点出手" : "Shots a spot") : (isChinese ? "出手数" : "Shots"),
-                       selection: setupBinding(\.shots)) {
-                    ForEach([5, 10, 15, 20, 25, 30, 50], id: \.self) { Text("\($0)").tag($0) }
-                }
-            } else {
-                Picker(drill.spotCount > 1 ? (isChinese ? "每点时间" : "Time a spot") : (isChinese ? "时间" : "Time"),
-                       selection: setupBinding(\.seconds)) {
-                    ForEach([20, 30, 45, 60, 90, 120, 180], id: \.self) { Text(ShootingSetup.time($0, chinese: isChinese)).tag($0) }
-                }
-            }
-            if drill == .twos {
-                Picker(isChinese ? "距离" : "Range", selection: setupBinding(\.range)) {
-                    ForEach(TwosRange.allCases, id: \.self) { Text($0.title(chinese: isChinese)).tag(Optional($0)) }
-                }
-            }
-            if drill == .dribbleShoot {
-                Picker(isChinese ? "折返距离" : "Dribble to", selection: setupBinding(\.court)) {
-                    ForEach(CourtLength.allCases, id: \.self) { Text($0.title(chinese: isChinese)).tag(Optional($0)) }
-                }
-            }
-        } label: {
+        Button { editingSetup = true } label: {
             Label(isChinese ? "更改" : "Change", systemImage: "slider.horizontal.3")
                 .labelStyle(.titleAndIcon)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.accentColor)
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier("shooting.setup")
-    }
-
-    private func setupBinding<T>(_ path: WritableKeyPath<ShootingSetup, T>) -> Binding<T> {
-        Binding(get: { run.setup[keyPath: path] },
-                set: { run.setup[keyPath: path] = $0; run.setup.remember(); remaining = nil })
     }
 
     // MARK: Summary — readable folded

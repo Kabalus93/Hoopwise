@@ -338,6 +338,9 @@ enum SheetGalleryDebug {
                     copy.curriculum.shooting = []
                     if mode != "clear" { copy.curriculum.skillDrillIds += ids }
                     dm.updateSessionEvent(copy, keepLiveFields: true)
+                    // Results are live data (kept by whole-session saves):
+                    // clear them through their own writer.
+                    dm.setSessionShooting(sessionId: session.id, runs: [])
                 }()
                 NavigationStack {
                     // Re-read: a demo hook above may just have written it.

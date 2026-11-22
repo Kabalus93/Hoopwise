@@ -122,6 +122,8 @@ struct FlightySessionPageView: View {
     
     // Plan tab drill management
     @State private var expandedDrillId: UUID?
+    /// The tracked drill whose shooting station is open (23 Nov 2026).
+    @State private var stationDrill: ShootingDrill?
     @State private var showAddOptionsFor: CurriculumSection?
     @State private var draggingDrillId: UUID?
     @AppStorage("recentlyUsedDrillIds") private var recentlyUsedDrillIdsData: Data = Data()
@@ -946,27 +948,38 @@ struct FlightySessionPageView: View {
             })
     }
 
+    /// Tracked drills with results here that have LEFT the plan: one small
+    /// row each, so results are never hidden. Drills in the plan carry their
+    /// tracker on their own row (`drillRow`).
     @ViewBuilder
     private var shootingAddOns: some View {
-        let tracked = trackedDrillsInPlan
-        if !tracked.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(LocalizationManager.shared.currentLanguage == .chinese ? "附加 · 投篮记录" : "ADD-ONS")
+        let inPlan = Set(session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds)
+        let orphans = trackedDrillsInPlan.filter { !inPlan.contains($0.drillId) }
+        if !orphans.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizationManager.shared.currentLanguage == .chinese ? "投篮记录（已不在计划中）" : "SHOOTING RESULTS")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
-                ForEach(tracked) { drill in
-                    if drill == .shotChart {
-                        ShotChartAddOnCard(run: shootingRunBinding(drill), students: shootingRoster,
-                                           sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
-                                           canEdit: accessMode.canEdit)
-                    } else {
-                        ShootingAddOnCard(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
-                                          sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
-                                          canEdit: accessMode.canEdit)
+                ForEach(orphans) { drill in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(drill.title(chinese: LocalizationManager.shared.currentLanguage == .chinese))
+                            .font(.subheadline.weight(.medium))
+                        shootingTracker(drill)
                     }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
                 }
             }
+        }
+    }
+
+    private func shootingTracker(_ drill: ShootingDrill) -> some View {
+        ShootingTrackerLine(drill: drill, run: shootingRunBinding(drill).wrappedValue, students: shootingRoster,
+                            sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
+                            canEdit: accessMode.canEdit) {
+            HapticFeedback.impact(.light)
+            stationDrill = drill
         }
     }
 
@@ -1031,7 +1044,7 @@ struct FlightySessionPageView: View {
                     section: .main
                 )
 
-                // Tracked shooting drills in the plan: their add-ons.
+                // Tracked drills with results that left the plan.
                 shootingAddOns
 
                 // Plays from the Hub's library this session runs.
@@ -1056,6 +1069,13 @@ struct FlightySessionPageView: View {
                 DrillDetailView(drill: drill)
                     .environmentObject(dataManager)
             }
+        }
+        .sheet(item: $stationDrill) { drill in
+            ShootingStationSheet(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
+                                 sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
+                                 canEdit: accessMode.canEdit)
+                .environmentObject(dataManager)
+                .presentationSizing(.page)
         }
         .fullScreenCover(item: $plannerMediaViewer) { target in
             // Resolve the drill out of the latest dataManager state so the
@@ -1546,6 +1566,14 @@ struct FlightySessionPageView: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     expandedDrillId = isExpanded ? nil : drill.id
                 }
+            }
+
+            // A tracked shooting drill carries its tracker on its own row.
+            if let tracked = ShootingDrill.allCases.first(where: { $0.drillId == drill.id }) {
+                shootingTracker(tracked)
+                    .padding(.leading, accessMode.canEdit ? 58 : 64)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 10)
             }
             
             // Expanded inline details

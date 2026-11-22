@@ -2359,6 +2359,26 @@ repeat; one total; default makes in 1 min at half court; `CourtLength`
 apart); rated shooting / ball handling / footwork 2; not on the map.
 Tests: ShootingTestTests (chart maths, map feeding, deltas, zone geometry),
 ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap.
+TRACKER ON THE ROW, STATION AS A PAGE (23 Nov 2026, Luther: "annoying to set
+up … the time could only be set up to 3 minutes, they took too much space and
+collapsing them … was popping back up"). The ADD-ONS section of big cards
+under Skills is GONE (its fold was @State, reset on every redraw). A tracked
+drill's own plan row (drillRow) carries ONE tracker line
+(Views/Coaching/ShootingStation.swift `ShootingTrackerLine`,
+`shooting.tracker.<drill>`): setup, n/N logged with a bar, the group result
+with ↑/↓ against last time, and Log (Results when read-only). The line opens
+the SHOOTING STATION (`ShootingStationSheet`, page-sized, Done): the same
+cards with `station: true` — no fold, no card frame. SETUP IS A SHEET
+(ShootingSetupSheet, from "Change" in the card header, `shooting.setup`;
+locked once results exist, as before): the summary on top, scoring
+segmented, shots 1–100 (stepper + chips), time on minute / second wheels
+5 s…20 min (chips 30 s…10 min), range / dribble-to; remembered per drill.
+`ShootingSetup.time` prints 1:30 (1分30秒) for odd minutes. Tracked drills
+with results that LEFT the plan show under Skills as "Shooting results" rows
+with the same tracker line. HOOPWISE_DEMO_SHOOTING now clears results through
+setSessionShooting (whole-session saves keep them). Tests:
+ShootingAddOnUITests (all four through the tracker → station, plus
+testSetupSheetTakesLongTimes).
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan

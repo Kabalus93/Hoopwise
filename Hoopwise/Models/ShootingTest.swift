@@ -293,9 +293,11 @@ struct ShootingSetup: Codable, Hashable {
         return parts.joined(separator: " · ")
     }
 
+    /// "45 s", "2 min", "1:30" (Chinese "1分30秒") — times now go to 20 min.
     static func time(_ seconds: Int, chinese: Bool) -> String {
+        if seconds < 60 { return chinese ? "\(seconds) 秒" : "\(seconds) s" }
         if seconds % 60 == 0 { return chinese ? "\(seconds / 60) 分钟" : "\(seconds / 60) min" }
-        return chinese ? "\(seconds) 秒" : "\(seconds) s"
+        return chinese ? "\(seconds / 60)分\(seconds % 60)秒" : String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
     /// The default the first time; afterwards the coach's last choice.
