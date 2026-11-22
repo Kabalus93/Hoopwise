@@ -699,10 +699,7 @@ struct EditContractView: View {
                     HStack {
                         Text("Price per Session")
                         Spacer()
-                        TextField("0", value: $pricePerSession, format: .number)
-                            .keyboardTypeCompat(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 100)
+                        NumberPadField(value: $pricePerSession)
                         Text("¥")
                     }
                     
@@ -716,10 +713,7 @@ struct EditContractView: View {
                     HStack {
                         Text("Amount Paid")
                         Spacer()
-                        TextField("0", value: $amountPaid, format: .number)
-                            .keyboardTypeCompat(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 100)
+                        NumberPadField(value: $amountPaid)
                         Text("¥")
                     }
                 }
@@ -733,10 +727,7 @@ struct EditContractView: View {
                     HStack {
                         Text("Jersey Number")
                         Spacer()
-                        TextField("#", text: $jerseyNumber)
-                            .keyboardTypeCompat(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 60)
+                        NumberPadTextField(text: $jerseyNumber)
                     }
                     
                     Picker("Jersey Size", selection: $jerseySize) {

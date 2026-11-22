@@ -447,8 +447,9 @@ struct CustomTrackPad: View {
                 VStack(spacing: 14) {
                     Text("\(number)" + (def.measure == .madeOf ? " / \(def.amount)" : ""))
                         .font(.system(size: 52, weight: .bold, design: .rounded)).monospacedDigit()
-                    NumberWheel(range: 0...def.maxEntry, value: $number, identifier: "track.wheel")
-                        .frame(height: 64)
+                        .contentTransition(.numericText())
+                        .accessibilityIdentifier("track.wheel.value")
+                    NumberWheel(range: 0...def.maxEntry, value: $number, identifier: "track.wheel", showsValue: false)
                     logButton { save(Double(number)) }
                 }
             }

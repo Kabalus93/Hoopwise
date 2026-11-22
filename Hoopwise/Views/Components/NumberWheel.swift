@@ -1,72 +1,51 @@
 import SwiftUI
 
-/// A horizontal number wheel — a ruler of numbers that snaps to the one in
-/// the middle, a haptic tick per number (21 Nov 2026, Luther: "a scrolling
-/// wheel would be elegant and practical"). Tap a number to jump to it.
-/// VoiceOver: swipe up / down to adjust.
+/// Where a tracked drill's number is entered. It was a horizontal wheel
+/// (21 Nov 2026); since 23 Nov 2026 it is the FLOATING NUMBER PAD (Luther:
+/// "I prefer this floating number pad … especially the trackable drills") —
+/// the number large in a window, the keypad under it. Same name and call so
+/// every entry pad switched at once.
+///
+/// The first key after the value is set (a new athlete, a new spot, a quick
+/// chip) replaces it; later keys append; a number past the range's top starts
+/// again from the key just pressed. ⌫ with nothing left goes back to the
+/// range's bottom.
 struct NumberWheel: View {
     let range: ClosedRange<Int>
     @Binding var value: Int
     var tint: Color = .orange
     var itemWidth: CGFloat = 52
-    /// Prefix for each number's identifier (UI tests): "<id>.<n>".
+    /// Prefix for the keys' identifiers (UI tests): "<id>.key.<digit>", and
+    /// "<id>.value" on the number.
     var identifier: String = "wheel"
+    /// Off when the page shows the number itself (the custom tracking pad).
+    var showsValue = true
 
-    @State private var position: Int?
+    @State private var entry = NumberPadEntry(text: "")
+    /// The value this pad last wrote, to tell an outside change from its own.
+    @State private var written: Int?
 
     var body: some View {
-        GeometryReader { geo in
-            let margin = max(0, (geo.size.width - itemWidth) / 2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 0) {
-                    ForEach(Array(range), id: \.self) { n in
-                        Button {
-                            withAnimation(.snappy) { position = n }
-                        } label: {
-                            Text("\(n)")
-                                .font(.system(size: 30, weight: .bold, design: .rounded))
-                                .monospacedDigit()
-                                .frame(width: itemWidth, height: 64)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .scrollTransition(axis: .horizontal) { content, phase in
-                            content
-                                .scaleEffect(phase.isIdentity ? 1 : 0.62)
-                                .opacity(phase.isIdentity ? 1 : 0.35)
-                        }
-                        .accessibilityIdentifier("\(identifier).\(n)")
-                    }
-                }
-                .scrollTargetLayout()
+        VStack(spacing: 10) {
+            if showsValue {
+                Text("\(value)")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .accessibilityIdentifier("\(identifier).value")
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.tertiarySystemFill)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(entry.fresh ? tint.opacity(0.35) : tint, lineWidth: 2.5)
+                )
             }
-            .contentMargins(.horizontal, margin, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $position, anchor: .center)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(.tertiarySystemFill))
-            }
-            .overlay {
-                // The reading window.
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(tint, lineWidth: 2.5)
-                    .frame(width: itemWidth + 6, height: 60)
-                    .allowsHitTesting(false)
-            }
-            .overlay(alignment: .top) {
-                Image(systemName: "arrowtriangle.down.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(tint)
-                    .offset(y: -2)
-                    .allowsHitTesting(false)
-            }
+            FloatingNumberPad(onKey: type, keyHeight: 48, identifier: identifier)
         }
-        .frame(height: 68)
-        .onAppear { position = value }
-        .onChange(of: value) { _, v in if position != v { withAnimation(.snappy) { position = v } } }
-        .onChange(of: position) { _, p in if let p, p != value { value = p } }
-        .sensoryFeedback(.selection, trigger: position)
+        .frame(maxWidth: 340)
+        .frame(maxWidth: .infinity)
+        .onAppear { reset() }
+        .onChange(of: value) { _, v in if v != written { reset() } }
         .accessibilityElement(children: .contain)
         .accessibilityValue("\(value)")
         .accessibilityAdjustableAction { direction in
@@ -76,5 +55,18 @@ struct NumberWheel: View {
             @unknown default: break
             }
         }
+    }
+
+    private func reset() {
+        entry = NumberPadEntry(text: "", maximum: Double(range.upperBound))
+        entry.reset(to: Double(value))
+        written = nil
+    }
+
+    private func type(_ key: Character) {
+        if key == "⌫" { entry.delete() } else { entry.press(key) }
+        let v = entry.text.isEmpty ? range.lowerBound : max(range.lowerBound, min(range.upperBound, Int(entry.value)))
+        written = v
+        withAnimation(.snappy(duration: 0.15)) { value = v }
     }
 }

@@ -34,11 +34,14 @@ final class CustomTrackingUITests: XCTestCase {
         attach("station")
         log.tap()
         let save = app.buttons["track.pad.log"]
-        XCTAssertTrue(save.waitForExistence(timeout: 5), "the pad opens with the wheel")
-        // 30 seconds of passes: pick a number on the wheel, then Log.
-        let twelve = app.buttons["track.wheel.12"]
-        for _ in 0..<12 where !twelve.exists { app.swipeLeft() }
-        if twelve.exists { twelve.tap(); sleep(1) }
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "the pad opens with the number pad")
+        // 30 seconds of passes: type 12 on the floating number pad, then Log.
+        let one = app.buttons["track.wheel.key.1"]
+        if one.exists {
+            one.tap()
+            app.buttons["track.wheel.key.2"].tap()
+            XCTAssertTrue(app.staticTexts["track.wheel.value"].label.hasPrefix("12"), "the first key replaces, the next appends")
+        }
         attach("pad")
         let athletes = app.buttons.matching(identifier: "track.pad.athlete").count
         for _ in 0..<athletes where save.exists { save.tap(); sleep(1) }

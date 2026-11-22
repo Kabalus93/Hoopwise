@@ -263,12 +263,7 @@ struct AddEditContractSheet: View {
         HStack {
             Text(isChinese ? "单价" : "Price per session")
             Spacer()
-            TextField("0", value: $pricePerSession, format: .number)
-                #if os(iOS)
-                .keyboardType(.decimalPad)
-                #endif
-                .multilineTextAlignment(.trailing)
-                .monospacedDigit()
+            NumberPadField(value: $pricePerSession, identifier: "contract.price")
             Text(dataManager.appSettings.currency.symbol)
                 .foregroundStyle(.secondary)
         }
@@ -293,10 +288,9 @@ struct AddEditContractSheet: View {
             .onDelete { payments.remove(atOffsets: $0) }
 
             HStack {
-                TextField(isChinese ? "金额" : "Amount",
-                          value: $newPaymentAmount, format: .number)
-                    .keyboardTypeCompat(.decimalPad)
-                    .monospacedDigit()
+                Text(isChinese ? "金额" : "Amount").foregroundStyle(.secondary)
+                NumberPadField(value: $newPaymentAmount, identifier: "contract.payment")
+                Spacer(minLength: 0)
                 DatePicker("", selection: $newPaymentDate, displayedComponents: .date)
                     .labelsHidden()
                 Button {
@@ -339,11 +333,7 @@ struct AddEditContractSheet: View {
             HStack {
                 Text(isChinese ? "差旅费" : "Travel fee")
                 Spacer()
-                TextField("0", value: $travelFeeAmount, format: .number)
-                    .keyboardTypeCompat(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .monospacedDigit()
-                    .frame(maxWidth: 120)
+                NumberPadField(value: $travelFeeAmount, identifier: "contract.travel")
             }
             Picker(isChinese ? "计费方式" : "Basis", selection: $travelFeeBasis) {
                 ForEach(TravelFeeBasis.allCases, id: \.self) { basis in

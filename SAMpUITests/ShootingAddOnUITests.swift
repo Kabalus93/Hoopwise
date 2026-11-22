@@ -69,14 +69,13 @@ final class ShootingAddOnUITests: XCTestCase {
         XCTAssertTrue(grid.waitForExistence(timeout: 5) || log.exists, "Log makes opens the pad")
         attach("pad")
         // One athlete's five spots, one action each: a grid tap (≤ 10 shots)
-        // or, on the wheel, a number near the start then Log.
+        // or, past ten shots, 3 typed on the floating number pad then Log.
         for _ in 0..<5 {
             if grid.exists {
                 grid.tap()
             } else {
-                let start = Int(log.label.filter(\.isNumber)) ?? 0
-                let near = app.buttons["shooting.wheel.\(max(0, start - 1))"]
-                if near.exists { near.tap(); sleep(1) }
+                let three = app.buttons["shooting.wheel.key.3"]
+                if three.exists { three.tap() }
                 log.tap()
             }
         }
@@ -104,12 +103,11 @@ final class ShootingAddOnUITests: XCTestCase {
         let rim = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.0").firstMatch
         for _ in 0..<6 where rim.frame.maxY > window.maxY - 60 { app.swipeUp(velocity: .slow) }
         leftWing.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4)).tap()
-        let four = app.buttons["shotchart.made.4"]
-        XCTAssertTrue(four.waitForExistence(timeout: 5), "tapping a zone opens the pad with its wheels")
-        four.tap()                               // made
-        sleep(1)
-        app.buttons["shotchart.att.9"].tap()     // of 9
-        sleep(1)
+        let four = app.buttons["shotchart.keys.key.4"]
+        XCTAssertTrue(four.waitForExistence(timeout: 5), "tapping a zone opens the number pad")
+        four.tap()                                   // made
+        app.buttons["shotchart.keys.key.next"].tap() // → attempted
+        app.buttons["shotchart.keys.key.9"].tap()    // of 9
         XCTAssertTrue(app.buttons["shotchart.log"].label.contains("4/9"), app.buttons["shotchart.log"].label)
         app.buttons["shotchart.log"].tap()
         attach("pad")

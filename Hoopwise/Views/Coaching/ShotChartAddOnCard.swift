@@ -336,16 +336,14 @@ struct ShotZonePad: View {
     private var keypad: some View {
         if chart {
             VStack(spacing: 14) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(isChinese ? "命中" : "MADE").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                        NumberWheel(range: 0...40, value: $madeWheel, identifier: "shotchart.made")
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(isChinese ? "出手" : "ATTEMPTED").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                        NumberWheel(range: 1...50, value: $attWheel, tint: .secondary, identifier: "shotchart.att")
-                    }
-                }
+                // One floating number pad for both (23 Nov 2026): tap a box,
+                // or → from MADE to ATTEMPTED.
+                PairedNumberPad(
+                    first: .init(title: isChinese ? "命中" : "MADE", range: 0...40, value: $madeWheel,
+                                 tint: .orange, identifier: "shotchart.made"),
+                    second: .init(title: isChinese ? "出手" : "ATTEMPTED", range: 1...50, value: $attWheel,
+                                  tint: .secondary, identifier: "shotchart.att"),
+                    identifier: "shotchart.keys")
                 HStack {
                     Text(attWheel > 0 ? "\(Int((Double(madeWheel) / Double(attWheel) * 100).rounded()))%" : "—")
                         .font(.title2.weight(.heavy)).monospacedDigit()

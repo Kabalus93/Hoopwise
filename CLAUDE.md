@@ -2335,6 +2335,26 @@ moves on. The shot chart pad: MADE and ATTEMPTED wheels side by side (start:
 what is in, else their last chart's zone, else 4/10), the live %, one LOG
 (refused while made > attempted); fixed shots per zone keeps the grid.
 DEBUG HOOPWISE_DEMO_SHOOTING=chart puts the Shot Chart in the demo plan.
+THE FLOATING NUMBER PAD REPLACED THE WHEEL (23 Nov 2026, Luther, markup on a
+phone-style keypad floating over a field: "I prefer this floating number pad to
+strictly enter numerical values through the app. Especially the trackable
+drills."). Views/Components/FloatingNumberPad.swift: `FloatingNumberPad` (1–9,
+then [. / → / nothing] 0 ⌫ on a frosted card; keys "<id>.key.<digit>",
+".key.dot", ".key.next", ".key.delete"), `NumberPadEntry` (pure typing rules:
+the FIRST key after the value was set from outside REPLACES it, later keys
+append, a number past the top starts again from the key pressed, no leading
+zeros, decimals only when asked — NumberPadEntryTests). `NumberWheel` kept its
+name and call but now draws the number in a window over the pad (`showsValue:
+false` where the page shows the number — the custom tracking pad), so every
+tracked entry switched at once (shooting pad past ten shots, custom tracked
+drills up to 200). The shot chart's MADE / ATTEMPTED share ONE pad
+(`PairedNumberPad`: tap a box, → moves to the second; a new zone starts on
+MADE; keys "shotchart.keys.key.<d>"). Number FORM fields open the pad as a
+popover instead of the system keyboard (on the iPad `.numberPad` brings up the
+full keyboard): `NumberPadField` (Double, two decimals) / `NumberPadTextField`
+— the contract sheet's price per session, payment amount and travel fee, and
+SalesView's price, amount paid and jersey number. ≤ 10 shots keeps the one-tap
+grid.
 RESULTS ARE LIVE DATA (21 Nov 2026, Luther: add-ons with recorded results
 vanished from a session hours later). Causes: (1) Regenerate rebuilt the
 curriculum keeping only notes and plays — results and tracked drills went;
