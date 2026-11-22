@@ -58,6 +58,7 @@ struct JournalPlayStepEditor: View {
     @State private var boardStepsOpen = false
     /// The board's Defense dock, open above its capsule (20 Nov 2026).
     @State private var defenseOpen = false
+    @State private var offenseOpen = false
     /// The board's court plays in place: the step player replaces the
     /// editable court while it plays or while Scribble is on.
     @State private var boardPlayer = false
@@ -731,11 +732,12 @@ struct JournalPlayStepEditor: View {
                     .padding(JSpacing.m)
                     .padding(.bottom, 52)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Steps · Defense · the play bar (20 Nov 2026, Luther:
-                    // the defense gets its own place, between the two).
+                    // Offense · Defense · the play bar (22 Nov 2026, Luther:
+                    // the steps moved to the rail, the offense presets took
+                    // their place).
                     .overlay(alignment: .bottom) {
                         HStack(alignment: .bottom, spacing: JSpacing.s) {
-                            boardStepsButton
+                            offenseDock
                             Spacer(minLength: 0)
                             defenseDock
                             Spacer(minLength: 0)
@@ -932,24 +934,28 @@ struct JournalPlayStepEditor: View {
 
     // MARK: - The Coach board
 
-    /// Bottom left of the court: which step, opening the steps and this
-    /// step's words, defense, the tool's options and the selection.
+    /// At the foot of the tool rail: which step ("2/3" under the stack), and
+    /// it opens the steps, this step's words, the tool's options and the
+    /// selection beside the rail.
     private var boardStepsButton: some View {
         Button { boardStepsOpen.toggle() } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "square.stack.3d.up")
-                JText("Step \(number) of \(pages.count)").monospacedDigit()
-                Image(systemName: "chevron.up").font(.caption.weight(.semibold))
+            VStack(spacing: 3) {
+                Image(systemName: "square.stack.3d.up").font(.system(size: 17, weight: .medium))
+                Text(verbatim: "\(number)/\(pages.count)")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
             }
-            .font(.subheadline.weight(.semibold))
-            .padding(.horizontal, 16)
-            .frame(minHeight: 44)
-            .contentShape(Capsule())
+            .foregroundStyle(boardStepsOpen ? Color.white : JPalette.ink.opacity(0.82))
+            .frame(width: 40, height: 48)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(boardStepsOpen ? Color.accentColor : JPalette.ink.opacity(0.08))
+            }
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: Capsule())
+        .accessibilityLabel(JText("Step \(number) of \(pages.count)"))
         .accessibilityIdentifier("plays.editor.steps")
-        .popover(isPresented: $boardStepsOpen, arrowEdge: .bottom) {
+        .popover(isPresented: $boardStepsOpen, arrowEdge: .leading) {
             ScrollView {
                 VStack(alignment: .leading, spacing: JSpacing.l) {
                     stepsPanel
@@ -1235,6 +1241,8 @@ struct JournalPlayStepEditor: View {
                 ForEach(group) { item in railButton(item) }
             }
             Spacer(minLength: 0)
+            // The board's steps live at the foot of the rail (22 Nov 2026).
+            if board != nil { boardStepsButton }
         }
         .padding(.vertical, 12)
         .frame(width: 56)
@@ -1485,11 +1493,111 @@ struct JournalPlayStepEditor: View {
         }
     }
 
+    /// The Offense dock (22 Nov 2026, Luther: "replace it with offense
+    /// option & preset"): bottom left of the board, saying the set on screen
+    /// (or "Offense"); it opens upward into the presets, 5v5 down to 1v1, each
+    /// a small court. A tap sets it on this step (undo takes it back).
+    private var offenseDock: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                offenseOpen.toggle()
+                if offenseOpen { defenseOpen = false }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "person.3.fill")
+                Text(verbatim: offenseShortName).lineLimit(1).fixedSize()
+                Image(systemName: offenseOpen ? "chevron.down" : "chevron.up").font(.caption.weight(.semibold))
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: Capsule())
+        .accessibilityIdentifier("plays.editor.offenseDock")
+        .overlay(alignment: .bottomLeading) {
+            if offenseOpen {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: JSpacing.m) {
+                        JEyebrowLabel(title: "Offense")
+                        ForEach([5, 4, 3, 2, 1], id: \.self) { n in
+                            VStack(alignment: .leading, spacing: JSpacing.xs) {
+                                Text(verbatim: "\(n)v\(n)")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                // A plain grid, three across: only 14 tiles, and every
+                                // one exists (a lazy grid left the lower ones unbuilt).
+                                let presets = OffensePresets.with(players: n)
+                                Grid(horizontalSpacing: JSpacing.s, verticalSpacing: JSpacing.s) {
+                                    ForEach(Array(stride(from: 0, to: presets.count, by: 3)), id: \.self) { start in
+                                        GridRow {
+                                            ForEach(presets[start..<min(start + 3, presets.count)]) { preset in
+                                                presetTile(preset).frame(maxWidth: .infinity)
+                                            }
+                                            ForEach(0..<(3 - min(3, presets.count - start)), id: \.self) { _ in
+                                                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(JSpacing.m)
+                }
+                .frame(width: 400)
+                .frame(maxHeight: 520)
+                .fixedSize(horizontal: false, vertical: true)
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .offset(y: -56)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .accessibilityIdentifier("plays.editor.offensePanel")
+            }
+        }
+    }
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    private var offenseShortName: String {
+        OffensePresets.matching(diagram, court: court)?.title(chinese: isChinese) ?? jp("Offense")
+    }
+
+    private func presetTile(_ preset: OffensePreset) -> some View {
+        let on = OffensePresets.matching(diagram, court: court)?.id == preset.id
+        return Button {
+            pushUndo()
+            selection = nil
+            diagram = JournalPlayMath.applying(preset, to: diagram, court: court)
+            withAnimation { offenseOpen = false }
+        } label: {
+            VStack(spacing: 4) {
+                JournalPlayDiagramView(diagram: preset.diagram(court: court), court: court, compact: true)
+                    .frame(height: 70)
+                    .allowsHitTesting(false)
+                Text(verbatim: preset.title(chinese: isChinese))
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(6)
+            .background(JPalette.card.opacity(0.6), in: .rect(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(on ? Color.accentColor : JPalette.ink.opacity(0.10), lineWidth: on ? 2 : 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("plays.editor.preset.\(preset.id)")
+    }
+
     /// The Defense dock (20 Nov 2026, Luther: "instead of tucking it in steps
     /// give it its own expandable place to live"): a capsule in the bottom
     /// bar saying the defense; it opens upward into the controls.
     private var defenseDock: some View {
-        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { defenseOpen.toggle() } } label: {
+        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            defenseOpen.toggle()
+            if defenseOpen { offenseOpen = false }
+        } } label: {
             HStack(spacing: 8) {
                 // An inbound shows as its own icon, so the label stays one line.
                 Image(systemName: inboundNow == nil ? "shield.lefthalf.filled" : "arrow.down.to.line")

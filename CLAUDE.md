@@ -2534,6 +2534,29 @@ ADDED TO THE BOARD'S EDITOR (19 Nov 2026, Luther), board and drill drawings:
   The simulator's synthetic touches draw near-invisible pen strokes (no
   touch size); the highlighter shows — real fingers/Pencil need a device.
 Tests: BoardDrawingExtrasTests, BoardExtrasUITests (iPad mini).
+CLEAR WIPES IT, STEPS IN THE RAIL, OFFENSE PRESETS (22 Nov 2026, Luther,
+markup: Clear "is not functioning as intended … it should wipe the board
+clean"; "move [Step] in the side bar and replace it with offense option &
+preset"). Clear put the default five back (`DrillDrawing.new`); it now
+leaves `DrillDrawing.empty` — one step, nobody on it — on the board AND in
+drill drawings, and a new board starts empty (a new drill drawing still
+starts on the five). `CoachBoardStore.isBlank` = an untouched empty court
+or the five. The Step button is a 40 pt tile at the FOOT of the tool rail
+("2/3" under a stack; same id `plays.editor.steps`; the panel opens beside
+it). Bottom left is the OFFENSE DOCK (`plays.editor.offenseDock`, saying
+the set on screen — `OffensePresets.matching` — else "Offense"): a panel
+upward of presets 5v5 → 1v1, each a small court (`plays.editor.preset.<id>`;
+a plain Grid — a lazy one left the lower tiles unbuilt): 5-Out (= the
+default alignment exactly), 4-Out 1-In, Horns, 1-4 High, 1-4 Low, Box,
+1-3-1 · 4-Out, 3-Out 1-In · 3-Out, 2-Out 1-In · Top and wing, Wing and post
+· 1v1 at the top. Models/JournalPlays/OffensePresets.swift (pure, half-court
+metres, converted to the attacked end of a full court). A tap
+(`JournalPlayMath.applying`, one undo step) puts the set on THIS step: 1 with
+the ball, the step's lines gone (drawn from the old spots), cones / lanes /
+notes / ink kept, an auto defense re-matched one per attacker (by hand:
+kept). Opening one dock closes the other. Tests: OffensePresetsTests,
+CoachBoardUITests.testClearWipesTheCourtAndPresetsSetItUp (the ball-rule and
+dock tests put 5-Out on after their Clear).
 HOOPWISE_SHOT=coachBoard. Tests: CoachBoardUITests (opens in the editor,
 draw, steps button, relaunch → still there, Save → Play/Drill, Clear; full
 court upright; ball rule + play in place), SkillIntegrationTests.

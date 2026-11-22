@@ -24,6 +24,9 @@ final class BoardDefenseUITests: XCTestCase {
         let dock = element("plays.editor.defenseDock")
         XCTAssertTrue(dock.waitForExistence(timeout: 30), "the dock sits in the bottom bar")
         if element("board.clear").isEnabled { element("board.clear").tap(); element("board.confirmClear").tap() }
+        // Clear leaves an empty court (22 Nov 2026): five attackers first.
+        element("plays.editor.offenseDock").tap()
+        element("plays.editor.preset.fiveOut").tap()
 
         dock.tap()
         XCTAssertTrue(element("plays.editor.defense").waitForExistence(timeout: 5), "it opens upward")

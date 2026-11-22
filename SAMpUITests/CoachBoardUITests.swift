@@ -111,6 +111,10 @@ extension CoachBoardUITests {
             element("board.confirmClear").tap()
         }
         XCTAssertFalse(element("board.clear").waitForEnabled(false, timeout: 5).isEnabled)
+        // An empty court since 22 Nov 2026: the 5-Out preset puts the five on.
+        element("plays.editor.offenseDock").tap()
+        element("plays.editor.preset.fiveOut").tap()
+        XCTAssertFalse(element("board.clear").waitForEnabled(false, timeout: 3).isEnabled, "5-Out is the familiar start")
         let court = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Drawing of step 1'")).firstMatch
         func at(_ x: Double, _ y: Double) -> XCUICoordinate {   // court metres on the half court
             court.coordinate(withNormalizedOffset: CGVector(dx: (x + 1.3) / 17.6, dy: (y + 1.3) / 16.6))
@@ -170,5 +174,43 @@ private extension XCUIElement {
         let end = Date().addingTimeInterval(timeout)
         while isEnabled != enabled, Date() < end { RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
         return self
+    }
+}
+
+extension CoachBoardUITests {
+    /// Clear wipes the court clean (22 Nov 2026, Luther: it put the five
+    /// back), and the Offense dock — where the steps button was — puts a set
+    /// on in one tap; the steps now sit at the foot of the tool rail.
+    func testClearWipesTheCourtAndPresetsSetItUp() {
+        continueAfterFailure = false
+        app = launch()
+        let dock = element("plays.editor.offenseDock")
+        XCTAssertTrue(dock.waitForExistence(timeout: 30), "the Offense dock sits bottom left")
+        XCTAssertTrue(element("plays.editor.steps").exists, "the steps button is still there (in the rail)")
+        XCTAssertLessThan(element("plays.editor.steps").frame.midX, element("plays.editor.tool.erase").frame.maxX + 10,
+                          "in the tool rail's column")
+
+        dock.tap()
+        XCTAssertTrue(element("plays.editor.preset.horns").waitForExistence(timeout: 5))
+        attach("presets panel")
+        element("plays.editor.preset.horns").tap()
+        XCTAssertTrue(dock.label.contains("Horns"), dock.label)
+        XCTAssertTrue(element("board.clear").waitForEnabled(true, timeout: 3).isEnabled)
+        attach("horns")
+
+        let threeOut = element("plays.editor.preset.threeOut")
+        dock.tap()
+        if !threeOut.waitForExistence(timeout: 3) { dock.tap() }   // the panel was still closing
+        XCTAssertTrue(threeOut.waitForExistence(timeout: 5), "3v3 sets are offered too")
+        threeOut.tap()
+        XCTAssertTrue(dock.label.contains("3-Out"), dock.label)
+        attach("3-out")
+
+        element("board.clear").tap()
+        XCTAssertTrue(element("board.confirmClear").waitForExistence(timeout: 5))
+        element("board.confirmClear").tap()
+        XCTAssertFalse(element("board.clear").waitForEnabled(false, timeout: 5).isEnabled, "nothing left to clear")
+        XCTAssertTrue(dock.label.contains("Offense"), "an empty court is no set — " + dock.label)
+        attach("cleared")
     }
 }

@@ -31,6 +31,13 @@ nonisolated struct DrillDrawing: Codable, Equatable, Sendable {
         DrillDrawing(court: court, steps: [Step(diagram: JournalPlayMath.defaultAlignment(court))])
     }
 
+    /// An empty court: one step, nobody on it (22 Nov 2026, Luther: Clear
+    /// "should wipe the board clean" — it put the five back). The board starts
+    /// here too; the Offense presets put a set on it in one tap.
+    static func empty(court: JournalCourtKind = .half) -> DrillDrawing {
+        DrillDrawing(court: court, steps: [Step(diagram: JournalPlayDiagram())])
+    }
+
     var encoded: Data? {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]

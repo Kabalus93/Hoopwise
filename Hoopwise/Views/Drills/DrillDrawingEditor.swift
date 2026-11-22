@@ -35,7 +35,7 @@ struct DrillDrawingEditor: View {
         .confirmationDialog(isChinese ? "清空这张图？" : "Clear this drawing?", isPresented: $confirmingClear,
                             titleVisibility: .visible) {
             Button(isChinese ? "清空" : "Clear", role: .destructive) {
-                drawing = .new(court: drawing.court)
+                drawing = .empty(court: drawing.court)
                 generation += 1
             }
             .accessibilityIdentifier("board.confirmClear")

@@ -65,10 +65,13 @@ enum CoachBoardStore {
         try? FileManager.default.removeItem(at: url)
     }
 
-    /// Whether `drawing` is still the untouched starting board (nothing to keep).
+    /// Whether `drawing` has nothing to keep: one step, untouched — an empty
+    /// court, or the five in the default alignment (a drill drawing's start).
     static func isBlank(_ drawing: DrillDrawing) -> Bool {
-        drawing == DrillDrawing(court: drawing.court, steps: [DrillDrawing.Step(id: drawing.steps.first?.id ?? UUID(),
-                                                                                    diagram: JournalPlayMath.defaultAlignment(drawing.court))])
+        let id = drawing.steps.first?.id ?? UUID()
+        return [JournalPlayDiagram(), JournalPlayMath.defaultAlignment(drawing.court)].contains { start in
+            drawing == DrillDrawing(court: drawing.court, steps: [DrillDrawing.Step(id: id, diagram: start)])
+        }
     }
 }
 
@@ -80,7 +83,7 @@ enum CoachBoardStore {
 struct CoachBoardScreen: View {
     @EnvironmentObject var dataManager: DataManager
 
-    @State private var drawing: DrillDrawing = CoachBoardStore.debugScene() ?? CoachBoardStore.load() ?? .new(court: .half)
+    @State private var drawing: DrillDrawing = CoachBoardStore.debugScene() ?? CoachBoardStore.load() ?? .empty(court: .half)
     @State private var generation = 0
     @State private var savingPlay = false
     @State private var savingDrill = false
@@ -152,7 +155,7 @@ struct CoachBoardScreen: View {
 
     private func clear() {
         CoachBoardStore.clear()
-        drawing = .new(court: drawing.court)
+        drawing = .empty(court: drawing.court)
         generation += 1
     }
 
