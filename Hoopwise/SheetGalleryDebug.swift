@@ -758,6 +758,12 @@ enum SheetGalleryDebug {
             if ProcessInfo.processInfo.environment["HOOPWISE_PEEP"] == "photo",
                let student = dm.students.max(by: { ($0.profileImageData?.count ?? 0) < ($1.profileImageData?.count ?? 0) }) {
                 StudentQuickPeepView(student: student, sessionId: nil)
+            } else if ProcessInfo.processInfo.environment["HOOPWISE_PEEP"] == "games",
+                      let student = dm.students.max(by: {
+                          GameStatsReport.player($0.id, sessions: dm.sessionEvents).games
+                              < GameStatsReport.player($1.id, sessions: dm.sessionEvents).games }) {
+                // The athlete with the most games: the evaluation's evidence.
+                StudentQuickPeepView(student: student, sessionId: nil)
             } else if let program = dm.programs.first,
                let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
                 StudentQuickPeepView(student: student,

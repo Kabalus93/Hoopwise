@@ -688,9 +688,11 @@ struct StudentQuickPeepView: View {
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: 14))
                     .foregroundColor(.yellow)
+                // The card is always light yellow: dark ink in both
+                // appearances (it was white on yellow in dark mode).
                 Text(isChinese ? "教练洞察" : "Coach Insights")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(AppTheme.neutral850)
             }
             
             if insights.isEmpty {
@@ -826,35 +828,106 @@ struct StudentQuickPeepView: View {
         HapticFeedback.impact(.light)
     }
 
-    @ViewBuilder
-    private func trackLines(_ axis: DrillAttribute, standings: [CustomTrackHistory.Standing]) -> some View {
-        let mine = standings.filter { $0.definition.attributes.contains(axis) }
-        ForEach(mine, id: \.self) { st in
-            Label(CustomTrackHistory.text(st, chinese: isChinese), systemImage: st.definition.measure.symbol)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .padding(.leading, 24)
-                .accessibilityIdentifier("peep.trackEvidence")
-        }
-        if let suggested = CustomTrackHistory.suggestion(for: axis, standings: standings),
-           suggested != (isEditingSkills ? editedSkills.rating(axis) : skills.rating(axis)) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 9))
-                Text(isChinese ? "成绩建议 \(suggested) 分" : "Results suggest \(suggested)")
-                    .font(.system(size: 10, weight: .semibold))
-                Button {
-                    takeSuggestion(suggested, for: axis)
-                } label: {
-                    Text(isChinese ? "采用" : "Use")
-                        .font(.system(size: 10, weight: .bold))
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Capsule().fill(Color.orange.opacity(0.18)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("peep.useSuggestion.\(axis.rawValue)")
+    private struct EvidenceRow: Identifiable {
+        let id: String
+        let axis: DrillAttribute
+        let icon: String
+        let text: String
+        var suggestion: Int? = nil
+    }
+
+    private func evidenceRows(evidence: [DrillAttribute: SkillEvidence.Line], shooting: [String],
+                              standings: [CustomTrackHistory.Standing]) -> [EvidenceRow] {
+        var rows: [EvidenceRow] = []
+        for axis in DrillAttribute.allCases {
+            if let line = evidence[axis] {
+                rows.append(.init(id: "game.\(axis.rawValue)", axis: axis, icon: "sportscourt",
+                                  text: SkillEvidence.text(line, chinese: isChinese)))
             }
-            .foregroundColor(.orange)
-            .padding(.leading, 24)
+            if axis == .shooting {
+                for (i, line) in shooting.enumerated() {
+                    rows.append(.init(id: "shoot.\(i)", axis: axis, icon: "gauge.with.dots.needle.67percent", text: line))
+                }
+            }
+            for st in standings where st.definition.attributes.contains(axis) {
+                rows.append(.init(id: "track.\(axis.rawValue).\(st.drillId)", axis: axis, icon: st.definition.measure.symbol,
+                                  text: CustomTrackHistory.text(st, chinese: isChinese)))
+            }
+            if let suggested = CustomTrackHistory.suggestion(for: axis, standings: standings),
+               suggested != (isEditingSkills ? editedSkills.rating(axis) : skills.rating(axis)) {
+                rows.append(.init(id: "suggest.\(axis.rawValue)", axis: axis, icon: "sparkles",
+                                  text: isChinese ? "成绩建议 \(suggested) 分" : "Results suggest \(suggested)",
+                                  suggestion: suggested))
+            }
+        }
+        #if DEBUG
+        // HOOPWISE_PEEP_SAMPLE_EVIDENCE=1: sample lines to check the layout
+        // (the demo store has no athlete with three games).
+        if rows.isEmpty, ProcessInfo.processInfo.environment["HOOPWISE_PEEP_SAMPLE_EVIDENCE"] == "1" {
+            rows = [
+                .init(id: "game.passing", axis: .passing, icon: "sportscourt", text: "0.0 AST/game · 3rd of 4"),
+                .init(id: "game.shooting", axis: .shooting, icon: "sportscourt", text: "1.0 PTS/game · 2nd of 4"),
+                .init(id: "shoot.0", axis: .shooting, icon: "gauge.with.dots.needle.67percent",
+                      text: "FT · 10 shots: 64% (last 3) · up from 48% · 2nd of 9 same grade"),
+                .init(id: "suggest.shooting", axis: .shooting, icon: "sparkles", text: "Results suggest 6", suggestion: 6),
+                .init(id: "game.defense", axis: .defense, icon: "sportscourt", text: "1.0 STL+BLK/game · 3rd of 4"),
+            ]
+        }
+        #endif
+        return rows
+    }
+
+    @ViewBuilder
+    private func evidenceBlock(evidence: [DrillAttribute: SkillEvidence.Line], shooting: [String],
+                               standings: [CustomTrackHistory.Standing]) -> some View {
+        let rows = evidenceRows(evidence: evidence, shooting: shooting, standings: standings)
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 7) {
+                Text(isChinese ? "比赛与训练数据" : "FROM GAMES AND DRILLS")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                ForEach(rows) { row in
+                    let first = rows.first { $0.axis == row.axis }?.id == row.id
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        // The skill's name once, on its first line.
+                        Text(first ? row.axis.short(chinese: isChinese) : "")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .frame(width: 64, alignment: .leading)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Image(systemName: row.icon)
+                            .font(.system(size: 9))
+                            .foregroundColor(row.suggestion == nil ? .secondary : .orange)
+                            .frame(width: 12)
+                        Text(row.text)
+                            .font(.system(size: 10, weight: row.suggestion == nil ? .regular : .semibold))
+                            .foregroundColor(row.suggestion == nil ? .secondary : .orange)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 4)
+                        if let suggested = row.suggestion {
+                            Button {
+                                takeSuggestion(suggested, for: row.axis)
+                            } label: {
+                                Text(isChinese ? "采用" : "Use")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.orange)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Capsule().fill(Color.orange.opacity(0.18)))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("peep.useSuggestion.\(row.axis.rawValue)")
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier(row.id.hasPrefix("shoot") ? "peep.shootingEvidence"
+                                             : row.id.hasPrefix("track") ? "peep.trackEvidence" : "peep.evidence")
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.secondary.opacity(0.08)))
         }
     }
 
@@ -899,33 +972,22 @@ struct StudentQuickPeepView: View {
                 .accessibilityIdentifier("peep.evaluate")
             }
 
+            // The eight ratings as an even column — nothing between the
+            // rows (24 Nov 2026, Luther: the evidence lines between them
+            // "create chaos"). A suggested rating is an orange tick on its bar.
             VStack(spacing: 10) {
                 ForEach(DrillAttribute.allCases, id: \.self) { axis in
-                    VStack(alignment: .leading, spacing: 3) {
-                        if isEditingSkills {
-                            editableSkillRow(axis: axis)
-                        } else {
-                            skillBar(axis: axis)
-                        }
-                        if let line = evidence[axis] {
-                            Text(SkillEvidence.text(line, chinese: isChinese))
-                                .font(.system(size: 10))
-                                .foregroundColor(.secondary)
-                                .padding(.leading, 24)
-                        }
-                        trackLines(axis, standings: standings)
-                        if axis == .shooting {
-                            ForEach(shooting, id: \.self) { line in
-                                Label(line, systemImage: "gauge.with.dots.needle.67percent")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 24)
-                                    .accessibilityIdentifier("peep.shootingEvidence")
-                            }
-                        }
+                    if isEditingSkills {
+                        editableSkillRow(axis: axis, suggested: CustomTrackHistory.suggestion(for: axis, standings: standings))
+                    } else {
+                        skillBar(axis: axis, suggested: CustomTrackHistory.suggestion(for: axis, standings: standings))
                     }
                 }
             }
+
+            // What games and tracked drills say, in one aligned block under
+            // the ratings: skill | evidence, one line each.
+            evidenceBlock(evidence: evidence, shooting: shooting, standings: standings)
 
             if isEditingSkills {
                 Button(action: { withAnimation { isEditingSkills = false } }) {
@@ -961,7 +1023,7 @@ struct StudentQuickPeepView: View {
         .cornerRadius(16)
     }
 
-    private func skillBar(axis: DrillAttribute) -> some View {
+    private func skillBar(axis: DrillAttribute, suggested: Int? = nil) -> some View {
         let value = skills.rating(axis)
         return HStack(spacing: 8) {
             Image(systemName: axis.icon)
@@ -982,6 +1044,9 @@ struct StudentQuickPeepView: View {
                             .fill(Color.accentColor)
                             .frame(width: geo.size.width * CGFloat(value) / 10.0)
                     }
+                    if let suggested, suggested != value {
+                        suggestionTick(width: geo.size.width, value: suggested)
+                    }
                 }
             }
             .frame(height: 6)
@@ -992,7 +1057,16 @@ struct StudentQuickPeepView: View {
         }
     }
 
-    private func editableSkillRow(axis: DrillAttribute) -> some View {
+    /// Where the tracked-drill results put this skill: a short orange tick
+    /// across the bar.
+    private func suggestionTick(width: CGFloat, value: Int) -> some View {
+        RoundedRectangle(cornerRadius: 1)
+            .fill(Color.orange)
+            .frame(width: 3, height: 12)
+            .offset(x: max(0, width * CGFloat(value) / 10.0 - 1.5))
+    }
+
+    private func editableSkillRow(axis: DrillAttribute, suggested: Int? = nil) -> some View {
         let binding = Binding<Double>(
             get: { Double(editedSkills.rating(axis) ?? 5) },
             set: { editedSkills.setRating(Int($0.rounded()), for: axis) })

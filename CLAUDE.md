@@ -2437,6 +2437,16 @@ rationale "low tracked-drill results: <skill>". DEBUG HOOPWISE_DEMO_TRACKED=
 HOOPWISE_DEMO_SHOOTING also resets remembered shooting setups. Tests:
 CustomTrackingTests, CustomTrackingUITests (iPad mini). NOT YET: the
 connector's create_drill cannot set tracking; DrillWriter does not suggest it.
+THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
+the evidence lines between the bars "create chaos"). The eight ratings are an
+even column with NOTHING between the rows; a suggested rating is a short
+orange tick across its bar. Every game stat, tracked-shooting line,
+custom-drill standing and "Results suggest N · Use" sits in ONE block under
+the ratings, "FROM GAMES AND DRILLS": skill (short name, once) | icon | text,
+aligned (`evidenceRows` / `evidenceBlock`). Also fixed: the Coach Insights
+title was white on its yellow card in dark mode. DEBUG HOOPWISE_PEEP=games
+(the athlete with the most games) and HOOPWISE_PEEP_SAMPLE_EVIDENCE=1 (sample
+lines — the demo store has nobody with three games) on quickPeep.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan
