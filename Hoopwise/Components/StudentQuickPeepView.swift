@@ -1570,3 +1570,24 @@ struct QuickPeepRadarView: View {
     }
 }
 
+
+// THE PEEP GROWS (24 Nov 2026, Luther: "holding the handle and pulling
+// upwards extend the page into a full screen like slide up page that can be
+// dismissed by tapping Done or sliding back down"). Opens part-way; the
+// handle pulls it to full height; down again (or Done) closes it. Content
+// scrolls inside without resizing the sheet — only the handle resizes it.
+private struct QuickPeepPresentation: ViewModifier {
+    @State private var detent: PresentationDetent = .fraction(0.62)
+
+    func body(content: Content) -> some View {
+        content
+            .presentationDetents([.fraction(0.62), .large], selection: $detent)
+            .presentationDragIndicator(.visible)
+            .presentationContentInteraction(.scrolls)
+    }
+}
+
+extension View {
+    /// How the Quick Peep is presented everywhere it opens as a sheet.
+    func quickPeepPresentation() -> some View { modifier(QuickPeepPresentation()) }
+}

@@ -2460,6 +2460,15 @@ aligned (`evidenceRows` / `evidenceBlock`). Also fixed: the Coach Insights
 title was white on its yellow card in dark mode. DEBUG HOOPWISE_PEEP=games
 (the athlete with the most games) and HOOPWISE_PEEP_SAMPLE_EVIDENCE=1 (sample
 lines — the demo store has nobody with three games) on quickPeep.
+THE PEEP GROWS (24 Nov 2026, Luther: "holding the handle and pulling upwards
+extend the page into a full screen like slide up page … dismissed by tapping
+Done or sliding back down"). `.quickPeepPresentation()` (StudentQuickPeepView
+.swift) on both sheets that open it (session roster, Home): detents 62 % and
+large, the handle visible, `presentationContentInteraction(.scrolls)` — the
+page scrolls inside, only the handle resizes it. Honoured on the iPad mini's
+regular-width sheet too. Test: QuickPeepSheetUITests (iPad mini, sessionPage
+Attend tab — `pastSession` finds no past scheduled session in the demo store
+now).
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan

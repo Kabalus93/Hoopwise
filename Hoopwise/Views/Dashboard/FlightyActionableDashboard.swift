@@ -412,8 +412,7 @@ struct FlightyActionableDashboard: View {
             }
             .sheet(item: $selectedStudent) { student in
                 StudentQuickPeepView(student: student, sessionId: nil)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+                    .quickPeepPresentation()
             }
             .sheet(isPresented: $showingAllAttentionItems) {
                 AllAttentionItemsSheet(

@@ -2334,8 +2334,7 @@ struct FlightySessionPageView: View {
         #endif
         .sheet(item: $selectedStudentForPeep) { student in
             StudentQuickPeepView(student: student, sessionId: session.id)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .quickPeepPresentation()
         }
         .sheet(isPresented: $showingAddAthleteSheet) {
             // Available pool = all students not already enrolled in this
