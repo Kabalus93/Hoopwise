@@ -40,6 +40,18 @@ import Foundation
 // blended smoothly by where the ball is; the on-ball duty passes between
 // positions the same way. Off the ball each defender shades an attacker in
 // his area, and someone always protects the rim.
+// INBOUNDS (22 Nov 2026, Luther: "the defense engine must understand …
+// out of bound or live — maybe this can be selected"). `situation` Auto
+// reads an inbound when the BALL is out of bounds (beyond a line by
+// 0.15 m); Live never, Inbound always (the holder is the inbounder, the
+// nearest line his). BASELINE (behind the attacked baseline): everyone
+// basket-side and ball-side of his man — no layups, see the ball —, the
+// perimeter defenders sag into the paint, and nobody "helps on the drive"
+// against a ball that is out of bounds. SIDELINE / far baseline: the men
+// near the ball are denied, the help side sags as live. The INBOUNDER'S
+// defender: Pressure (just inside the line, shading the pass to the rim) or
+// Protect the rim (free safety in front of the rim / at the ball-side
+// elbow). Once the ball is inside, the live rules take over by themselves.
 // In playback each defender reacts a fraction of a beat late (his spot is
 // averaged over the last `reactionBeats`), so a closeout, a switch or a
 // rotation slides instead of jumping. The attacked basket is the court's
@@ -51,20 +63,29 @@ nonisolated struct DefenseScheme: Codable, Equatable, Sendable {
     enum OnBall: String, Codable, CaseIterable, Sendable { case contain, noMiddle }
     enum OffBall: String, Codable, CaseIterable, Sendable { case gap, deny }
     enum Screens: String, Codable, CaseIterable, Sendable { case switchAll, drop, hedge, trap, chase }
+    /// Live ball or an inbound — Auto reads it from where the ball is.
+    enum Situation: String, Codable, CaseIterable, Sendable { case auto, live, inbound }
+    /// The inbounder's defender: on the passer, or protecting the rim.
+    enum Inbounder: String, Codable, CaseIterable, Sendable { case pressure, protectRim }
 
     var onBall: OnBall = .contain
     var offBall: OffBall = .gap
     var screens: Screens = .switchAll
     /// Help on drives and rotate behind the helper.
     var helpRotate = true
+    var situation: Situation = .auto
+    var inbounder: Inbounder = .pressure
 
     static let standard = DefenseScheme()
 
-    init(onBall: OnBall = .contain, offBall: OffBall = .gap, screens: Screens = .switchAll, helpRotate: Bool = true) {
+    init(onBall: OnBall = .contain, offBall: OffBall = .gap, screens: Screens = .switchAll, helpRotate: Bool = true,
+         situation: Situation = .auto, inbounder: Inbounder = .pressure) {
         self.onBall = onBall
         self.offBall = offBall
         self.screens = screens
         self.helpRotate = helpRotate
+        self.situation = situation
+        self.inbounder = inbounder
     }
 
     // Tolerant: an unknown value (a newer build's) reads as the default.
@@ -74,6 +95,8 @@ nonisolated struct DefenseScheme: Codable, Equatable, Sendable {
         offBall = (try? c.decodeIfPresent(OffBall.self, forKey: .offBall)) ?? .gap
         screens = (try? c.decodeIfPresent(Screens.self, forKey: .screens)) ?? .switchAll
         helpRotate = (try? c.decodeIfPresent(Bool.self, forKey: .helpRotate)) ?? true
+        situation = (try? c.decodeIfPresent(Situation.self, forKey: .situation)) ?? .auto
+        inbounder = (try? c.decodeIfPresent(Inbounder.self, forKey: .inbounder)) ?? .pressure
     }
 }
 
@@ -145,6 +168,111 @@ nonisolated extension JournalPlayMath {
         return n.key
     }
 
+    // MARK: - Inbounds
+
+    /// Where the ball is put in from.
+    enum InboundSide: Equatable, Sendable {
+        /// Behind the attacked baseline (a BLOB).
+        case baseline
+        /// A sideline, or the far baseline of a full court.
+        case side
+    }
+
+    /// The line a point is beyond (by more than 0.15 m), if any, and the
+    /// direction into the court from it.
+    static func outOfBounds(_ p: JournalCourtPoint, court: JournalCourtKind) -> (side: InboundSide, inward: JournalCourtPoint)? {
+        let size = court.size, e = 0.15
+        switch court {
+        case .half:
+            if p.y < -e { return (.baseline, JournalCourtPoint(0, 1)) }
+            if p.x < -e { return (.side, JournalCourtPoint(1, 0)) }
+            if p.x > size.width + e { return (.side, JournalCourtPoint(-1, 0)) }
+        case .full:
+            if p.x > size.width + e { return (.baseline, JournalCourtPoint(-1, 0)) }
+            if p.x < -e { return (.side, JournalCourtPoint(1, 0)) }
+            if p.y < -e { return (.side, JournalCourtPoint(0, 1)) }
+            if p.y > size.height + e { return (.side, JournalCourtPoint(0, -1)) }
+        }
+        return nil
+    }
+
+    /// The nearest line to a point inside the court (an inbound forced on a
+    /// holder drawn on the floor).
+    static func nearestLine(_ p: JournalCourtPoint, court: JournalCourtKind) -> (side: InboundSide, inward: JournalCourtPoint) {
+        let size = court.size
+        var lines: [(d: Double, side: InboundSide, inward: JournalCourtPoint)] = [
+            (p.x, .side, JournalCourtPoint(1, 0)),
+            (size.width - p.x, court == .full ? .baseline : .side, JournalCourtPoint(-1, 0)),
+        ]
+        switch court {
+        case .half: lines.append((p.y, .baseline, JournalCourtPoint(0, 1)))
+        case .full:
+            lines.append((p.y, .side, JournalCourtPoint(0, 1)))
+            lines.append((size.height - p.y, .side, JournalCourtPoint(0, -1)))
+        }
+        let best = lines.min { $0.d < $1.d }!
+        return (best.side, best.inward)
+    }
+
+    /// The inbound in play at a moment: from the ball's position (Auto), never
+    /// (Live), or always (Inbound — the holder's nearest line).
+    static func inbound(ball: JournalCourtPoint?, holderAt: JournalCourtPoint?, court: JournalCourtKind,
+                        scheme: DefenseScheme) -> (side: InboundSide, inward: JournalCourtPoint)? {
+        guard let ball else { return nil }
+        switch scheme.situation {
+        case .live: return nil
+        case .auto: return outOfBounds(ball, court: court)
+        case .inbound: return outOfBounds(ball, court: court) ?? nearestLine(holderAt ?? ball, court: court)
+        }
+    }
+
+    /// The inbounder's defender. Pressure: just inside the line opposite the
+    /// passer, shaded toward the rim (the pass he must not make). Protect the
+    /// rim: in front of the rim on the ball side (baseline), or at the
+    /// ball-side elbow (sideline).
+    static func inbounderSpot(_ passer: JournalCourtPoint, inward: JournalCourtPoint, side: InboundSide,
+                              court: JournalCourtKind, scheme: DefenseScheme) -> JournalCourtPoint {
+        let g = DefenseGeometry(court)
+        switch scheme.inbounder {
+        case .pressure:
+            // Onto the line, then 0.8 m inside it.
+            let size = court.size
+            var onLine = passer
+            if inward.x != 0 { onLine.x = inward.x > 0 ? 0 : size.width }
+            if inward.y != 0 { onLine.y = inward.y > 0 ? 0 : size.height }
+            var spot = plus(onLine, inward, 0.8)
+            // Along the line toward the rim: take away the pass to the basket.
+            let along = JournalCourtPoint(-inward.y, inward.x)
+            let toward = (g.basket.x - spot.x) * along.x + (g.basket.y - spot.y) * along.y
+            spot = plus(spot, along, max(-0.5, min(0.5, toward * 0.3)))
+            return clamp(spot, court)
+        case .protectRim:
+            let b = g.local(passer)
+            if side == .baseline { return clamp(g.world(b.s >= 0 ? 0.6 : -0.6, 1.4), court) }
+            let dir = unit(g.basket, passer)
+            return clamp(plus(g.basket, dir, min(4.6, g.basket.distance(to: passer) * 0.5)), court)
+        }
+    }
+
+    /// Against a baseline inbound: between his man and the rim, a step toward
+    /// the ball (see it, no backdoor to the rim); a man out on the perimeter
+    /// is given the pass out — his defender sags into the paint.
+    static func baselineInboundSpot(guarding man: JournalCourtPoint, ball: JournalCourtPoint,
+                                    court: JournalCourtKind, scheme: DefenseScheme) -> JournalCourtPoint {
+        let g = DefenseGeometry(court)
+        let dRim = man.distance(to: g.basket), dBall = man.distance(to: ball)
+        var spot: JournalCourtPoint
+        if scheme.offBall == .deny, dBall < 4.5 {
+            // Deny the direct pass in, the rim still behind him.
+            spot = plus(plus(man, unit(man, ball), 0.9), unit(man, g.basket), 0.3)
+        } else {
+            spot = plus(plus(man, unit(man, g.basket), min(1.1, max(0.5, dRim * 0.3))), unit(man, ball), 0.45)
+        }
+        let sag = smooth((dRim - 5.8) / 2.0)
+        if sag > 0 { spot = lerp(spot, lerp(man, g.basket, 0.42), sag) }
+        return clamp(spot, court)
+    }
+
     // MARK: - Man-to-man: one defender
 
     /// On the ball: an arm's length between him and the rim; "No middle"
@@ -182,8 +310,21 @@ nonisolated extension JournalPlayMath {
     /// Where a man-to-man defender stands against `man` with the ball at
     /// `ball` (his own spot, before the team's help and screen rules).
     static func manSpot(guarding man: JournalCourtPoint, ball: JournalCourtPoint?, court: JournalCourtKind,
-                        scheme: DefenseScheme = .standard) -> JournalCourtPoint {
+                        scheme: DefenseScheme = .standard,
+                        inbound: (side: InboundSide, inward: JournalCourtPoint)? = nil) -> JournalCourtPoint {
         let g = DefenseGeometry(court)
+        if let inbound, let ball {
+            if man.distance(to: ball) < 0.6 {
+                return inbounderSpot(man, inward: inbound.inward, side: inbound.side, court: court, scheme: scheme)
+            }
+            if inbound.side == .baseline {
+                return baselineInboundSpot(guarding: man, ball: ball, court: court, scheme: scheme)
+            }
+            // Sideline: the live rules, the men near the ball denied.
+            var denying = scheme
+            if man.distance(to: ball) < 7.6 { denying.offBall = .deny }
+            return manSpot(guarding: man, ball: ball, court: court, scheme: denying)
+        }
         guard let ball, man.distance(to: ball) >= 0.6 else { return onBallSpot(man, court: court, scheme: scheme) }
         let dBall = man.distance(to: ball)
         let toBall = unit(man, ball), toRim = unit(man, g.basket)
@@ -238,7 +379,8 @@ nonisolated extension JournalPlayMath {
     /// defender i guards at this moment.
     static func manTeamSpots(_ spots: [JournalCourtPoint?], guards: [Int?], players: [Int: JournalCourtPoint],
                              ball: JournalCourtPoint?, court: JournalCourtKind,
-                             scheme: DefenseScheme = .standard, screens: [ActiveScreen] = []) -> [JournalCourtPoint?] {
+                             scheme: DefenseScheme = .standard, screens: [ActiveScreen] = [],
+                             inbound: Bool = false) -> [JournalCourtPoint?] {
         guard let ball else { return spots }
         let g = DefenseGeometry(court)
         var out = spots
@@ -306,8 +448,9 @@ nonisolated extension JournalPlayMath {
             }
         }
 
-        // 2. Help on the drive, and the rotation behind the helper.
-        if scheme.helpRotate, let h = holder {
+        // 2. Help on the drive, and the rotation behind the helper — never
+        // against a ball that is still out of bounds.
+        if scheme.helpRotate, !inbound, let h = holder {
             let dBall = ball.distance(to: g.basket)
             // Penetration: from inside the free-throw line, full at ~2.8 m.
             let s = smooth((4.6 - dBall) / 1.8)
@@ -514,8 +657,12 @@ nonisolated extension JournalPlayMath {
         var bases: [JournalCourtPoint?]
         if mode == .man {
             let own = diagram.defense.indices.map { $0 < guards.count ? guards[$0] : nil }
-            bases = own.map { g in g.flatMap { players[$0] }.map { manSpot(guarding: $0, ball: ball, court: court, scheme: scheme) } }
-            bases = manTeamSpots(bases, guards: own, players: players, ball: ball, court: court, scheme: scheme, screens: screens)
+            let holderAt = ballHolder(players: players, ball: ball).flatMap { players[$0] }
+            let play = inbound(ball: ball, holderAt: holderAt, court: court, scheme: scheme)
+            bases = own.map { g in g.flatMap { players[$0] }.map {
+                manSpot(guarding: $0, ball: ball, court: court, scheme: scheme, inbound: play) } }
+            bases = manTeamSpots(bases, guards: own, players: players, ball: ball, court: court, scheme: scheme,
+                                 screens: screens, inbound: play != nil)
         } else {
             let zone = zoneSpots(mode, ball: ball, players: players, court: court)
             bases = diagram.defense.indices.map { $0 < zone.count ? zone[$0] : nil }
@@ -751,4 +898,18 @@ nonisolated extension JournalPlayMath {
         let after = guards(diagram, at: .infinity, switches: switches(diagram, plan: plan))
         return diagram.defense.enumerated().map { i, d in var d = d; d.guards = after[i]; return d }
     }
+
+    // MARK: - Format (1v1 … 5v5)
+
+    /// "3v3" from the drawing: attackers against defenders (man matches one
+    /// per attacker; a zone is five).
+    static func format(_ diagram: JournalPlayDiagram) -> String? {
+        let o = diagram.offense.count, d = diagram.defense.count
+        guard o > 0 || d > 0 else { return nil }
+        return "\(o)v\(d)"
+    }
+
+    /// Zones need five attackers — a 2-3 against three players puts two
+    /// defenders on nobody.
+    static func zonesFit(_ diagram: JournalPlayDiagram) -> Bool { diagram.offense.count >= 5 }
 }

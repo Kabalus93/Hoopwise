@@ -1413,7 +1413,44 @@ struct JournalPlayStepEditor: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                // Live ball or an inbound (22 Nov 2026, Luther).
+                schemeRow("Situation", id: "situation", selection: Binding(
+                    get: { scheme.situation }, set: { new in setScheme { $0.situation = new } })) {
+                    JText("Auto").tag(DefenseScheme.Situation.auto)
+                    JText("Live ball").tag(DefenseScheme.Situation.live)
+                    JText("Inbound").tag(DefenseScheme.Situation.inbound)
+                }
+                if inboundNow != nil || scheme.situation == .inbound {
+                    schemeRow("Inbounder's defender", id: "inbounder", selection: Binding(
+                        get: { scheme.inbounder }, set: { new in setScheme { $0.inbounder = new } })) {
+                        JText("Pressure the pass").tag(DefenseScheme.Inbounder.pressure)
+                        JText("Protect the rim").tag(DefenseScheme.Inbounder.protectRim)
+                    }
+                }
+                JText(situationExplanation)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    /// The inbound this step starts with, as the engine reads it.
+    private var inboundNow: JournalPlayMath.InboundSide? {
+        guard diagram.defenseMode == .man else { return nil }
+        let players = Dictionary(diagram.offense.map { ($0.number, $0.at) }, uniquingKeysWith: { a, _ in a })
+        let ball = diagram.balls.first.flatMap { players[$0] }
+        return JournalPlayMath.inbound(ball: ball, holderAt: ball, court: court, scheme: scheme)?.side
+    }
+
+    private var situationExplanation: JPString {
+        switch inboundNow {
+        case .baseline?: "Baseline inbound: everyone basket-side and ball-side of his man — no layups; the perimeter defenders sag into the paint. Live rules once the ball is in."
+        case .side?: "Sideline inbound: the men near the ball are denied, the help side sags. Live rules once the ball is in."
+        case nil:
+            scheme.situation == .live
+                ? "Live ball: the inbound rules never apply."
+                : "Auto: an inbound whenever the ball is out of bounds — put the inbounder outside the line."
         }
     }
 
@@ -1454,10 +1491,18 @@ struct JournalPlayStepEditor: View {
     private var defenseDock: some View {
         Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { defenseOpen.toggle() } } label: {
             HStack(spacing: 8) {
-                Image(systemName: "shield.lefthalf.filled")
-                Text(verbatim: defenseShortName)
+                // An inbound shows as its own icon, so the label stays one line.
+                Image(systemName: inboundNow == nil ? "shield.lefthalf.filled" : "arrow.down.to.line")
+                // The format leads when there is room ("3v3 · Man · Switch");
+                // on a narrow bar the defense alone, never truncated.
+                ViewThatFits(in: .horizontal) {
+                    Text(verbatim: defenseShortName).lineLimit(1).fixedSize()
+                    Text(verbatim: defenseModeName).lineLimit(1).fixedSize()
+                }
                 Image(systemName: defenseOpen ? "chevron.down" : "chevron.up").font(.caption.weight(.semibold))
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(verbatim: inboundNow == nil ? defenseShortName : defenseShortName + " · " + jp("Inbound")))
             .font(.subheadline.weight(.semibold))
             .padding(.horizontal, 16)
             .frame(minHeight: 44)
@@ -1486,7 +1531,16 @@ struct JournalPlayStepEditor: View {
         }
     }
 
+    /// "3v3 · Man · Chase" — the format the engine is reading, then the
+    /// defense (an inbound shows as the dock's icon).
     private var defenseShortName: String {
+        var parts: [String] = []
+        if diagram.defenseMode != nil, let format = JournalPlayMath.format(diagram) { parts.append(format) }
+        parts.append(defenseModeName)
+        return parts.joined(separator: " · ")
+    }
+
+    private var defenseModeName: String {
         switch diagram.defenseMode {
         case nil: jp("By hand")
         case .man:
@@ -1523,15 +1577,31 @@ struct JournalPlayStepEditor: View {
     /// hand, man-to-man (matched by nearest, switch on every screen), or a
     /// 2-3 / 3-2 zone. Changing it re-matches from the first step on.
     private var defensePicker: some View {
-        Picker(selection: Binding(get: { diagram.defenseMode?.rawValue ?? "off" },
-                                  set: { setDefense(JournalPlayDiagram.DefenseMode(rawValue: $0)) })) {
-            JText("By hand").tag("off")
-            JText("Man").tag(JournalPlayDiagram.DefenseMode.man.rawValue)
-            Text(verbatim: "2-3").tag(JournalPlayDiagram.DefenseMode.zone23.rawValue)
-            Text(verbatim: "3-2").tag(JournalPlayDiagram.DefenseMode.zone32.rawValue)
-        } label: { JText("Defense") }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("plays.editor.defense")
+        VStack(alignment: .leading, spacing: 4) {
+            Picker(selection: Binding(get: { diagram.defenseMode?.rawValue ?? "off" },
+                                      set: { setDefense(JournalPlayDiagram.DefenseMode(rawValue: $0)) })) {
+                JText("By hand").tag("off")
+                JText("Man").tag(JournalPlayDiagram.DefenseMode.man.rawValue)
+                // Zones need five attackers (22 Nov 2026): a 2-3 in a 3v3 put
+                // two defenders on nobody. Kept while one is on, to turn it off.
+                if zonesOffered {
+                    Text(verbatim: "2-3").tag(JournalPlayDiagram.DefenseMode.zone23.rawValue)
+                    Text(verbatim: "3-2").tag(JournalPlayDiagram.DefenseMode.zone32.rawValue)
+                }
+            } label: { JText("Defense") }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("plays.editor.defense")
+            if !zonesOffered, let format = JournalPlayMath.format(diagram) {
+                Text(verbatim: format + " · " + jp("Zones need five attackers."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("plays.editor.defense.zonesNeedFive")
+            }
+        }
+    }
+
+    private var zonesOffered: Bool {
+        JournalPlayMath.zonesFit(diagram) || diagram.defenseMode == .zone23 || diagram.defenseMode == .zone32
     }
 
     private func setDefense(_ mode: JournalPlayDiagram.DefenseMode?) {

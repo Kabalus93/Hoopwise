@@ -142,5 +142,23 @@ nonisolated enum JournalPlayStringsAdded {
         "Draw from a player: arrow = cut, dashes = pass, bar = screen, zigzag = dribble":
             .init(en: "Draw from a player: arrow = cut, dashes = pass, bar = screen, zigzag = dribble",
                   enOne: nil, zh: "从球员画起：箭头 = 空切，虚线 = 传球，横杠 = 掩护，折线 = 运球"),
+        "Situation": .init(en: "Situation", enOne: nil, zh: "比赛状态"),
+        "Auto": .init(en: "Auto", enOne: nil, zh: "自动"),
+        "Live ball": .init(en: "Live ball", enOne: nil, zh: "活球"),
+        "Inbound": .init(en: "Inbound", enOne: nil, zh: "发界外球"),
+        "Inbounder's defender": .init(en: "Inbounder's defender", enOne: nil, zh: "防守发球人"),
+        "Pressure the pass": .init(en: "Pressure the pass", enOne: nil, zh: "干扰传球"),
+        "Protect the rim": .init(en: "Protect the rim", enOne: nil, zh: "回防篮下"),
+        "Zones need five attackers.": .init(en: "Zones need five attackers.", enOne: nil, zh: "区域防守需要五名进攻球员。"),
+        "Baseline inbound: everyone basket-side and ball-side of his man — no layups; the perimeter defenders sag into the paint. Live rules once the ball is in.":
+            .init(en: "Baseline inbound: everyone basket-side and ball-side of his man — no layups; the perimeter defenders sag into the paint. Live rules once the ball is in.",
+                  enOne: nil, zh: "底线发球：每名防守人站在对手与篮筐之间并偏向球——不给上篮；外线防守人收缩到禁区。球进场后按活球规则。"),
+        "Sideline inbound: the men near the ball are denied, the help side sags. Live rules once the ball is in.":
+            .init(en: "Sideline inbound: the men near the ball are denied, the help side sags. Live rules once the ball is in.",
+                  enOne: nil, zh: "边线发球：靠近球的对手被绕前封堵，弱侧收缩。球进场后按活球规则。"),
+        "Live ball: the inbound rules never apply.": .init(en: "Live ball: the inbound rules never apply.", enOne: nil, zh: "活球：不使用发界外球的规则。"),
+        "Auto: an inbound whenever the ball is out of bounds — put the inbounder outside the line.":
+            .init(en: "Auto: an inbound whenever the ball is out of bounds — put the inbounder outside the line.",
+                  enOne: nil, zh: "自动：球在界外即视为发界外球——把发球人放在线外。"),
     ]
 }

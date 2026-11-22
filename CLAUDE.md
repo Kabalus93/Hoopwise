@@ -1196,6 +1196,36 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Defender tool show the same controls. The connector still sets only
   defense_mode. Tests: JournalPlayDefensePrinciplesTests (each principle,
   coverages, slide charts, smooth swing), BoardDefenseUITests.
+  INBOUNDS AND THE FORMAT (22 Nov 2026, Luther, markup on a 3v3 BLOB: "the
+  defense engine must understand when defending 1v1 to 5v5, out of bound or
+  live — maybe this can be selected"). The live rules assumed the ball in
+  FRONT of the rim: with the inbounder behind the baseline the ball's depth
+  went negative, the help-side spot collapsed onto the rim (X1 under the
+  basket), the post rule fronted toward the baseline, and a ball 2 m from
+  the rim read as PENETRATION, pulling a helper. Now `DefenseScheme`
+  .situation Auto (inbound when the BALL is beyond a line by 0.15 m —
+  `outOfBounds`; half: y < 0 baseline, x < 0 / > 15 side; full: x > 28 the
+  attacked baseline, else side) · Live (never) · Inbound (always — the
+  holder's `nearestLine`), and .inbounder Pressure the pass (0.8 m inside
+  the line opposite the passer, shaded toward the rim) · Protect the rim
+  (free safety in front of the rim; at the ball-side elbow on a sideline) —
+  both in the step JSON, tolerant, default Auto / Pressure. BASELINE:
+  `baselineInboundSpot` — basket-side and ball-side of his man (Deny: in
+  the lane of the direct pass in), perimeter men (> 5.8 m from the rim)
+  sag into the paint; SIDELINE: the live rules with the men within 7.6 m
+  of the ball denied; NO DRIVE HELP while the ball is out (`manTeamSpots`
+  inbound). Once the ball is in, the live rules take over by themselves
+  (detection follows the ball, also mid-pass). FORMAT: `format` "3v3"
+  (attackers v defenders); zones need five attackers (`zonesFit`) — with
+  fewer the picker has no 2-3 / 3-2 and says "Zones need five attackers"
+  (kept while a zone is on, to turn it off). Dock: "3v3 · Man · Switch",
+  falling back to "Man · Switch" when the bar is narrow (ViewThatFits — the
+  mini wrapped it on three lines), an inbound shows as the arrow-to-line
+  icon (and "Inbound" in the accessibility label); Situation and
+  Inbounder's defender rows + a line saying what the coverage does. DEBUG
+  HOOPWISE_BOARD_DEMO=blob|blobRim|slob opens the board on a 3v3 inbound
+  (with HOOPWISE_SHOT=coachBoard). Tests: JournalPlayInboundDefenseTests,
+  BoardDefenseUITests.testAnInboundIsReadAndZonesNeedFive.
 - TWENTY-FIRST sanctioned exception (8 November 2026, Luther's request):
   on a PRIVATE session (SessionPrivacy), the session page's Add Athlete adds
   to THAT SESSION ONLY — `addStudentsToSessionOnly` (roster = who was

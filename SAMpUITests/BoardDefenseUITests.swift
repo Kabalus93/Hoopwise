@@ -44,4 +44,33 @@ final class BoardDefenseUITests: XCTestCase {
         app.tap()
         element("board.clear").tap(); element("board.confirmClear").tap()
     }
+
+    /// His screenshot (22 Nov 2026): a 3v3 with 2 inbounding from behind the
+    /// baseline. The dock reads the format and the inbound, offers the
+    /// situation and the inbounder's defender, and no zones (three attackers).
+    func testAnInboundIsReadAndZonesNeedFive() {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchEnvironment["HOOPWISE_SHOT"] = "coachBoard"
+        app.launchEnvironment["HOOPWISE_SCREENSHOT_STORE"] = "1"
+        app.launchEnvironment["HOOPWISE_GALLERY_FULL"] = "1"
+        app.launchEnvironment["HOOPWISE_BOARD_DEMO"] = "blob"
+        app.launchArguments += ["-app_language", "en", "-hasOnboarded", "YES"]
+        app.launch()
+        let dock = element("plays.editor.defenseDock")
+        XCTAssertTrue(dock.waitForExistence(timeout: 30))
+        XCTAssertTrue(dock.label.contains("3v3"), dock.label)
+        XCTAssertTrue(dock.label.contains("Inbound"), dock.label)
+        dock.tap()
+        XCTAssertTrue(element("plays.editor.defense.situation").waitForExistence(timeout: 5), "the situation can be chosen")
+        XCTAssertTrue(element("plays.editor.defense.inbounder").exists, "and the inbounder's defender")
+        XCTAssertTrue(element("plays.editor.defense.zonesNeedFive").exists, "a 3v3 is told why there is no zone")
+        XCTAssertFalse(app.buttons["2-3"].exists)
+        app.buttons["Protect the rim"].firstMatch.tap()
+        attach("blob protect the rim")
+        app.buttons["Live ball"].firstMatch.tap()
+        XCTAssertFalse(dock.label.contains("Inbound"), "Live: the inbound rules are off — " + dock.label)
+        XCTAssertFalse(element("plays.editor.defense.inbounder").exists)
+        attach("blob forced live")
+    }
 }

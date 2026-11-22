@@ -35,6 +35,31 @@ enum CoachBoardStore {
         try? data.write(to: url, options: .atomic)
     }
 
+    /// DEBUG HOOPWISE_BOARD_DEMO=blob | blobRim | slob: a 3v3 inbound with
+    /// man defense (his 22 Nov 2026 screenshot), not saved unless edited.
+    static func debugScene() -> DrillDrawing? {
+        #if DEBUG
+        guard let scene = ProcessInfo.processInfo.environment["HOOPWISE_BOARD_DEMO"] else { return nil }
+        typealias P = JournalCourtPoint
+        var d: JournalPlayDiagram
+        var scheme = DefenseScheme.standard
+        switch scene {
+        case "slob":
+            d = JournalPlayDiagram(offense: [.init(number: 1, at: P(-0.6, 8)), .init(number: 2, at: P(3.0, 9.0)),
+                                             .init(number: 3, at: P(12, 4))], ball: 1)
+        default:
+            d = JournalPlayDiagram(offense: [.init(number: 2, at: P(5.2, -0.6)), .init(number: 3, at: P(2.4, 4.6)),
+                                             .init(number: 1, at: P(9.8, 5.0))], ball: 2)
+            if scene == "blobRim" { scheme.inbounder = .protectRim }
+        }
+        d.defense = d.offense.map { .init(at: P($0.at.x, max($0.at.y, 0.5) - 0.5)) }
+        let placed = JournalPlayMath.applyingDefense(.man, to: [d], court: .half, scheme: scheme)
+        return DrillDrawing(court: .half, steps: placed.map { DrillDrawing.Step(diagram: $0) })
+        #else
+        return nil
+        #endif
+    }
+
     static func clear() {
         guard let url else { return }
         try? FileManager.default.removeItem(at: url)
@@ -55,7 +80,7 @@ enum CoachBoardStore {
 struct CoachBoardScreen: View {
     @EnvironmentObject var dataManager: DataManager
 
-    @State private var drawing: DrillDrawing = CoachBoardStore.load() ?? .new(court: .half)
+    @State private var drawing: DrillDrawing = CoachBoardStore.debugScene() ?? CoachBoardStore.load() ?? .new(court: .half)
     @State private var generation = 0
     @State private var savingPlay = false
     @State private var savingDrill = false
