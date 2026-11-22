@@ -584,6 +584,29 @@ enum SheetGalleryDebug {
                 }
             }
 
+        case "teamPlay", "playSheet":
+            // The demo team's focus play (demo store): =teamPlay its breakdown
+            // page (HOOPWISE_TEAMPLAY_PEOPLE=1 faces on, HOOPWISE_TEAMPLAY_FOLLOW=<n>
+            // follows role n); =playSheet the share sheet, and with
+            // HOOPWISE_PLAYSHEET_EXPORT=team|player|everyone it writes
+            // playsheet.pdf + playsheet.jpg to the App Group Library/Caches.
+            if ScreenshotStore.isActive, TeamPracticeDemo.seed(dm) != nil,
+               let team = dm.teams.first(where: { $0.name == TeamPracticeDemo.teamName }),
+               let key = team.playbook.focus.first,
+               let play = ((try? dm.modelContext.fetch(FetchDescriptor<JournalPlay>())) ?? []).first(where: { $0.planRef.key == key }) {
+                let env = ProcessInfo.processInfo.environment
+                let _ = {
+                    if let on = env["HOOPWISE_TEAMPLAY_PEOPLE"] { TeamPlayCast.setShowsPeople(on == "1", team: team.id) }
+                }()
+                if shot == "teamPlay" {
+                    NavigationStack { PlayBreakdownView(teamId: team.id, ref: play.planRef, debugFollow: env["HOOPWISE_TEAMPLAY_FOLLOW"].flatMap(Int.init)) }
+                } else {
+                    PlaySheetShareSheet(play: play, teamId: team.id, initialFocus: nil)
+                }
+            } else {
+                missing("teamPlay: needs HOOPWISE_SCREENSHOT_STORE=1")
+            }
+
         case "homeCards":
             // Home with the demo team pinned and its play marked as being
             // worked on (demo store only).

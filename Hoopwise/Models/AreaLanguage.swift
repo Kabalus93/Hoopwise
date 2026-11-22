@@ -26,7 +26,7 @@ nonisolated enum AreaLanguage {
 
         func title(chinese: Bool) -> String {
             switch self {
-            case .exports: return chinese ? "导出的 PDF（家长指南）" : "Exported PDFs (Parent Guide)"
+            case .exports: return chinese ? "导出的 PDF（家长指南、战术单）" : "Exported PDFs (Parent Guide, play sheets)"
             case .playerCard: return chinese ? "球员卡" : "Player card"
             case .gameRecap: return chinese ? "比赛回顾" : "Game recap"
             }

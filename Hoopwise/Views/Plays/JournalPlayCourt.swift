@@ -152,6 +152,11 @@ struct JournalPlayDiagramView: View {
     /// Draw the step's kept annotations (off while the editor's own ink
     /// canvas shows them).
     var showsInk = true
+    /// A team's faces in place of numbers, one player followed, defenders
+    /// left off (PlayBubbles.swift).
+    @Environment(\.playBubbles) private var bubbles
+    @Environment(\.playFocus) private var focus
+    @Environment(\.playHidesDefense) private var hidesDefense
 
     /// Marks grow in thumbnails and on a small court (the full court on a
     /// phone) so players and numbers stay readable.
@@ -226,9 +231,31 @@ struct JournalPlayDiagramView: View {
             drawAction(diagram.actions[i], in: &halo, scale: s, k: k, shading: .color(JPalette.play),
                        width: width * 3.2, radius: r, keepsColor: true)
         }
-        for action in diagram.actions {
-            drawAction(action, in: &actionLayer, scale: s, k: k, shading: ink, width: width, radius: r,
-                       screenPart: .line)
+        if let focus {
+            // Following one player: everyone else's lines grey and faint,
+            // theirs bold in the focus colour, a pass to them in it too.
+            var others = context
+            others.opacity = frame != nil ? 0.12 : 0.28
+            var mine = context
+            if frame != nil { mine.opacity = 0.55 }
+            let tint = GraphicsContext.Shading.color(PlayFocusStyle.color)
+            for action in diagram.actions where action.player != focus && action.receiver != focus {
+                drawAction(action, in: &others, scale: s, k: k, shading: .color(.secondary), width: width,
+                           radius: r, keepsColor: true, screenPart: .line)
+            }
+            for action in diagram.actions where action.receiver == focus && action.player != focus {
+                drawAction(action, in: &mine, scale: s, k: k, shading: tint, width: width,
+                           radius: r, keepsColor: true, screenPart: .line)
+            }
+            for action in diagram.actions where action.player == focus {
+                drawAction(action, in: &mine, scale: s, k: k, shading: tint, width: width * 1.7,
+                           radius: r, keepsColor: true, screenPart: .line)
+            }
+        } else {
+            for action in diagram.actions {
+                drawAction(action, in: &actionLayer, scale: s, k: k, shading: ink, width: width, radius: r,
+                           screenPart: .line)
+            }
         }
         if showsBends {
             let dot = max(4, r * 0.32)
@@ -244,7 +271,7 @@ struct JournalPlayDiagramView: View {
 
         // Where players end up.
         if frame == nil {
-            for spot in JournalPlayMath.endSpots(diagram) {
+            for spot in JournalPlayMath.endSpots(diagram) where focus == nil || spot.number == focus {
                 let c = JournalPlayCourt.point(spot.at, scale: s, court: court)
                 let ring = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
                 context.stroke(ring, with: .color(JPalette.play),
@@ -258,15 +285,17 @@ struct JournalPlayDiagramView: View {
         }
 
         // Defenders.
-        for (i, defender) in diagram.defense.enumerated() {
+        var defenseLayer = context
+        if focus != nil { defenseLayer.opacity = 0.4 }
+        for (i, defender) in diagram.defense.enumerated() where !hidesDefense {
             let at = frame.flatMap { i < $0.defense.count ? $0.defense[i] : nil } ?? defender.at
             let c = JournalPlayCourt.point(at, scale: s, court: court)
             let size = JournalPlayCourt.defenderSize * s * (compact ? 1.4 : k)
             let tint = defender.isRead ? JPalette.read : Color.secondary
-            context.draw(Text(verbatim: "X").font(.system(size: size, weight: .semibold)).foregroundStyle(tint), at: c)
+            defenseLayer.draw(Text(verbatim: "X").font(.system(size: size, weight: .semibold)).foregroundStyle(tint), at: c)
             // Man-to-man: the man he guards, small beside the X.
             if !compact, diagram.defenseMode == .man, let man = defender.guards {
-                context.draw(Text(verbatim: "\(man)").font(.system(size: size * 0.5, weight: .semibold, design: .rounded))
+                defenseLayer.draw(Text(verbatim: "\(man)").font(.system(size: size * 0.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(tint), at: CGPoint(x: c.x + size * 0.48, y: c.y + size * 0.36))
             }
         }
@@ -276,14 +305,23 @@ struct JournalPlayDiagramView: View {
             let at = frame?.players[player.number] ?? player.at
             let c = JournalPlayCourt.point(at, scale: s, court: court)
             let circle = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+            let followed = focus == player.number
+            var layer = context
+            if focus != nil && !followed { layer.opacity = 0.4 }
+            let ring = followed ? PlayFocusStyle.color : JPalette.play
             if compact {
-                context.fill(circle, with: .color(JPalette.play))
+                layer.fill(circle, with: .color(ring))
                 continue
             }
-            context.fill(circle, with: .color(JPalette.background))
-            context.fill(circle, with: .color(JPalette.play.opacity(0.14)))
-            context.stroke(circle, with: .color(JPalette.play), lineWidth: max(1.2, width * 1.15))
-            context.draw(label("\(player.number)", size: JournalPlayCourt.numberSize * s * k, weight: .semibold)
+            if let bubble = bubbles[player.number] {
+                drawBubble(bubble, at: c, radius: r * 1.25, ring: ring, width: width * (followed ? 1.9 : 1.15),
+                           numberSize: JournalPlayCourt.numberSize * s * k, in: &layer)
+                continue
+            }
+            layer.fill(circle, with: .color(JPalette.background))
+            layer.fill(circle, with: .color(ring.opacity(0.14)))
+            layer.stroke(circle, with: .color(ring), lineWidth: max(1.2, width * (followed ? 2 : 1.15)))
+            layer.draw(label("\(player.number)", size: JournalPlayCourt.numberSize * s * k, weight: .semibold)
                 .foregroundStyle(JPalette.ink), at: c)
         }
         // Every ball beside its holder (a second ball on the same player on
@@ -292,6 +330,15 @@ struct JournalPlayDiagramView: View {
         var screenLayer = context
         if frame != nil { screenLayer.opacity = 0.22 }
         for action in diagram.actions where action.kind == .screen {
+            if let focus {
+                var layer = context
+                let mine = action.player == focus
+                layer.opacity = mine ? (frame != nil ? 0.55 : 1) : (frame != nil ? 0.12 : 0.28)
+                drawAction(action, in: &layer, scale: s, k: k,
+                           shading: .color(mine ? PlayFocusStyle.color : .secondary),
+                           width: mine ? width * 1.7 : width, radius: r, keepsColor: true, screenPart: .mark)
+                continue
+            }
             drawAction(action, in: &screenLayer, scale: s, k: k, shading: ink, width: width, radius: r,
                        screenPart: .mark)
         }
@@ -348,6 +395,37 @@ struct JournalPlayDiagramView: View {
                               weight: mark ? .semibold : .regular))
                 .foregroundStyle(mark ? JPalette.ink : Color.secondary), at: JournalPlayCourt.point(note.at, scale: s, court: court))
         }
+    }
+
+    /// A person in place of a number: their photo (or initials) in a ring,
+    /// the role number as a small badge at the lower right.
+    private func drawBubble(_ bubble: PlayBubble, at c: CGPoint, radius rb: CGFloat, ring: Color, width: CGFloat,
+                            numberSize: CGFloat, in context: inout GraphicsContext) {
+        let rect = CGRect(x: c.x - rb, y: c.y - rb, width: 2 * rb, height: 2 * rb)
+        let circle = Path(ellipseIn: rect)
+        context.fill(circle, with: .color(bubble.backdrop ?? Color(white: 0.88)))
+        if let image = bubble.image {
+            var clipped = context
+            clipped.clip(to: circle)
+            let w = image.size.width, h = image.size.height
+            let side = max(w, h) > 0 ? 2 * rb / min(w, h) : 1
+            let drawn = CGSize(width: w * side, height: h * side)
+            clipped.draw(Image(uiImage: image).resizable(),
+                         in: CGRect(x: c.x - drawn.width / 2, y: c.y - drawn.height / 2, width: drawn.width, height: drawn.height))
+        } else {
+            context.draw(Text(verbatim: bubble.initials)
+                .font(.system(size: rb * (bubble.initials.count > 1 ? 0.78 : 1.0), weight: .bold, design: .rounded))
+                .foregroundStyle(Color(white: 0.2)), at: c)
+        }
+        context.stroke(circle, with: .color(ring), lineWidth: max(1.4, width))
+        let br = max(rb * 0.42, numberSize * 0.62)
+        let bc = CGPoint(x: c.x + rb * 0.74, y: c.y + rb * 0.74)
+        let badge = Path(ellipseIn: CGRect(x: bc.x - br, y: bc.y - br, width: 2 * br, height: 2 * br))
+        context.fill(badge, with: .color(ring))
+        context.stroke(badge, with: .color(.white), lineWidth: max(0.8, width * 0.5))
+        context.draw(Text(verbatim: "\(bubble.number)")
+            .font(.system(size: br * 1.25, weight: .bold, design: .rounded)).monospacedDigit()
+            .foregroundStyle(.white), at: bc)
     }
 
     private func label(_ text: String, size: CGFloat, weight: Font.Weight) -> Text {

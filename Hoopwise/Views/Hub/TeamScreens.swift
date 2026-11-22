@@ -754,12 +754,17 @@ struct TeamSectionView: View {
 struct PlayBreakdownView: View {
     let teamId: UUID
     let ref: SessionPlayRef
+    /// DEBUG gallery: start following this role.
+    var debugFollow: Int? = nil
     @EnvironmentObject var dataManager: DataManager
     @Query(sort: [SortDescriptor(\JournalPlay.order), SortDescriptor(\JournalPlay.createdAt)])
     private var library: [JournalPlay]
     @State private var stepIndex = 0
     @State private var editingRole: Int?
     @State private var openPlay = false
+    /// Numbers or the team's faces, and who is followed (TeamPlaySharing).
+    @State private var teamState = TeamPlayViewState()
+    @State private var sharing = false
 
     private var team: Team? { dataManager.teams.first { $0.id == teamId } }
     private var play: JournalPlay? { library.first { $0.isNamed(by: ref) } }
@@ -769,7 +774,9 @@ struct PlayBreakdownView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let play, let part = play.conceptPart, !part.sortedSteps.isEmpty {
+                    TeamPlayCastBar(state: $teamState) { sharing = true }
                     JournalPlayStepPlayer(part: part, index: $stepIndex)
+                        .teamPlayState(teamState)
                     Button { openPlay = true } label: {
                         Label(isChinese ? "在战术库中打开" : "Open in Plays", systemImage: "arrow.up.right.square")
                             .font(.subheadline.weight(.semibold))
@@ -819,10 +826,18 @@ struct PlayBreakdownView: View {
         .sheet(item: Binding(get: { editingRole.map { RoleRef(number: $0) } }, set: { editingRole = $0?.number })) { role in
             RoleEditorSheet(teamId: teamId, ref: ref, number: role.number)
         }
+        .onAppear(perform: loadCast)
+        .onChange(of: breakdown) { loadCast() }
+        .sheet(isPresented: $sharing) {
+            if let play {
+                PlaySheetShareSheet(play: play, teamId: teamId, initialFocus: teamState.focus)
+                    .environmentObject(dataManager)
+            }
+        }
         .sheet(isPresented: $openPlay) {
             if let play {
                 NavigationStack {
-                    JournalPlayScreen(play: play)
+                    JournalPlayScreen(play: play, teamId: teamId)
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
                                 Button(isChinese ? "完成" : "Done") { openPlay = false }
@@ -834,6 +849,14 @@ struct PlayBreakdownView: View {
     }
 
     private struct RoleRef: Identifiable { let number: Int; var id: Int { number } }
+
+    private func loadCast() {
+        let cast = dataManager.teamPlayCast(teamId: teamId, ref: ref)
+        teamState.cast = cast
+        teamState.showsPeople = (cast?.hasPeople ?? false) && TeamPlayCast.showsPeople(team: teamId)
+        if let f = teamState.focus, cast?.seats.contains(where: { $0.number == f }) != true { teamState.focus = nil }
+        if teamState.focus == nil, let debugFollow { teamState.focus = debugFollow }
+    }
 
     private func roleCard(_ role: PlayBreakdown.Role) -> some View {
         let players = role.playerIds.compactMap { id -> Student? in

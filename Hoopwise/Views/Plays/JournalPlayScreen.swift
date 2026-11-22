@@ -12,6 +12,9 @@ struct JournalPlayStudyRoute: Hashable {
 /// wrinkles and variations, and where it comes from.
 struct JournalPlayScreen: View {
     let play: JournalPlay
+    /// Opened from a team (its page, a team practice's plan): Numbers |
+    /// Players, follow a player, share as a team or player sheet.
+    var teamId: UUID?
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -32,10 +35,13 @@ struct JournalPlayScreen: View {
     @State private var editingSteps = false
     /// The visible height, so the court fits the window (`JournalPlayStepPlayer`).
     @State private var viewportHeight: CGFloat?
+    @State private var teamState = TeamPlayViewState()
+    @State private var sharingSheet = false
 
     /// Opens straight on a part (a new play: its first step, to draw).
-    init(play: JournalPlay, opening: JournalPlayStudyRoute? = nil) {
+    init(play: JournalPlay, opening: JournalPlayStudyRoute? = nil, teamId: UUID? = nil) {
         self.play = play
+        self.teamId = teamId
         _openedPart = State(initialValue: opening)
     }
 
@@ -93,6 +99,16 @@ struct JournalPlayScreen: View {
         }
         .sheet(isPresented: $showingLegend) {
             JournalPlayLegendSheet()
+        }
+        .sheet(isPresented: $sharingSheet) {
+            PlaySheetShareSheet(play: play, teamId: teamId, initialFocus: teamState.focus)
+                .environmentObject(DataManager.shared)
+        }
+        .onAppear {
+            guard let teamId else { return }
+            let cast = DataManager.shared.teamPlayCast(teamId: teamId, ref: play.planRef)
+            teamState.cast = cast
+            teamState.showsPeople = (cast?.hasPeople ?? false) && TeamPlayCast.showsPeople(team: teamId)
         }
         .fullScreenCover(item: $editingStep) { step in
             JournalPlayStepEditor(step: step, court: play.court)
@@ -196,10 +212,15 @@ struct JournalPlayScreen: View {
             drawHero(concept)
         } else {
             VStack(alignment: .leading, spacing: JSpacing.xs) {
+                if teamId != nil {
+                    TeamPlayCastBar(state: $teamState) { sharingSheet = true }
+                        .padding(.bottom, JSpacing.xs)
+                }
                 conceptLabel(concept)
                 JournalPlayStepPlayer(part: concept, index: $conceptStep,
-                                      paused: editingStep != nil || showingLegend || editingSteps,
+                                      paused: editingStep != nil || showingLegend || editingSteps || sharingSheet,
                                       viewportHeight: viewportHeight)
+                    .teamPlayState(teamState)
             }
             // Steps deleted on the step screen: stay on one that exists.
             .onAppear {

@@ -2573,6 +2573,63 @@ HOOPWISE_SHOT=coachBoard. Tests: CoachBoardUITests (opens in the editor,
 draw, steps button, relaunch → still there, Save → Play/Drill, Clear; full
 court upright; ball rule + play in place), SkillIntegrationTests.
 
+## Team plays: faces, follow a player, play sheets (23 Nov 2026, Luther)
+"When I'm using a play in a team practice or team option in the hub, let me
+have the choice of having either numbers or bubble pictures on the play … share
+a play to the team … share a play to a player: this highlights what that player
+does … as PDF or printed. The quality of the export matters." Decided: A4,
+defenders asked EACH TIME, names on paper by default, photos only with media
+consent.
+- ON SCREEN (Views/Plays/TeamPlaySharing.swift): where a play is opened FROM A
+  TEAM — the breakdown page (PlayBreakdownView), the play page opened from it,
+  a team practice's plan plays (`JournalPlayScreen(teamId:)`,
+  `SessionPlanPlaysSection(teamId:)` = curriculum.teamId) — `TeamPlayCastBar`
+  sits over the court: Numbers | Players (device-local per team,
+  `team.play.people.<team>`), Share, and a chip per role (photo, name, role
+  badge) that FOLLOWS that player; a role with several players is a Menu
+  (tap follows, the menu picks who is on — `team.play.lineup.<team>.<play>`).
+- THE COURT (JournalPlayDiagramView) reads three environment values
+  (Views/Plays/PlayBubbles.swift): `playBubbles` (number → photo or initials,
+  role number as a badge; the skill-level backdrop behind a cut-out),
+  `playFocus` (the followed player's lines bold ORANGE `PlayFocusStyle.color`,
+  a pass to them orange, every other line, player and defender faint grey, only
+  their end spot), `playHidesDefense`. One drawing for the page, playback and
+  paper. Who plays a role = the team's PlayBreakdown (`DataManager.
+  teamPlayCast`); a play not broken down shows numbers.
+- PLAY SHEETS (Views/Plays/PlaySheetDocument.swift): A4 portrait, VECTOR —
+  each court is JournalPlayDiagramView drawn by ImageRenderer straight into
+  the UIGraphicsPDFRenderer context (y flipped; Canvas paths and text stay
+  vector — the courts' letters are selectable text in the PDF; only a photo
+  is a bitmap). Header: team-colour rule, eyebrow (TEAM PLAY SHEET / PLAYER
+  SHEET · name · ROLE n), play name, category · court · steps · options,
+  When, The idea; ROLES key (team) or "Your role" box with the role's standard
+  and drills (player); a grid of steps — half court two across, full court
+  (upright) three across, the court as wide as lets the part take the FEWEST
+  pages and never under 75 mm; caption over each court, its words under it,
+  and on a player sheet "Your job: …" worded from the drawing by
+  Models/JournalPlays/PlayRoleJob.swift (cut / dribble / pass / hand-off /
+  shot / screen for whom / catch from whom, spots named "the left wing", "the
+  right elbow", "the top"…; nothing drawn = "Stay at …"; bilingual, pure);
+  each wrinkle / variation from a new page; footer = the line legend (+ "Your
+  moves" on a player sheet), academy, page n of m. Long image for WeChat =
+  the pages stacked (1242 px JPEG). Language: Languages by Area → Exported
+  PDFs.
+- SHARE SHEET (`PlaySheetShareSheet`): the first page as a live preview on
+  top; For: the team / one role's player / sheets for everyone (one PDF, a
+  page set per player); On the court: Numbers | Players, "Include photos"
+  only when someone has a photo AND recorded publication consent
+  (`mayPublishMedia`; staff coaches count as consenting) — the others print
+  as initials; Defenders Show | Hide with NO default (PDF / Print / Image stay
+  disabled until answered). Actions in a fixed bottom bar. Print =
+  UIPrintInteractionController.
+- DEBUG: HOOPWISE_SHOT=teamPlay (+ HOOPWISE_TEAMPLAY_PEOPLE=1,
+  HOOPWISE_TEAMPLAY_FOLLOW=<n>) and =playSheet (+ HOOPWISE_PLAYSHEET_EXPORT=
+  team|player|everyone, HOOPWISE_PLAYSHEET_DEFENSE=0 → playsheet.pdf +
+  playsheet.jpg in the App Group Library/Caches). Tests: PlaySheetTests
+  (jobs, spots, consent, A4, pages, text is text), TeamPlaySharingUITests.
+- NEXT (agreed, not built): a BOOKLET — every play of a playbook section or
+  the focus plays in one PDF.
+
 ## The ball rule (17 Nov 2026, Luther)
 "A pass can only be drawn from a player with a ball, otherwise nothing is
 drawn; a dribble same." In the step editor (every play and drill, not only

@@ -12,6 +12,8 @@ struct SessionPlanPlaysSection: View {
     let color: Color
     /// Writes the session after a change.
     let onChange: () -> Void
+    /// A team practice's team: its plays open with the team's faces and sharing.
+    var teamId: UUID? = nil
 
     @Query(sort: [SortDescriptor(\JournalPlay.order), SortDescriptor(\JournalPlay.createdAt)])
     private var library: [JournalPlay]
@@ -62,7 +64,7 @@ struct SessionPlanPlaysSection: View {
         }
         .sheet(item: $opened) { opened in
             NavigationStack {
-                JournalPlayScreen(play: opened.play)
+                JournalPlayScreen(play: opened.play, teamId: teamId)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button { self.opened = nil } label: { Text(isChinese ? "完成" : "Done") }

@@ -1040,7 +1040,8 @@ struct FlightySessionPageView: View {
                     plays: $session.curriculum.plays,
                     canEdit: accessMode.canEdit,
                     color: Color.accentColor,
-                    onChange: saveSession
+                    onChange: saveSession,
+                    teamId: session.curriculum.teamId
                 )
                 }
 
