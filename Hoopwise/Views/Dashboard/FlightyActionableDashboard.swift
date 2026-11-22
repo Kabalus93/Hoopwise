@@ -410,9 +410,8 @@ struct FlightyActionableDashboard: View {
             .onReceive(NotificationCenter.default.publisher(for: .hoopwiseHomePins)) { _ in
                 pinTick += 1
             }
-            .sheet(item: $selectedStudent) { student in
+            .quickPeep(item: $selectedStudent) { student in
                 StudentQuickPeepView(student: student, sessionId: nil)
-                    .quickPeepPresentation()
             }
             .sheet(isPresented: $showingAllAttentionItems) {
                 AllAttentionItemsSheet(

@@ -2461,14 +2461,22 @@ title was white on its yellow card in dark mode. DEBUG HOOPWISE_PEEP=games
 (the athlete with the most games) and HOOPWISE_PEEP_SAMPLE_EVIDENCE=1 (sample
 lines — the demo store has nobody with three games) on quickPeep.
 THE PEEP GROWS (24 Nov 2026, Luther: "holding the handle and pulling upwards
-extend the page into a full screen like slide up page … dismissed by tapping
-Done or sliding back down"). `.quickPeepPresentation()` (StudentQuickPeepView
-.swift) on both sheets that open it (session roster, Home): detents 62 % and
-large, the handle visible, `presentationContentInteraction(.scrolls)` — the
-page scrolls inside, only the handle resizes it. Honoured on the iPad mini's
-regular-width sheet too. Test: QuickPeepSheetUITests (iPad mini, sessionPage
-Attend tab — `pastSession` finds no past scheduled session in the demo store
-now).
+extend the page into a full screen"; then "extend into full screen … the
+empty side left and right could be used to show more … pulled down to a peep,
+and pull down to disappear"). `.quickPeep(item:)` (StudentQuickPeepView.swift)
+on both places that open it (session roster, Home). COMPACT (iPhone): the
+system sheet, detents 62 % / large, handle visible, content scrolls without
+resizing (`quickPeepPresentation`). REGULAR (iPad, Mac): a system sheet can
+grow taller but never wider, so `QuickPeepStage` over a clear fullScreenCover
+(presented without the cover's slide; the stage animates itself): a centred
+peep ≤ 720 pt wide, 62 % high, with a handle (`peep.handle`); dragging it
+interpolates width and height up to the WHOLE screen (`peep.stage.full`);
+release above halfway = full, else peep, below 55 % of the peep = gone; a tap
+on the handle toggles; tap outside, Done (env `peepClose`) or the drag down
+closes it. The page's layout follows its OWN width (onGeometryChange): < 700
+one column, ≥ 700 card | the rest, ≥ 1100 three columns (card | evaluation +
+results | notes, insights, reminders, contract). Tests: QuickPeepSheetUITests
+(iPad mini, sessionPage Attend tab; skips on a phone). Not checked on the Mac.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan

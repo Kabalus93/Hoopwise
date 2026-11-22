@@ -6,6 +6,11 @@ struct StudentQuickPeepView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.dismiss) var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Set by the iPad peep stage: Done slides it away instead of dismissing.
+    @Environment(\.peepClose) private var peepClose
+    /// The page's own width — the layout follows it (one, two or three
+    /// columns), so the full-screen peep uses the room it has.
+    @State private var pageWidth: CGFloat = 0
     
     /// The student as handed in; `student` re-reads the store so an edit made
     /// from this sheet shows here at once.
@@ -383,14 +388,17 @@ struct StudentQuickPeepView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                if isIPad {
-                    // iPad: Compact two-column layout
+                if pageWidth >= 1100 {
+                    wideContent
+                } else if pageWidth >= 700 || (pageWidth == 0 && isIPad) {
+                    // Two columns: the card | everything else
                     ipadContent
                 } else {
-                    // iPhone: Single column scrolling
+                    // Single column scrolling
                     iphoneContent
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "学员速览" : "Quick Peep")
             .navigationBarTitleDisplayMode(.inline)
@@ -400,8 +408,10 @@ struct StudentQuickPeepView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "完成" : "Done") { dismiss() }
-                        .fontWeight(.semibold)
+                    Button(isChinese ? "完成" : "Done") {
+                        if let peepClose { peepClose() } else { dismiss() }
+                    }
+                    .fontWeight(.semibold)
                 }
 
                 ToolbarItem(placement: .primaryAction) {
@@ -428,6 +438,36 @@ struct StudentQuickPeepView: View {
         }
     }
     
+    // MARK: - Full screen on a wide iPad / Mac: three columns
+    // (24 Nov 2026, Luther: "the empty side left and right could be used to
+    // show more"). The card | the evaluation and results | notes, insights,
+    // reminders, contract.
+    private var wideContent: some View {
+        HStack(alignment: .top, spacing: 20) {
+            AthleteCardFlip(student: student)
+                .frame(maxWidth: 420)
+            VStack(spacing: 16) {
+                skillsSection
+                ShootingProfileSection(studentId: student.id)
+                CustomTrackProfileSection(student: student)
+            }
+            .frame(maxWidth: .infinity)
+            VStack(spacing: 16) {
+                if let notes = player?.coachNotes, !notes.isEmpty {
+                    coachNotesSection(notes)
+                }
+                if !insights.isEmpty {
+                    insightsSection
+                }
+                StudentRemindersCard(student: student)
+                contractInfoSection
+                AboutAthleteCard(studentId: student.id)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(24)
+    }
+
     // MARK: - iPad Content (Two-column - matches Intelligence Profile)
     private var ipadContent: some View {
         HStack(alignment: .top, spacing: 20) {
@@ -1572,10 +1612,29 @@ struct QuickPeepRadarView: View {
 
 
 // THE PEEP GROWS (24 Nov 2026, Luther: "holding the handle and pulling
-// upwards extend the page into a full screen like slide up page that can be
-// dismissed by tapping Done or sliding back down"). Opens part-way; the
-// handle pulls it to full height; down again (or Done) closes it. Content
-// scrolls inside without resizing the sheet — only the handle resizes it.
+// upwards extend the page … dismissed by tapping Done or sliding back down";
+// then: "extend into full screen … the empty side left and right could be
+// used to show more … pulled down to a peep, and pull down to disappear").
+//
+// iPhone (compact): the system sheet — 62 % and large, the handle visible;
+// the page scrolls inside, only the handle resizes it.
+// iPad / Mac (regular): the system sheet can grow taller but never wider, so
+// the peep is its own stage (QuickPeepStage) over a clear full-screen cover:
+// a centred peep with a handle; the handle pulls it up into the WHOLE screen
+// (and the page lays out in two or three columns); down from full = the peep;
+// down from the peep = gone. Tap outside or Done closes it too.
+
+private struct PeepCloseKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var peepClose: (() -> Void)? {
+        get { self[PeepCloseKey.self] }
+        set { self[PeepCloseKey.self] = newValue }
+    }
+}
+
 private struct QuickPeepPresentation: ViewModifier {
     @State private var detent: PresentationDetent = .fraction(0.62)
 
@@ -1588,6 +1647,134 @@ private struct QuickPeepPresentation: ViewModifier {
 }
 
 extension View {
-    /// How the Quick Peep is presented everywhere it opens as a sheet.
+    /// The compact (iPhone) Quick Peep sheet.
     func quickPeepPresentation() -> some View { modifier(QuickPeepPresentation()) }
+
+    /// Presents the Quick Peep for `item`: a sheet on the iPhone, the
+    /// growing stage on the iPad and Mac.
+    func quickPeep<Item: Identifiable, Peep: View>(item: Binding<Item?>,
+                                                   @ViewBuilder content: @escaping (Item) -> Peep) -> some View {
+        modifier(QuickPeepHost(item: item, peep: content))
+    }
+}
+
+private struct QuickPeepHost<Item: Identifiable, Peep: View>: ViewModifier {
+    @Binding var item: Item?
+    let peep: (Item) -> Peep
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// The stage's own copy, set without the cover's slide (the stage
+    /// animates itself).
+    @State private var staged: Item?
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: Binding(get: { sizeClass == .regular ? nil : item },
+                                 set: { item = $0 })) { it in
+                peep(it).quickPeepPresentation()
+            }
+            .fullScreenCover(item: $staged) { it in
+                QuickPeepStage(onClosed: {
+                    var t = Transaction(); t.disablesAnimations = true
+                    withTransaction(t) { staged = nil; item = nil }
+                }) {
+                    peep(it)
+                }
+                .presentationBackground(.clear)
+            }
+            .onChange(of: item?.id) { _, id in
+                guard sizeClass == .regular else { return }
+                var t = Transaction(); t.disablesAnimations = true
+                withTransaction(t) { staged = id == nil ? nil : item }
+            }
+    }
+}
+
+/// The iPad / Mac peep: a centred panel that its handle pulls up into the
+/// whole screen and down again, then away.
+struct QuickPeepStage<Peep: View>: View {
+    let onClosed: () -> Void
+    @ViewBuilder let peep: Peep
+
+    @State private var full = false
+    @State private var shown = false
+    @State private var drag: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let safeTop = geo.safeAreaInsets.top
+            let screenW = geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing
+            let screenH = geo.size.height + safeTop + geo.safeAreaInsets.bottom
+            let peepW = min(screenW - 64, 720)
+            let peepH = screenH * 0.62
+            let base = full ? screenH : peepH
+            // Dragging up grows it (to the screen), down shrinks it.
+            let height = min(screenH, max(0, base - drag))
+            let grow = max(0, min(1, (height - peepH) / (screenH - peepH)))
+            let width = peepW + (screenW - peepW) * grow
+            let radius = 24 * (1 - grow)
+            ZStack(alignment: .bottom) {
+                Color.black.opacity(shown ? 0.35 * min(1, height / peepH) : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture { close() }
+                    .accessibilityHidden(true)
+                VStack(spacing: 0) {
+                    handle
+                        .padding(.top, safeTop * grow)
+                        .gesture(dragGesture(peepH: peepH, screenH: screenH))
+                    peep
+                        .environment(\.peepClose, close)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(width: width, height: height)
+                .background(AppTheme.background)
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous))
+                .shadow(color: .black.opacity(0.25 * (1 - grow)), radius: 20, y: -4)
+                .offset(y: shown ? 0 : screenH)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier(full ? "peep.stage.full" : "peep.stage")
+            }
+            .frame(width: screenW, height: screenH, alignment: .bottom)
+            .ignoresSafeArea()
+        }
+        .onAppear { withAnimation(.spring(duration: 0.35)) { shown = true } }
+    }
+
+    /// The grabber: a wide strip so it is easy to catch.
+    private var handle: some View {
+        Capsule()
+            .fill(Color.secondary.opacity(0.5))
+            .frame(width: 40, height: 5)
+            .frame(maxWidth: .infinity, minHeight: 22)
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel(full ? "Show less" : "Show more")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("peep.handle")
+            .accessibilityAction { withAnimation(.spring(duration: 0.35)) { full.toggle() } }
+            .onTapGesture { withAnimation(.spring(duration: 0.35)) { full.toggle() } }
+    }
+
+    private func dragGesture(peepH: CGFloat, screenH: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
+            .onChanged { drag = $0.translation.height }
+            .onEnded { value in
+                let base = full ? screenH : peepH
+                let end = base - value.predictedEndTranslation.height
+                withAnimation(.spring(duration: 0.35)) {
+                    drag = 0
+                    if end > (peepH + screenH) / 2 {
+                        full = true
+                    } else if end > peepH * 0.55 {
+                        full = false
+                    } else {
+                        close()
+                    }
+                }
+            }
+    }
+
+    private func close() {
+        withAnimation(.easeIn(duration: 0.25)) { shown = false; drag = 0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onClosed() }
+    }
 }
