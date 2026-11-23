@@ -4214,6 +4214,38 @@ STILL OPEN, needs a decision rather than a verdict:
   updateContractsForAttendance, which never un-charges, so balances were
   untouched; the "Before overwrite" revision restores games and marks.
 
+## Session notes save themselves (23 November 2026, Luther: "make sure notes are syncing to the cloud like everything else")
+- AUDIT: every kind of note is in the synced store — session notes
+  (`SDSessionEvent.notes` / `coachNotes`), reminders (SDReminder), athlete
+  notes and the contact log (SDPlayer), team playbook notes (playbookData).
+  Device-local on purpose: Parent Guide wording (ProgramGuideStore).
+- THE GAP was WHEN session notes were written: only when the Notes tab was
+  LEFT (`.onDisappear { saveSession() }`). Notes typed and left on screen — a
+  Mac or iPad sitting on the tab, or the app put away and closed by iOS —
+  never reached the store, so never iCloud.
+- NOW: `setSessionNotes(sessionId:notes:coachNotes:)` is the field-level
+  writer (no revision — it runs every few seconds of typing and the ten kept
+  revisions are the restore points for games and attendance). The session
+  page writes 2 s after the last keystroke, and at once when the editor loses
+  focus, the tab or page closes, or the app leaves the front (`notesEdited`,
+  `flushNotes`). `notesBaseline` = the notes as last taken from / written to
+  the store; text that differs is unsaved (`notesDirty`).
+- STALE COPIES: a whole-session save from a page that did NOT change the
+  notes now takes the store's notes first (another device's newer notes used
+  to be written back over by an older open copy), and a refresh never
+  replaces notes typed here and not yet written.
+- DEAD, NOT SYNCED: Components/SessionNotesBoard.swift (`BoardNotesStore`,
+  UserDefaults `session_notes_board_v1` — the 33 MB blob in the phone's
+  prefs) is referenced by nothing. Whatever old board notes it holds exist
+  only on the device that wrote them and show nowhere. Bringing them into
+  the session notes is a decision for Luther (asked 23 Nov 2026).
+- DEBUG HOOPWISE_DEMO_NOTES=<text> (sessionPage, demo store) sets the demo
+  session's notes. Tests: SessionNotesSaveTests, SessionNotesAutosaveUITests
+  (types, kills the app on the Notes tab, relaunches: the text is there).
+  SessionRemindersUITests failed the same evening at "the options appear
+  while writing" — not shown to be related (it expects a "Before next class"
+  option, which needs a later class that day); check it in the morning.
+
 ## No third-party imagery (App Review 4.1(a), 29 October 2026)
 - Version 1.0 (5) was REJECTED under 4.1(a) Copycats: "the app's metadata
   contains third-party content … from a third-party platform". The listing

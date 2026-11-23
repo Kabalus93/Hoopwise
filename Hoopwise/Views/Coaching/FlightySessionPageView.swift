@@ -90,6 +90,17 @@ struct FlightySessionPageView: View {
     @State private var inlineDrillTextBySection: [CurriculumSection: String] = [:]
     @State private var notesEditorTarget: NotesEditorTarget = .session
     @FocusState private var focusedNotesEditor: NotesEditorTarget?
+    /// NOTES SAVE THEMSELVES (23 Nov 2026): typed notes not yet in the store,
+    /// and the pending write (2 s after the last keystroke; at once when the
+    /// field is left, the tab or page closes, or the app leaves the front).
+    /// The notes as this page last took them from (or wrote them to) the
+    /// store. Text that differs from it was typed here and is not saved yet.
+    @State private var notesBaseline: (notes: String?, coachNotes: String?)?
+    private var notesDirty: Bool {
+        guard let base = notesBaseline else { return false }
+        return base.notes != session.notes || base.coachNotes != session.coachNotes
+    }
+    @State private var notesSaveTask: Task<Void, Never>?
     /// Notes tab: this session's reminders (the default, on the left) or
     /// the notebook (14 Nov 2026 — Reminders replaced the Reflection tab).
     @State private var notesPane: NotesPane = .reminders
@@ -468,14 +479,43 @@ struct FlightySessionPageView: View {
         // entry point (calendar, dashboard tile, …) leaves the local
         // snapshot frozen at view-init time — that's the stale-snapshot
         // path that wiped games + the attendance photo for one coach.
-        .task { refreshSessionFromStore() }
+        .task {
+            if notesBaseline == nil { notesBaseline = (session.notes, session.coachNotes) }
+            refreshSessionFromStore()
+        }
         .onChange(of: dataManager.sessionEvents) { _, _ in
             refreshSessionFromStore()
         }
-        .onDisappear { flushAttendanceMarks() }
+        .onDisappear { flushAttendanceMarks(); flushNotes() }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { flushAttendanceMarks() }
+            if phase != .active { flushAttendanceMarks(); flushNotes() }
         }
+        .onChange(of: session.notes) { _, _ in notesEdited() }
+        .onChange(of: session.coachNotes) { _, _ in notesEdited() }
+        .onChange(of: focusedNotesEditor) { _, target in
+            if target == nil { flushNotes() }
+        }
+    }
+
+    /// The notes on this page differ from the store's: write them soon.
+    private func notesEdited() {
+        guard notesDirty else { return }
+        notesSaveTask?.cancel()
+        notesSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            flushNotes()
+        }
+    }
+
+    /// Writes the typed notes alone (field-level), so they reach iCloud
+    /// without waiting for the tab to be left.
+    private func flushNotes() {
+        notesSaveTask?.cancel()
+        notesSaveTask = nil
+        guard notesDirty, accessMode.canAddNotes else { return }
+        notesBaseline = (session.notes, session.coachNotes)
+        dataManager.setSessionNotes(sessionId: session.id, notes: session.notes, coachNotes: session.coachNotes)
     }
 
     /// Pulls the latest `SessionEvent` out of the dataManager cache and
@@ -528,11 +568,14 @@ struct FlightySessionPageView: View {
         session.games = fresh.games
         session.headerImageURL = fresh.headerImageURL
 
-        if focusedNotesEditor != .session {
+        // Never over notes typed here and not yet written.
+        if focusedNotesEditor != .session, notesBaseline?.notes == session.notes {
             session.notes = fresh.notes
+            notesBaseline?.notes = fresh.notes
         }
-        if focusedNotesEditor != .reflections {
+        if focusedNotesEditor != .reflections, notesBaseline?.coachNotes == session.coachNotes {
             session.coachNotes = fresh.coachNotes
+            notesBaseline?.coachNotes = fresh.coachNotes
         }
         session.updatedAt = fresh.updatedAt
     }
@@ -3281,7 +3324,7 @@ struct FlightySessionPageView: View {
             AddReminderSheet(sessionId: session.id, programId: session.programId, existingReminder: reminder)
                 .environmentObject(dataManager)
         }
-        .onDisappear { saveSession() }
+        .onDisappear { flushNotes(); saveSession() }
     }
 
     /// The notebook, an older reflection, the previous class's notes, then
@@ -4765,6 +4808,17 @@ struct FlightySessionPageView: View {
                 debugLog("   - Game \(game.gameNumber): status=\(game.status.rawValue), stats=\(game.playerStats.count)")
             }
         }
+        // Notes this page did not change follow the STORE: a copy opened
+        // before another device's notes arrived must not write its older
+        // text back over them.
+        if notesDirty {
+            notesSaveTask?.cancel(); notesSaveTask = nil
+        } else if notesBaseline != nil,
+                  let stored = dataManager.sessionEvents.first(where: { $0.id == session.id }) {
+            if session.notes != stored.notes { session.notes = stored.notes }
+            if session.coachNotes != stored.coachNotes { session.coachNotes = stored.coachNotes }
+        }
+        if notesBaseline != nil { notesBaseline = (session.notes, session.coachNotes) }
         session.updatedAt = Date()
         // Details only: games, marks and the photo are written field by
         // field as they happen and keep the store's values here, so this

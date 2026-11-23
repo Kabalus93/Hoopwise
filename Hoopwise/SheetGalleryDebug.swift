@@ -321,6 +321,14 @@ enum SheetGalleryDebug {
                     }
                     dm.replaceSessionGames(inSessionId: session.id, games: games)
                 }()
+                // HOOPWISE_DEMO_NOTES=<text> (demo store only): this session's
+                // notes are set to the text ("" clears them) before the page
+                // opens — how SessionNotesAutosaveUITests puts them back.
+                let _ = {
+                    guard ScreenshotStore.isActive, !DemoNotesOnce.done, let text = env["HOOPWISE_DEMO_NOTES"] else { return }
+                    DemoNotesOnce.done = true
+                    dm.setSessionNotes(sessionId: session.id, notes: text.isEmpty ? nil : text, coachNotes: session.coachNotes)
+                }()
                 // HOOPWISE_DEMO_SHOOTING=1 | clear (demo store only): Free
                 // Throws and 5-Spot Twos in this session's Skills with no
                 // results yet, or out again (20 Nov 2026).
@@ -867,6 +875,7 @@ enum SheetGalleryDebug {
 /// HOOPWISE_DEMO_READY_GAMES writes once per launch.
 private enum DemoGamesOnce { static var done = false }
 private enum DemoShootingOnce { static var done = false }
+private enum DemoNotesOnce { static var done = false }
 private enum DemoTrackedOnce {
     static var done = false
     static let drillId = UUID(uuidString: "7AC4ED00-0000-4000-8000-00000000BA55")!

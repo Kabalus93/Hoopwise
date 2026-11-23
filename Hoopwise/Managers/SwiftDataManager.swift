@@ -2176,6 +2176,28 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
+    /// THE writer of a session's NOTES while they are being typed (23 Nov
+    /// 2026, Luther: "make sure notes are syncing to the cloud like
+    /// everything else"). The Notes tab used to write only when it was LEFT:
+    /// notes typed and left on screen — or lost with the app in the
+    /// background — never reached the store, so never iCloud. Field-level
+    /// (nothing else of the session is touched) and without a revision: it
+    /// runs every few seconds of typing, and the ten kept revisions are the
+    /// restore points for games and attendance.
+    func setSessionNotes(sessionId: UUID, notes: String?, coachNotes: String?) {
+        do {
+            let descriptor = FetchDescriptor<SDSessionEvent>(predicate: #Predicate { $0.id == sessionId })
+            guard let sd = try modelContext.fetch(descriptor).first else { return }
+            guard sd.notes != notes || sd.coachNotes != coachNotes else { return }
+            if sd.notes != notes { sd.notes = notes }
+            if sd.coachNotes != coachNotes { sd.coachNotes = coachNotes }
+            sd.updatedAt = Date()
+            saveAndRefresh()
+        } catch {
+            debugLog("❌ setSessionNotes failed: \(error)")
+        }
+    }
+
     /// THE writer of a session's custom tracked-drill results (23 Nov 2026),
     /// field-level like setSessionShooting.
     func setSessionTracking(sessionId: UUID, runs: [TrackedRun]) {
