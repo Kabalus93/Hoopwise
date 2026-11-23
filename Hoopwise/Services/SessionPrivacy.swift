@@ -18,6 +18,9 @@ import Foundation
 // decides whether a client is charged.
 enum SessionPrivacy {
 
+    /// A private client's own program (lessons booked one by one, no weekday).
+    static func isPrivate(_ program: Program) -> Bool { program.programType == .privateSessions }
+
     static func isPrivate(_ session: SessionEvent,
                           programs: [Program],
                           contracts: [Contract]) -> Bool {

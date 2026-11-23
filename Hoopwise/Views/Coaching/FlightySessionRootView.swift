@@ -224,27 +224,18 @@ struct FlightyProgramsListView: View {
         return Set(ids).count
     }
     
-    // Group programs by their primary recurring day
-    private var programsByDay: [(day: Weekday, programs: [Program])] {
-        let grouped = Dictionary(grouping: activePrograms) { program -> Weekday in
-            program.recurringDays.first ?? .saturday
-        }
-        return Weekday.allCases.compactMap { day in
-            if let programs = grouped[day], !programs.isEmpty {
-                return (day: day, programs: programs.sorted(by: { $0.name < $1.name }))
-            }
-            return nil
+    private var programsByDay: [(group: ProgramListGroup, programs: [Program])] {
+        let grouped = Dictionary(grouping: activePrograms, by: ProgramListGroup.of)
+        let order: [ProgramListGroup] = Weekday.allCases.map { .day($0) } + [.privateLessons, .noFixedDay]
+        return order.compactMap { group in
+            guard let programs = grouped[group], !programs.isEmpty else { return nil }
+            return (group: group, programs: programs.sorted(by: { $0.name < $1.name }))
         }
     }
-    
-    // Days that have programs
-    private var daysWithPrograms: [Weekday] {
-        programsByDay.map { $0.day }
-    }
-    
+
     @State private var searchText: String = ""
 
-    private var filteredProgramsByDay: [(day: Weekday, programs: [Program])] {
+    private var filteredProgramsByDay: [(group: ProgramListGroup, programs: [Program])] {
         guard !searchText.isEmpty else { return programsByDay }
         let query = searchText.lowercased()
         let roster = dataManager.programs
@@ -257,7 +248,7 @@ struct FlightyProgramsListView: View {
                     || program.name.lowercased().contains(query)
                     || (program.locationName ?? "").lowercased().contains(query)
             }
-            return filtered.isEmpty ? nil : (day: group.day, programs: filtered)
+            return filtered.isEmpty ? nil : (group: group.group, programs: filtered)
         }
     }
 
@@ -297,16 +288,16 @@ struct FlightyProgramsListView: View {
                 }
             }
 
-            ForEach(filteredProgramsByDay, id: \.day) { dayGroup in
+            ForEach(filteredProgramsByDay, id: \.group) { dayGroup in
                 Section {
                     ForEach(dayGroup.programs) { program in
                         NavigationLink(destination: FlightyProgramDetailView(program: program)) {
-                            minimalProgramRow(program: program, sectionDay: dayGroup.day)
+                            minimalProgramRow(program: program, sectionDay: dayGroup.group)
                         }
                     }
                 } header: {
                     HStack(spacing: 6) {
-                        Text(dayGroup.day.displayName)
+                        Text(dayGroup.group.title(chinese: isChinese))
                             .textCase(nil)
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.primary)
@@ -368,7 +359,7 @@ struct FlightyProgramsListView: View {
     }
     
     // MARK: - Minimal Program Row (Two-line)
-    private func minimalProgramRow(program: Program, sectionDay: Weekday) -> some View {
+    private func minimalProgramRow(program: Program, sectionDay: ProgramListGroup) -> some View {
         let nextSession = dataManager.sessionEvents
             .filter { $0.programId == program.id && $0.startTime > Date() }
             .sorted { $0.startTime < $1.startTime }
@@ -387,7 +378,7 @@ struct FlightyProgramsListView: View {
         // chip so a program that runs Thu+Wed reads honestly even though
         // it's filed under whichever day comes first in `recurringDays`.
         let otherDays = program.recurringDays
-            .filter { $0 != sectionDay }
+            .filter { ProgramListGroup.day($0) != sectionDay }
             .sorted { $0.rawValue < $1.rawValue }
 
         return HStack(spacing: 10) {
@@ -2856,4 +2847,25 @@ struct ArchivedProgramRow: View {
 #Preview {
     FlightySessionRootView()
         .environmentObject(DataManager.shared)
+}
+
+/// Where a program is listed: under its first weekday, or — with no
+/// weekday — under Private lessons or No fixed day. A program without a
+/// day used to be filed under SATURDAY, so every private client's program
+/// read as a Saturday class (23 Nov 2026, Luther).
+nonisolated enum ProgramListGroup: Hashable {
+    case day(Weekday), privateLessons, noFixedDay
+
+    func title(chinese: Bool) -> String {
+        switch self {
+        case .day(let d): d.displayName
+        case .privateLessons: chinese ? "私教课" : "Private lessons"
+        case .noFixedDay: chinese ? "没有固定上课日" : "No fixed day"
+        }
+    }
+
+    static func of(_ program: Program) -> ProgramListGroup {
+        if let day = program.recurringDays.first { return .day(day) }
+        return SessionPrivacy.isPrivate(program) ? .privateLessons : .noFixedDay
+    }
 }

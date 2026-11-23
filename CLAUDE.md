@@ -4233,6 +4233,15 @@ STILL OPEN, needs a decision rather than a verdict:
   updateContractsForAttendance, which never un-charges, so balances were
   untouched; the "Before overwrite" revision restores games and marks.
 
+## Programs list: no weekday is not Saturday (23 November 2026, Luther: "why are my clients appearing on Saturday?")
+The Sessions tab's programs list grouped by `recurringDays.first ?? .saturday`,
+so every program WITHOUT a weekday — each private client's own program, a
+camp — sat under Saturday. `ProgramListGroup` (FlightySessionRootView.swift,
+file scope): `.day(first weekday)`, else `.privateLessons` ("Private lessons"
+/ 私教课, via `SessionPrivacy.isPrivate(program)`), else `.noFixedDay` ("No
+fixed day"); those two sections come after the weekdays. Nothing stored
+changed. Test: ProgramListGroupTests. Not looked at on screen.
+
 ## Session notes save themselves (23 November 2026, Luther: "make sure notes are syncing to the cloud like everything else")
 - AUDIT: every kind of note is in the synced store — session notes
   (`SDSessionEvent.notes` / `coachNotes`), reminders (SDReminder), athlete
