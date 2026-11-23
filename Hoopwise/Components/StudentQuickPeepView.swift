@@ -10,7 +10,15 @@ struct StudentQuickPeepView: View {
     @Environment(\.peepClose) private var peepClose
     /// The page's own width — the layout follows it (one, two or three
     /// columns), so the full-screen peep uses the room it has.
-    @State private var pageWidth: CGFloat = 0
+    @State private var measuredColumns = 0
+    /// The width the iPad stage lays this page out at (known before the
+    /// first draw, so the page is built once, in the right layout).
+    @Environment(\.peepLayoutWidth) private var stageWidth
+    private static func columns(for width: CGFloat) -> Int { width >= 1100 ? 3 : width >= 700 ? 2 : width > 0 ? 1 : 0 }
+    private var columns: Int {
+        if let stageWidth { return Self.columns(for: stageWidth) }
+        return measuredColumns == 0 ? (isIPad ? 2 : 1) : measuredColumns
+    }
     
     /// The student as handed in; `student` re-reads the store so an edit made
     /// from this sheet shows here at once.
@@ -388,9 +396,9 @@ struct StudentQuickPeepView: View {
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
-                if pageWidth >= 1100 {
+                if columns == 3 {
                     wideContent
-                } else if pageWidth >= 700 || (pageWidth == 0 && isIPad) {
+                } else if columns == 2 {
                     // Two columns: the card | everything else
                     ipadContent
                 } else {
@@ -398,7 +406,7 @@ struct StudentQuickPeepView: View {
                     iphoneContent
                 }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+            .onGeometryChange(for: Int.self) { Self.columns(for: $0.size.width) } action: { measuredColumns = $0 }
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(isChinese ? "学员速览" : "Quick Peep")
             .navigationBarTitleDisplayMode(.inline)
@@ -1629,10 +1637,18 @@ private struct PeepCloseKey: EnvironmentKey {
     static let defaultValue: (() -> Void)? = nil
 }
 
+private struct PeepLayoutWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
 extension EnvironmentValues {
     var peepClose: (() -> Void)? {
         get { self[PeepCloseKey.self] }
         set { self[PeepCloseKey.self] = newValue }
+    }
+    var peepLayoutWidth: CGFloat? {
+        get { self[PeepLayoutWidthKey.self] }
+        set { self[PeepLayoutWidthKey.self] = newValue }
     }
 }
 
@@ -1692,13 +1708,26 @@ private struct QuickPeepHost<Item: Identifiable, Peep: View>: ViewModifier {
 
 /// The iPad / Mac peep: a centred panel that its handle pulls up into the
 /// whole screen and down again, then away.
+///
+/// SMOOTHNESS (24 Nov 2026, Luther: "slow … lagging behind my finger"): the
+/// page inside is heavy, and resizing it with the finger re-laid it out on
+/// every frame. Now the page has only TWO layouts — the peep's width or the
+/// screen's (`pageFull`) — and a drag only moves, clips and SCALES it; the
+/// page reflows once, when the finger lets go.
 struct QuickPeepStage<Peep: View>: View {
     let onClosed: () -> Void
     @ViewBuilder let peep: Peep
 
+    /// Where the panel rests.
     @State private var full = false
+    /// The layout the page is drawn in (changes once per transition, never
+    /// during a drag).
+    @State private var pageFull = false
     @State private var shown = false
-    @State private var drag: CGFloat = 0
+    @GestureState private var dragging: CGFloat = 0
+    /// The drag's distance kept while the settle animation starts.
+    @State private var held: CGFloat = 0
+    private let handleHeight: CGFloat = 22
 
     var body: some View {
         GeometryReader { geo in
@@ -1708,26 +1737,37 @@ struct QuickPeepStage<Peep: View>: View {
             let peepW = min(screenW - 64, 720)
             let peepH = screenH * 0.62
             let base = full ? screenH : peepH
+            let drag = dragging + held
             // Dragging up grows it (to the screen), down shrinks it.
             let height = min(screenH, max(0, base - drag))
-            let grow = max(0, min(1, (height - peepH) / (screenH - peepH)))
+            let grow = max(0, min(1, (height - peepH) / max(1, screenH - peepH)))
             let width = peepW + (screenW - peepW) * grow
             let radius = 24 * (1 - grow)
+            let top = handleHeight + safeTop * grow
+            // The page: laid out at one of two sizes, scaled to the panel.
+            let pageW = pageFull ? screenW : peepW
+            let pageH = (pageFull ? screenH - handleHeight - safeTop : peepH - handleHeight)
+            let scale = pageFull ? width / screenW : 1
             ZStack(alignment: .bottom) {
                 Color.black.opacity(shown ? 0.35 * min(1, height / peepH) : 0)
                     .ignoresSafeArea()
                     .onTapGesture { close() }
                     .accessibilityHidden(true)
-                VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    AppTheme.background
+                    peep
+                        .environment(\.peepClose, close)
+                        .environment(\.peepLayoutWidth, pageW)
+                        .transaction { $0.animation = nil }
+                        .frame(width: pageW, height: max(pageH, (height - top) / max(scale, 0.01)), alignment: .top)
+                        .scaleEffect(scale, anchor: .top)
+                        .frame(width: width, height: max(0, height - top), alignment: .top)
+                        .padding(.top, top)
                     handle
                         .padding(.top, safeTop * grow)
                         .gesture(dragGesture(peepH: peepH, screenH: screenH))
-                    peep
-                        .environment(\.peepClose, close)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(width: width, height: height)
-                .background(AppTheme.background)
+                .frame(width: width, height: height, alignment: .top)
                 .clipShape(UnevenRoundedRectangle(topLeadingRadius: radius, topTrailingRadius: radius, style: .continuous))
                 .shadow(color: .black.opacity(0.25 * (1 - grow)), radius: 20, y: -4)
                 .offset(y: shown ? 0 : screenH)
@@ -1737,7 +1777,7 @@ struct QuickPeepStage<Peep: View>: View {
             .frame(width: screenW, height: screenH, alignment: .bottom)
             .ignoresSafeArea()
         }
-        .onAppear { withAnimation(.spring(duration: 0.35)) { shown = true } }
+        .onAppear { withAnimation(.snappy(duration: 0.28)) { shown = true } }
     }
 
     /// The grabber: a wide strip so it is easy to catch.
@@ -1745,37 +1785,50 @@ struct QuickPeepStage<Peep: View>: View {
         Capsule()
             .fill(Color.secondary.opacity(0.5))
             .frame(width: 40, height: 5)
-            .frame(maxWidth: .infinity, minHeight: 22)
+            .frame(maxWidth: .infinity, minHeight: handleHeight)
             .contentShape(Rectangle())
             .accessibilityElement()
             .accessibilityLabel(full ? "Show less" : "Show more")
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("peep.handle")
-            .accessibilityAction { withAnimation(.spring(duration: 0.35)) { full.toggle() } }
-            .onTapGesture { withAnimation(.spring(duration: 0.35)) { full.toggle() } }
+            .accessibilityAction { settle(full: !full) }
+            .onTapGesture { settle(full: !full) }
+    }
+
+    /// Reflow the page once (no animation), then let the panel glide there.
+    private func settle(full target: Bool) {
+        var t = Transaction(); t.disablesAnimations = true
+        withTransaction(t) { pageFull = target }
+        // The glide starts on the next pass, so the reflow is never animated.
+        DispatchQueue.main.async {
+            withAnimation(.snappy(duration: 0.3)) { full = target; held = 0 }
+        }
     }
 
     private func dragGesture(peepH: CGFloat, screenH: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 4, coordinateSpace: .global)
-            .onChanged { drag = $0.translation.height }
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .updating($dragging) { value, state, t in
+                t.animation = nil
+                state = value.translation.height
+            }
             .onEnded { value in
                 let base = full ? screenH : peepH
+                // Keep the panel where the finger left it; the settle starts there.
+                var t = Transaction(); t.disablesAnimations = true
+                withTransaction(t) { held = value.translation.height }
                 let end = base - value.predictedEndTranslation.height
-                withAnimation(.spring(duration: 0.35)) {
-                    drag = 0
-                    if end > (peepH + screenH) / 2 {
-                        full = true
-                    } else if end > peepH * 0.55 {
-                        full = false
-                    } else {
-                        close()
-                    }
+                if end > (peepH + screenH) / 2 {
+                    settle(full: true)
+                } else if end > peepH * 0.55 {
+                    settle(full: false)
+                } else {
+                    close()
                 }
             }
     }
 
     private func close() {
-        withAnimation(.easeIn(duration: 0.25)) { shown = false; drag = 0 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onClosed() }
+        withAnimation(.easeIn(duration: 0.22)) { shown = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) { onClosed() }
     }
 }

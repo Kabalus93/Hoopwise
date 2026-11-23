@@ -2534,7 +2534,18 @@ closes it. The page's layout follows its OWN width (onGeometryChange): < 700
 one column, ≥ 700 card | the rest, ≥ 1100 three columns (card | evaluation +
 results | notes, insights, reminders, contract). TWO COLUMNS (same day,
 Luther, markup "use this space too"): left = card, Skills Evaluation, coach
-notes, About; right = shooting, tracked drills, insights, reminders, contract. Tests: QuickPeepSheetUITests
+notes, About; right = shooting, tracked drills, insights, reminders, contract.
+SMOOTH (23 Nov 2026, Luther on build 71: opening, growing and a slow drag
+"lagging behind my finger"): the stage resized the page with the finger, so
+the whole heavy page re-laid out (and its body re-ran — the width was @State)
+every frame, crossed column layouts mid-drag, and on opening was built twice
+(two columns, then one once measured). Now the page has TWO layouts only —
+peep width or screen width (`pageFull`, handed down as env `peepLayoutWidth`,
+so the first draw is the right one) — and a drag only moves, clips and SCALES
+it (full layout shrinking: scaled; peep growing: margins); it reflows ONCE on
+release, unanimated, and the panel glides from the next run-loop pass. The
+page stores a column COUNT, not its width. Never size the peep's page from a
+drag again. Tests: QuickPeepSheetUITests
 (iPad mini, sessionPage Attend tab; skips on a phone). Not checked on the Mac.
 
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
