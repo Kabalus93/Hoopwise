@@ -2544,6 +2544,24 @@ the picker gets `drill.addToSession` beside Edit and Favourite (env
 `drillSessionPick`). The series and phase pickers still close on one pick.
 TRAP: the tracked rows' `library.tracked` identifier overrides the add
 button's — find those by label. Test: PlanPickerMultiAddUITests.
+ONE EDITOR EVERYWHERE (23 Nov 2026, Luther, markup on a play's step editor:
+"use the editor everywhere, it's more complete"). `JournalPlayStepEditor(step:
+court:)` — a PLAY's steps — now opens in the BOARD layout too (regular width):
+tool rail with the steps tile at its foot (panel: filmstrip, this step's
+words, the tool's options, the selection), Offense and Defense docks, ‹ ▶ › +,
+Lanes and Annotate in the top bar; Cancel and Done as before; NO court switch
+and no Save menu (`BoardActions.showsCourt = false` — the court is the
+play's). The inspector layout (side column / under the court) is no longer
+reached; its code stays. The phone keeps its layout. Team breakdown page:
+"Open in Plays" became "Edit play" (`team.play.edit` — straight into the
+editor on the step on screen) + a smaller "Play page" (`team.play.open`).
+PLAY SHEET PHOTOS (same day, markup "with photos"): "Players" on the share
+sheet shows PHOTOS for everyone who has one (Include photos, on by default);
+media consent no longer gates it — the footer says how many have no consent
+on record ("fine for the team itself, not for a public post"). REVERSES the
+23 Nov "photos only with media consent" rule for play sheets, at his request.
+Tests: PlayEditorWorkspaceUITests (rewritten for the board layout),
+PlayDefenseUITests (defense dock).
 THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
 the evidence lines between the bars "create chaos"). The eight ratings are an
 even column with NOTHING between the rows; a suggested rating is a short

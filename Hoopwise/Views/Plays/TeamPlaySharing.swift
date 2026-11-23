@@ -164,7 +164,7 @@ struct PlaySheetShareSheet: View {
     /// Asked every time (Luther): nil until the coach answers.
     @State private var defenders: Bool?
     @State private var people = true
-    @State private var photos = false
+    @State private var photos = true
     @State private var preview: UIImage?
     @State private var pdf: Data?
     @State private var sharing: [Any]?
@@ -176,7 +176,15 @@ struct PlaySheetShareSheet: View {
     private var hasDefense: Bool {
         play.sortedParts.contains { $0.sortedSteps.contains { !$0.diagram.defense.isEmpty } }
     }
-    private var consented: Bool { cast?.seats.contains { $0.people.contains { $0.mayPublish && $0.imageData != nil } } ?? false }
+    /// PHOTOS ON THE SHEET (23 Nov 2026, Luther, markup on Players: "with
+    /// photos" — it printed initials for a team with no consent recorded).
+    /// A play sheet goes to the team itself, so "Players" means their photos;
+    /// the switch stays to leave them off, and the footer says who has no
+    /// media consent on record (a reminder before posting it anywhere public).
+    private var hasPhotos: Bool { cast?.seats.contains { $0.people.contains { $0.imageData != nil } } ?? false }
+    private var withoutConsent: Int {
+        cast.map { c in c.seats.compactMap { c.person(for: $0.number) }.filter { $0.imageData != nil && !$0.mayPublish }.count } ?? 0
+    }
     private var ready: Bool { !hasDefense || defenders != nil }
 
     var body: some View {
@@ -205,15 +213,20 @@ struct PlaySheetShareSheet: View {
                             Text(isChinese ? "球员" : "Players").tag(true)
                         }
                         .pickerStyle(.segmented)
-                        if people && consented {
+                        if people && hasPhotos {
                             Toggle(isChinese ? "包含照片" : "Include photos", isOn: $photos)
                                 .accessibilityIdentifier("playSheet.photos")
                         }
                     } footer: {
                         if people {
-                            Text(consented
-                                 ? (isChinese ? "只有已记录肖像发布同意的学员会显示照片；其他人显示姓名缩写。" : "Photos only for athletes whose media consent is recorded; the others show initials.")
-                                 : (isChinese ? "球员以姓名缩写显示，号位旁写上姓名。" : "Players show as initials, with their names beside the role numbers."))
+                            if !hasPhotos {
+                                Text(isChinese ? "球员以姓名缩写显示，号位旁写上姓名。" : "Players show as initials, with their names beside the role numbers.")
+                            } else if photos && withoutConsent > 0 {
+                                Text(isChinese ? "其中 \(withoutConsent) 名学员没有记录肖像发布同意：这份战术单发给本队即可，不要公开发布。"
+                                               : "\(withoutConsent) of these athletes have no media consent on record — fine for the team itself, not for a public post.")
+                            } else {
+                                Text(isChinese ? "球员显示照片，号位旁写上姓名。" : "Players show with their photos, names beside the role numbers.")
+                            }
                         }
                     }
                 }
@@ -310,7 +323,7 @@ struct PlaySheetShareSheet: View {
 
     private func sheets() -> [PlaySheet] {
         let zh = chinese
-        let bubbles = people ? (cast?.bubbles(photos: photos, onlyConsented: true) ?? [:]) : [:]
+        let bubbles = people ? (cast?.bubbles(photos: photos, onlyConsented: false) ?? [:]) : [:]
         let roles: [PlaySheet.Role] = {
             let numbers = play.conceptPart?.sortedSteps.first?.diagram.offense.map(\.number).sorted() ?? []
             let all = Set(numbers + (cast?.seats.map(\.number) ?? [])).sorted()

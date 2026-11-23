@@ -53,6 +53,8 @@ struct JournalPlayStepEditor: View {
         /// Edits made before the editor was rebuilt (a court change), so
         /// Cancel still asks before throwing them away.
         var edited: Bool = false
+        /// false on a PLAY (its court belongs to the play, changed in its details).
+        var showsCourt = true
     }
     private let board: BoardActions?
     @State private var boardStepsOpen = false
@@ -300,7 +302,12 @@ struct JournalPlayStepEditor: View {
         part = step.part
         onSaveDrill = nil
         onDrawingChange = nil
-        board = nil
+        // ONE EDITOR EVERYWHERE (23 Nov 2026, Luther, markup on a play's
+        // step editor: "use the editor everywhere, it's more complete"): a
+        // play's steps are edited in the board layout too — tool rail with
+        // the steps at its foot, Offense and Defense docks, ‹ ▶ › + — with
+        // Cancel and Done as before. The inspector layout is no longer used.
+        board = BoardActions(title: "Play", isBlank: false, setCourt: { _, _ in }, showsCourt: false)
         let models = step.part?.sortedSteps ?? [step]
         let pages = models.map { model in
             Page(model: model, saved: Content(diagram: model.diagram, caption: model.caption, text: model.text),
@@ -1089,21 +1096,23 @@ struct JournalPlayStepEditor: View {
     /// Court, Clear and Save — the board's top bar.
     @ViewBuilder
     private func boardControls(_ board: BoardActions) -> some View {
-        Menu {
-            ForEach(JournalCourtKind.allCases) { kind in
-                Button { stash(); board.setCourt(kind, drawingNow) } label: {
-                    if kind == court {
-                        Label { JText(kind.label) } icon: { Image(systemName: "checkmark") }
-                    } else {
-                        JText(kind.label)
+        if board.showsCourt {
+            Menu {
+                ForEach(JournalCourtKind.allCases) { kind in
+                    Button { stash(); board.setCourt(kind, drawingNow) } label: {
+                        if kind == court {
+                            Label { JText(kind.label) } icon: { Image(systemName: "checkmark") }
+                        } else {
+                            JText(kind.label)
+                        }
                     }
                 }
+            } label: {
+                Label { JText(court.label) } icon: { Image(systemName: "sportscourt") }
+                    .labelStyle(.titleAndIcon)
             }
-        } label: {
-            Label { JText(court.label) } icon: { Image(systemName: "sportscourt") }
-                .labelStyle(.titleAndIcon)
+            .accessibilityIdentifier("board.court")
         }
-        .accessibilityIdentifier("board.court")
         Button(action: toggleLanes) {
             Label { JText("Lanes") } icon: { Image(systemName: "rectangle.split.3x1") }
         }

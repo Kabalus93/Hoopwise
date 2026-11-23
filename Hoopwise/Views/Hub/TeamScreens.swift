@@ -762,6 +762,7 @@ struct PlayBreakdownView: View {
     @State private var stepIndex = 0
     @State private var editingRole: Int?
     @State private var openPlay = false
+    @State private var editingStep: JournalPlayStep?
     /// Numbers or the team's faces, and who is followed (TeamPlaySharing).
     @State private var teamState = TeamPlayViewState()
     @State private var sharing = false
@@ -777,9 +778,22 @@ struct PlayBreakdownView: View {
                     TeamPlayCastBar(state: $teamState) { sharing = true }
                     JournalPlayStepPlayer(part: part, index: $stepIndex)
                         .teamPlayState(teamState)
-                    Button { openPlay = true } label: {
-                        Label(isChinese ? "在战术库中打开" : "Open in Plays", systemImage: "arrow.up.right.square")
-                            .font(.subheadline.weight(.semibold))
+                    // Straight into the editor, on the step on screen (23 Nov
+                    // 2026, Luther); the play's page is the second link.
+                    HStack(spacing: 18) {
+                        Button {
+                            let steps = part.sortedSteps
+                            editingStep = steps[min(max(stepIndex, 0), steps.count - 1)]
+                        } label: {
+                            Label(isChinese ? "编辑战术" : "Edit play", systemImage: "pencil")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .accessibilityIdentifier("team.play.edit")
+                        Button { openPlay = true } label: {
+                            Label(isChinese ? "战术页" : "Play page", systemImage: "arrow.up.right.square")
+                                .font(.subheadline)
+                        }
+                        .accessibilityIdentifier("team.play.open")
                     }
                 } else {
                     Text(isChinese ? "这个战术已不在战术库中。" : "This play is no longer in the library.")
@@ -833,6 +847,9 @@ struct PlayBreakdownView: View {
                 PlaySheetShareSheet(play: play, teamId: teamId, initialFocus: teamState.focus)
                     .environmentObject(dataManager)
             }
+        }
+        .fullScreenCover(item: $editingStep) { step in
+            if let play { JournalPlayStepEditor(step: step, court: play.court) }
         }
         .sheet(isPresented: $openPlay) {
             if let play {
