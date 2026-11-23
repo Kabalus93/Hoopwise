@@ -219,7 +219,8 @@ struct AddSessionOnboardingView: View {
             VStack(spacing: 0) {
                 stepHeader(.type)
                 VStack(spacing: 12) {
-                    ForEach(SessionType.allCases, id: \.self) { type in
+                    // A game is scheduled from its team's page (Game Day), not here.
+                    ForEach(SessionType.allCases.filter { $0 != .game }, id: \.self) { type in
                         typeCard(type)
                     }
                 }
@@ -238,6 +239,7 @@ struct AddSessionOnboardingView: View {
             case .recovery:   return isChinese ? "放松恢复课" : "Recovery session"
             case .assessment: return isChinese ? "评估测试课" : "Skills assessment / testing"
             case .teamPractice: return isChinese ? "你执教的球队的训练（不计费）" : "A practice of a team you coach — never billed"
+            case .game: return isChinese ? "球队的正式比赛" : "A team's game against an opponent"
             }
         }()
         return Button {

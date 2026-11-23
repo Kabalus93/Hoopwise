@@ -53,6 +53,10 @@ enum SessionType: String, Codable, CaseIterable {
     /// A practice of one of the coach's Teams (Hub → Teams, November 2026):
     /// roster from the team, never billed, opens on its Plan.
     case teamPractice
+    /// A GAME of one of the coach's Teams against an opponent (23 Nov 2026 —
+    /// Models/GamePlan.swift): scheduled and planned from the team page,
+    /// roster from the team, never billed, scored against the opponent.
+    case game
 
     /// Scrimmages, game prep and team practice can have organization coaches
     /// on the floor.
@@ -66,6 +70,7 @@ enum SessionType: String, Codable, CaseIterable {
         case .recovery: return "Recovery"
         case .assessment: return "Assessment"
         case .teamPractice: return "Team Practice"
+        case .game: return "Game"
         }
     }
     
@@ -77,6 +82,7 @@ enum SessionType: String, Codable, CaseIterable {
         case .recovery: return "heart.circle"
         case .assessment: return "checklist"
         case .teamPractice: return "person.3.sequence.fill"
+        case .game: return "flag.checkered"
         }
     }
 }
@@ -109,6 +115,9 @@ struct SessionCurriculum: Codable, Hashable {
     /// The coach's own tracked drills' results (23 Nov 2026 —
     /// CustomTracking.swift). Its own key, written by setSessionTracking.
     var tracked: [TrackedRun] = []
+    /// A team GAME's plan (23 Nov 2026 — GamePlan.swift): opponent, lineup,
+    /// keys, opponent notes. In the curriculum JSON; nil on everything else.
+    var gamePlan: GamePlan? = nil
     
     init(warmupDrillIds: [UUID] = [], skillDrillIds: [UUID] = [], gameDrillIds: [UUID] = [],
          warmupMinutes: Int = 30, skillsMinutes: Int = 30, gameMinutes: Int = 30, notes: String? = nil,
@@ -127,7 +136,7 @@ struct SessionCurriculum: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case warmupDrillIds, skillDrillIds, gameDrillIds, warmupMinutes, skillsMinutes, gameMinutes, notes, plays
-        case coachIds, teamId, shooting, tracked
+        case coachIds, teamId, shooting, tracked, gamePlan
     }
 
     init(from decoder: Decoder) throws {
@@ -144,6 +153,7 @@ struct SessionCurriculum: Codable, Hashable {
         teamId = try c.decodeIfPresent(UUID.self, forKey: .teamId)
         shooting = (try? c.decodeIfPresent([ShootingRun].self, forKey: .shooting)) ?? []
         tracked = (try? c.decodeIfPresent([TrackedRun].self, forKey: .tracked)) ?? []
+        gamePlan = try? c.decodeIfPresent(GamePlan.self, forKey: .gamePlan)
     }
     
     var totalDrillCount: Int { warmupDrillIds.count + skillDrillIds.count + gameDrillIds.count }

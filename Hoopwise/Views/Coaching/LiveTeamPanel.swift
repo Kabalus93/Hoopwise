@@ -110,6 +110,63 @@ struct LiveTeamPanel: View {
     @State private var subTick = 0
 
     var body: some View {
+        if team.playerIds.isEmpty {
+            opponentPad
+        } else {
+            floor
+        }
+    }
+
+    /// THE OPPONENT (23 Nov 2026 — a team's game, GamePlan.swift): a team
+    /// with no players in the app. Its points are added to its score here;
+    /// −1 takes one back.
+    private var opponentPad: some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        let score = game.score(for: team.id)
+        return VStack(spacing: 18) {
+            VStack(spacing: 4) {
+                Text(team.name).font(.title3.weight(.semibold)).foregroundStyle(teamColor).lineLimit(1)
+                Text("\(score)")
+                    .font(.system(size: 64, weight: .bold, design: .rounded)).monospacedDigit()
+                    .contentTransition(.numericText(value: Double(score)))
+                    .accessibilityIdentifier("live.opponent.score")
+                Text(isChinese ? "对手得分" : "Their points").font(.footnote).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                ForEach([1, 2, 3], id: \.self) { n in
+                    Button { addOpponent(n) } label: {
+                        Text("+\(n)")
+                            .font(.title2.weight(.bold))
+                            .frame(maxWidth: .infinity, minHeight: 72)
+                            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(teamColor.opacity(n == pointValue ? 0.28 : 0.14)))
+                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(teamColor.opacity(0.4), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("live.opponent.add.\(n)")
+                }
+            }
+            Button { addOpponent(-1) } label: {
+                Label(isChinese ? "减 1 分" : "Take 1 back", systemImage: "minus.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(minHeight: 44)
+            }
+            .disabled(score == 0)
+            .accessibilityIdentifier("live.opponent.minus")
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .sensoryFeedback(.impact(weight: .light), trigger: score)
+    }
+
+    private func addOpponent(_ points: Int) {
+        var g = game
+        g.teamScores[team.id] = max(0, g.score(for: team.id) + points)
+        g.updatedAt = Date()
+        withAnimation(.snappy) { game = g }
+    }
+
+    private var floor: some View {
         GeometryReader { proxy in
             let count = max(players.count, 5)
             let spacing: CGFloat = 8

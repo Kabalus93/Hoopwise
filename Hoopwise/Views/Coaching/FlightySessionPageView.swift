@@ -27,7 +27,7 @@ struct FlightySessionPageView: View {
         _session = State(initialValue: session)
         self.accessMode = accessMode
         self.embeddedInSplit = embeddedInSplit
-        _selectedTab = State(initialValue: initialTab ?? (session.sessionType == .teamPractice ? 0 : 1))
+        _selectedTab = State(initialValue: initialTab ?? (session.sessionType == .teamPractice || session.sessionType == .game ? 0 : 1))
     }
     /// Measured roster row heights; sizes the non-scrolling attendance List.
     @State private var rosterRowHeights: [UUID: CGFloat] = [:]
@@ -1036,7 +1036,10 @@ struct FlightySessionPageView: View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return ScrollView(showsIndicators: false) {
             VStack(spacing: 12) {
-                if let teamId = session.curriculum.teamId {
+                if session.sessionType == .game {
+                    // A team's GAME: its plan (opponent, lineup, keys) on top.
+                    SessionGamePlanCard(session: $session, canEdit: accessMode.canEdit)
+                } else if let teamId = session.curriculum.teamId {
                     // A team practice plans from its TEAM (focus plays, their
                     // roles' drills), not from age · level · phase.
                     SessionTeamPlanCard(
@@ -5206,7 +5209,7 @@ struct SessionGamesTabView: View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(isChinese ? "比赛" : "SCRIMMAGE GAMES")
+                Text(isTeamGame ? (isChinese ? "比赛 · 各节" : "THE GAME · PERIODS") : (isChinese ? "比赛" : "SCRIMMAGE GAMES"))
                     .font(.caption.weight(.bold))
                     .monospaced()
                     .foregroundStyle(.secondary)
@@ -5217,9 +5220,10 @@ struct SessionGamesTabView: View {
             }
             Spacer()
             Button {
-                showingCreateGame = true
+                newGameTapped()
             } label: {
-                Label(isChinese ? "新比赛" : "New Game", systemImage: "plus")
+                Label(isTeamGame ? (session.games.isEmpty ? (isChinese ? "开始比赛" : "Start the game") : (isChinese ? "下一节" : "Next period"))
+                                 : (isChinese ? "新比赛" : "New Game"), systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.borderedProminent)
@@ -5312,7 +5316,43 @@ struct SessionGamesTabView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: A team's game against an opponent (23 Nov 2026 — GamePlan.swift)
+
+    private var isTeamGame: Bool { session.sessionType == .game && session.curriculum.teamId != nil }
+
+    /// New Game: a team's game starts its next PERIOD against the opponent;
+    /// everything else opens the setup page.
+    private func newGameTapped() {
+        if isTeamGame { startTeamGamePeriod() } else { showingCreateGame = true }
+    }
+
+    /// Our team (the plan's starters first, then the bench) against the
+    /// opponent, who has no players — its score is typed on the live screen.
+    private func startTeamGamePeriod() {
+        guard let team = session.curriculum.teamId.flatMap({ id in dataManager.teams.first { $0.id == id } }) else {
+            showingCreateGame = true
+            return
+        }
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        let present = enrolledStudents.filter { session.actualAttendeeIds.contains($0.id) }
+        let pool = (present.isEmpty ? enrolledStudents : present).map(\.id)
+        let teams = GameDay.teams(team: team, plan: session.curriculum.gamePlan ?? GamePlan(), pool: pool, chinese: isChinese)
+        var newGame = SessionGame(
+            sessionId: session.id,
+            gameNumber: (session.games.map { $0.gameNumber }.max() ?? 0) + 1,
+            gameType: .twoTeam,
+            teams: teams,
+            durationMinutes: 10,
+            basketValue: 2,
+            status: .ready)
+        newGame.playersPerSide = teams.first?.starters
+        session.games.append(newGame)
+        dataManager.appendSessionGame(toSessionId: session.id, game: newGame)
+        selectedGame = newGame
+    }
+
     private func createStarterGame(type: SessionGameType) {
+        if isTeamGame { startTeamGamePeriod(); return }
         let availableStudents = enrolledStudents.filter { session.actualAttendeeIds.contains($0.id) }
         // Coaches on a scrimmage are always in the pool (they take no roll call).
         let playerPool = (availableStudents.isEmpty ? enrolledStudents : availableStudents) + guestPlayers

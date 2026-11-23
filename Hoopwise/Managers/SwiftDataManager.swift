@@ -3885,7 +3885,7 @@ class SwiftDataManager: ObservableObject {
         guard let event = cachedSessionEvents.first(where: { $0.id == sessionId }) else { return }
         // A team practice is never billed (Luther, November 2026) — its
         // attendance is a record only, shown on the athlete's profile.
-        guard event.sessionType != .teamPractice else { return }
+        guard event.sessionType != .teamPractice, event.sessionType != .game else { return }
         let isPrivate = eventIsPrivate(event)
         // A group class charges only when it belongs to a program; a program-
         // less, non-private session (a scrimmage, a camp) charges nobody.

@@ -2562,6 +2562,38 @@ on record ("fine for the team itself, not for a public post"). REVERSES the
 23 Nov "photos only with media consent" rule for play sheets, at his request.
 Tests: PlayEditorWorkspaceUITests (rewritten for the board layout),
 PlayDefenseUITests (defense dock).
+GAME DAY (23 Nov 2026, Luther, markup on the team page: "add a game day card
+where I can plan and schedule a game"; decided: the plan holds LINEUP, PLAYS
+TO RUN, KEYS TO THE GAME and OPPONENT NOTES; a game is a SESSION — calendar
+and Home, attendance never billed, scored live against the opponent).
+Models/GamePlan.swift: `SessionType.game` (a new case in the stored raw
+string — no schema change), `SessionCurriculum.gamePlan: GamePlan?`
+(opponent, isHome, starters in order, keys, opponentNotes — curriculum JSON,
+tolerant), the plays in `curriculum.plays`. Created through SessionCreation
+like a team practice (group .unassigned, roster = the team's athletes,
+curriculum.teamId, title "<team> vs|@ <opponent>"); NEVER BILLED
+(redeemPrivateAttendance skips `.game`, SessionPrivacy says not private); not
+offered in Add Session's type list (a game is scheduled from its team).
+Views/Hub/TeamGameDay.swift: `GameDaySheet` (schedule AND edit: opponent,
+home/away, tip-off, length, venue; lineup = tap a player to start, in tap
+order; plays from the team's playbook; keys; opponent notes; Delete this
+game) — an edit writes onto the STORED session through updateSessionEvent.
+Team page GAME DAY block (TeamScreens.gameDayBlock, above Practices, which no
+longer lists games): NEXT GAME (vs, when, where, starters' photos, counts,
+Plan | Open), other upcoming and played games with their result, "Schedule a
+game". Session page: opens on Plan with `SessionGamePlanCard` on top (score,
+starters with names, bench count, keys, opponent, Edit); the Games tab's
+button is "Start the game" / "Next period" and makes a two-team game —
+OUR team (id = the Team's id; the plan's starters who are present first, then
+the bench; `starters` set) against THE OPPONENT (`GamePlan.opponentTeamId`,
+a fixed id, no players). LiveTeamPanel shows a team with no players as a
+SCORE PAD (+1 +2 +3, Take 1 back — writes teamScores directly, not in the
+Undo log). `GameDay.score(of:)` adds every period played (clock ran, or
+anyone scored): "W 34–28" once every period is ended. Ours are scored as in
+any game, so the athletes' game stats and chemistry include it.
+NOT YET: the live screen's own button still says "Next Game"; no
+quarter/foul/time-out tracking; the plan is not on a printable sheet.
+Tests: GameDayTests, GameDayUITests (iPad mini; creates and deletes its team).
 THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
 the evidence lines between the bars "create chaos"). The eight ratings are an
 even column with NOTHING between the rows; a suggested rating is a short

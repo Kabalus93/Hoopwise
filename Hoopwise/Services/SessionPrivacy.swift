@@ -22,7 +22,7 @@ enum SessionPrivacy {
                           programs: [Program],
                           contracts: [Contract]) -> Bool {
         // A team practice is a team's, never a private lesson.
-        if session.sessionType == .teamPractice { return false }
+        if session.sessionType == .teamPractice || session.sessionType == .game { return false }
         if let programId = session.programId {
             // A named program answers the question outright. A DANGLING
             // programId is not private: it names a group program that no

@@ -30,6 +30,7 @@ enum CourtArtStyle: String, CaseIterable {
         case .recovery: self = .centreCircle
         case .assessment: self = .testSpots
         case .teamPractice: self = .broadcast
+        case .game: self = .fullCourt
         }
     }
 }

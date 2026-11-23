@@ -365,6 +365,7 @@ extension SessionType {
         case .recovery: return "恢复"
         case .assessment: return "测评"
         case .teamPractice: return "球队训练"
+        case .game: return "比赛"
         }
     }
 }

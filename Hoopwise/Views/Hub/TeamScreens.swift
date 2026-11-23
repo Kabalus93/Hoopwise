@@ -165,6 +165,12 @@ struct TeamDetailView: View {
     @State private var addingPlayers = false
     @State private var editing = false
     @State private var editingFocus = false
+    /// The Game Day sheet: a new game (nil) or one being planned.
+    @State private var gameSheet: GameSheetTarget?
+    private struct GameSheetTarget: Identifiable {
+        let id = UUID()
+        let session: SessionEvent?
+    }
     @State private var pinTick = 0
     @State private var confirmingDelete = false
     @State private var openStudent: Student?
@@ -189,13 +195,14 @@ struct TeamDetailView: View {
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(spacing: 16) { focusBlock(team); playbookBlock(team); standardsBlock(team) }
-                        VStack(spacing: 16) { rosterBlock(team, roster: roster); practicesBlock(team) }
+                        VStack(spacing: 16) { rosterBlock(team, roster: roster); gameDayBlock(team); practicesBlock(team) }
                     }
                 } else {
                     focusBlock(team)
                     playbookBlock(team)
                     standardsBlock(team)
                     rosterBlock(team, roster: roster)
+                    gameDayBlock(team)
                     practicesBlock(team)
                 }
             }
@@ -515,10 +522,124 @@ struct TeamDetailView: View {
         }
     }
 
+    // MARK: Game day (23 Nov 2026 — Models/GamePlan.swift, TeamGameDay.swift)
+
+    @ViewBuilder
+    private func gameDayBlock(_ team: Team) -> some View {
+        let games = dataManager.sessionEvents.filter { $0.curriculum.teamId == team.id && $0.sessionType == .game }
+        let upcoming = games
+            .filter { $0.endTime >= Date() && !SessionLifecycle.didNotHappen($0) && $0.status != .completed }
+            .sorted { $0.startTime < $1.startTime }
+        let played = games.filter { g in !upcoming.contains { $0.id == g.id } }.sorted { $0.startTime > $1.startTime }
+        TeamBlock(title: isChinese ? "比赛日" : "Game day", icon: "flag.checkered", tint: .red) {
+            if let next = upcoming.first {
+                nextGame(next, team: team)
+            } else {
+                Text(isChinese ? "安排一场比赛：对手、时间、阵容、要打的战术和比赛要点。"
+                               : "Schedule a game: the opponent, when, the lineup, the plays to run and the keys to the game.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            if upcoming.count > 1 || !played.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(upcoming.dropFirst().prefix(3)) { gameRow($0) }
+                    ForEach(played.prefix(3)) { gameRow($0) }
+                }
+            }
+            Button { gameSheet = GameSheetTarget(session: nil) } label: {
+                Label(isChinese ? "安排比赛" : "Schedule a game", systemImage: "plus.circle.fill")
+                    .font(.body.weight(.semibold))
+            }
+            .accessibilityIdentifier("team.gameDay.schedule")
+        }
+        .sheet(item: $gameSheet) { target in
+            GameDaySheet(team: team, editing: target.session)
+                .environmentObject(dataManager)
+        }
+    }
+
+    private func nextGame(_ session: SessionEvent, team: Team) -> some View {
+        let plan = session.curriculum.gamePlan ?? GamePlan()
+        let details = [session.startTime.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)),
+                       session.startTime.formatted(date: .omitted, time: .shortened),
+                       session.location].compactMap { $0 }.filter { !$0.isEmpty }
+        let counts = [plan.starters.isEmpty ? nil : (isChinese ? "首发 \(plan.starters.count) 人" : "^[\(plan.starters.count) starter](inflect: true)"),
+                      session.curriculum.plays.isEmpty ? nil : (isChinese ? "\(session.curriculum.plays.count) 个战术" : "^[\(session.curriculum.plays.count) play](inflect: true)"),
+                      plan.cleanKeys.isEmpty ? nil : (isChinese ? "\(plan.cleanKeys.count) 条要点" : "^[\(plan.cleanKeys.count) key](inflect: true)")]
+            .compactMap { $0 }
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(isChinese ? "下一场" : "NEXT GAME").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                Text((plan.isHome ? "vs " : "@ ") + plan.opponentName(chinese: isChinese))
+                    .font(.title3.weight(.bold))
+                Text(details.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary)
+            }
+            if !plan.starters.isEmpty {
+                GameDayLineupStrip(starters: plan.starters, size: 34)
+            }
+            if counts.isEmpty {
+                Text(isChinese ? "还没有计划：定首发、战术和要点。" : "Not planned yet: pick the starters, the plays and the keys.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 6) {
+                    ForEach(counts, id: \.self) { text in
+                        Text(LocalizedStringKey(text))
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Capsule().fill(Color(.tertiarySystemFill)))
+                    }
+                }
+            }
+            HStack(spacing: 10) {
+                Button { gameSheet = GameSheetTarget(session: session) } label: {
+                    Label(isChinese ? "计划" : "Plan", systemImage: "list.clipboard")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color(hex: team.colorHex))
+                .accessibilityIdentifier("team.gameDay.plan")
+                NavigationLink(destination: FlightySessionPageView(session: session, accessMode: .execution)) {
+                    Label(isChinese ? "打开" : "Open", systemImage: "arrow.right.circle")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("team.gameDay.open")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("team.gameDay.next")
+    }
+
+    private func gameRow(_ session: SessionEvent) -> some View {
+        let plan = session.curriculum.gamePlan ?? GamePlan()
+        return NavigationLink(destination: FlightySessionPageView(session: session, accessMode: .execution)) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text((plan.isHome ? "vs " : "@ ") + plan.opponentName(chinese: isChinese))
+                        .font(.body.weight(.medium))
+                    Text(session.startTime.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).hour().minute()))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let score = GameDay.score(of: session) {
+                    Text(score.text(chinese: isChinese))
+                        .font(.subheadline.weight(.semibold)).monospacedDigit()
+                        .foregroundStyle(score.isFinal ? (score.won ? Color.green : (score.tied ? Color.secondary : Color.red)) : Color.primary)
+                }
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 8)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("team.gameDay.row")
+    }
+
     @ViewBuilder
     private func practicesBlock(_ team: Team) -> some View {
         let practices = dataManager.sessionEvents
-            .filter { $0.curriculum.teamId == team.id }
+            .filter { $0.curriculum.teamId == team.id && $0.sessionType != .game }
             .sorted { $0.startTime > $1.startTime }
         TeamBlock(title: isChinese ? "球队训练" : "Practices", icon: "calendar", tint: .indigo) {
             if practices.isEmpty {
