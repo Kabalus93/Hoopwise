@@ -2530,6 +2530,20 @@ line: "Round 2 · 1/2 logged · Group 40% → 80% ↑", and the button reads
 "Round N" once everyone is logged in the latest round (opens a new round).
 Tests: ShootingTestTests / CustomTrackingTests (rounds),
 ShootingAddOnUITests.testASecondRoundComparesWithTheFirst.
+THE PLAN'S + (23 Nov 2026, Luther: "let the app open the library straight
+after tapping on the plus … select more than one drill at a time … within the
+drill detail view, show next to edit and favorite the add to the session
+button"). Warm-up / Skills + is a plain button that opens the library picker
+(`plan.add.warmup` / `plan.add.skills`); the "From Library / Quick Text" menu
+is gone — Quick Text is a LONG PRESS on the +. The picker
+(SmartDrillPickerSheet) no longer closes on an add: each tap adds at once, the
+button reads "Done · N added" (`drillPicker.done`), and a drill added in THIS
+visit can be taken back with a second tap (`Pick.canRemove` / `remove`;
+drills already in the plan stay a disabled check). A drill page opened from
+the picker gets `drill.addToSession` beside Edit and Favourite (env
+`drillSessionPick`). The series and phase pickers still close on one pick.
+TRAP: the tracked rows' `library.tracked` identifier overrides the add
+button's — find those by label. Test: PlanPickerMultiAddUITests.
 THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
 the evidence lines between the bars "create chaos"). The eight ratings are an
 even column with NOTHING between the rows; a suggested rating is a short

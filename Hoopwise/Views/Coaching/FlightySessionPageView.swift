@@ -1445,14 +1445,22 @@ struct FlightySessionPageView: View {
 
                 // + menu
                 if accessMode.canEdit {
-                    Menu {
-                        Button {
-                            drillPickerSection = section
-                            pickerAttribute = nil
-                            showingSmartDrillPicker = true
-                        } label: {
-                            Label(isChinese ? "从训练库添加" : "From Library", systemImage: "books.vertical")
-                        }
+                    // + opens the library at once (23 Nov 2026, Luther: no
+                    // "From Library / Quick Text" choice). Quick Text is a
+                    // long press on the +.
+                    Button {
+                        drillPickerSection = section
+                        pickerAttribute = nil
+                        showingSmartDrillPicker = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.footnote.weight(.bold))
+                    }
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.small)
+                    .tint(color)
+                    .contextMenu {
                         Button {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 showingInlineDrillInputFor = showingInlineDrillInputFor == section ? nil : section
@@ -1460,15 +1468,9 @@ struct FlightySessionPageView: View {
                         } label: {
                             Label(isChinese ? "快速文本" : "Quick Text", systemImage: "text.cursor")
                         }
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.footnote.weight(.bold))
                     }
-                    .menuStyle(.button)
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .controlSize(.small)
-                    .tint(color)
+                    .accessibilityLabel(isChinese ? "添加训练" : "Add drills")
+                    .accessibilityIdentifier("plan.add.\(section == .warmup ? "warmup" : "skills")")
                 }
             }
             .padding(.horizontal, 16)
@@ -7196,6 +7198,10 @@ struct SmartDrillPickerSheet: View {
     var attribute: DrillAttribute? = nil
 
     private let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+    /// SEVERAL AT ONCE (23 Nov 2026, Luther: "adding one drill automatically
+    /// closes the window"): an add stays in the library; Done closes. What
+    /// was added in THIS visit can be taken back with a second tap.
+    @State private var addedNow: [UUID] = []
 
     /// The drills library itself (Luther, November 2026: "reflect the drills
     /// library properly with the same search bar") — age, block, type,
@@ -7212,16 +7218,34 @@ struct SmartDrillPickerSheet: View {
                 attribute: attribute,
                 isAdded: isDrillInSection,
                 add: { drill in
+                    HapticFeedback.impact(.light)
                     addDrillToSection(drill.id)
-                    dismiss()
+                    addedNow.append(drill.id)
+                },
+                canRemove: { addedNow.contains($0) },
+                remove: { drill in
+                    removeDrillFromSection(drill.id)
+                    addedNow.removeAll { $0 == drill.id }
                 }))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(isChinese ? "取消" : "Cancel") { dismiss() }
+                        Button(addedNow.isEmpty ? (isChinese ? "完成" : "Done")
+                                                : (isChinese ? "完成 · 已加 \(addedNow.count)" : "Done · \(addedNow.count) added")) { dismiss() }
+                            .fontWeight(.semibold)
+                            .accessibilityIdentifier("drillPicker.done")
                     }
                 }
         }
+    }
+
+    private func removeDrillFromSection(_ drillId: UUID) {
+        switch section {
+        case .warmup: session.curriculum.warmupDrillIds.removeAll { $0 == drillId }
+        case .main: session.curriculum.skillDrillIds.removeAll { $0 == drillId }
+        case .cooldown: session.curriculum.gameDrillIds.removeAll { $0 == drillId }
+        }
+        onSave()
     }
 
     private func isDrillInSection(_ drillId: UUID) -> Bool {

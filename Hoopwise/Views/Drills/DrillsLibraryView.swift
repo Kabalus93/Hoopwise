@@ -20,6 +20,9 @@ struct DrillsLibraryView: View {
         var attribute: DrillAttribute? = nil
         let isAdded: (UUID) -> Bool
         let add: (DrillItem) -> Void
+        /// Added in this visit: a second tap takes it back.
+        var canRemove: (UUID) -> Bool = { _ in false }
+        var remove: (DrillItem) -> Void = { _ in }
     }
 
     var pick: Pick? = nil
@@ -257,17 +260,20 @@ struct DrillsLibraryView: View {
     private func drillLink<Label: View>(_ drill: DrillItem, @ViewBuilder label: () -> Label) -> some View {
         if let pick {
             let added = pick.isAdded(drill.id)
+            let removable = added && pick.canRemove(drill.id)
             HStack(spacing: 10) {
-                NavigationLink(destination: DrillDetailView(drill: drill)) { label() }
+                NavigationLink(destination: DrillDetailView(drill: drill).environment(\.drillSessionPick, pick)) { label() }
                 Button {
-                    if !added { pick.add(drill) }
+                    if !added { pick.add(drill) } else if removable { pick.remove(drill) }
                 } label: {
                     Image(systemName: added ? "checkmark.circle.fill" : "plus.circle.fill")
                         .font(.title2)
                         .foregroundStyle(added ? Color.green : Color.accentColor)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .disabled(added)
+                .disabled(added && !removable)
                 .accessibilityLabel(added ? (isChinese ? "已添加" : "Added") : (isChinese ? "添加" : "Add"))
                 .accessibilityIdentifier("drillPicker.add")
             }
@@ -1120,8 +1126,24 @@ private struct DrillRow: View {
 }
 
 // MARK: - Drill Detail View (Enhanced)
+/// The plan picker the drill page was opened from (nil elsewhere): the page
+/// then has an add-to-session button beside Edit and Favourite (23 Nov 2026).
+private struct DrillSessionPickKey: EnvironmentKey {
+    static let defaultValue: DrillsLibraryView.Pick? = nil
+}
+
+extension EnvironmentValues {
+    var drillSessionPick: DrillsLibraryView.Pick? {
+        get { self[DrillSessionPickKey.self] }
+        set { self[DrillSessionPickKey.self] = newValue }
+    }
+}
+
 struct DrillDetailView: View {
     @EnvironmentObject var dataManager: DataManager
+    @Environment(\.drillSessionPick) private var sessionPick
+    /// Flips the add button at once (the picker's own state is behind this page).
+    @State private var addedHere: Bool?
     let drill: DrillItem
     @State private var showEditSheet = false
     @State private var showDeleteConfirm = false
@@ -1361,6 +1383,27 @@ struct DrillDetailView: View {
                         Image(systemName: currentDrill.isFavorite ? "heart.fill" : "heart")
                             .font(.system(size: 18))
                             .foregroundColor(currentDrill.isFavorite ? .red : AppTheme.textSecondary)
+                    }
+
+                    if let sessionPick {
+                        let added = addedHere ?? sessionPick.isAdded(currentDrill.id)
+                        Button {
+                            HapticFeedback.impact(.light)
+                            if added {
+                                if sessionPick.canRemove(currentDrill.id) || addedHere == true {
+                                    sessionPick.remove(currentDrill); addedHere = false
+                                }
+                            } else {
+                                sessionPick.add(currentDrill); addedHere = true
+                            }
+                        } label: {
+                            Image(systemName: added ? "checkmark.circle.fill" : "plus.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(added ? .green : .accentColor)
+                        }
+                        .accessibilityLabel(added ? (LocalizationManager.shared.currentLanguage == .chinese ? "已在本节课" : "In the session")
+                                                  : (LocalizationManager.shared.currentLanguage == .chinese ? "加入本节课" : "Add to session"))
+                        .accessibilityIdentifier("drill.addToSession")
                     }
                 }
             }
