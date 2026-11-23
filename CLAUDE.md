@@ -2399,6 +2399,18 @@ from the key pressed, so "60" became "0". Both now take up to
 `ShotChartAddOnCard.mostShots` (999). The setup's shots a spot / zone and a
 custom made-of drill's amount go to 500 (were 100). Test:
 ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap logs 60 of 100.
+THE CHART'S NUMBERS, LARGE, AND SHARE (23 Nov 2026, Luther, markup on the
+one footnote line under the session's shot chart: "make these bigger and
+more detailed — I'd like to share this with my client").
+Views/Components/ShotChartBreakdown.swift: `ShotChartTotals` (pure: total,
+threes = zones 5–9, mid = 1–4, rim = 0, best / weakest zone when two differ)
+and `ShotChartBreakdown` under the map — the total at 52 pt
+(`shotchart.total`), "N made of M shots", ↑/↓ against last time or the round
+before, tiles by range (only with two or more ranges), Best / To work on,
+and every logged zone as name · band-colour bar · made/att · %. "Share this
+chart" (`shotchart.share`) = `SessionShotChartShareCard` — light, 600 pt at
+3×: name, date, map, legend, the same numbers, academy — through ShareSheet.
+Group works the same (pooled). The share picture was not looked at on screen.
 TRACKER ON THE ROW, STATION AS A PAGE (23 Nov 2026, Luther: "annoying to set
 up … the time could only be set up to 3 minutes, they took too much space and
 collapsing them … was popping back up"). The ADD-ONS section of big cards

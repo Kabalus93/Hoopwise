@@ -154,10 +154,26 @@ final class ShootingAddOnUITests: XCTestCase {
         key(app, "shotchart.keys", "confirm")
         // The pad moves on to the athlete's next empty zone.
         XCTAssertTrue(app.buttons["shotchart.keys.key.4"].waitForExistence(timeout: 5), "the next zone opens")
+        // A second zone, so the numbers have a best and a weakest: 3 of 10.
+        key(app, "shotchart.keys", "3")
+        key(app, "shotchart.keys", "next")
+        for k in ["1", "0"] { key(app, "shotchart.keys", k) }
+        key(app, "shotchart.keys", "confirm")
+        XCTAssertTrue(app.buttons["shotchart.keys.key.4"].waitForExistence(timeout: 5), "and the one after")
         closePad(app)
         let zone = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
         XCTAssertTrue(zone.label.contains("60%"), "60 of 100 in the left wing: \(zone.label)")
         attach("logged")
+        // The numbers under the map: large, with the made and attempted.
+        let total = addon.staticTexts["shotchart.total"]
+        for _ in 0..<4 where !total.exists { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(total.waitForExistence(timeout: 5), "the total shows under the map")
+        XCTAssertEqual(total.label, "57%")
+        XCTAssertTrue(addon.staticTexts.matching(NSPredicate(format: "label CONTAINS '63 made of 110'")).firstMatch.exists)
+        let share = addon.buttons["shotchart.share"]
+        for _ in 0..<4 where !share.isHittable { app.swipeUp(velocity: .slow) }
+        attach("numbers")
+        XCTAssertTrue(share.isHittable, "the chart can be shared")
     }
 
     /// The setup sheet goes past the old 3-minute cap.

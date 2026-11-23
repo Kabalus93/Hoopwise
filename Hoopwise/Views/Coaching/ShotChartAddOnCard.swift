@@ -36,6 +36,7 @@ struct ShotChartAddOnCard: View {
     /// The zone to open once the current popup has gone.
     @State private var pendingZone: Int?
     @State private var editingSetup = false
+    @State private var sharing: UIImage?
     @State private var expanded = true
     @AppStorage("shotChart.colour") private var colourRaw = ShotChartColour.bands.rawValue
     @AppStorage("shotChart.vsLast") private var vsLast = true
@@ -206,28 +207,56 @@ struct ShotChartAddOnCard: View {
         }
     }
 
+    private var chosenStudent: Student? { chosen.flatMap { id in students.first { $0.id == id } } }
+
+    /// Today against the last chart (or the round before).
+    private var comparison: (text: String, up: Bool?)? {
+        guard let id = chosen, let last = previous(id), let now = run.result(for: id) else { return nil }
+        let lead = previousRound != nil ? (isChinese ? "第 \(previousRoundNumber) 轮 " : "Round \(previousRoundNumber): ")
+                                        : (isChinese ? "上次 " : "Last time: ")
+        let gap = now.value - last.value
+        return (lead + last.text, abs(gap) < 0.005 ? nil : gap > 0)
+    }
+
+    /// The numbers under the map, large: total, by range, best and weakest
+    /// zone, every zone logged — and Share, the same as a light picture.
     @ViewBuilder
     private var summary: some View {
-        let z = zones(for: chosen).compactMap { $0 }
-        let made = z.reduce(0) { $0 + $1.made }, att = z.reduce(0) { $0 + $1.attempted }
-        HStack(spacing: 6) {
-            if let who = chosen.flatMap({ id in students.first { $0.id == id } }) {
-                Text(who.primaryDisplayName).font(.footnote.weight(.semibold))
-            } else {
-                Text(isChinese ? "全组" : "Group").font(.footnote.weight(.semibold))
-            }
-            if att > 0 {
-                Text("· \(Int(made))/\(Int(att)) · \(Int((made / att * 100).rounded()))%")
-                    .font(.footnote).monospacedDigit()
-                if let id = chosen, let last = previous(id) {
-                    Text((previousRound != nil ? (isChinese ? "· 第 \(previousRoundNumber) 轮 " : "· round \(previousRoundNumber) ") : (isChinese ? "· 上次 " : "· last time ")) + last.text).font(.footnote).foregroundStyle(.secondary)
+        let z = zones(for: chosen)
+        let name = chosenStudent?.primaryDisplayName ?? (isChinese ? "全组" : "Group")
+        if z.contains(where: { ($0?.attempted ?? 0) > 0 }) {
+            VStack(alignment: .leading, spacing: 14) {
+                ShotChartBreakdown(name: name, zones: z, comparison: comparison, chinese: isChinese)
+                Button {
+                    sharing = SessionShotChartShareCard(student: chosenStudent, groupName: name, date: sessionDate,
+                                                        zones: z, colour: colour, comparison: comparison,
+                                                        chinese: isChinese).image()
+                } label: {
+                    Label(isChinese ? "分享这张图" : "Share this chart", systemImage: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                        .padding(.horizontal, 18).frame(minHeight: 44)
+                        .background(Capsule().fill(Color.orange.opacity(0.16)))
+                        .foregroundStyle(.orange)
                 }
-            } else if canEdit {
-                Text(chosen == nil ? (isChinese ? "· 选一位学员，点区域记录" : "· choose an athlete, tap a zone to log")
-                                   : (isChinese ? "· 点区域记录" : "· tap a zone to log"))
-                    .font(.footnote).foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("shotchart.share")
             }
-            Spacer()
+            .padding(.top, 4)
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
+            .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
+                if let sharing { ShareSheet(items: [sharing]) }
+            }
+        } else {
+            HStack(spacing: 6) {
+                Text(name).font(.footnote.weight(.semibold))
+                if canEdit {
+                    Text(chosen == nil ? (isChinese ? "· 选一位学员，点区域记录" : "· choose an athlete, tap a zone to log")
+                                       : (isChinese ? "· 点区域记录" : "· tap a zone to log"))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
         }
     }
 
