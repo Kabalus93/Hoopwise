@@ -2594,6 +2594,30 @@ any game, so the athletes' game stats and chemistry include it.
 NOT YET: the live screen's own button still says "Next Game"; no
 quarter/foul/time-out tracking; the plan is not on a printable sheet.
 Tests: GameDayTests, GameDayUITests (iPad mini; creates and deletes its team).
+A PLAYER ON A TEAM (23 Nov 2026, Luther, markup on the roster's player page:
+"make this page better — useful, complete, expressive … add a scheduler, for
+example a session to have the athlete work on the skills he'll need for his
+position. Also a way to export plays focused on him"). `TeamWorkoutView`
+moved to Views/Hub/TeamPlayerPage.swift and is rebuilt: a team-colour header
+(photo, names, tiles Roles · Plays · Drills · Minutes), Schedule a workout |
+Export plays, SKILLS NEEDED (chips, ×n when several roles ask), ROLES (the
+play's thumbnail, role number, its standard, its skills → the breakdown),
+WORKOUT (numbered drills with minutes and the roles they are for → the drill),
+POSITION WORKOUTS already scheduled. `TeamPlaybook.playerRoles(of:)` /
+`skills(of:)`. SCHEDULE (`PositionWorkoutSheet`): when, length, venue, which
+of the drills, "Include the plays" → a TEAM session (type .teamPractice,
+curriculum.teamId — NEVER BILLED) with ONLY that athlete on its roster, the
+drills as Skills, the plays in the plan, titled "<name> · Position workout";
+found again as teamId + attendeeIds == [player]. Athletes only (a coach on
+the team gets no schedule button). EXPORT (`PlayerPlaysShareSheet`): every
+play the player has a role in as a PLAYER SHEET followed from that role, in
+ONE PDF / long image / print (PlaySheetDocument.pdf with one sheet a play;
+the player is forced onto their role in the cast); Faces on the court;
+Defenders asked each time. App wording there is NEUTRAL (no he / his — the
+first draft said "his" on a girl's page). FIXED with it: a FULL-COURT play
+sheet laid three 75 mm courts across A4 — wider than the page, the outer two
+cut off; `PlaySheetDocument.columns` now takes as many as fit (two on A4).
+Tests: TeamsUITests (the page, export preview, schedule and delete).
 THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
 the evidence lines between the bars "create chaos"). The eight ratings are an
 even column with NOTHING between the rows; a suggested rating is a short

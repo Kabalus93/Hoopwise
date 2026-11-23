@@ -1289,56 +1289,6 @@ struct TeamStandardsView: View {
     }
 }
 
-struct TeamWorkoutView: View {
-    let teamId: UUID
-    let playerId: UUID
-    @EnvironmentObject var dataManager: DataManager
-    @State private var openDrill: DrillItem?
-
-    var body: some View {
-        let book = dataManager.teams.first { $0.id == teamId }?.playbook ?? TeamPlaybook()
-        let items = book.workout(for: playerId)
-        let name = dataManager.students.first { $0.id == playerId }?.primaryDisplayName
-            ?? dataManager.staffCoaches.first { $0.id == playerId }?.name ?? ""
-        List {
-            Section {
-                ForEach(book.roles(of: playerId), id: \.self) { Text($0) }
-            } header: {
-                Text(isChinese ? "号位" : "Roles")
-            } footer: {
-                if book.roles(of: playerId).isEmpty {
-                    Text(isChinese ? "在战术拆解里把这名队员分配到号位。" : "Assign this player to a role in a play breakdown.")
-                }
-            }
-            if !items.isEmpty {
-                Section(isChinese ? "个人训练" : "Workout") {
-                    ForEach(items) { item in
-                        let drill = dataManager.drills.first { $0.id == item.drillId }
-                        Button { openDrill = drill } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(drill?.localizedName ?? (isChinese ? "已删除的练习" : "Deleted drill")).foregroundStyle(.primary)
-                                Text(item.sources.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle(name)
-        .sheet(item: $openDrill) { drill in
-            NavigationStack {
-                DrillDetailView(drill: drill)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button(isChinese ? "完成" : "Done") { openDrill = nil }
-                        }
-                    }
-            }
-        }
-    }
-}
-
 // MARK: - The team on a team practice's plan
 
 /// The top of a team practice's Plan — where the team page and the session

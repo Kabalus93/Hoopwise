@@ -176,6 +176,33 @@ extension TeamPlaybook {
         }
     }
 
+    /// One role a player holds in one play.
+    struct PlayerRole: Identifiable, Equatable {
+        let key: String
+        let playName: String
+        let role: PlayBreakdown.Role
+        var id: String { "\(key)#\(role.number)" }
+        var ref: SessionPlayRef { SessionPlayRef(key: key, name: playName) }
+    }
+
+    /// Every role a player holds, in playbook order (the player's page).
+    func playerRoles(of playerId: UUID) -> [PlayerRole] {
+        orderedBreakdownKeys.flatMap { key -> [PlayerRole] in
+            guard let b = breakdowns[key] else { return [] }
+            return b.roles.filter { $0.playerIds.contains(playerId) }
+                .sorted { $0.number < $1.number }
+                .map { PlayerRole(key: key, playName: b.playName, role: $0) }
+        }
+    }
+
+    /// The skills a player's roles ask for, most asked first (`ActivityType`
+    /// raw values with how many of their roles need each).
+    func skills(of playerId: UUID) -> [(skill: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for r in playerRoles(of: playerId) { for s in Set(r.role.skills) { counts[s, default: 0] += 1 } }
+        return counts.map { ($0.key, $0.value) }.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
+    }
+
     /// The skills the playbook asks for, most demanded first, each with the
     /// roles that need it.
     struct SkillDemand: Identifiable, Equatable {

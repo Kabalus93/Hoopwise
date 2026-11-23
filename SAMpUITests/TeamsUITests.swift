@@ -90,6 +90,39 @@ final class TeamsUITests: XCTestCase {
         XCTAssertTrue(workout.exists, "Maya's workout has the drill")
         attach(app, "team page with standards")
 
+        // Her page (23 Nov 2026): roles, skills, workout; a position workout
+        // is scheduled; her plays export.
+        workout.tap()
+        let header = app.descendants(matching: .any).matching(identifier: "team.player.header").firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5), "the player's page opens")
+        XCTAssertTrue(app.buttons["team.player.role"].firstMatch.exists, "her role, with its play")
+        XCTAssertTrue(app.buttons["team.player.drill"].firstMatch.exists, "her workout")
+        XCTAssertTrue(app.staticTexts["Shooting"].firstMatch.exists, "the skill her role needs")
+        attach(app, "player page")
+        app.buttons["team.player.export"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "playerPlays.preview").firstMatch.waitForExistence(timeout: 10),
+                      "her plays render as sheets")
+        attach(app, "export her plays")
+        app.buttons["Done"].firstMatch.tap()
+        app.buttons["team.player.schedule"].tap()
+        XCTAssertTrue(app.buttons["workout.drill"].firstMatch.waitForExistence(timeout: 5), "the workout's drills are offered")
+        attach(app, "schedule a workout")
+        app.buttons["workout.save"].tap()
+        let scheduled = app.buttons["team.player.session"].firstMatch
+        for _ in 0..<3 where !scheduled.exists { app.swipeUp() }
+        XCTAssertTrue(scheduled.waitForExistence(timeout: 5), "the position workout is listed")
+        // Take the scheduled session out again (session page → ⋯ → Delete).
+        scheduled.tap()
+        let more = app.buttons["session.more"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 8))
+        more.tap()
+        app.buttons.matching(NSPredicate(format: "label CONTAINS 'Delete'")).firstMatch.tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Delete'")).firstMatch
+        if confirm.waitForExistence(timeout: 3) { confirm.tap() }
+        XCTAssertTrue(header.waitForExistence(timeout: 8), "back on her page")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["team.menu"].waitForExistence(timeout: 5))
+
         // Leave the demo store as it was.
         app.buttons["team.menu"].tap()
         app.buttons["Delete Team"].tap()

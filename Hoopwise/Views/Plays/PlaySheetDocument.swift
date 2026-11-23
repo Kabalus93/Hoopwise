@@ -215,7 +215,14 @@ enum PlaySheetDocument {
         return pages
     }
 
-    private static func columns(_ court: JournalCourtKind) -> Int { court == .full ? 3 : 2 }
+    /// Half court two across; an upright full court three across IF three
+    /// courts of at least 75 mm fit the page — on A4 they do not (3 × 75 mm
+    /// is wider than the sheet: the outer two were cut off, found 23 Nov
+    /// 2026), so it is two across there too.
+    private static func columns(_ court: JournalCourtKind) -> Int {
+        let fits = Int((contentWidth + gutter) / (minCourtWidth + gutter))
+        return max(1, min(court == .full ? 3 : 2, fits))
+    }
 
     /// The widest court (up to the column width) with which the part takes
     /// the fewest pages, never under 75 mm.
