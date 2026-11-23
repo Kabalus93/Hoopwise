@@ -2392,6 +2392,13 @@ repeat; one total; default makes in 1 min at half court; `CourtLength`
 apart); rated shooting / ball handling / footwork 2; not on the map.
 Tests: ShootingTestTests (chart maths, map feeding, deltas, zone geometry),
 ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap.
+BIG NUMBERS ON THE SHOT CHART (23 Nov 2026, Luther: a client's target was 60
+made a spot and the pad "wouldn't let me log such high numbers"). The zone
+pad capped made at 40 and attempted at 50 — a value past the cap restarts
+from the key pressed, so "60" became "0". Both now take up to
+`ShotChartAddOnCard.mostShots` (999). The setup's shots a spot / zone and a
+custom made-of drill's amount go to 500 (were 100). Test:
+ShootingAddOnUITests.testShotChartLogsAZoneFromTheMap logs 60 of 100.
 TRACKER ON THE ROW, STATION AS A PAGE (23 Nov 2026, Luther: "annoying to set
 up … the time could only be set up to 3 minutes, they took too much space and
 collapsing them … was popping back up"). The ADD-ONS section of big cards

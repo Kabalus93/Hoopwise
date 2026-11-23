@@ -101,7 +101,7 @@ struct ShootingSetupSheet: View {
     private var shotsSection: some View {
         Section(perSpot ? (isChinese ? (drill == .shotChart ? "每区出手" : "每点出手") : (drill == .shotChart ? "Shots a zone" : "Shots a spot"))
                         : (isChinese ? "出手数" : "Shots")) {
-            Stepper(value: $draft.shots, in: 1...100) {
+            Stepper(value: $draft.shots, in: 1...500) {
                 Text("\(draft.shots)").font(.title2.weight(.bold)).monospacedDigit()
             }
             .accessibilityIdentifier("shootingSetup.shots")

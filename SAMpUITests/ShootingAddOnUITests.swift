@@ -146,16 +146,17 @@ final class ShootingAddOnUITests: XCTestCase {
         let rim = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.0").firstMatch
         for _ in 0..<6 where rim.frame.maxY > window.maxY - 60 { app.swipeUp(velocity: .slow) }
         leftWing.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4)).tap()
-        key(app, "shotchart.keys", "4")          // made
-        key(app, "shotchart.keys", "next")       // → attempted
-        key(app, "shotchart.keys", "9")          // of 9
+        // A long workout: 60 made of 100 in one zone (the pad stopped at 40 / 50).
+        for k in ["6", "0"] { key(app, "shotchart.keys", k) }           // made
+        key(app, "shotchart.keys", "next")                              // → attempted
+        for k in ["1", "0", "0"] { key(app, "shotchart.keys", k) }      // of 100
         attach("pad")
         key(app, "shotchart.keys", "confirm")
         // The pad moves on to the athlete's next empty zone.
         XCTAssertTrue(app.buttons["shotchart.keys.key.4"].waitForExistence(timeout: 5), "the next zone opens")
         closePad(app)
         let zone = addon.descendants(matching: .any).matching(identifier: "shotchart.zone.6").firstMatch
-        XCTAssertTrue(zone.label.contains("44%"), "4 of 9 in the left wing: \(zone.label)")
+        XCTAssertTrue(zone.label.contains("60%"), "60 of 100 in the left wing: \(zone.label)")
         attach("logged")
     }
 

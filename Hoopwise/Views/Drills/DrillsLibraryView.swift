@@ -2621,7 +2621,7 @@ struct AddDrillView: View {
                 // 3. How much.
                 switch def.measure {
                 case .madeOf:
-                    Stepper(value: trackBinding(\.amount), in: 1...100) {
+                    Stepper(value: trackBinding(\.amount), in: 1...500) {
                         Text((isChinese ? "次数" : "Attempts")
                              + (def.onShotMap ? (isChinese ? "（每区）" : " a zone") : (def.spotCount > 1 ? (isChinese ? "（每点）" : " a spot") : ""))
                              + ": \(def.amount)")

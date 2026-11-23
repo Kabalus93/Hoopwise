@@ -241,14 +241,17 @@ struct ShotChartAddOnCard: View {
 
 extension ShotChartAddOnCard {
     private var chart: Bool { setup.mode == .chart }
+    /// The most one zone takes, made or attempted. A long shooting workout
+    /// (make 60 a spot) runs well past a hundred shots a zone.
+    static let mostShots = 999
     private var who: UUID? { chosen ?? students.first?.id }
 
     func open(_ zone: Int) {
         if chosen == nil { chosen = students.first?.id }
         guard let who else { return }
         let made = run.makes(who, spot: zone)
-        madeEntry = .cell(made.map(Double.init), maximum: Double(chart ? 40 : max(1, setup.shots)))
-        attEntry = .cell((chart ? run.attempts(who, spot: zone) : nil).map(Double.init), maximum: 50)
+        madeEntry = .cell(made.map(Double.init), maximum: Double(chart ? Self.mostShots : max(1, setup.shots)))
+        attEntry = .cell((chart ? run.attempts(who, spot: zone) : nil).map(Double.init), maximum: Double(Self.mostShots))
         typingAttempts = false
         active = zone
     }
