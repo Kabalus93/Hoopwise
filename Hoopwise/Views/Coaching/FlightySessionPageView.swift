@@ -124,6 +124,8 @@ struct FlightySessionPageView: View {
     @State private var expandedDrillId: UUID?
     /// The tracked drill whose shooting station is open (23 Nov 2026).
     @State private var stationDrill: ShootingDrill?
+    /// The station opens on a new round (the tracker's "Round N" button).
+    @State private var stationNewRound = false
     /// The coach's own tracked drill whose station is open (23 Nov 2026).
     @State private var customStation: CustomStation?
     struct CustomStation: Identifiable { let id: UUID; let name: String }
@@ -925,7 +927,7 @@ struct FlightySessionPageView: View {
         let inPlan = (session.curriculum.warmupDrillIds + session.curriculum.skillDrillIds).compactMap { id in
             ShootingDrill.allCases.first(where: { $0.drillId == id })
         }
-        let withResults = session.curriculum.shooting.filter { !$0.entries.isEmpty }.map(\.setup.drill)
+        let withResults = session.curriculum.shooting.filter { $0.hasResults }.map(\.setup.drill)
         return (inPlan + withResults).filter { seen.insert($0).inserted }
     }
 
@@ -1013,8 +1015,9 @@ struct FlightySessionPageView: View {
     private func customTracker(_ drillId: UUID, name: String) -> some View {
         CustomTrackerLine(drillId: drillId, run: trackedRunBinding(drillId).wrappedValue, students: shootingRoster,
                           sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
-                          canEdit: accessMode.canEdit) {
+                          canEdit: accessMode.canEdit) { newRound in
             HapticFeedback.impact(.light)
+            stationNewRound = newRound
             customStation = CustomStation(id: drillId, name: name)
         }
     }
@@ -1022,8 +1025,9 @@ struct FlightySessionPageView: View {
     private func shootingTracker(_ drill: ShootingDrill) -> some View {
         ShootingTrackerLine(drill: drill, run: shootingRunBinding(drill).wrappedValue, students: shootingRoster,
                             sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
-                            canEdit: accessMode.canEdit) {
+                            canEdit: accessMode.canEdit) { newRound in
             HapticFeedback.impact(.light)
+            stationNewRound = newRound
             stationDrill = drill
         }
     }
@@ -1116,16 +1120,17 @@ struct FlightySessionPageView: View {
             }
         }
         .sheet(item: $customStation) { station in
-            CustomTrackStationSheet(drillId: station.id, drillName: station.name, run: trackedRunBinding(station.id),
+            CustomTrackStationSheet(drillId: station.id, drillName: station.name, all: trackedRunBinding(station.id),
                                     students: shootingRoster, sessionDate: session.startTime,
-                                    allSessions: dataManager.sessionEvents, canEdit: accessMode.canEdit)
+                                    allSessions: dataManager.sessionEvents, canEdit: accessMode.canEdit,
+                                    newRound: stationNewRound)
                 .environmentObject(dataManager)
                 .presentationSizing(.page)
         }
         .sheet(item: $stationDrill) { drill in
             ShootingStationSheet(drill: drill, run: shootingRunBinding(drill), students: shootingRoster,
                                  sessionDate: session.startTime, allSessions: dataManager.sessionEvents,
-                                 canEdit: accessMode.canEdit)
+                                 canEdit: accessMode.canEdit, newRound: stationNewRound)
                 .environmentObject(dataManager)
                 .presentationSizing(.page)
         }

@@ -376,8 +376,8 @@ struct DrillPlanGenerator {
     static func shootingSignal(runs: [ShootingRun], roster: Set<UUID>) -> String? {
         var latest: [UUID: Double] = [:]
         for run in runs where run.setup.mode.isShare {
-            for e in run.entries where roster.contains(e.studentId) {
-                if let r = run.result(for: e.studentId) { latest[e.studentId] = r.value }
+            for id in run.reporters where roster.contains(id) {
+                if let r = run.result(for: id) { latest[id] = r.value }
             }
         }
         guard latest.count >= 3 else { return nil }

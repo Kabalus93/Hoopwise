@@ -2507,6 +2507,29 @@ ActivityLibraryUITests had been failing on the mini since the Tracked
 shooting rows pushed the lazy library rows out of reach — they scroll now.
 DrillPreferenceTests.testTheEngineFollowsTheCoach is order-dependent (picks
 from an unordered set): fails now and then in a full run, passes alone.
+ROUNDS (23 Nov 2026, Luther: "what happens if I want multiple 5-Spot Threes?
+… sometimes I run the same drill more than once, to see how they improve
+within the session or after correcting something"; decided: pool for
+percentages, best for the rest). A tracked drill is run again as a ROUND, not
+added twice. `ShootingRun.more` / `TrackedRun.more` = rounds 2…n (optional
+JSON key inside the curriculum, written only when present — no schema
+change; `entries` stays round 1). `round(i)` is one round as a run of its
+own — what the station's cards EDIT (a binding per round; the cards are
+unchanged apart from `previousRound`, `previousRoundNumber`, `lockSetup`).
+EVERYTHING ELSE reads `result(for:)`, which is the SESSION's: made-of-shots
+(and the shot chart) POOL every round spot by spot (the pooled entry carries
+its own attempts — `ShootingResult.shots(at:)` honours them in .attempts
+mode), so the profile, shot map, "vs last time", ranks and the plan engine
+see every shot; timed / time-to-finish / count take the BEST round. Station:
+`RoundBar` (ShootingStation.swift — Round 1 | Round 2 | + New round, shown
+once a round has results; ⋯ deletes the round on screen; ids `round.<n>`,
+`round.add`, `round.more`); in a later round every "last time" compares with
+the round BEFORE ("round 1 40%"); the setup is locked once any round has a
+result; a round nobody logged in is dropped when the station closes. Plan
+line: "Round 2 · 1/2 logged · Group 40% → 80% ↑", and the button reads
+"Round N" once everyone is logged in the latest round (opens a new round).
+Tests: ShootingTestTests / CustomTrackingTests (rounds),
+ShootingAddOnUITests.testASecondRoundComparesWithTheFirst.
 THE EVALUATION READS CALMLY (24 Nov 2026, Luther, markup on the Quick Peep:
 the evidence lines between the bars "create chaos"). The eight ratings are an
 even column with NOTHING between the rows; a suggested rating is a short

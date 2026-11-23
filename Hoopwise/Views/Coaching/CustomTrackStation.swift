@@ -20,21 +20,29 @@ struct CustomTrackerLine: View {
     let sessionDate: Date
     let allSessions: [SessionEvent]
     let canEdit: Bool
-    let onOpen: () -> Void
+    /// true = open on a NEW round (the last one is complete).
+    let onOpen: (Bool) -> Void
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private var def: TrackDefinition { run.definition }
 
     var body: some View {
-        let logged = students.filter { run.result(for: $0.id) != nil }
-        let values = logged.compactMap { run.result(for: $0.id) }
+        // Several rounds: the latest against the round before it.
+        let rounds = run.roundCount
+        let current = run.round(rounds - 1)
+        let before = rounds > 1 ? run.round(rounds - 2) : nil
+        let logged = students.filter { current.result(for: $0.id) != nil }
+        let values = logged.compactMap { current.result(for: $0.id) }
         let avg = values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
-        let then = logged.compactMap {
-            CustomTrackHistory.previous($0.id, drillId: drillId, key: def.key, before: sessionDate, sessions: allSessions)
+        let then = logged.compactMap { s in
+            before != nil ? before?.result(for: s.id)
+                : CustomTrackHistory.previous(s.id, drillId: drillId, key: def.key, before: sessionDate, sessions: allSessions)
         }
-        let thenAvg = then.count >= 2 ? then.reduce(0, +) / Double(then.count) : nil
+        let thenAvg = then.count >= (before != nil ? 1 : 2) ? then.reduce(0, +) / Double(then.count) : nil
+        let complete = !students.isEmpty && logged.count == students.count
+        let next = canEdit && complete
 
-        return Button(action: onOpen) {
+        return Button(action: { onOpen(next) }) {
             HStack(spacing: 10) {
                 Image(systemName: def.measure.symbol)
                     .font(.caption.weight(.bold))
@@ -53,12 +61,14 @@ struct CustomTrackerLine: View {
                             ProgressView(value: Double(logged.count), total: Double(max(1, students.count)))
                                 .tint(.orange)
                                 .frame(width: 44)
-                            Text(isChinese ? "已记录 \(logged.count)/\(students.count)" : "\(logged.count)/\(students.count) logged")
+                            Text(TrackerRoundText.logged(logged.count, students.count, round: rounds, chinese: isChinese))
                                 .monospacedDigit()
                         }
                         if let avg {
                             Text("·")
-                            Text((isChinese ? "全组 " : "Group ") + def.text(avg, chinese: isChinese))
+                            Text((isChinese ? "全组 " : "Group ")
+                                 + (before != nil && thenAvg != nil ? def.text(thenAvg!, chinese: isChinese) + " → " : "")
+                                 + def.text(avg, chinese: isChinese))
                                 .monospacedDigit()
                                 .foregroundStyle(.primary)
                             if let thenAvg, abs(avg - thenAvg) > 0.0001 {
@@ -74,7 +84,7 @@ struct CustomTrackerLine: View {
                     .lineLimit(1)
                 }
                 Spacer(minLength: 6)
-                Text(canEdit ? (isChinese ? "记录" : "Log") : (isChinese ? "结果" : "Results"))
+                Text(TrackerRoundText.button(canEdit: canEdit, nextRound: next ? rounds + 1 : nil, chinese: isChinese))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
@@ -96,11 +106,30 @@ struct CustomTrackStationSheet: View {
     @EnvironmentObject private var dataManager: DataManager
     let drillId: UUID
     let drillName: String
-    @Binding var run: TrackedRun
+    /// Every round of the drill in this session.
+    @Binding var all: TrackedRun
     let students: [Student]
     let sessionDate: Date
     let allSessions: [SessionEvent]
     let canEdit: Bool
+    /// Open on a new round.
+    var newRound = false
+
+    /// The round on screen; `run` is that round as a run of its own.
+    @State private var round = 0
+    private var shownRound: Int { min(round, all.roundCount - 1) }
+    private var run: TrackedRun {
+        get { all.round(shownRound) }
+        nonmutating set {
+            var a = all
+            a.setRound(shownRound, entries: newValue.entries)
+            all = a
+        }
+    }
+    private func lastWord(long: Bool) -> String {
+        if shownRound > 0 { return isChinese ? "第 \(shownRound) 轮 " : "round \(shownRound) " }
+        return isChinese ? "上次 " : (long ? "last time " : "last ")
+    }
 
     /// A shooting drill on the shot map: whose map shows (nil = the group).
     @State private var chosen: UUID?
@@ -118,8 +147,12 @@ struct CustomTrackStationSheet: View {
 
     private var lastTime: [UUID: Double] {
         var out: [UUID: Double] = [:]
+        // In a later round the numbers compare with the round before.
+        let before = shownRound > 0 ? all.round(shownRound - 1) : nil
         for s in students {
-            if let v = CustomTrackHistory.previous(s.id, drillId: drillId, key: def.key, before: sessionDate, sessions: allSessions) {
+            if let before {
+                if let v = before.result(for: s.id) { out[s.id] = v }
+            } else if let v = CustomTrackHistory.previous(s.id, drillId: drillId, key: def.key, before: sessionDate, sessions: allSessions) {
                 out[s.id] = v
             }
         }
@@ -131,6 +164,10 @@ struct CustomTrackStationSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    RoundBar(count: all.roundCount, selection: $round, canEdit: canEdit,
+                             canAdd: all.round(all.roundCount - 1).hasResults,
+                             onAdd: { active = nil; var a = all; round = a.addRound(); all = a },
+                             onDelete: { active = nil; var a = all; let i = shownRound; a.removeRound(i); all = a; round = max(0, i - 1) })
                     header
                     summary(last)
                     if def.measure == .timeToFinish && canEdit && !students.isEmpty { stopwatch }
@@ -166,6 +203,18 @@ struct CustomTrackStationSheet: View {
             .onReceive(tick) { if startedAt != nil { now = $0 } }
         }
         .environmentObject(dataManager)
+        .onAppear {
+            if newRound, canEdit, all.round(all.roundCount - 1).hasResults {
+                var a = all; round = a.addRound(); all = a
+            } else {
+                round = all.roundCount - 1
+            }
+        }
+        .onDisappear {
+            // A round nobody logged in is not kept.
+            var a = all; a.dropEmptyRounds()
+            if a != all { all = a }
+        }
     }
 
     private var header: some View {
@@ -221,7 +270,7 @@ struct CustomTrackStationSheet: View {
                         if let thenAvg { arrow(avg, thenAvg) }
                     }
                     if let thenAvg {
-                        Text((isChinese ? "上次 " : "last time ") + def.text(thenAvg, chinese: isChinese))
+                        Text(lastWord(long: true) + def.text(thenAvg, chinese: isChinese))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -341,7 +390,7 @@ struct CustomTrackStationSheet: View {
                             Text("—").foregroundStyle(.secondary)
                         }
                         if let l = last[s.id] {
-                            Text((isChinese ? "上次 " : "last ") + def.text(l, chinese: isChinese))
+                            Text(lastWord(long: false) + def.text(l, chinese: isChinese))
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                     }
@@ -394,7 +443,7 @@ struct CustomTrackStationSheet: View {
 
     private func commit(_ cell: PadCell) {
         guard draft.typed else { return }
-        run.set(draft.text.isEmpty ? nil : draft.value, for: cell.student, spot: cell.spot)
+        var r = run; r.set(draft.text.isEmpty ? nil : draft.value, for: cell.student, spot: cell.spot); run = r
     }
 
     private func confirm(_ cell: PadCell) {
@@ -454,7 +503,7 @@ struct CustomTrackStationSheet: View {
                     let t = (Date().timeIntervalSince(startedAt) * 10).rounded() / 10
                     self.startedAt = nil
                     AudioServicesPlaySystemSound(1104)
-                    if let target { run.set(t, for: target.student, spot: target.spot); active = nil }
+                    if let target { var r = run; r.set(t, for: target.student, spot: target.spot); run = r; active = nil }
                 } else {
                     startedAt = Date(); now = Date()
                 }

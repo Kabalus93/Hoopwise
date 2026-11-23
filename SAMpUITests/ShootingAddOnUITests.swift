@@ -75,6 +75,44 @@ final class ShootingAddOnUITests: XCTestCase {
         attach("plan after")
     }
 
+    /// Rounds (23 Nov 2026): the same drill run again in the session — the
+    /// second round compares with the first, the plan line follows it.
+    func testASecondRoundComparesWithTheFirst() {
+        let app = launch("1")
+        defer { _ = launch("clear") }
+        let addon = openStation(app, "freeThrows")
+        XCTAssertFalse(app.buttons["round.add"].exists, "nothing to run again yet")
+        let cells = addon.buttons.matching(identifier: "shooting.cell")
+        cells.element(boundBy: 0).tap()
+        key(app, "shooting.keys", "4")
+        key(app, "shooting.keys", "confirm")
+        closePad(app)
+        XCTAssertTrue(addon.staticTexts["40%"].waitForExistence(timeout: 5))
+        let add = app.buttons["round.add"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5), "a logged round can be run again")
+        add.tap()
+        XCTAssertTrue(app.buttons["round.2"].waitForExistence(timeout: 5))
+        let again = app.descendants(matching: .any).matching(identifier: "shooting.addon.freeThrows").firstMatch
+        XCTAssertFalse(again.staticTexts["40%"].exists, "round 2 starts empty")
+        again.buttons.matching(identifier: "shooting.cell").element(boundBy: 0).tap()
+        key(app, "shooting.keys", "8")
+        key(app, "shooting.keys", "confirm")
+        closePad(app)
+        XCTAssertTrue(again.staticTexts["80%"].waitForExistence(timeout: 5))
+        XCTAssertTrue(again.staticTexts.matching(NSPredicate(format: "label CONTAINS 'round 1 40%'")).firstMatch.exists,
+                      "compared with round 1")
+        attach("round 2")
+        app.buttons["round.1"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "shooting.addon.freeThrows").firstMatch
+            .staticTexts["40%"].waitForExistence(timeout: 5), "round 1 is still there")
+        app.buttons["shooting.station.done"].tap()
+        let line = app.buttons["shooting.tracker.freeThrows"]
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        XCTAssertTrue(line.label.contains("Round 2"), line.label)
+        XCTAssertTrue(line.label.contains("40% → 80%"), line.label)
+        attach("plan after")
+    }
+
     func testFiveSpotsLogAthleteByAthleteFromLogMakes() {
         let app = launch("1")
         defer { _ = launch("clear") }

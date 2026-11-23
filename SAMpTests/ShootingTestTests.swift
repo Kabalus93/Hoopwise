@@ -188,4 +188,54 @@ final class ShootingTestTests: XCTestCase {
         XCTAssertNil(old.court)
         XCTAssertEqual(old.key, ft10.key)
     }
+
+    // MARK: Rounds (23 Nov 2026)
+
+    func testMadeOfShotsPoolsEveryRound() throws {
+        var r = run(ShootingSetup(drill: .threes, mode: .attempts, shots: 10), [a: [3, 4, 5, 2, 6]])
+        XCTAssertEqual(r.roundCount, 1)
+        let second = r.addRound()
+        r.setRound(second, entries: [ShootingEntry(studentId: a, makes: [7, 6, nil, 5, 8]),
+                                     ShootingEntry(studentId: b, makes: [5, 5, 5, 5, 5])])
+        XCTAssertEqual(r.roundCount, 2)
+        XCTAssertEqual(r.round(0).result(for: a)?.made, 20, "a round reads alone")
+        XCTAssertEqual(try XCTUnwrap(r.round(1).result(for: a)).value, 26.0 / 40.0, accuracy: 0.0001)
+        let pooled = try XCTUnwrap(r.result(for: a))
+        XCTAssertEqual(pooled.made, 46)
+        XCTAssertEqual(pooled.attempted, 90, "5 spots + 4 spots of 10")
+        XCTAssertEqual(pooled.shots(at: 0)?.attempted, 20)
+        XCTAssertEqual(pooled.shots(at: 2)?.attempted, 10, "the spot only one round reported")
+        XCTAssertEqual(r.result(for: b)?.made, 25, "someone who only shot in round 2")
+        XCTAssertEqual(Set(r.reporters), [a, b])
+        // The shot chart gets every shot.
+        let zones = ShootingHistory.zones(of: r, student: a)
+        XCTAssertEqual(zones[5]?.attempted, 20); XCTAssertEqual(zones[5]?.made, 10)
+        // Round trip, and a run without rounds writes no key.
+        let back = try JSONDecoder().decode(ShootingRun.self, from: JSONEncoder().encode(r))
+        XCTAssertEqual(back, r)
+        let plain = String(data: try JSONEncoder().encode(run(ft10, [a: [5]])), encoding: .utf8)!
+        XCTAssertFalse(plain.contains("more"))
+    }
+
+    func testATimedDrillKeepsItsBestRound() throws {
+        var r = run(ShootingSetup(drill: .mikan, mode: .timed, seconds: 60), [a: [14]])
+        r.setRound(r.addRound(), entries: [ShootingEntry(studentId: a, makes: [19])])
+        r.setRound(r.addRound(), entries: [ShootingEntry(studentId: a, makes: [16])])
+        XCTAssertEqual(try XCTUnwrap(r.result(for: a)).made, 19)
+    }
+
+    func testEmptyRoundsAreDroppedAndARoundCanBeDeleted() {
+        var r = run(ft10, [a: [5]])
+        r.addRound()
+        XCTAssertEqual(r.roundCount, 2)
+        XCTAssertEqual(r.result(for: a)?.made, 5, "an empty round changes nothing")
+        r.dropEmptyRounds()
+        XCTAssertEqual(r.roundCount, 1); XCTAssertNil(r.more)
+        r.setRound(r.addRound(), entries: [ShootingEntry(studentId: a, makes: [8])])
+        r.removeRound(0)
+        XCTAssertEqual(r.roundCount, 1)
+        XCTAssertEqual(r.result(for: a)?.made, 8, "round 2 became the only round")
+        r.removeRound(0)
+        XCTAssertEqual(r.roundCount, 1, "never the only one")
+    }
 }

@@ -16,6 +16,15 @@ struct ShotChartAddOnCard: View {
     let canEdit: Bool
     /// In the shooting station: no fold, no card frame.
     var station = false
+    /// Rounds: the round before this one (compared with instead of the
+    /// last session) and its number.
+    var previousRound: ShootingRun? = nil
+    var previousRoundNumber = 0
+    var lockSetup = false
+    private func previous(_ student: UUID) -> ShootingResult? {
+        if let previousRound { return previousRound.result(for: student) }
+        return ShootingHistory.previous(student, setup: setup, before: sessionDate, sessions: allSessions)
+    }
 
     @EnvironmentObject private var dataManager: DataManager
     @State private var chosen: UUID?
@@ -52,7 +61,7 @@ struct ShotChartAddOnCard: View {
     }
 
     private func lastZones(for student: UUID) -> [ShotZoneValue?]? {
-        ShootingHistory.previous(student, setup: setup, before: sessionDate, sessions: allSessions)?.zoneValues
+        previous(student)?.zoneValues
     }
 
     var body: some View {
@@ -94,7 +103,7 @@ struct ShotChartAddOnCard: View {
                 Text(drill.title(chinese: isChinese).uppercased()).font(.subheadline.weight(.bold))
                 HStack(spacing: 4) {
                     Text(setup.summary(chinese: isChinese))
-                    if canEdit && run.entries.isEmpty { setupMenu }
+                    if canEdit && run.entries.isEmpty && !lockSetup { setupMenu }
                 }
                 .font(.caption).foregroundStyle(.secondary)
             }
@@ -188,7 +197,7 @@ struct ShotChartAddOnCard: View {
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 260)
-            Toggle(isOn: $vsLast) { Text(isChinese ? "对比上次" : "Vs last time").font(.caption) }
+            Toggle(isOn: $vsLast) { Text(previousRound != nil ? (isChinese ? "对比第 \(previousRoundNumber) 轮" : "Vs round \(previousRoundNumber)") : (isChinese ? "对比上次" : "Vs last time")).font(.caption) }
                 .toggleStyle(.button)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
@@ -210,8 +219,8 @@ struct ShotChartAddOnCard: View {
             if att > 0 {
                 Text("· \(Int(made))/\(Int(att)) · \(Int((made / att * 100).rounded()))%")
                     .font(.footnote).monospacedDigit()
-                if let id = chosen, let last = ShootingHistory.previous(id, setup: setup, before: sessionDate, sessions: allSessions) {
-                    Text((isChinese ? "· 上次 " : "· last time ") + last.text).font(.footnote).foregroundStyle(.secondary)
+                if let id = chosen, let last = previous(id) {
+                    Text((previousRound != nil ? (isChinese ? "· 第 \(previousRoundNumber) 轮 " : "· round \(previousRoundNumber) ") : (isChinese ? "· 上次 " : "· last time ")) + last.text).font(.footnote).foregroundStyle(.secondary)
                 }
             } else if canEdit {
                 Text(chosen == nil ? (isChinese ? "· 选一位学员，点区域记录" : "· choose an athlete, tap a zone to log")

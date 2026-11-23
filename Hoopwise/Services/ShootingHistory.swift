@@ -135,11 +135,13 @@ enum ShootingHistory {
     static func zones(of run: TrackedRun, student: UUID) -> [ShotZoneValue?] {
         var out = [ShotZoneValue?](repeating: nil, count: 10)
         let def = run.definition
-        for (spot, value) in run.values(for: student).enumerated() {
-            guard let value, let zone = def.zone(forSpot: spot) else { continue }
-            var z = out[zone] ?? ShotZoneValue(made: 0, attempted: 0)
-            z.made += value; z.attempted += Double(def.amount)
-            out[zone] = z
+        for round in run.rounds {
+            for (spot, value) in round.values(for: student).enumerated() {
+                guard let value, let zone = def.zone(forSpot: spot) else { continue }
+                var z = out[zone] ?? ShotZoneValue(made: 0, attempted: 0)
+                z.made += value; z.attempted += Double(def.amount)
+                out[zone] = z
+            }
         }
         return out
     }

@@ -428,8 +428,61 @@ nonisolated struct TrackedRun: Codable, Hashable, Identifiable, Sendable {
         entries[student.uuidString] = v.allSatisfy { $0 == nil } ? nil : v
     }
 
-    func result(for student: UUID) -> Double? { definition.result(values(for: student)) }
-    var hasResults: Bool { !entries.isEmpty }
+    /// ROUNDS (23 Nov 2026): rounds 2…n of the same drill in this session.
+    /// The pages edit ONE round (`round(_:)`); `result(for:)` is the
+    /// session's — made-of POOLS every round, the other measures take the
+    /// BEST round.
+    var more: [[String: [Double?]]]? = nil
+
+    var roundCount: Int { 1 + (more?.count ?? 0) }
+
+    func round(_ i: Int) -> TrackedRun {
+        var r = self
+        r.more = nil
+        r.entries = i == 0 ? entries : (more.flatMap { $0.indices.contains(i - 1) ? $0[i - 1] : nil } ?? [:])
+        return r
+    }
+
+    var rounds: [TrackedRun] { (0..<roundCount).map(round) }
+
+    mutating func setRound(_ i: Int, entries new: [String: [Double?]]) {
+        if i == 0 { entries = new; return }
+        var m = more ?? []
+        while m.count < i { m.append([:]) }
+        m[i - 1] = new
+        more = m
+    }
+
+    @discardableResult mutating func addRound() -> Int {
+        more = (more ?? []) + [[:]]
+        return roundCount - 1
+    }
+
+    mutating func removeRound(_ i: Int) {
+        guard roundCount > 1, i < roundCount else { return }
+        var all = [entries] + (more ?? [])
+        all.remove(at: i)
+        entries = all[0]
+        more = all.count > 1 ? Array(all.dropFirst()) : nil
+    }
+
+    mutating func dropEmptyRounds(keeping keep: Int? = nil) {
+        guard let m = more else { return }
+        let kept = m.enumerated().filter { !$0.element.isEmpty || $0.offset + 1 == keep }.map(\.element)
+        more = kept.isEmpty ? nil : kept
+    }
+
+    func result(for student: UUID) -> Double? {
+        guard more != nil else { return definition.result(values(for: student)) }
+        let each = rounds.map { $0.values(for: student) }
+        if definition.measure == .madeOf { return definition.result(each.flatMap { $0 }) }
+        return each.compactMap { definition.result($0) }.max { definition.better($1, than: $0) }
+    }
+
+    var hasResults: Bool { !entries.isEmpty || (more ?? []).contains { !$0.isEmpty } }
+
+    /// Everyone with a number in any round.
+    var reporterIds: Set<String> { Set(entries.keys).union((more ?? []).flatMap(\.keys)) }
 }
 
 // MARK: - On the drill

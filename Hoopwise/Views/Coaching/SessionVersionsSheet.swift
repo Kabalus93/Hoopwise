@@ -105,7 +105,7 @@ struct SessionVersionsSheet: View {
     }
 
     private func shootingEntries(_ e: SessionEvent) -> Int {
-        e.curriculum.shooting.reduce(0) { $0 + $1.entries.count }
+        e.curriculum.shooting.reduce(0) { $0 + $1.rounds.reduce(0) { $0 + $1.entries.count } }
     }
 
     private func summary(_ e: SessionEvent, date: Date?, actor: String?) -> some View {
@@ -138,8 +138,8 @@ struct SessionVersionsSheet: View {
             }
             if shootingEntries(e) > 0 {
                 label("gauge.with.dots.needle.67percent",
-                      zh ? "投篮记录 \(shootingEntries(e)) 条（\(e.curriculum.shooting.filter { !$0.entries.isEmpty }.map { $0.setup.drill.short(chinese: true) }.joined(separator: "、"))）"
-                         : "\(shootingEntries(e)) shooting results (\(e.curriculum.shooting.filter { !$0.entries.isEmpty }.map { $0.setup.drill.short(chinese: false) }.joined(separator: ", ")))")
+                      zh ? "投篮记录 \(shootingEntries(e)) 条（\(e.curriculum.shooting.filter { $0.hasResults }.map { $0.setup.drill.short(chinese: true) }.joined(separator: "、"))）"
+                         : "\(shootingEntries(e)) shooting results (\(e.curriculum.shooting.filter { $0.hasResults }.map { $0.setup.drill.short(chinese: false) }.joined(separator: ", ")))")
             }
         }
         .padding(.vertical, 2)

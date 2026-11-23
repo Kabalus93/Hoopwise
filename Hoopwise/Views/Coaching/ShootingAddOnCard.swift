@@ -28,6 +28,15 @@ struct ShootingAddOnCard: View {
     /// In the shooting station (23 Nov 2026): no fold, no card frame — the
     /// station is the page. The plan shows a one-line tracker instead.
     var station = false
+    /// Rounds (23 Nov 2026): the round before this one — numbers compare
+    /// with IT instead of the last session — and its number.
+    var previousRound: ShootingRun? = nil
+    var previousRoundNumber = 0
+    var lockSetup = false
+    private func lastWord(long: Bool) -> String {
+        if previousRound != nil { return isChinese ? "第 \(previousRoundNumber) 轮 " : "round \(previousRoundNumber) " }
+        return isChinese ? "上次 " : (long ? "last time " : "last ")
+    }
 
     @EnvironmentObject private var dataManager: DataManager
     /// The cell the number pad is open on, and what has been typed there.
@@ -48,14 +57,16 @@ struct ShootingAddOnCard: View {
     enum Sort: String, CaseIterable { case roster, best, toLog }
 
     private var setup: ShootingSetup { run.setup }
-    private var locked: Bool { !run.entries.isEmpty }
+    private var locked: Bool { lockSetup || !run.entries.isEmpty }
     private var sort: Sort { Sort(rawValue: sortRaw) ?? .roster }
 
     /// Each athlete's result in this test last time (computed once a draw).
     private var lastTime: [UUID: ShootingResult] {
         var out: [UUID: ShootingResult] = [:]
         for s in students {
-            if let r = ShootingHistory.previous(s.id, setup: setup, before: sessionDate, sessions: allSessions) { out[s.id] = r }
+            if let previousRound {
+                if let r = previousRound.result(for: s.id) { out[s.id] = r }
+            } else if let r = ShootingHistory.previous(s.id, setup: setup, before: sessionDate, sessions: allSessions) { out[s.id] = r }
         }
         return out
     }
@@ -184,7 +195,7 @@ struct ShootingAddOnCard: View {
                         if let thenAvg { delta(avg, thenAvg) }
                     }
                     if let thenAvg {
-                        Text((isChinese ? "上次 " : "last time ") + ShootingResult.text(thenAvg, mode: setup.mode, chinese: isChinese))
+                        Text(lastWord(long: true) + ShootingResult.text(thenAvg, mode: setup.mode, chinese: isChinese))
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
@@ -354,7 +365,7 @@ struct ShootingAddOnCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 if let last {
-                    Text((isChinese ? "上次 " : "last ") + last.text)
+                    Text(lastWord(long: false) + last.text)
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                 }
             }

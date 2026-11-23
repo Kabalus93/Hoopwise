@@ -333,9 +333,89 @@ struct ShootingEntry: Codable, Hashable {
 struct ShootingRun: Codable, Hashable, Identifiable {
     var id = UUID()
     var setup: ShootingSetup
+    /// Round 1 (the only round until the coach runs the drill again).
     var entries: [ShootingEntry] = []
+    /// ROUNDS (23 Nov 2026, Luther: "sometimes I run the same drill more
+    /// than once … see how they improve within the session"): rounds 2…n,
+    /// same setup. Written only when there is one. The pages edit ONE round
+    /// (`round(_:)` — a run without `more`); everything else reads the
+    /// session's result (`result(for:)`): made-of-shots POOLS every round,
+    /// a timed result is the BEST round.
+    var more: [[ShootingEntry]]? = nil
 
-    func entry(for student: UUID) -> ShootingEntry? { entries.first { $0.studentId == student } }
+    var roundCount: Int { 1 + (more?.count ?? 0) }
+
+    /// Round `i` (0-based) as a run of its own.
+    func round(_ i: Int) -> ShootingRun {
+        var r = self
+        r.more = nil
+        r.entries = i == 0 ? entries : (more.flatMap { $0.indices.contains(i - 1) ? $0[i - 1] : nil } ?? [])
+        return r
+    }
+
+    var rounds: [ShootingRun] { (0..<roundCount).map(round) }
+
+    mutating func setRound(_ i: Int, entries new: [ShootingEntry]) {
+        if i == 0 { entries = new; return }
+        var m = more ?? []
+        while m.count < i { m.append([]) }
+        m[i - 1] = new
+        more = m
+    }
+
+    /// Opens a new, empty round and returns its index.
+    @discardableResult mutating func addRound() -> Int {
+        more = (more ?? []) + [[]]
+        return roundCount - 1
+    }
+
+    /// Takes a round out (never the only one).
+    mutating func removeRound(_ i: Int) {
+        guard roundCount > 1, i < roundCount else { return }
+        var all = [entries] + (more ?? [])
+        all.remove(at: i)
+        entries = all[0]
+        more = all.count > 1 ? Array(all.dropFirst()) : nil
+    }
+
+    /// Rounds nobody logged in are dropped before saving (round 1 stays).
+    mutating func dropEmptyRounds(keeping keep: Int? = nil) {
+        guard let m = more else { return }
+        let kept = m.enumerated().filter { !$0.element.isEmpty || $0.offset + 1 == keep }.map(\.element)
+        more = kept.isEmpty ? nil : kept
+    }
+
+    var hasResults: Bool { !entries.isEmpty || (more ?? []).contains { !$0.isEmpty } }
+
+    /// Everyone with a number in any round.
+    var reporters: [UUID] {
+        var seen = Set<UUID>(); var out: [UUID] = []
+        for e in entries + (more ?? []).flatMap({ $0 }) where seen.insert(e.studentId).inserted { out.append(e.studentId) }
+        return out
+    }
+
+    /// The athlete's entry: the round's own, or — with several rounds — the
+    /// session's (shares pooled spot by spot, a timed drill's best round).
+    func entry(for student: UUID) -> ShootingEntry? {
+        guard more != nil else { return entries.first { $0.studentId == student } }
+        let mine = rounds.compactMap { r -> (ShootingEntry, ShootingResult)? in
+            guard let e = r.entries.first(where: { $0.studentId == student }) else { return nil }
+            let res = ShootingResult(setup: setup, makes: e.makes, attempts: e.attempts)
+            return res.spotsReported > 0 ? (e, res) : nil
+        }
+        guard !mine.isEmpty else { return nil }
+        if !setup.mode.isShare { return mine.max { $0.1.value < $1.1.value }?.0 }
+        let count = setup.drill.spotCount
+        var makes = [Int?](repeating: nil, count: count), attempts = [Int?](repeating: nil, count: count)
+        for (_, res) in mine {
+            for spot in 0..<count {
+                guard let s = res.shots(at: spot) else { continue }
+                makes[spot] = (makes[spot] ?? 0) + s.made
+                attempts[spot] = (attempts[spot] ?? 0) + s.attempted
+            }
+        }
+        return ShootingEntry(studentId: student, makes: makes, attempts: attempts)
+    }
 
     func makes(_ student: UUID, spot: Int) -> Int? {
         guard let e = entry(for: student), spot < e.makes.count else { return nil }
@@ -396,7 +476,10 @@ struct ShootingResult: Hashable {
     func shots(at spot: Int) -> (made: Int, attempted: Int)? {
         guard spot < makes.count, let m = makes[spot] else { return nil }
         switch setup.mode {
-        case .attempts: return (m, max(setup.shots, 1))
+        case .attempts:
+            // Several rounds pooled carry their own total (see ShootingRun.entry).
+            if let a = attempts, spot < a.count, let n = a[spot], n > 0 { return (min(m, n), n) }
+            return (m, max(setup.shots, 1))
         case .chart:
             guard let a = attempts, spot < a.count, let n = a[spot], n > 0 else { return nil }
             return (min(m, n), n)

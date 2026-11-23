@@ -277,4 +277,35 @@ final class CustomTrackingTests: XCTestCase {
         XCTAssertTrue((schema?["required"] as? [String])?.contains("tracking") == true)
         XCTAssertTrue(JSONSerialization.isValidJSONObject(body))
     }
+
+    // MARK: Rounds (23 Nov 2026)
+
+    func testRoundsPoolAShareAndKeepTheBestOfTheRest() throws {
+        var made = TrackKind.shooting.preset(chinese: false); made.amount = 10; made.zones = [5, 9]
+        var r = run(made, [a: [4, 6]])
+        var second = r.round(0); second.entries = [:]
+        second.set(8, for: a, spot: 0)
+        r.setRound(r.addRound(), entries: second.entries)
+        XCTAssertEqual(try XCTUnwrap(r.result(for: a)), 18.0 / 30.0, accuracy: 0.0001, "three reports of 10")
+        XCTAssertEqual(try XCTUnwrap(r.round(1).result(for: a)), 0.8, accuracy: 0.0001)
+        let zones = ShootingHistory.zones(of: r, student: a)
+        XCTAssertEqual(zones[5]?.made, 12); XCTAssertEqual(zones[5]?.attempted, 20)
+        XCTAssertEqual(zones[9]?.attempted, 10)
+
+        let sprint = TrackKind.conditioning.preset(chinese: false)
+        XCTAssertEqual(sprint.measure, .timeToFinish)
+        var t = run(sprint, [a: [12.4]])
+        var faster = t.round(0); faster.entries = [:]; faster.set(11.8, for: a, spot: 0)
+        t.setRound(t.addRound(), entries: faster.entries)
+        var slower = t.round(0); slower.entries = [:]; slower.set(12.9, for: a, spot: 0)
+        t.setRound(t.addRound(), entries: slower.entries)
+        XCTAssertEqual(t.result(for: a), 11.8, "the fastest round is the session's time")
+
+        let back = try JSONDecoder().decode(TrackedRun.self, from: JSONEncoder().encode(t))
+        XCTAssertEqual(back, t)
+        t.addRound(); t.dropEmptyRounds()
+        XCTAssertEqual(t.roundCount, 3)
+        t.removeRound(1)
+        XCTAssertEqual(t.result(for: a), 12.4)
+    }
 }
