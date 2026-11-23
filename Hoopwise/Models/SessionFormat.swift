@@ -15,6 +15,9 @@ enum SessionFormat: String, Codable, Hashable {
     /// court but billed to the school, not students. Surfaced as a distinct
     /// badge/colour so coaches can spot school sessions on the schedule.
     case school
+    /// A team's GAME against an opponent (23 Nov 2026, Luther: on the
+    /// calendar "game icon and color should be different" — it read Group).
+    case game
 
     var shortLabel: String {
         let isCN = LocalizationManager.shared.currentLanguage == .chinese
@@ -22,6 +25,7 @@ enum SessionFormat: String, Codable, Hashable {
         case .privateClient: return isCN ? "私教" : "Private"
         case .group:         return isCN ? "团课" : "Group"
         case .school:        return isCN ? "校园" : "School"
+        case .game:          return isCN ? "比赛" : "Game"
         }
     }
 
@@ -31,6 +35,7 @@ enum SessionFormat: String, Codable, Hashable {
         case .privateClient: return "person.fill"
         case .group:         return "person.2.fill"
         case .school:        return "building.columns.fill"
+        case .game:          return "flag.checkered"
         }
     }
 
@@ -41,6 +46,9 @@ enum SessionFormat: String, Codable, Hashable {
         case .privateClient: return AppTheme.avatarPurple
         case .group:         return AppTheme.avatarBlue
         case .school:        return AppTheme.avatarTeal
+        // Gold: red is a cancelled class, green a finished one, blue /
+        // purple / teal the other formats.
+        case .game:          return AppTheme.amber
         }
     }
 

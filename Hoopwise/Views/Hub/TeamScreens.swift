@@ -531,7 +531,7 @@ struct TeamDetailView: View {
             .filter { $0.endTime >= Date() && !SessionLifecycle.didNotHappen($0) && $0.status != .completed }
             .sorted { $0.startTime < $1.startTime }
         let played = games.filter { g in !upcoming.contains { $0.id == g.id } }.sorted { $0.startTime > $1.startTime }
-        TeamBlock(title: isChinese ? "比赛日" : "Game day", icon: "flag.checkered", tint: .red) {
+        TeamBlock(title: isChinese ? "比赛日" : "Game day", icon: "flag.checkered", tint: AppTheme.amber) {
             if let next = upcoming.first {
                 nextGame(next, team: team)
             } else {

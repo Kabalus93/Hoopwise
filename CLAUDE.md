@@ -2591,6 +2591,12 @@ SCORE PAD (+1 +2 +3, Take 1 back — writes teamScores directly, not in the
 Undo log). `GameDay.score(of:)` adds every period played (clock ran, or
 anyone scored): "W 34–28" once every period is ended. Ours are scored as in
 any game, so the athletes' game stats and chemistry include it.
+ON THE CALENDAR (same day, Luther, markup: "game icon and color should be
+different" — the row read Group, blue, two people): `SessionFormat.game`
+(checkered flag, gold `AppTheme.amber`, "Game" / 比赛), answered first by
+`SessionPrivacy.format` for a `.game` session, so the day row's icon, bar
+and badge, the day dots and every FormatBadge follow; the Game Day block and
+Home's type tint use the same gold (red is a cancelled class).
 NOT YET: the live screen's own button still says "Next Game"; no
 quarter/foul/time-out tracking; the plan is not on a printable sheet.
 Tests: GameDayTests, GameDayUITests (iPad mini; creates and deletes its team).

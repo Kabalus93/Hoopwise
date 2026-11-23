@@ -47,6 +47,8 @@ enum SessionPrivacy {
     static func format(_ session: SessionEvent,
                        programs: [Program],
                        contracts: [Contract]) -> SessionFormat {
+        // A team's game is its own format on every row, badge and dot.
+        if session.sessionType == .game { return .game }
         if let programId = session.programId,
            let program = programs.first(where: { $0.id == programId }) {
             return program.format

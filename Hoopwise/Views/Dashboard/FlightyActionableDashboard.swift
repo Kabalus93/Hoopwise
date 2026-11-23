@@ -1429,7 +1429,7 @@ struct AllAttentionItemsSheet: View {
         case .recovery:   return AppTheme.avatarGreen
         case .assessment: return AppTheme.amber
         case .teamPractice: return .indigo
-        case .game: return .red
+        case .game: return AppTheme.amber
         }
     }
 

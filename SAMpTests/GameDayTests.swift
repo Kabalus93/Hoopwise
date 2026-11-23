@@ -87,6 +87,9 @@ final class GameDayTests: XCTestCase {
         let session = try XCTUnwrap(dm.sessionEvents.first { $0.sessionType == .game })
         XCTAssertEqual(session.curriculum.gamePlan?.starters, [kid.id], "the plan is stored")
         XCTAssertFalse(SessionPrivacy.isPrivate(session, programs: dm.programs, contracts: dm.contracts))
+        // On the calendar it is a Game, not a Group class (its own icon and colour).
+        XCTAssertEqual(dm.sessionFormat(session), .game)
+        XCTAssertNotEqual(SessionFormat.game.icon, SessionFormat.group.icon)
         dm.setStudentAttendanceState(sessionId: session.id, studentId: kid.id, state: .present)
         for contract in dm.allContracts(for: kid.id) {
             XCTAssertEqual(contract.bundleRedemptionsRemaining, 10, "contract #\(contract.contractNumber) was charged")

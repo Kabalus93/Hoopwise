@@ -2474,7 +2474,9 @@ struct CompactSessionRow: View {
         case .inProgress: return isEndedOpen ? .orange : .green
         case .completed: return .green
         case .skipped: return Color.gray.opacity(0.4)
-        case .scheduled: return programColor
+        // A game has no program: its own colour, not the accent a
+        // program-less class takes (which read as a group class).
+        case .scheduled: return format == .game ? format.tint : programColor
         }
     }
 }
