@@ -301,6 +301,7 @@ struct FlightyActionableDashboard: View {
     private var homeStack: some View {
         NavigationStack {
             ScrollView {
+                if FilmRoom.isOn { macHeader }
                 GlassEffectContainer(spacing: 16) {
                     if horizontalSizeClass == .regular {
                         // iPad (November 2026): two columns — the day on the
@@ -339,30 +340,11 @@ struct FlightyActionableDashboard: View {
             .scrollContentBackground(.hidden)
             .filmRoomPage()
             .navigationTitle(navTitle)
+            .toolbar(FilmRoom.isOn ? .hidden : .automatic, for: .navigationBar)
             .toolbar {
                 #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) {
                     profileToolbarButton
-                }
-                // The Mac has no pull-down: the search is a field-shaped
-                // button with its key.
-                if FilmRoom.isOn {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button { showingSearch = true } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                Text(LocalizationManager.shared.currentLanguage == .chinese ? "搜索" : "Search")
-                                Text("⌘K").foregroundStyle(.tertiary)
-                            }
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12).frame(height: 30)
-                            .background(Capsule().fill(FilmGlass.fill))
-                            .overlay(Capsule().stroke(FilmGlass.edge, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("home.search.button")
-                    }
                 }
                 #else
                 ToolbarItem(placement: .navigation) {
@@ -483,6 +465,47 @@ struct FlightyActionableDashboard: View {
         case .drill(let drill): searchDrillId = drill.id
         case .lexicon(let item): searchLexicon = item
         }
+    }
+
+    /// The Mac's Home header: the greeting and the date on the left, the
+    /// search as a field-shaped button with its key and the coach on the
+    /// right. The Mac has no pull-down and no large-title bar.
+    private var macHeader: some View {
+        let chinese = LocalizationManager.shared.currentLanguage == .chinese
+        return HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(navTitle)
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(currentTime.formatted(.dateTime.weekday(.wide).month(.wide).day()
+                    .locale(Locale(identifier: chinese ? "zh-Hans" : "en"))))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 12)
+            Button { showingSearch = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                    Text(chinese ? "搜索" : "Search")
+                    Spacer(minLength: 24)
+                    Text("⌘K").foregroundStyle(.tertiary)
+                }
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .frame(width: 220, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(FilmGlass.fill))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(FilmGlass.edge, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home.search.button")
+            profileToolbarButton
+                .buttonStyle(.plain)
+        }
+        .padding(.top, 34)
+        .padding(.bottom, 18)
     }
 
     private var navTitle: String {

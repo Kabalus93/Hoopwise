@@ -48,7 +48,75 @@ struct FlightySessionRootView: View {
     }
     
     // MARK: - Enhanced Header with Prominent Picker (Liquid Glass Style)
-    private var compactHeader: some View {
+    @ViewBuilder private var compactHeader: some View {
+        if FilmRoom.isOn { macHeader } else { phoneHeader }
+    }
+
+    /// The Mac's header: the page's name, a quiet two-part switch, and the
+    /// one action of the part on screen as a labelled button at the right.
+    private var macHeader: some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        let parts: [(Int, String, Int)] = [
+            (1, isChinese ? "日历" : "Calendar", todaySessionsCount),
+            (0, isChinese ? "训练计划" : "Programs", dataManager.programs.filter { $0.status != .archived }.count)
+        ]
+        return HStack(spacing: 16) {
+            Text(isChinese ? "课程" : "Sessions")
+                .font(.system(size: 22, weight: .light))
+            HStack(spacing: 2) {
+                ForEach(parts, id: \.0) { part in
+                    let on = selectedSegment == part.0
+                    Button { selectedSegment = part.0 } label: {
+                        HStack(spacing: 6) {
+                            Text(part.1)
+                            if part.2 > 0 {
+                                Text("\(part.2)")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .font(.system(size: 13, weight: on ? .medium : .regular))
+                        .foregroundStyle(on ? .primary : .secondary)
+                        .padding(.horizontal, 12)
+                        .frame(height: 26)
+                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(on ? FilmGlass.fillActive : Color.clear))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(part.0 == 0 ? "sessions.part.programs" : "sessions.part.calendar")
+                }
+            }
+            .padding(2)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(FilmGlass.fill))
+            Spacer(minLength: 12)
+            Button {
+                if selectedSegment == 0 { showingAddProgram = true }
+                else { NotificationCenter.default.post(name: .hoopwiseOpenAddSession, object: nil) }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                    Text(selectedSegment == 0 ? (isChinese ? "新建计划" : "New Program") : (isChinese ? "新建课程" : "New Session"))
+                }
+                .font(.system(size: 13, weight: .medium))
+                .padding(.horizontal, 12)
+                .frame(height: 28)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(FilmGlass.fill))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(FilmGlass.edge, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sessions.new")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 34)
+        .padding(.bottom, 14)
+        .sheet(isPresented: $showingAddProgram) {
+            AddProgramOnboardingView { _ in selectedSegment = 0 }
+        }
+    }
+
+    private var phoneHeader: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return VStack(spacing: 0) {
             // Centered segment picker with a trailing "+" button overlay so the
@@ -1818,6 +1886,8 @@ struct FlightySessionsCalendarView: View {
             // with existing sessions. Keeps the affordance discoverable while
             // dodging the iOS 26 stretched-button bug seen with
             // `.borderedProminent` inside an `actions:` slot.
+            // The Mac has New Session in the page header.
+            if !FilmRoom.isOn {
             Section {
                 Button {
                     showingCreateSession = true
@@ -1829,6 +1899,7 @@ struct FlightySessionsCalendarView: View {
                 .sensoryFeedback(.selection, trigger: showingCreateSession)
                 .filmRoomHover()
                 .filmRoomListRow()
+            }
             }
         }
         .listStyle(.insetGrouped)

@@ -120,6 +120,8 @@ struct FlightyProgramDetailView: View {
         return dayNames
     }
     
+    @State private var pageWidth: CGFloat = 0
+
     var body: some View {
         page.environment(\.skillLevelProgram, program.id)
     }
@@ -133,6 +135,28 @@ struct FlightyProgramDetailView: View {
                 heroHeader
                 
                 // Content sections
+                if FilmRoom.isOn, pageWidth >= 860 {
+                    // The Mac: the plan (level, phases, their balance) beside
+                    // the people (athletes, who has outgrown the group).
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(spacing: 20) {
+                            phasesSection
+                            PhaseCoverageCard(program: program)
+                            ProgramLevelCard(program: $program, enrolledStudents: enrolledStudents)
+                            if !program.objectives.isEmpty { objectivesSection }
+                        }
+                        .frame(maxWidth: .infinity)
+                        VStack(spacing: 20) {
+                            athletesSection
+                            GroupFitCard(program: program)
+                        }
+                        .frame(width: min(420, pageWidth * 0.38))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 60)
+                    .accessibilityIdentifier("program.macLayout")
+                } else {
                 VStack(spacing: 20) {
                     // Training level — read by the session plan generator.
                     ProgramLevelCard(program: $program, enrolledStudents: enrolledStudents)
@@ -159,8 +183,10 @@ struct FlightyProgramDetailView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 20)
                 .padding(.bottom, 20)
+                }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 20).rounded() * 20 } action: { pageWidth = $0 }
         .filmRoomPage()
         .sheet(isPresented: $showingCyclePlanner) {
             CyclePlannerSheet(
@@ -714,7 +740,7 @@ struct FlightyProgramDetailView: View {
             } else {
                 // The whole roster, always (18 Nov 2026, Luther: "show the full
                 // list always" — it stopped at six behind "View all").
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                LazyVGrid(columns: FilmRoom.isOn && pageWidth >= 860 ? [GridItem(.flexible())] : [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(enrolledStudents) { student in
                         NavigationLink(destination: StudentDetailView(student: student)) {
                             AthleteCard(student: student, accentColor: programColor)
