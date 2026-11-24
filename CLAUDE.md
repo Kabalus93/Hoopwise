@@ -2951,6 +2951,20 @@ tool only sees the coach's real app's window, never a demo copy's).
     and report buttons are hidden there). "Hub" in the sidebar is REVENUE
     (⌘4, the revenue page). Attention and team cards on Home are quiet
     panes; a tracked drill's plan line is quiet (orange text, no fill).
+  · DRILLS: Views/Mac/MacDrillsBrowser.swift — the library (≤ 430 pt)
+    beside the drill from 900 pt (`drills.macLayout`, "Choose a drill"
+    when none); a row SELECTS instead of pushing because the browser sets
+    the environment values `macDrillSelect` / `macDrillSelectedId` — the
+    library is otherwise unchanged (the plan picker and iPhone / iPad never
+    set them).
+  · FULL-SCREEN COVERS (Create Game, the live game, the recap) share the
+    main window with the page that opened them, which stays drawn — a clear
+    cover showed it through. The layout hook paints a full-screen cover and
+    its container `MacGlass.coverColor` (solid dark). THE QUICK PEEP is the
+    one cover meant to float: QuickPeepHost sets `MacGlass.clearCover`
+    while it is up, the peep's panel has `coverColor` as its backing (the
+    theme background is clear on the Mac), it opens on MacAthleteHeader and
+    has no Player card / Progress report buttons there.
   · THE BOARD WINDOW has the room's backdrop and is dark.
   · DEBUG: HOOPWISE_FILM_OPEN=drill|team|program|coach|lexicon|session|board
     opens that page at launch on the Mac (the page stays over the sidebar's
@@ -2964,8 +2978,8 @@ tool only sees the coach's real app's window, never a demo copy's).
     are refused while the screen is locked; the menus still work. The Mac
     demo store was seeded by hand (a class, five Demo athletes, a "Demo
     Hawks" team, three private programs).
-- NOT DONE YET (Mac): the live game cover and the game recap were not
-  treated or seen; drag-and-drop was never driven by a real mouse.
+- NOT DONE YET (Mac): the live game and the game recap were not seen (the
+  Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was
   never seen (the capture shows glass as flat grey; the one full-screen look
   was over a dark desktop).
