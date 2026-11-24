@@ -1627,6 +1627,7 @@ struct FlightySessionsCalendarView: View {
     @State private var currentWeekStart = Date()
     @State private var showingCreateSession = false
     @State private var isCalendarExpanded = false
+    @State private var calendarWidth: CGFloat = 0
     @State private var weekDragOffset: CGFloat = 0
     @State private var contentDragOffset: CGFloat = 0
     @State private var isDraggingWeek = false
@@ -1660,6 +1661,27 @@ struct FlightySessionsCalendarView: View {
     }
 
     private var calendarMaster: some View {
+        Group {
+            if FilmRoom.isOn, calendarWidth >= 820 {
+                // The Mac: the month always open on the left, the day's
+                // classes beside it — a calendar, not a phone's week strip
+                // over a list (25 Nov 2026, Luther: the pages "still scream
+                // iPad").
+                HStack(alignment: .top, spacing: 0) {
+                    VStack(spacing: 0) {
+                        calendarHeader
+                        weekdayHeaderRow
+                        monthlyCalendarGrid
+                            .padding(.horizontal, 8)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(width: 340)
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                    sessionsListView
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("calendar.macLayout")
+            } else {
         VStack(spacing: 0) {
             calendarHeader
             weekStrip
@@ -1667,6 +1689,9 @@ struct FlightySessionsCalendarView: View {
                 .padding(.top, 4)
             sessionsListView
         }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 20).rounded() * 20 } action: { calendarWidth = $0 }
         .filmRoomPage()
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAddSession)) { _ in
             showingCreateSession = true      // ⌘N on the Mac
@@ -2179,6 +2204,13 @@ struct FlightySessionsCalendarView: View {
     
     // MARK: - Navigation
     private func navigateWeek(by value: Int) {
+        // The Mac's month layout steps by month.
+        if FilmRoom.isOn, calendarWidth >= 820,
+           let next = calendar.date(byAdding: .month, value: value, to: selectedDate) {
+            selectedDate = next
+            currentWeekStart = next
+            return
+        }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             if let newDate = calendar.date(byAdding: .weekOfYear, value: value, to: currentWeekStart) {
                 currentWeekStart = newDate

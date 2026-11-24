@@ -82,13 +82,14 @@ struct ShootingTrackerLine: View {
                 Spacer(minLength: 6)
                 Text(TrackerRoundText.button(canEdit: canEdit, nextRound: next ? rounds + 1 : nil, chinese: isChinese))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(FilmRoom.isOn ? Color.orange : Color.white)
                     .padding(.horizontal, 14)
-                    .frame(minHeight: 32)
-                    .background(Capsule().fill(Color.orange))
+                    .frame(minHeight: FilmRoom.isOn ? 26 : 32)
+                    .background(Capsule().fill(Color.orange.opacity(FilmRoom.isOn ? 0.16 : 1)))
             }
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.orange.opacity(0.07)))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(FilmRoom.isOn ? Color.white.opacity(0.04) : Color.orange.opacity(0.07)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
