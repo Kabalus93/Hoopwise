@@ -378,7 +378,7 @@ struct LiveGameScoringView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .glassEffect(.regular, in: Capsule())
+                        .filmGlass(.regular, in: Capsule())
                     }
                     Spacer()
                 }
@@ -386,7 +386,7 @@ struct LiveGameScoringView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
     }
     
     private var gameHeader: some View {
@@ -483,7 +483,7 @@ struct LiveGameScoringView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .sensoryFeedback(.selection, trigger: selectedTeamIndex)
     }
 
@@ -871,7 +871,7 @@ struct LiveGameScoringView: View {
             }
         }
         .padding(8)
-        .glassEffect(.regular, in: .rect(cornerRadius: 8))
+        .filmGlass(.regular, in: .rect(cornerRadius: 8))
     }
 
     private func compactStatButton(_ label: String, color: Color, action: @escaping () -> Void) -> some View {
@@ -959,7 +959,7 @@ struct LiveGameScoringView: View {
             }
         }
         .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .filmGlass(.regular, in: .rect(cornerRadius: 12))
     }
     
     private var playersList: some View {
@@ -1022,7 +1022,7 @@ struct LiveGameScoringView: View {
             }
         }
         .padding(12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .filmGlass(.regular, in: .rect(cornerRadius: 12))
     }
 
     private func statLabel(_ label: String, value: Int) -> some View {

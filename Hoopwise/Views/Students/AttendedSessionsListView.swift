@@ -71,6 +71,7 @@ struct AttendedSessionsListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .scrollContentBackground(.hidden)
         .filmRoomPage()
         .navigationTitle(isChinese ? "出勤历史" : "Attendance History")

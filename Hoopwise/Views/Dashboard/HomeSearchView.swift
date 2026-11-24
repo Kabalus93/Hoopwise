@@ -196,7 +196,7 @@ struct HomeSearchView: View {
             .scrollDismissesKeyboard(.interactively)
             .opacity(reveal)
         }
-        .background(.ultraThinMaterial.opacity(reveal))
+        .background(.filmUltraThinMaterial.opacity(reveal))
         .background(Color(.systemGroupedBackground).opacity(0.55 * reveal))
         .onAppear {
             if live { DispatchQueue.main.async { focused = true } }
@@ -239,7 +239,7 @@ struct HomeSearchView: View {
             .font(.title3)
             .padding(.horizontal, 14)
             .frame(height: 50)
-            .glassEffect(.regular, in: .capsule)
+            .filmGlass(.regular, in: .capsule)
 
             Button(isChinese ? "取消" : "Cancel", action: onClose)
                 .font(.body.weight(.semibold))

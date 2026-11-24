@@ -24,7 +24,7 @@ struct SyncStatusView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             }
-            .background(.regularMaterial)
+            .background(.filmMaterial)
             .navigationTitle(isChinese ? "iCloud 同步" : "iCloud Sync")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -80,7 +80,7 @@ struct SyncStatusView: View {
             }
         }
         .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.filmThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Details Card
@@ -118,7 +118,7 @@ struct SyncStatusView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.filmThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Mapping

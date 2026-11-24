@@ -26,10 +26,16 @@ enum FilmRoom {
     }()
 
     static let sidebarWidth: CGFloat = 236
+    /// THE pane: every card on the Mac is this one material — the quiet navy
+    /// the system's glass renders as over the window (cards drawn with
+    /// `.glassEffect` and cards filled with a colour looked like two apps).
+    static let pane = FilmGlass.fill
     static let boardWindowId = "coachBoard"
 }
 
 extension Notification.Name {
+    /// The Mac: open this class (object: its id) in the work area.
+    static let hoopwiseFilmRoomOpenSession = Notification.Name("hoopwiseFilmRoomOpenSession")
     /// ⇧⌘B on the Mac: the Coach board in its own window (the shell opens it).
     static let hoopwiseOpenBoardWindow = Notification.Name("hoopwiseOpenBoardWindow")
 }
@@ -52,7 +58,9 @@ extension EnvironmentValues {
 struct FilmRoomBackdrop: View {
     var body: some View {
         #if targetEnvironment(macCatalyst)
-        Color(red: 0.05, green: 0.09, blue: 0.18).opacity(0.22)
+        // Dark and neutral: the desktop behind only whispers through (a red
+        // wallpaper turned the whole app red at a lighter tint).
+        Color(red: 0.04, green: 0.05, blue: 0.075).opacity(0.62)
         #else
         // A stand-in for the frosted window: a blurred desktop, roughly.
         LinearGradient(colors: [Color(red: 0.16, green: 0.18, blue: 0.24), Color(red: 0.09, green: 0.10, blue: 0.14)],
@@ -78,7 +86,7 @@ extension Color {
     /// A CARD's fill. Off the Mac: the system's secondary grouped background,
     /// as before. On the Mac: a thin pane of glass over the window's.
     static var filmCard: Color {
-        FilmRoom.isOn ? Color.white.opacity(0.075) : Color(.secondarySystemGroupedBackground)
+        FilmRoom.isOn ? FilmRoom.pane : Color(.secondarySystemGroupedBackground)
     }
 }
 
@@ -108,6 +116,12 @@ extension View {
         listRowBackground(FilmRoom.isOn ? Color.filmCard : nil)
     }
 
+    /// A grouped List: on the Mac it has no slab of its own — it sits on the
+    /// window's glass.
+    func filmRoomList() -> some View {
+        scrollContentBackground(FilmRoom.isOn ? .hidden : .automatic)
+    }
+
     /// On the Mac the row lights up under the pointer; nothing elsewhere.
     func filmRoomHover(cornerRadius: CGFloat = 12) -> some View { modifier(FilmRoomHover(radius: cornerRadius)) }
 }
@@ -125,7 +139,9 @@ enum FilmRoomPlace: Int, CaseIterable, Identifiable {
         case .home: chinese ? "首页" : "Home"
         case .sessions: chinese ? "课程" : "Sessions"
         case .athletes: chinese ? "学员" : "Athletes"
-        case .hub: chinese ? "中心" : "Hub"
+        // The Hub's tiles are the sidebar on the Mac; what is left of it is
+        // the money: revenue and the private clients.
+        case .hub: chinese ? "收入" : "Revenue"
         case .plays: chinese ? "战术" : "Plays"
         case .drills: chinese ? "训练" : "Drills"
         case .lexicon: chinese ? "术语" : "Lexicon"
@@ -139,7 +155,7 @@ enum FilmRoomPlace: Int, CaseIterable, Identifiable {
         case .home: "house"
         case .sessions: "calendar"
         case .athletes: "person.2"
-        case .hub: "square.grid.2x2"
+        case .hub: "chart.bar"
         case .plays: "sportscourt"
         case .drills: "cone"
         case .lexicon: "book"
@@ -163,6 +179,9 @@ struct FilmRoomShell<Main: View>: View {
     /// Pages opened so far stay alive behind the one on screen, so coming
     /// back finds them where they were left.
     @State private var visited: Set<FilmRoomPlace> = []
+    /// A class opened from the clipboard (or a link): it takes the work area
+    /// — on a Mac a class is a place, not a popup.
+    @State private var openSessionId: UUID?
 
     private var place: FilmRoomPlace { FilmRoomPlace(rawValue: selection) ?? .home }
 
@@ -177,19 +196,40 @@ struct FilmRoomShell<Main: View>: View {
                         if visited.contains(p) || p == place {
                             page(p)
                                 .opacity(p == place ? 1 : 0)
+                                // Only the page coming in fades; the one
+                                // leaving goes at once (two see-through
+                                // pages crossing showed through each other).
+                                .animation(p == place ? .easeOut(duration: 0.18) : nil, value: selection)
                                 .allowsHitTesting(p == place)
                                 .disabled(p != place)
                                 .accessibilityHidden(p != place)
                         }
                     }
                 }
+                .opacity(openSession == nil ? 1 : 0)
+                .allowsHitTesting(openSession == nil)
+
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
                 .contentShape(Rectangle())
-                .padding(.leading, FilmRoom.sidebarWidth + 10)
+                .padding(.leading, FilmRoom.sidebarWidth + 22)
+
+                if let session = openSession {
+                    NavigationStack {
+                        FlightySessionPageView(session: session, accessMode: .execution, embeddedInSplit: true)
+                            .filmRoomPage()
+                            .toolbar(.hidden, for: .navigationBar)
+                    }
+                    .id(session.id)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .padding(.leading, FilmRoom.sidebarWidth + 22)
+                }
 
                 // The clipboard, above everything.
-                FilmRoomSidebar(selection: $selection) { openWindow(id: FilmRoom.boardWindowId) }
+                FilmRoomSidebar(selection: Binding(get: { openSessionId == nil ? selection : -1 },
+                                                   set: { openSessionId = nil; selection = $0 }),
+                                openSessionId: $openSessionId) { openWindow(id: FilmRoom.boardWindowId) }
                     .frame(width: FilmRoom.sidebarWidth)
                     .padding(.leading, 10).padding(.vertical, 10)
                     .zIndex(2)
@@ -199,15 +239,24 @@ struct FilmRoomShell<Main: View>: View {
         .ignoresSafeArea()
         .onAppear { visited.insert(place) }
         .onChange(of: selection) { _, _ in visited.insert(place) }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseFilmRoomOpenSession)) { note in
+            openSessionId = note.object as? UUID
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseSelectTab)) { _ in openSessionId = nil }
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenBoardWindow)) { _ in
             openWindow(id: FilmRoom.boardWindowId)
         }
     }
 
+    private var openSession: SessionEvent? {
+        openSessionId.flatMap { id in dataManager.sessionEvents.first { $0.id == id } }
+    }
+
     @ViewBuilder
     private func page(_ p: FilmRoomPlace) -> some View {
         switch p {
-        case .home, .sessions, .athletes, .hub: main(p)
+        case .home, .sessions, .athletes: main(p)
+        case .hub: NavigationStack { MonthlyRevenueHistoryView(pushed: true).filmRoomPage() }
         case .plays: NavigationStack { JournalPlaysScreen() }
         case .drills: NavigationStack { DrillsLibraryView() }
         case .lexicon: NavigationStack { LexiconScreen() }
@@ -222,6 +271,7 @@ struct FilmRoomSidebar: View {
     @EnvironmentObject private var dataManager: DataManager
     @ObservedObject private var localization = LocalizationManager.shared
     @Binding var selection: Int
+    @Binding var openSessionId: UUID?
     let openBoard: () -> Void
 
     private var zh: Bool { localization.currentLanguage == .chinese }
@@ -279,12 +329,8 @@ struct FilmRoomSidebar: View {
                 .padding(.horizontal, 14).padding(.vertical, 12)
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
-        // The pane catches a little light along its top and leading edges.
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(LinearGradient(colors: [.white.opacity(0.34), .white.opacity(0.06), .white.opacity(0.02)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1))
-        .shadow(color: .black.opacity(0.35), radius: 18, x: 0, y: 8)
+        .filmGlass(.regular, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 8)
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("filmRoom.sidebar")
@@ -314,8 +360,9 @@ struct FilmRoomSidebar: View {
             .locale(Locale(identifier: zh ? "zh_CN" : "en_US")))
         let note = dropNote?.session == session.id ? dropNote?.outcome : nil
         let targeted = dropTarget == session.id
+        let open = openSessionId == session.id
         return Button {
-            NotificationCenter.default.post(name: .hoopwiseOpenSessionRequest, object: session.id)
+            openSessionId = session.id
         } label: {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -336,7 +383,7 @@ struct FilmRoomSidebar: View {
             }
             .padding(.horizontal, 10).frame(minHeight: 34)
             .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Color.white.opacity(targeted ? 0.18 : 0))
+                .fill(Color.white.opacity(targeted ? 0.18 : (open ? 0.16 : 0)))
                 .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .strokeBorder(Color.white.opacity(targeted ? 0.5 : 0), lineWidth: 1)))
             .contentShape(Rectangle())

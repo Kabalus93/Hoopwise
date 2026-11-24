@@ -107,6 +107,12 @@ struct FlightySessionPageView: View {
     /// The Notes tab's width: from 1100 pt (a Mac window, a 13" iPad in
     /// landscape) Reminders and Notes sit side by side, no switch.
     @State private var notesTabWidth: CGFloat = 0
+    /// THE MAC WORKSPACE (25 Nov 2026, Luther: the page "still screams iPad"):
+    /// in a wide Mac window the session is not a stack of tabs under a
+    /// billboard — a compact header, the work (plan · games · notes) on the
+    /// left and the roster always in sight on the right.
+    @State private var workspaceWidth: CGFloat = 0
+    private var isWorkspace: Bool { FilmRoom.isOn && workspaceWidth >= 860 }
     /// DEBUG HOOPWISE_NOTES_WIDE_AT=<pt> moves the threshold (checking the
     /// wide layout on an iPad simulator in portrait).
     private var notesWideAt: CGFloat {
@@ -205,6 +211,107 @@ struct FlightySessionPageView: View {
     
     var body: some View {
         page.environment(\.skillLevelProgram, session.programId)
+            .onGeometryChange(for: CGFloat.self) { ($0.size.width / 20).rounded() * 20 } action: { workspaceWidth = $0 }
+    }
+
+    // MARK: - The Mac workspace
+
+    private var macWorkspace: some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        return VStack(spacing: 0) {
+            // Compact header: the title and its facts on one band, room left
+            // for the floating back and ⋯ buttons.
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(session.title)
+                        .font(.title2.weight(.bold))
+                        .strikethrough(session.status == .cancelled)
+                        .lineLimit(1)
+                    if let location = session.location, !location.isEmpty {
+                        Label(location, systemImage: "mappin").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    if let phase = parentPhase {
+                        Text(isChinese ? "阶段 \(phase.phaseNumber) · \(phase.title)" : "Phase \(phase.phaseNumber) · \(phase.title)")
+                            .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                FlowLayout(spacing: 8) {
+                    heroStatusPill
+                    FormatBadge(format: dataManager.sessionFormat(session), size: .compact)
+                    heroMetaPill(icon: "calendar",
+                                 value: session.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
+                    heroMetaPill(icon: "clock",
+                                 value: "\(session.startTime.formatted(date: .omitted, time: .shortened)) – \(session.endTime.formatted(date: .omitted, time: .shortened))")
+                }
+            }
+            .padding(.leading, embeddedInSplit ? 20 : 72).padding(.trailing, 72)
+            .padding(.top, floatingButtonsTop).padding(.bottom, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+
+            HStack(alignment: .top, spacing: 0) {
+                // The work.
+                VStack(spacing: 0) {
+                    macWorkSelector
+                    ScrollView(showsIndicators: false) {
+                        switch selectedTab {
+                        case 2: gamesTab
+                        case 3: notesTab
+                        default: planTab
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+
+                // The roster, always in sight.
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Text(isChinese ? "名单" : "ROSTER").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 2)
+                        primarySessionCTA
+                        attendanceStats
+                        attendanceTab
+                    }
+                }
+                .frame(width: workspaceWidth >= 1100 ? 400 : 340)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("session.workspace.roster")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("session.workspace")
+    }
+
+    /// Plan · Games · Notes — the roster has its own column.
+    private var macWorkSelector: some View {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        let tabs: [(Int, String)] = [(0, isChinese ? "计划" : "Plan"), (2, isChinese ? "比赛" : "Games"), (3, isChinese ? "笔记" : "Notes")]
+        let current = selectedTab == 1 ? 0 : selectedTab
+        return HStack(spacing: 2) {
+            ForEach(tabs, id: \.0) { index, title in
+                Button { selectedTab = index } label: {
+                    Text(title)
+                        .font(.subheadline.weight(current == index ? .semibold : .regular))
+                        .foregroundStyle(current == index ? Color.primary : Color.secondary)
+                        .padding(.horizontal, 16).frame(height: 28)
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.white.opacity(current == index ? 0.14 : 0)))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("session.workspace.tab.\(index)")
+                .accessibilityAddTraits(current == index ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
     /// The page; its photos show skill levels in this group (SkillTier).
@@ -214,7 +321,9 @@ struct FlightySessionPageView: View {
             ZStack(alignment: .top) {
                 #if os(iOS)
                 Group {
-                    if selectedTab == 1 {
+                    if isWorkspace {
+                        macWorkspace
+                    } else if selectedTab == 1 {
                         ScrollView(showsIndicators: false) {
                             VStack(spacing: 0) {
                                 heroCard(safeAreaTop: windowSafeTop)
@@ -260,7 +369,7 @@ struct FlightySessionPageView: View {
                                 .background {
                                     Circle().fill(.black.opacity(0.35))
                                 }
-                                .glassEffect(.regular.interactive(), in: Circle())
+                                .filmGlass(.regular.interactive(), in: Circle())
                         }
                         .buttonStyle(.plain)
                         .sensoryFeedback(.impact(weight: .light), trigger: embeddedInSplit)
@@ -353,7 +462,7 @@ struct FlightySessionPageView: View {
                             .background {
                                 Circle().fill(.black.opacity(0.35))
                             }
-                            .glassEffect(.regular.interactive(), in: Circle())
+                            .filmGlass(.regular.interactive(), in: Circle())
                     }
                     .accessibilityIdentifier("session.more")
                 }
@@ -733,7 +842,7 @@ struct FlightySessionPageView: View {
         .background {
             Capsule().fill(statusColor.opacity(0.28))
         }
-        .glassEffect(.regular, in: Capsule())
+        .filmGlass(.regular, in: Capsule())
     }
     
     // MARK: - Hero Background
@@ -777,12 +886,12 @@ struct FlightySessionPageView: View {
         // Dark scrim under the glass so white text stays readable on
         // bright header images (sky, light hardwood, etc.). Mirrors the
         // pattern used by the floating nav buttons earlier in this file —
-        // without it, `.glassEffect(.regular)` picks up the underlying
+        // without it, `.filmGlass(.regular)` picks up the underlying
         // photo and the pill can render near-white-on-white.
         .background {
             Capsule().fill(.black.opacity(0.35))
         }
-        .glassEffect(.regular, in: Capsule())
+        .filmGlass(.regular, in: Capsule())
     }
     
     // MARK: - Tab Content
@@ -1518,7 +1627,7 @@ struct FlightySessionPageView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .glassEffect(.regular, in: Capsule())
+                    .filmGlass(.regular, in: Capsule())
                     .contentTransition(.numericText())
                 }
 
@@ -1623,7 +1732,7 @@ struct FlightySessionPageView: View {
                 }
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     private func drillRow(drill: DrillItem, color: Color, section: CurriculumSection, index: Int, totalCount: Int) -> some View {
@@ -2234,11 +2343,13 @@ struct FlightySessionPageView: View {
     /// the stack it replaced.
     @ViewBuilder
     private var attendanceRoster: some View {
-        if pageSizeClass == .regular {
+        // The Mac workspace's roster is a narrow column: the list, not the grid.
+        if pageSizeClass == .regular && !isWorkspace {
             attendanceGrid
         } else {
             attendanceList
-                .background(Color.filmCard)
+                // The Mac workspace's rows are panes already.
+                .background(isWorkspace ? Color.clear : Color.filmCard)
         }
     }
 
@@ -2728,7 +2839,7 @@ struct FlightySessionPageView: View {
             )
         }
         .padding(.vertical, 14)
-        .background(.regularMaterial)
+        .background(FilmRoom.isOn ? AnyShapeStyle(Color.clear) : AnyShapeStyle(.filmMaterial))
     }
 
     private func attendanceStat(value: String, label: String, tint: AnyShapeStyle) -> some View {
@@ -3024,7 +3135,7 @@ struct FlightySessionPageView: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .filmGlass(.regular, in: .rect(cornerRadius: 14))
     }
 
     private var photoErrorPlaceholder: some View {
@@ -3942,7 +4053,7 @@ struct FlightySessionPageView: View {
                 }
             }
             .padding(.vertical, 12)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .filmGlass(.regular, in: .rect(cornerRadius: 16))
             .padding(.horizontal, 12)
             .padding(.bottom, 80)
         }
@@ -3978,7 +4089,7 @@ struct FlightySessionPageView: View {
                 }
             }
             .padding(.vertical, 12)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .filmGlass(.regular, in: .rect(cornerRadius: 16))
             .padding(.horizontal, 12)
             .padding(.bottom, 80)
         }
@@ -4035,7 +4146,7 @@ struct FlightySessionPageView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .glassEffect(.regular, in: Capsule())
+        .filmGlass(.regular, in: Capsule())
         .padding(.horizontal, 20)
         .padding(.bottom, 20)
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -5370,6 +5481,7 @@ struct ManageSessionStudentsSheet: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+        .filmRoomList()
                 .scrollContentBackground(.hidden)
             }
             .filmRoomPage()
@@ -5431,7 +5543,7 @@ struct SessionPhotoViewer: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(10)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .background(.filmUltraThinMaterial, in: Circle())
             }
             .padding(.top, 56)
             .padding(.trailing, 16)
@@ -5461,7 +5573,7 @@ struct SessionPhotoExportToastView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background(.filmUltraThinMaterial, in: Capsule())
         .overlay(Capsule().stroke(.white.opacity(0.15), lineWidth: 0.5))
         .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
         .padding(.horizontal, 24)

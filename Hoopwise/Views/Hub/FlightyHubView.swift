@@ -163,7 +163,7 @@ struct FlightyHubView: View {
                 .frame(width: 40, height: 40)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
+        .filmGlass(.regular.interactive(), in: .circle)
         .sensoryFeedback(.impact(weight: .light), trigger: themeManager.isDarkMode)
         .accessibilityLabel(isChinese ? "切换外观" : "Switch appearance")
         // The Mac's film room is always dark: no switch there.
@@ -259,7 +259,7 @@ struct FlightyHubView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.tint(.white.opacity(0.06)), in: .rect(cornerRadius: 20))
+        .filmGlass(.regular.tint(.white.opacity(0.06)), in: .rect(cornerRadius: 20))
         .sensoryFeedback(.selection, trigger: showingRevenueHistory)
     }
 
@@ -323,7 +323,7 @@ struct FlightyHubView: View {
                             hubTile(.lexicon, title: lexiconTitle, count: lexiconCount, unit: isChinese ? "个术语" : "terms")
                         }
                         .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                        .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
                         .accessibilityIdentifier("hub.lexicon")
                     }
                 } else {
@@ -337,7 +337,7 @@ struct FlightyHubView: View {
                                                       : "\(lexiconCount) terms · plays, actions, rules, defenses")
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
                     .accessibilityIdentifier("hub.lexicon")
                 }
             }
@@ -350,7 +350,7 @@ struct FlightyHubView: View {
                                 unit: isChinese ? "支球队" : (teams == 1 ? "team" : "teams"))
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
                     .accessibilityIdentifier("hub.teams")
 
                     NavigationLink(destination: OrganizationView()) {
@@ -359,7 +359,7 @@ struct FlightyHubView: View {
                                 unit: isChinese ? "名教练" : (dataManager.staffCoaches.count == 1 ? "coach" : "coaches"))
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+                    .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
                     .accessibilityIdentifier("hub.organization")
 
                     // The Coach board takes the third slot on a wide screen.
@@ -390,7 +390,7 @@ struct FlightyHubView: View {
             }
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
         .accessibilityIdentifier("hub.board")
     }
 
@@ -400,7 +400,7 @@ struct FlightyHubView: View {
                     unit: isChinese ? "个战术" : (count == 1 ? "play" : "plays"))
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
         .accessibilityIdentifier("hub.plays")
     }
 
@@ -410,7 +410,7 @@ struct FlightyHubView: View {
                     count: "\(dataManager.drills.count)", unit: isChinese ? "个训练" : "drills")
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 20))
+        .filmGlass(.regular.interactive(), in: .rect(cornerRadius: 20))
         .accessibilityIdentifier("hub.drills")
     }
 
@@ -645,6 +645,7 @@ struct MonthlyRevenueHistoryView: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .navigationTitle("Revenue")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1382,6 +1383,7 @@ struct PrivateClientDetailSheet: View {
                 attendedSection
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .navigationTitle(student?.name ?? "Client")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1831,6 +1833,7 @@ struct PrivateClientsListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle("Private clients")
         .navigationBarTitleDisplayModeCompat(.inline)
         .sheet(item: $presentedContract) { contract in
@@ -1961,6 +1964,7 @@ struct ReclassifyContractsSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .navigationTitle("Reclassify Contracts")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -2197,6 +2201,7 @@ struct ReclassifyKeeperPicker: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search clients")
             .navigationTitle(selectedIds.isEmpty
@@ -2287,7 +2292,7 @@ struct ContractDetailSheet: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -2318,7 +2323,7 @@ struct ContractDetailSheet: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -2352,7 +2357,7 @@ struct ContractDetailSheet: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     

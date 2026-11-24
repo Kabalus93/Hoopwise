@@ -163,6 +163,7 @@ struct PhasesListView: View {
         }
         #if os(iOS)
         .listStyle(.insetGrouped)
+        .filmRoomList()
         #else
         .listStyle(.sidebar)
         #endif

@@ -107,7 +107,7 @@ struct CoachBoardScreen: View {
                 Label(savedNote, systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 16).padding(.vertical, 10)
-                    .glassEffect(.regular, in: Capsule())
+                    .filmGlass(.regular, in: Capsule())
                     .padding(.top, 60)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }

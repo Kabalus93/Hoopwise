@@ -35,6 +35,7 @@ struct AttentionFocusedSheet: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+        .filmRoomList()
                 }
             }
             .navigationTitle(category.label)

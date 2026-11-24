@@ -128,6 +128,7 @@ struct CoachProfileDetailView: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .listSectionSpacing(.compact)
             .navigationTitle(isChinese ? "教练" : "Coach")
             .navigationBarTitleDisplayMode(.inline)

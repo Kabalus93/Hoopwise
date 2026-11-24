@@ -195,6 +195,7 @@ extension View {
     func listStyleInsetGroupedCompat() -> some View {
         #if os(iOS)
         self.listStyle(.insetGrouped)
+        .filmRoomList()
         #else
         self.listStyle(.inset)
         #endif

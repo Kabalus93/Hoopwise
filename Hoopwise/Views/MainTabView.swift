@@ -206,6 +206,11 @@ struct MainTabView: View {
         let session = dataManager.sessionEvents.first(where: { $0.id == id })
         WidgetSnapshotWriter.traceDeepLink("session \(id) found=\(session != nil)")
         guard let session else { return }
+        // The Mac: a class opens in the work area, not in a popup.
+        if FilmRoom.isOn {
+            NotificationCenter.default.post(name: .hoopwiseFilmRoomOpenSession, object: session.id)
+            return
+        }
         widgetDeepLink = .session(session)
     }
 

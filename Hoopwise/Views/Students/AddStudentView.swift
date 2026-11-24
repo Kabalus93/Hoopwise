@@ -437,7 +437,7 @@ struct EditStudentView: View {
                     .padding(16)
             }
         }
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -586,7 +586,7 @@ struct EditStudentView: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(14)
     }
     
@@ -949,7 +949,7 @@ struct EditStudentView: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
 
@@ -1133,7 +1133,7 @@ struct EditStudentView: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -1499,7 +1499,7 @@ struct ContractEditSheet: View {
                             .padding(16)
                         }
                     }
-                    .background(.regularMaterial)
+                    .background(.filmMaterial)
                     .cornerRadius(14)
                     
                     // Session Count Display (expandable with session list)
@@ -1695,7 +1695,7 @@ struct ContractEditSheet: View {
                 .padding(.vertical, 12)
             }
         }
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(14)
     }
     
@@ -1779,7 +1779,7 @@ struct ContractEditSheet: View {
             content()
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(14)
     }
     

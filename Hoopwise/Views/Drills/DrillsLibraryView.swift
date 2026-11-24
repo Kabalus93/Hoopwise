@@ -582,6 +582,9 @@ struct DrillsLibraryView: View {
 
     var body: some View {
         List {
+            // One Group so every row takes the Mac's pane (nil = the
+            // system's own row background everywhere else).
+            Group {
             #if targetEnvironment(macCatalyst)
             claudeSection
             #endif
@@ -593,8 +596,11 @@ struct DrillsLibraryView: View {
                 if pick == nil { seriesEntry }
                 drillList
             }
+            }
+            .filmRoomListRow()
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         // The filters sit right on top of the list (Luther, November 2026:
         // there was a section gap between ages, blocks and the list).
         .listSectionSpacing(.compact)
@@ -1679,7 +1685,7 @@ struct DrillDetailView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background { Capsule().fill(.black.opacity(0.3)) }
-        .glassEffect(.regular, in: Capsule())
+        .filmGlass(.regular, in: Capsule())
     }
 
     // MARK: - Inline Info Chips (replaces cards)

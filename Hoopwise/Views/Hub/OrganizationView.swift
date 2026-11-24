@@ -145,6 +145,7 @@ struct OrganizationView: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .listSectionSpacing(.compact)
             // A readable column on a wide window, like a settings page.
             .contentMargins(.horizontal, max(20, (pageWidth - 860) / 2), for: .scrollContent)
@@ -545,6 +546,7 @@ struct BundleImportPreviewSheet: View {
             }
             #if os(iOS)
             .listStyle(.insetGrouped)
+        .filmRoomList()
             #endif
             .navigationTitle(isChinese ? "导入预览" : "Review Import")
             #if os(iOS)
@@ -1671,7 +1673,7 @@ struct AddressAutocompleteField: View {
                         }
                     }
                 }
-                .background(.regularMaterial)
+                .background(.filmMaterial)
                 .cornerRadius(8)
                 .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                 .padding(.top, 4)
@@ -1858,7 +1860,7 @@ struct LocationDetailView: View {
             }
         }
         .padding(14)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(12)
     }
     
@@ -1886,7 +1888,7 @@ struct LocationDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(12)
     }
     
@@ -1905,7 +1907,7 @@ struct LocationDetailView: View {
             }
         }
         .padding(14)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(12)
     }
     

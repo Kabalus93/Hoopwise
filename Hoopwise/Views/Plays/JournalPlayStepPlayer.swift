@@ -230,7 +230,7 @@ struct JournalPlayStepPlayer<Leading: View>: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, JSpacing.s)
                 .padding(.vertical, 6)
-                .glassEffect(.regular, in: .capsule)
+                .filmGlass(.regular, in: .capsule)
                 .padding(JSpacing.s)
                 .allowsHitTesting(false)
         }

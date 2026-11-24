@@ -111,7 +111,7 @@ struct AppTheme {
     
     static var cardBackground: Color {
         // The Mac's film room: cards are thin panes over the court.
-        if FilmRoom.isOn { return Color.white.opacity(0.075) }
+        if FilmRoom.isOn { return FilmRoom.pane }
         return isDark ? Color(hex: "#1A1A1A") : Color(hex: "#F5F5F7")
     }
     
@@ -373,7 +373,7 @@ struct GlassCardStyle: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
                     .fill(Color.white.opacity(0.05))
-                    .background(.ultraThinMaterial.opacity(0.5))
+                    .background(.filmUltraThinMaterial.opacity(0.5))
             )
             .cornerRadius(AppTheme.cornerRadius)
             .overlay(

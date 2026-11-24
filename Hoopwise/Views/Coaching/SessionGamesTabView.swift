@@ -153,7 +153,7 @@ struct SessionGamesTabView: View {
                         }
                     }
                 }
-                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                .filmGlass(.regular, in: .rect(cornerRadius: 14))
                 .padding(.horizontal, 16)
             }
         }
@@ -261,7 +261,7 @@ struct SessionGamesTabView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     private func quickStartGameButton(
@@ -596,7 +596,7 @@ struct SessionGamesTabView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .fixedSize()
-        .glassEffect(.regular, in: Capsule())
+        .filmGlass(.regular, in: Capsule())
     }
 
     private func statusColor(_ status: SessionGameStatus) -> Color {

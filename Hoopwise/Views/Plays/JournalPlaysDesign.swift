@@ -101,7 +101,7 @@ struct JCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, JSpacing.m)
             .padding(.vertical, verticalPadding)
-            .glassEffect(.regular, in: .rect(cornerRadius: JRadius.card))
+            .filmGlass(.regular, in: .rect(cornerRadius: JRadius.card))
     }
 }
 
@@ -262,7 +262,7 @@ struct JUndoToastView: View {
             .padding(.leading, JSpacing.m)
             .padding(.trailing, JSpacing.xs)
             .padding(.vertical, JSpacing.xxs)
-            .glassEffect(.regular, in: .capsule)
+            .filmGlass(.regular, in: .capsule)
             .padding(.horizontal, JSpacing.screen)
             .padding(.bottom, 96)
             .transition(.move(edge: .bottom).combined(with: .opacity))

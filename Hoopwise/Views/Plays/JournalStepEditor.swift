@@ -1060,7 +1060,7 @@ struct JournalPlayStepEditor: View {
         .buttonStyle(.plain)
         .foregroundStyle(JPalette.ink)
         .padding(.horizontal, 6)
-        .glassEffect(.regular.interactive(), in: Capsule())
+        .filmGlass(.regular.interactive(), in: Capsule())
     }
 
     private var offersScribble: Bool {
@@ -1240,7 +1240,7 @@ struct JournalPlayStepEditor: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .glassEffect(.regular, in: .capsule)
+        .filmGlass(.regular, in: .capsule)
     }
 
     /// One column of tools, grouped like a graphics app's: select, the four
@@ -1320,7 +1320,7 @@ struct JournalPlayStepEditor: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(.regularMaterial, in: .rect(cornerRadius: 8, style: .continuous))
+                .background(.filmMaterial, in: .rect(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(JPalette.ink.opacity(0.10), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
                 .fixedSize()
@@ -1536,7 +1536,7 @@ struct JournalPlayStepEditor: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: Capsule())
+        .filmGlass(.regular.interactive(), in: Capsule())
         .accessibilityIdentifier("plays.editor.offenseDock")
         .overlay(alignment: .bottomLeading) {
             if offenseOpen {
@@ -1571,7 +1571,7 @@ struct JournalPlayStepEditor: View {
                 .frame(width: 400)
                 .frame(maxHeight: 520)
                 .fixedSize(horizontal: false, vertical: true)
-                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .filmGlass(.regular, in: .rect(cornerRadius: 20))
                 .offset(y: -56)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .accessibilityIdentifier("plays.editor.offensePanel")
@@ -1638,7 +1638,7 @@ struct JournalPlayStepEditor: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: Capsule())
+        .filmGlass(.regular.interactive(), in: Capsule())
         .accessibilityIdentifier("plays.editor.defenseDock")
         .overlay(alignment: .bottom) {
             if defenseOpen {
@@ -1652,7 +1652,7 @@ struct JournalPlayStepEditor: View {
                 .frame(width: 420)
                 .frame(maxHeight: 460)
                 .fixedSize(horizontal: false, vertical: true)
-                .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                .filmGlass(.regular, in: .rect(cornerRadius: 20))
                 .offset(y: -56)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .accessibilityIdentifier("plays.editor.defensePanel")
@@ -2123,7 +2123,7 @@ struct JournalPlayStepEditor: View {
                 }
             }
             .padding(8)
-            .glassEffect(.regular, in: .capsule)
+            .filmGlass(.regular, in: .capsule)
             .position(x: min(max(at.x, width / 2 + 4), size.width - width / 2 - 4),
                       y: max(at.y - 56, 28))
             .transition(.scale(scale: 0.9).combined(with: .opacity))

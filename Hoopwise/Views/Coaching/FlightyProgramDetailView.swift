@@ -531,7 +531,7 @@ struct FlightyProgramDetailView: View {
                 }
             }
             .padding(.vertical, 14)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .filmGlass(.regular, in: .rect(cornerRadius: 16))
             .padding(.horizontal, 16)
 
             // Coach + location — single row, neutral chrome.
@@ -639,7 +639,7 @@ struct FlightyProgramDetailView: View {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     /// Reusable section header — mono uppercase title + tertiary count, the
@@ -725,7 +725,7 @@ struct FlightyProgramDetailView: View {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 }
 
@@ -869,7 +869,7 @@ extension FlightyProgramDetailView {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     private var phasesEmptyState: some View {
@@ -1136,7 +1136,7 @@ struct FlightyMicroCycleDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
         .padding(.horizontal, 16)
         .padding(.top, 8)
     }
@@ -1157,7 +1157,7 @@ struct FlightyMicroCycleDetailView: View {
                       label: isChinese ? "课程" : "Sessions")
         }
         .padding(.vertical, 14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
         .padding(.horizontal, 16)
         .padding(.top, 12)
     }
@@ -1237,7 +1237,7 @@ struct FlightyMicroCycleDetailView: View {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     // MARK: - Focus Section
@@ -1259,7 +1259,7 @@ struct FlightyMicroCycleDetailView: View {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     // MARK: - Objectives Section
@@ -1284,7 +1284,7 @@ struct FlightyMicroCycleDetailView: View {
             }
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 }
 
@@ -1436,7 +1436,7 @@ struct ProgramSkillTargetsSheet: View {
             Spacer()
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -1470,7 +1470,7 @@ struct ProgramSkillTargetsSheet: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -1490,7 +1490,7 @@ struct ProgramSkillTargetsSheet: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -1541,7 +1541,7 @@ struct ProgramSkillTargetsSheet: View {
             }
         }
         .padding(16)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(16)
     }
     
@@ -1693,6 +1693,7 @@ struct ProgramSessionsListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle(isChinese ? "课程" : "Sessions")
         .navigationBarTitleDisplayModeCompat(.inline)
     }

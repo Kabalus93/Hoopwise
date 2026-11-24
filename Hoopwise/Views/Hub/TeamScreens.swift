@@ -58,7 +58,7 @@ private struct TeamBlock<Content: View>: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        .filmGlass(.regular, in: .rect(cornerRadius: 22))
     }
 }
 
@@ -147,7 +147,9 @@ private struct TeamCard: View {
             }
         }
         .padding(18)
-        .background(LinearGradient(colors: [colour, colour.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing),
+        // The Mac: a pane, with the team's colour only in its badge.
+        .background(FilmRoom.isOn ? AnyShapeStyle(FilmGlass.fill)
+                    : AnyShapeStyle(LinearGradient(colors: [colour, colour.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)),
                     in: .rect(cornerRadius: 22, style: .continuous))
     }
 }
@@ -853,6 +855,7 @@ struct TeamSectionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear(perform: saveNotes)
@@ -948,7 +951,7 @@ struct PlayBreakdownView: View {
                         .accessibilityIdentifier("breakdown.start")
                     }
                     .padding(18)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                    .filmGlass(.regular, in: .rect(cornerRadius: 22))
                 }
             }
             .padding(16)
@@ -1030,7 +1033,7 @@ struct PlayBreakdownView: View {
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
         }
         .padding(16)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .filmGlass(.regular, in: .rect(cornerRadius: 20))
     }
 
     /// Roles from the play's numbered players (step 1), else 1–5.
@@ -1285,6 +1288,7 @@ struct TeamStandardsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle(isChinese ? "标准" : "Standards")
     }
 }

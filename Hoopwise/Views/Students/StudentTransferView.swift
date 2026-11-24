@@ -144,6 +144,7 @@ private struct TransferExportView: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .searchable(text: $searchText, prompt: "Search")
 
             shareBar
@@ -351,6 +352,7 @@ private struct TransferImportView: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
 
             HStack(spacing: 12) {
                 Button("Cancel", role: .cancel) {

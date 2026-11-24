@@ -119,7 +119,7 @@ struct FloatingNumberPad: View {
         }
         .padding(chrome ? 10 : 0)
         .background {
-            if chrome { RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.regularMaterial) }
+            if chrome { RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.filmMaterial) }
         }
         .shadow(color: .black.opacity(chrome ? 0.12 : 0), radius: 14, y: 6)
         .sensoryFeedback(.selection, trigger: taps)

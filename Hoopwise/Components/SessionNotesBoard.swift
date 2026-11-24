@@ -1043,7 +1043,7 @@ struct SessionNotesBoard: View {
             .buttonStyle(.plain)
         }
         .frame(width: 200)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
     }
@@ -1206,6 +1206,7 @@ struct CoachMentionPickerSheet: View {
             }
             #if os(iOS)
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .searchable(text: $searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: isChinese ? "搜索教练" : "Search coaches")
@@ -1292,6 +1293,7 @@ struct StudentTagPickerSheet: View {
             }
             #if os(iOS)
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .searchable(text: $searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: isChinese ? "搜索学员" : "Search athletes")

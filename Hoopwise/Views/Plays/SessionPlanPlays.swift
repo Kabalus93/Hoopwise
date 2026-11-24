@@ -97,7 +97,7 @@ struct SessionPlanPlaysSection: View {
                 }
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
         .sheet(isPresented: $picking) {
             SessionPlayPicker(library: library, selected: plays) { chosen in
                 guard chosen != plays else { return }
@@ -136,7 +136,7 @@ struct SessionPlanPlaysSection: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .glassEffect(.regular, in: Capsule())
+                    .filmGlass(.regular, in: Capsule())
             }
             if canEdit {
                 Button { picking = true } label: {

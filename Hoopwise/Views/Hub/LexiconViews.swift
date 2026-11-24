@@ -134,6 +134,7 @@ struct LexiconScreen: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
     }
 }
 
@@ -198,6 +199,7 @@ struct LexiconSectionView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, prompt: isChinese ? "在本类中搜索" : "Search \(section.title.lowercased())")
@@ -291,6 +293,7 @@ struct LexiconEntryView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle(entry.term)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -329,6 +332,7 @@ struct LexiconSourcesView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationTitle(isChinese ? "来源" : "Sources")
         .navigationBarTitleDisplayMode(.inline)
     }

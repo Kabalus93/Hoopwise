@@ -451,6 +451,7 @@ struct FlightyDrillPickerSheet: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+        .filmRoomList()
                 }
             }
             .filmRoomPage()

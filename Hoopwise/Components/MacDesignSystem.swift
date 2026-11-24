@@ -437,7 +437,7 @@ struct PanelColumnContainer<LeftColumn: View, RightColumn: View>: View {
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .background(.ultraThinMaterial)
+            .background(.filmUltraThinMaterial)
             .overlay(
                 Rectangle()
                     .fill(Color.primary.opacity(0.05))

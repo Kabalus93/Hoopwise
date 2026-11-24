@@ -167,7 +167,7 @@ struct SAMApp: App {
                 Button(zh ? "首页" : "Home") { selectTab(0) }.keyboardShortcut("1")
                 Button(zh ? "课程" : "Sessions") { selectTab(1) }.keyboardShortcut("2")
                 Button(zh ? "学员" : "Athletes") { selectTab(2) }.keyboardShortcut("3")
-                Button(zh ? "中心" : "Hub") { selectTab(3) }.keyboardShortcut("4")
+                Button(zh ? "收入" : "Revenue") { selectTab(3) }.keyboardShortcut("4")
                 Button(zh ? "战术" : "Plays") { selectTab(4) }.keyboardShortcut("5")
                 Button(zh ? "训练" : "Drills") { selectTab(5) }.keyboardShortcut("6")
                 Button(zh ? "术语" : "Lexicon") { selectTab(6) }.keyboardShortcut("7")

@@ -90,7 +90,7 @@ struct GameDashboardView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .filmGlass(.regular, in: .rect(cornerRadius: 14))
     }
 
     // MARK: How they score
@@ -228,7 +228,7 @@ struct GameDashboardView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     private func student(_ id: UUID) -> Student? { students.first { $0.id == id } }

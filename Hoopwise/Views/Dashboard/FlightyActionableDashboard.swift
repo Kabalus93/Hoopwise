@@ -344,6 +344,26 @@ struct FlightyActionableDashboard: View {
                 ToolbarItem(placement: .topBarLeading) {
                     profileToolbarButton
                 }
+                // The Mac has no pull-down: the search is a field-shaped
+                // button with its key.
+                if FilmRoom.isOn {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showingSearch = true } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                Text(LocalizationManager.shared.currentLanguage == .chinese ? "搜索" : "Search")
+                                Text("⌘K").foregroundStyle(.tertiary)
+                            }
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12).frame(height: 30)
+                            .background(Capsule().fill(FilmGlass.fill))
+                            .overlay(Capsule().stroke(FilmGlass.edge, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("home.search.button")
+                    }
+                }
                 #else
                 ToolbarItem(placement: .navigation) {
                     profileToolbarButton
@@ -676,7 +696,7 @@ struct FlightyActionableDashboard: View {
             }
 
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .filmGlass(.regular, in: .rect(cornerRadius: 20))
     }
 
     private var briefingExpanded: Bool { briefingToggled ?? (horizontalSizeClass == .regular) }
@@ -981,7 +1001,10 @@ struct FlightyActionableDashboard: View {
                 .sensoryFeedback(.selection, trigger: showingAllAttentionItems)
             }
         }
-        .background(Color.red.gradient, in: .rect(cornerRadius: 24))
+        // The Mac: nothing shouts — a pane with a red edge says the same.
+        .background(FilmRoom.isOn ? AnyShapeStyle(Color.red.opacity(0.16)) : AnyShapeStyle(Color.red.gradient), in: .rect(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .strokeBorder(Color.red.opacity(FilmRoom.isOn ? 0.55 : 0), lineWidth: 1).allowsHitTesting(false))
     }
 
     private func attentionCategoryChip(category: AttentionCategory, count: Int) -> some View {
@@ -1152,7 +1175,7 @@ struct FlightyActionableDashboard: View {
             .padding(.bottom, 12)
             .sensoryFeedback(.selection, trigger: showingAllPlayers)
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .filmGlass(.regular, in: .rect(cornerRadius: 24))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { todaysCardWidth = $0 }
     }
     
@@ -1275,6 +1298,7 @@ struct AllAttentionItemsSheet: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+        .filmRoomList()
                 }
             }
             .navigationTitle(isChinese ? "需要关注" : "Attention")
@@ -1621,6 +1645,7 @@ struct AllPlayersSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
+        .filmRoomList()
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always))
             .navigationTitle(LocalizationManager.shared.currentLanguage == .chinese ? "今日学员" : "Today's Athletes")
             .navigationBarTitleDisplayModeCompat(.inline)

@@ -121,7 +121,7 @@ struct HomeTeamCard: View {
                 .allowsHitTesting(false)
         }
         .clipShape(.rect(cornerRadius: 24))
-        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .filmGlass(.regular, in: .rect(cornerRadius: 24))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 
@@ -228,7 +228,7 @@ struct HomePlayCard: View {
         }
         .buttonStyle(.plain)
         .clipShape(.rect(cornerRadius: 24))
-        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+        .filmGlass(.regular, in: .rect(cornerRadius: 24))
         .accessibilityIdentifier("home.play")
     }
 

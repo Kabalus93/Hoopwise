@@ -86,7 +86,7 @@ struct CourtDiagramEditor: View {
                     ProgressView(isChinese ? "保存中…" : "Saving…")
                         .progressViewStyle(.circular)
                         .padding(20)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(.filmMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
             .navigationTitle(isEditing

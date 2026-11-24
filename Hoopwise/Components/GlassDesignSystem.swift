@@ -60,7 +60,7 @@ struct GlassCardModifier: ViewModifier {
                     .fill(Color.white.opacity(opacity))
                     .background(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(.ultraThinMaterial)
+                            .fill(.filmUltraThinMaterial)
                             .opacity(0.5)
                     )
             )
@@ -83,7 +83,7 @@ struct GlassContainerModifier: ViewModifier {
                     .fill(Color.white.opacity(0.06))
                     .background(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .fill(.ultraThinMaterial)
+                            .fill(.filmUltraThinMaterial)
                             .opacity(0.3)
                     )
             )

@@ -322,7 +322,7 @@ struct AddPhaseOnboardingView: View {
                 }
             }
             .padding(14)
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 16))
+            .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 16))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
@@ -362,7 +362,7 @@ struct AddPhaseOnboardingView: View {
                     .textFieldStyle(.plain)
                     .font(.title2)
                     .padding(14)
-                    .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+                    .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 14))
                     .padding(.horizontal, 16)
 
                     Text(localized(
@@ -396,7 +396,7 @@ struct AddPhaseOnboardingView: View {
                         }
                     }
                     .padding(14)
-                    .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+                    .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 14))
                 }
                 .padding(.horizontal, 16)
 
@@ -442,7 +442,7 @@ struct AddPhaseOnboardingView: View {
             .padding(.vertical, 12)
             .padding(.horizontal, 14)
             .background(
-                isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.ultraThinMaterial),
+                isSelected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.filmUltraThinMaterial),
                 in: .rect(cornerRadius: 12)
             )
         }
@@ -482,7 +482,7 @@ struct AddPhaseOnboardingView: View {
                             }
                         }
                         .padding(12)
-                        .background(.ultraThinMaterial, in: .rect(cornerRadius: 12))
+                        .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 12))
                     }
 
                     if objectives.count < 5 {
@@ -533,7 +533,7 @@ struct AddPhaseOnboardingView: View {
                                 }
                                 .padding(.vertical, 10)
                                 .padding(.horizontal, 14)
-                                .background(.ultraThinMaterial, in: .rect(cornerRadius: 10))
+                                .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 10))
                             }
                             .buttonStyle(.plain)
                         }
@@ -594,7 +594,7 @@ struct AddPhaseOnboardingView: View {
             )
         }
         .padding(14)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+        .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 14))
     }
 
     private var loadHint: String {
@@ -630,7 +630,7 @@ struct AddPhaseOnboardingView: View {
                     Divider().padding(.leading, 16)
                     summaryRow(label: localized(en: "Volume", zh: "训练量", es: "Volumen"), value: "\(volume) / 10")
                 }
-                .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+                .background(.filmUltraThinMaterial, in: .rect(cornerRadius: 14))
                 .padding(.horizontal, 16)
 
                 if !coachingNote.isEmpty {

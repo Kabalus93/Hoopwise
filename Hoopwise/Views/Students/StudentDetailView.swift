@@ -50,10 +50,18 @@ struct StudentDetailView: View {
                 // The player card — the same two sides that are shared and
                 // printed, tap to flip (17 Nov 2026, Luther: "change this to
                 // the player card").
+                if FilmRoom.isOn {
+                    // The Mac: a pane of glass, not the collectible card —
+                    // cards are shared and printed from the iPad and iPhone.
+                    MacAthleteHeader(student: student)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                } else {
                 AthleteCardFlip(student: student)
                     .frame(maxWidth: 420)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                }
                 
                 // Quick stats row
                 quickStatsRow
@@ -113,6 +121,7 @@ struct StudentDetailView: View {
         .navigationBarTitleDisplayModeCompat(.inline)
         #endif
         .toolbar {
+            if !FilmRoom.isOn {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingCard = true } label: {
                     Label(isChinese ? "球员卡" : "Player card", systemImage: "square.and.arrow.up")
@@ -124,6 +133,7 @@ struct StudentDetailView: View {
                     Label(isChinese ? "成长报告" : "Progress report", systemImage: "doc.text.below.ecg")
                 }
                 .accessibilityIdentifier("athlete.report")
+            }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(isChinese ? "编辑" : "Edit") {
@@ -195,7 +205,7 @@ struct StudentDetailView: View {
             )
         }
         .padding(.vertical, 12)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .filmGlass(.regular, in: .rect(cornerRadius: 12))
         .padding(.horizontal, 16)
     }
 
@@ -401,7 +411,7 @@ struct StudentDetailView: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .filmGlass(.regular, in: .rect(cornerRadius: 14))
     }
 
     private func secondGuardianRow(_ info: ParentInfo) -> some View {
@@ -421,7 +431,7 @@ struct StudentDetailView: View {
             }
         }
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .filmGlass(.regular, in: .rect(cornerRadius: 14))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("athlete.secondGuardian")
     }
@@ -443,7 +453,7 @@ struct StudentDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .filmGlass(.regular, in: .rect(cornerRadius: 14))
     }
 
 }
@@ -702,6 +712,7 @@ struct StudentVersionHistorySheet: View {
                     }
                     #if os(iOS)
                     .listStyle(.insetGrouped)
+        .filmRoomList()
                     #endif
                 }
             }

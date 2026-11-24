@@ -73,8 +73,8 @@ struct FlightySessionRootView: View {
                             .padding(.vertical, 2)
                             .background {
                                 Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .glassEffect()
+                                    .fill(.filmUltraThinMaterial)
+                                    .filmGlass()
                             }
                     }
                     .foregroundColor(selectedSegment == 0 ? .blue : Color.gray)
@@ -83,8 +83,8 @@ struct FlightySessionRootView: View {
                     .background {
                         if selectedSegment == 0 {
                             Capsule()
-                                .fill(.ultraThinMaterial)
-                                .glassEffect()
+                                .fill(.filmUltraThinMaterial)
+                                .filmGlass()
                                 .matchedGeometryEffect(id: "tabIndicator", in: tabNamespace)
                         }
                     }
@@ -110,8 +110,8 @@ struct FlightySessionRootView: View {
                                 .padding(.vertical, 2)
                                 .background {
                                     Capsule()
-                                        .fill(.ultraThinMaterial)
-                                        .glassEffect()
+                                        .fill(.filmUltraThinMaterial)
+                                        .filmGlass()
                                 }
                         }
                     }
@@ -121,8 +121,8 @@ struct FlightySessionRootView: View {
                     .background {
                         if selectedSegment == 1 {
                             Capsule()
-                                .fill(.ultraThinMaterial)
-                                .glassEffect()
+                                .fill(.filmUltraThinMaterial)
+                                .filmGlass()
                                 .matchedGeometryEffect(id: "tabIndicator", in: tabNamespace)
                         }
                     }
@@ -157,7 +157,7 @@ struct FlightySessionRootView: View {
             }
             .padding(.vertical, 8)
             // On the Mac the header sits straight on the court, not on a grey band.
-            .background(FilmRoom.isOn ? AnyShapeStyle(Color.clear) : AnyShapeStyle(.regularMaterial))
+            .background(FilmRoom.isOn ? AnyShapeStyle(Color.clear) : AnyShapeStyle(.filmMaterial))
             .sensoryFeedback(.selection, trigger: selectedSegment)
 
             Divider()
@@ -331,6 +331,7 @@ struct FlightyProgramsListView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .scrollContentBackground(.hidden)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: isChinese ? "搜索训练班" : "Search programs")
     }
@@ -358,7 +359,7 @@ struct FlightyProgramsListView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
     }
     
     // MARK: - Minimal Program Row (Two-line)
@@ -1806,6 +1807,7 @@ struct FlightySessionsCalendarView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .scrollContentBackground(.hidden)
     }
 
@@ -1816,6 +1818,7 @@ struct FlightySessionsCalendarView: View {
 
         return NavigationLink(destination: FlightySessionPageView(session: session, accessMode: .execution)) {
             CompactSessionRow(session: session, program: dataManager.programs.first { $0.id == session.programId })
+                .filmRoomHover()
         }
         .sessionMacMenu(session)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -2078,7 +2081,7 @@ struct FlightySessionsCalendarView: View {
                 .foregroundStyle(Color.accentColor)
         }
         .padding(12)
-        .glassEffect(.regular.tint(Color.accentColor.opacity(0.1)), in: .rect(cornerRadius: 14))
+        .filmGlass(.regular.tint(Color.accentColor.opacity(0.1)), in: .rect(cornerRadius: 14))
     }
     
     // MARK: - Sessions Compact List View
@@ -2110,7 +2113,7 @@ struct FlightySessionsCalendarView: View {
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .filmGlass(.regular, in: .rect(cornerRadius: 16))
     }
 
     private func sessionRow<Content: View>(for session: SessionEvent, @ViewBuilder content: () -> Content) -> some View {
@@ -2171,7 +2174,7 @@ struct FlightySessionsCalendarView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .filmGlass(.regular, in: .rect(cornerRadius: 20))
     }
     
     // MARK: - Navigation

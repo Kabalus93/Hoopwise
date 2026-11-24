@@ -111,7 +111,7 @@ struct GameInsightsView: View {
                     if i < insights.count - 1 { Divider().padding(.leading, 52) }
                 }
             }
-            .glassEffect(.regular, in: .rect(cornerRadius: 14))
+            .filmGlass(.regular, in: .rect(cornerRadius: 14))
         }
         .accessibilityIdentifier("games.insights")
     }

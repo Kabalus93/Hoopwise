@@ -14,7 +14,7 @@ struct CalendarDateHeader: View {
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, 8)
-            .background(.regularMaterial)
+            .background(.filmMaterial)
     }
 }
 

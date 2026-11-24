@@ -246,7 +246,7 @@ struct GameRecapView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 7)
                 .padding(.vertical, 3)
-                .glassEffect(.regular.tint(.green.opacity(0.5)), in: .capsule)
+                .filmGlass(.regular.tint(.green.opacity(0.5)), in: .capsule)
         }
     }
 
@@ -553,7 +553,7 @@ struct GameRecapView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .filmGlass(.regular, in: .rect(cornerRadius: 18))
     }
 
     @ViewBuilder

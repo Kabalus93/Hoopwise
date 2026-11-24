@@ -260,7 +260,10 @@ struct StudentIntelligenceListView: View {
     
     var body: some View {
         Group {
-            if shouldUseSplitView, splitWidth < Self.tiledSplitMinWidth {
+            // The Mac lays the two panes out itself at every width: the system
+            // split view paints its list column as an opaque slab over the
+            // glass and adds a sidebar toggle the Mac's own sidebar replaces.
+            if shouldUseSplitView, splitWidth < Self.tiledSplitMinWidth || FilmRoom.isOn {
                 // Narrow iPads upright (the mini, 744 pt): iPadOS slides the
                 // split view's list over the profile however its visibility
                 // is set, so the two panes are laid out here (16 Nov 2026,
@@ -269,7 +272,7 @@ struct StudentIntelligenceListView: View {
                     NavigationStack {
                         mainContent
                     }
-                    .frame(width: min(340, splitWidth * 0.44))
+                    .frame(width: FilmRoom.isOn ? min(360, max(280, splitWidth * 0.3)) : min(340, splitWidth * 0.44))
                     Divider().ignoresSafeArea()
                     athleteDetail
                         .frame(maxWidth: .infinity)
@@ -534,7 +537,7 @@ struct StudentIntelligenceListView: View {
             }
         }
         .padding(12)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -587,7 +590,7 @@ struct StudentIntelligenceListView: View {
             )
         }
         .padding(.vertical, 12)
-        .background(.regularMaterial)
+        .background(.filmMaterial)
         .cornerRadius(12)
         .padding(.horizontal, 16)
     }
@@ -668,7 +671,7 @@ struct StudentIntelligenceListView: View {
                     }
                 }
             }
-            .background(.regularMaterial)
+            .background(.filmMaterial)
             .cornerRadius(16)
             .padding(.horizontal, 16)
         }
@@ -845,8 +848,8 @@ struct StudentIntelligenceListView: View {
                                 .background {
                                     if isActive {
                                         Capsule()
-                                            .fill(.ultraThinMaterial)
-                                            .glassEffect()
+                                            .fill(.filmUltraThinMaterial)
+                                            .filmGlass()
                                     }
                                 }
                         }
@@ -1541,11 +1544,13 @@ private struct AthleteListStyle: ViewModifier {
                 // title row and the search field under it — gets a fixed
                 // frosted bar, so rows blur only where they pass beneath it.
                 .scrollEdgeEffectHidden(true, for: .all)
-                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
-                .toolbarBackground(.bar, for: .navigationBar)
+                // Since the film room the bar is clear like every other (a
+                // material there is an opaque slab over the window's glass).
+                .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
                 #endif
         } else {
-            content.listStyle(.insetGrouped).scrollContentBackground(.hidden)
+            content.listStyle(.insetGrouped)
+        .filmRoomList().scrollContentBackground(.hidden)
         }
     }
 }

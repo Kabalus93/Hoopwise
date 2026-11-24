@@ -41,8 +41,16 @@ enum MacGlass {
              #selector(UINavigationController.hw_glassPop(animated:)), on: UINavigationController.self)
 
         // Bars and lists sit on the glass, not on their own slabs.
+        // Grouped List rows: the system paints each an opaque dark slab.
+        swapSafely(UICollectionViewListCell.self, #selector(UIView.layoutSubviews), #selector(UICollectionViewListCell.hw_glassCellLayout))
+
         let bar = UINavigationBarAppearance()
         bar.configureWithTransparentBackground()
+        // Titles in light type, like the numbers on the panes.
+        bar.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 30, weight: .light),
+                                        .foregroundColor: UIColor.white]
+        bar.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 15, weight: .medium),
+                                   .foregroundColor: UIColor.white.withAlphaComponent(0.9)]
         UINavigationBar.appearance().standardAppearance = bar
         UINavigationBar.appearance().scrollEdgeAppearance = bar
         UINavigationBar.appearance().compactAppearance = bar
@@ -56,6 +64,17 @@ enum MacGlass {
         }
         DispatchQueue.main.async { frostWindows() }
         #endif
+    }
+
+    /// Swaps a method a class INHERITS without touching its superclass: the
+    /// class first gets its own copy.
+    private static func swapSafely(_ type: AnyClass, _ original: Selector, _ replacement: Selector) {
+        guard let o = class_getInstanceMethod(type, original), let r = class_getInstanceMethod(type, replacement) else { return }
+        if class_addMethod(type, original, method_getImplementation(r), method_getTypeEncoding(r)) {
+            class_replaceMethod(type, replacement, method_getImplementation(o), method_getTypeEncoding(o))
+        } else {
+            method_exchangeImplementations(o, r)
+        }
     }
 
     private static func swap(_ a: Selector, _ b: Selector, on type: AnyClass) {
@@ -109,6 +128,9 @@ extension UIViewController {
     /// other system screens keep their own background.
     @objc func hw_glassLayout() {
         hw_glassLayout()
+        // Clear pages are see-through: only the top page of a stack shows
+        // (the page underneath was readable through the one pushed over it).
+        if let stack = self as? UINavigationController { stack.hw_showOnlyTheTopPage() }
         guard isViewLoaded, view.backgroundColor != .clear else { return }
         let name = String(describing: type(of: self))
         if name.contains("Hosting") || name.contains("Navigation") || name.contains("SplitView")
@@ -132,11 +154,38 @@ extension UIViewController {
     }
 }
 
+extension UICollectionViewListCell {
+    /// A List row the system would paint as an opaque slab becomes the pane
+    /// (a grouped row) or nothing (a plain row). Rows the app gave their own
+    /// background keep it.
+    @objc func hw_glassCellLayout() {
+        hw_glassCellLayout()
+        guard var config = backgroundConfiguration, config.customView == nil else { return }
+        let resolved = config.resolvedBackgroundColor(for: tintColor)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a), a > 0.9, r < 0.3 else { return }
+        // Dark grey = a grouped row; black = a plain one.
+        config.backgroundColor = r > 0.05 ? UIColor.white.withAlphaComponent(0.07) : .clear
+        backgroundConfiguration = config
+    }
+}
+
 extension UINavigationController {
     @objc func hw_glassPush(_ controller: UIViewController, animated: Bool) {
         hw_glassPush(controller, animated: false)
+        hw_showOnlyTheTopPage()
     }
     @objc func hw_glassPop(animated: Bool) -> UIViewController? {
-        hw_glassPop(animated: false)
+        let popped = hw_glassPop(animated: false)
+        hw_showOnlyTheTopPage()
+        return popped
+    }
+
+    func hw_showOnlyTheTopPage() {
+        let top = topViewController
+        for controller in viewControllers where controller.isViewLoaded {
+            let hide = controller !== top
+            if controller.view.isHidden != hide { controller.view.isHidden = hide }
+        }
     }
 }

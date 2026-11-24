@@ -21,6 +21,7 @@ struct PhaseTemplatesEditorView: View {
         }
         #if os(iOS)
         .listStyle(.insetGrouped)
+        .filmRoomList()
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .navigationTitle(isChinese ? "训练阶段模板" : "Phase Templates")

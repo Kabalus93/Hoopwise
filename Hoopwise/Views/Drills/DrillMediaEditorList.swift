@@ -71,6 +71,7 @@ struct DrillMediaEditorSheet: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+        .filmRoomList()
                     .environment(\.editMode, $editMode)
                 }
             }
