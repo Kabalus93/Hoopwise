@@ -36,4 +36,30 @@ final class AthleteSafetyTests: XCTestCase {
         XCTAssertEqual(after.skills.history.count, 1); XCTAssertEqual(after.skills.rating(.passing), 4)
         XCTAssertEqual(after.medicalNotes, "  Peanut allergy  ", "untouched by other writes")
     }
+
+    // MARK: The Mac's drag onto a class (25 Nov 2026)
+
+    func testADroppedDrillOrPlayJoinsTheClasssPlanOnce() throws {
+        let dm = SwiftDataManager.inMemoryForTesting()
+        let start = Date().addingTimeInterval(3600)
+        let session = SessionEvent(programId: nil, title: "Class", date: start, startTime: start, endTime: start.addingTimeInterval(3600))
+        dm.addSessionEvent(session)
+        let drill = DrillItem(name: "Dropped drill", category: .shooting)
+        dm.addDrill(drill)
+        let play = SessionPlayRef(key: "created:42", name: "Horns")
+
+        XCTAssertEqual(FilmRoomDrag.parse(FilmRoomDrag.payload(.drill(drill.id))), .drill(drill.id))
+        XCTAssertEqual(FilmRoomDrag.parse(FilmRoomDrag.payload(.play(play))), .play(play))
+        XCTAssertNil(FilmRoomDrag.parse("some other text"))
+
+        XCTAssertEqual(dm.drop(.drill(drill.id), onSession: session.id), .addedToSkills, "a coach's own drill goes to Skills")
+        XCTAssertEqual(dm.drop(.drill(drill.id), onSession: session.id), .alreadyThere)
+        XCTAssertEqual(dm.drop(.play(play), onSession: session.id), .addedPlay)
+        XCTAssertEqual(dm.drop(.play(play), onSession: session.id), .alreadyThere)
+        let stored = try XCTUnwrap(dm.sessionEvents.first { $0.id == session.id })
+        XCTAssertEqual(stored.curriculum.skillDrillIds, [drill.id])
+        XCTAssertEqual(stored.curriculum.plays.map(\.key), ["created:42"])
+        XCTAssertEqual(dm.drop(.drill(UUID()), onSession: session.id), .notPossible)
+        XCTAssertEqual(dm.drop(.play(play), onSession: UUID()), .notPossible)
+    }
 }

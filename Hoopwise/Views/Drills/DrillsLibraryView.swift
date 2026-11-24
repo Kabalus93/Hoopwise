@@ -880,6 +880,7 @@ private struct LibraryRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityIdentifier("library.row")
+        .filmRoomDraggable(.drill(drill.id), title: drill.localizedName, symbol: "cone")
     }
 }
 

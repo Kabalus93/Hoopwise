@@ -2898,8 +2898,22 @@ tool only sees the coach's real app's window, never a demo copy's).
   build had NO scene manifest (the generation key was set for the iOS SDKs
   only) — `INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=macosx*]`
   is now YES, which is what lets a second window open.
-- NOT DONE YET: dragging things where they belong (a drill onto a plan, an
-  athlete onto a team or class); the glass's tint over a BRIGHT desktop was
+- DRAG ONTO A CLASS (same night). The sidebar's clipboard lists UP NEXT —
+  the next six classes that can still be planned, today's first (weekday +
+  time; a click opens the class) — and each is a DROP TARGET: a drill row
+  (Drills library) or a play row (Plays) dragged onto it joins that class's
+  plan (Views/Mac/FilmRoomDrag.swift — `.filmRoomDraggable`, payload string
+  "hoopwise-drag:…", `SwiftDataManager.drop(_:onSession:)` onto the STORED
+  session: a drill the library files as a routine goes to Warm-up, any
+  other to Skills, a play to the plan's plays; never twice; not on a
+  completed or cancelled class). The row lights up under the drag and says
+  what happened for 2.5 s ("Added to Skills", "Already in the plan",
+  `filmRoom.dropNote`). ATHLETES ARE NOT DRAGGABLE on purpose: dropping one
+  on a class would mark them present and charge a session. All 13
+  `.navigationDestination` routes now mark their pages clear too. Tests:
+  AthleteSafetyTests.testADroppedDrillOrPlay…, FilmRoomUITests (drags a
+  play onto a class in the simulator; the Mac's mouse drag was not seen).
+- NOT DONE YET: the glass's tint over a BRIGHT desktop was
   never seen (the capture shows glass as flat grey; the one full-screen look
   was over a dark desktop).
 - HOW IT IS LOOKED AT: the layers in the iPad mini simulator with

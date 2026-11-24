@@ -85,6 +85,7 @@ struct FlightyHubView: View {
         // Revenue is a full page (15 Nov 2026, Luther: it opened in a popup).
         .navigationDestination(isPresented: $showingRevenueHistory) {
             MonthlyRevenueHistoryView(pushed: true)
+                .modifier(FilmRoomDestination())
         }
         // A client in the header opens their private contract card: history,
         // sessions, Schedule.

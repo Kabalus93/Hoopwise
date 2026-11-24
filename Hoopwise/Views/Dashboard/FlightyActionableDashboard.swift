@@ -361,23 +361,29 @@ struct FlightyActionableDashboard: View {
             }
             .navigationDestination(item: $selectedSession) { session in
                 FlightySessionPageView(session: session, accessMode: .architect)
+                    .modifier(FilmRoomDestination())
             }
             .navigationDestination(item: $selectedProgram) { program in
                 FlightyProgramDetailView(program: program)
+                    .modifier(FilmRoomDestination())
             }
             .navigationDestination(item: $openTeamId) { id in
                 TeamDetailView(teamId: id)
+                    .modifier(FilmRoomDestination())
             }
             .navigationDestination(item: $openPlay) { play in
                 JournalPlayScreen(play: play)
+                    .modifier(FilmRoomDestination())
             }
             .navigationDestination(item: $searchDrillId) { id in
                 if let drill = dataManager.drills.first(where: { $0.id == id }) {
                     DrillDetailView(drill: drill)
+                        .modifier(FilmRoomDestination())
                 }
             }
             .navigationDestination(item: $searchLexicon) { item in
                 LexiconEntryView(item: item)
+                    .modifier(FilmRoomDestination())
             }
             .sheet(item: $searchStudent) { picked in
                 NavigationStack {

@@ -31,7 +31,7 @@ struct DrillSeriesListView: View {
             }
         }
         .navigationTitle(isChinese ? "训练系列" : "Series")
-        .navigationDestination(item: $openId) { id in DrillSeriesView(seriesId: id) }
+        .navigationDestination(item: $openId) { id in DrillSeriesView(seriesId: id).modifier(FilmRoomDestination()) }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { creating = true } label: { Label(isChinese ? "新系列" : "New Series", systemImage: "plus") }

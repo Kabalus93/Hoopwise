@@ -226,11 +226,18 @@ struct FilmRoomSidebar: View {
 
     private var zh: Bool { localization.currentLanguage == .chinese }
 
-    private var today: [SessionEvent] {
-        dataManager.sessionEvents
-            .filter { Calendar.current.isDateInToday($0.startTime) && !SessionLifecycle.didNotHappen($0) }
+    /// The next classes — today's first — that can still be planned.
+    private var upcoming: [SessionEvent] {
+        let now = Date()
+        return dataManager.sessionEvents
+            .filter { !SessionLifecycle.didNotHappen($0) && $0.status != .completed && $0.endTime > now }
             .sorted { $0.startTime < $1.startTime }
+            .prefix(6).map { $0 }
     }
+
+    /// The class a drop just landed on, and what it did (shown for a moment).
+    @State private var dropNote: (session: UUID, outcome: FilmRoomDrag.Outcome)?
+    @State private var dropTarget: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -255,9 +262,12 @@ struct FilmRoomSidebar: View {
                                   hint: "⇧⌘B", selected: false, action: openBoard)
                         .accessibilityIdentifier("filmRoom.board")
 
-                    if !today.isEmpty {
-                        header(zh ? "今天" : "TODAY")
-                        ForEach(today.prefix(5)) { session in todayRow(session) }
+                    if !upcoming.isEmpty {
+                        header(zh ? "接下来的课" : "UP NEXT")
+                        ForEach(upcoming) { session in todayRow(session) }
+                        Text(zh ? "把训练或战术拖到课上" : "Drag a drill or a play onto a class")
+                            .font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.32))
+                            .padding(.horizontal, 10).padding(.top, 4)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -293,31 +303,58 @@ struct FilmRoomSidebar: View {
         .accessibilityIdentifier("filmRoom.place.\(place.rawValue)")
     }
 
-    /// One of today's classes: its time, its name, a dot only when its
-    /// status says something (live, done).
+    /// One of the next classes: when, its name, a dot only when it is live.
+    /// A drill or a play dropped here joins its plan.
     private func todayRow(_ session: SessionEvent) -> some View {
         let live = session.status == .inProgress
-        let done = session.status == .completed
+        let isToday = Calendar.current.isDateInToday(session.startTime)
+        let time = session.startTime.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute()
+            .locale(Locale(identifier: "en_GB")))
+        let day = session.startTime.formatted(.dateTime.weekday(.abbreviated)
+            .locale(Locale(identifier: zh ? "zh_CN" : "en_US")))
+        let note = dropNote?.session == session.id ? dropNote?.outcome : nil
+        let targeted = dropTarget == session.id
         return Button {
             NotificationCenter.default.post(name: .hoopwiseOpenSessionRequest, object: session.id)
         } label: {
             HStack(spacing: 8) {
-                Text(session.startTime.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute()
-                    .locale(Locale(identifier: "en_GB"))))
-                    .font(.system(size: 11, weight: .semibold)).monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.55))
-                    .frame(width: 38, alignment: .leading)
-                Text(session.title).font(.system(size: 12.5)).foregroundStyle(.white.opacity(done ? 0.5 : 0.88)).lineLimit(1)
-                Spacer(minLength: 0)
-                if live || done {
-                    Circle().fill(live ? Color.green : Color.white.opacity(0.35)).frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 0) {
+                    if !isToday { Text(day).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(.white.opacity(0.4)) }
+                    Text(time).font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundStyle(.white.opacity(0.55))
                 }
+                .frame(width: 38, alignment: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(session.title).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.88)).lineLimit(1)
+                    if let note {
+                        Text(note.text(chinese: zh)).font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(note.added ? Color.green : Color.orange)
+                            .accessibilityIdentifier("filmRoom.dropNote")
+                    }
+                }
+                Spacer(minLength: 0)
+                if live { Circle().fill(Color.green).frame(width: 6, height: 6) }
             }
-            .padding(.horizontal, 10).frame(height: 30)
+            .padding(.horizontal, 10).frame(minHeight: 34)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color.white.opacity(targeted ? 0.18 : 0))
+                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Color.white.opacity(targeted ? 0.5 : 0), lineWidth: 1)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .filmRoomHover(cornerRadius: 9)
+        .dropDestination(for: String.self) { items, _ in
+            guard let item = items.compactMap(FilmRoomDrag.parse).first else { return false }
+            let outcome = dataManager.drop(item, onSession: session.id)
+            withAnimation(.snappy) { dropNote = (session.id, outcome) }
+            let id = session.id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                if dropNote?.session == id { withAnimation(.easeOut) { dropNote = nil } }
+            }
+            return outcome.added
+        } isTargeted: { over in
+            dropTarget = over ? session.id : (dropTarget == session.id ? nil : dropTarget)
+        }
         .accessibilityIdentifier("filmRoom.today")
     }
 }

@@ -56,6 +56,17 @@ final class FilmRoomUITests: XCTestCase {
         let drill = app.buttons.matching(identifier: "library.tracked").firstMatch
         if drill.waitForExistence(timeout: 4) { drill.tap(); sleep(2); shot(app, "9e drill page") }
 
+        // A play dragged onto a class in the sidebar joins its plan.
+        app.buttons["filmRoom.place.4"].tap(); sleep(1)
+        let playRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plays.row.'")).firstMatch
+        let target = app.buttons["filmRoom.today"].firstMatch
+        XCTAssertTrue(playRow.waitForExistence(timeout: 5), "a play to drag")
+        XCTAssertTrue(target.exists, "a class to drop it on")
+        playRow.press(forDuration: 1.0, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.6)
+        let note = app.staticTexts.matching(identifier: "filmRoom.dropNote").firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 3), "the drop says what it did")
+        shot(app, "9f dropped on a class")
+
         // Back where a page was left: Home is still alive.
         app.buttons["filmRoom.place.0"].tap()
         XCTAssertTrue(app.buttons["filmRoom.board"].exists, "the board opens in its own window")

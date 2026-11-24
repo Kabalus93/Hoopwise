@@ -91,10 +91,12 @@ struct JournalPlayScreen: View {
         }
         .navigationDestination(item: $openedPart) { route in
             JournalPlayStudyScreen(part: route.part, editsFirstStep: route.editing)
+                .modifier(FilmRoomDestination())
         }
         .navigationDestination(isPresented: $editingSteps) {
             if let concept = play.conceptPart {
                 JournalPlayStudyScreen(part: concept, startingAt: conceptStep)
+                    .modifier(FilmRoomDestination())
             }
         }
         .sheet(isPresented: $showingLegend) {

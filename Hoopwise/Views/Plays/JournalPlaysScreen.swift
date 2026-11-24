@@ -67,6 +67,7 @@ struct JournalPlaysScreen: View {
             .searchable(text: $search, prompt: JText("Search plays"))
             .navigationDestination(item: $created) { opened in
                 JournalPlayScreen(play: opened.play, opening: opened.route)
+                    .modifier(FilmRoomDestination())
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -126,6 +127,7 @@ struct JournalPlaysScreen: View {
                             JournalPlayScreen(play: play)
                         } label: {
                             JournalPlayRow(play: play)
+                                .filmRoomDraggable(.play(play.planRef), title: play.name, symbol: "sportscourt")
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("plays.row.\(play.starterKey ?? play.name)")

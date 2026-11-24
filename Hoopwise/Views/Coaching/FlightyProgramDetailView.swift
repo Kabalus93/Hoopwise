@@ -247,10 +247,12 @@ struct FlightyProgramDetailView: View {
         .navigationDestination(isPresented: $showingManagePhases) {
             PhasesListView(program: program)
                 .environmentObject(dataManager)
+                .modifier(FilmRoomDestination())
         }
         .navigationDestination(isPresented: $showingSessionsList) {
             ProgramSessionsListView(program: program)
                 .environmentObject(dataManager)
+                .modifier(FilmRoomDestination())
         }
         .onAppear {
             selectedStudentIds = Set(program.enrolledStudentIds)
