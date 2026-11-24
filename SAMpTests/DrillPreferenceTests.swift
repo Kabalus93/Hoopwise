@@ -57,4 +57,28 @@ final class DrillPreferenceTests: XCTestCase {
         XCTAssertLessThan(plan(rated(favourite, .less))[favourite] ?? 0, base[favourite] ?? 0, "use less: less often")
         XCTAssertGreaterThan(plan(rated(sometimes, .more))[sometimes] ?? 0, base[sometimes] ?? 0, "use more: more often")
     }
+
+    // MARK: The reason steers the engine (25 Nov 2026)
+
+    func testAUseLessRatingFollowsItsReasonAtTheGroupsLevel() {
+        func drill(_ pref: DrillPreference, _ why: DrillPreferenceReason?) -> DrillItem {
+            var d = DrillItem(name: "D", category: .shooting)
+            d.tags = DrillItem.tags([], preference: pref, reason: why)
+            return d
+        }
+        XCTAssertEqual(drill(.less, .tooEasy).preference(atLevel: 2), .normal, "not too easy for a weaker group")
+        XCTAssertEqual(drill(.less, .tooEasy).preference(atLevel: 3), .less)
+        XCTAssertEqual(drill(.less, .tooHard).preference(atLevel: 4), .normal, "not too hard for a stronger group")
+        XCTAssertEqual(drill(.less, .notNow).preference(atLevel: 5), .normal)
+        XCTAssertEqual(drill(.less, .tooHard).preference(atLevel: 3), .less)
+        XCTAssertEqual(drill(.less, .boring).preference(atLevel: 1), .less, "boring at any level")
+        XCTAssertEqual(drill(.less, nil).preference(atLevel: 5), .less)
+        XCTAssertEqual(drill(.never, .tooEasy).preference(atLevel: 1), .never, "never stays never")
+        XCTAssertEqual(drill(.more, nil).preference(atLevel: 3), .more)
+
+        XCTAssertEqual(DrillLevelHint.make(tooEasy: 3, tooHard: 0), .raise(3))
+        XCTAssertEqual(DrillLevelHint.make(tooEasy: 1, tooHard: 4), .lower(4))
+        XCTAssertNil(DrillLevelHint.make(tooEasy: 3, tooHard: 2), "mixed signals say nothing")
+        XCTAssertNil(DrillLevelHint.make(tooEasy: 2, tooHard: 0))
+    }
 }

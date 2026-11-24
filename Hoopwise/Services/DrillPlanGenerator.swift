@@ -125,7 +125,22 @@ struct DrillPlanGenerator {
             rationale.notes.append((zh ? "补本阶段的短板：" : "fills the phase's gaps: ") + topGaps.joined(separator: ", "))
         }
 
-        let candidates = candidates(drills: ctx.allDrills, window: window, age: age)
+        // What the coach's "too easy" / "too hard" ratings at this age say
+        // about the level — said, never applied.
+        let turnedDown = ctx.allDrills.filter { $0.libraryActivity?.age == age && ($0.preference == .less || $0.preference == .never) }
+        if let hint = DrillLevelHint.make(tooEasy: turnedDown.filter { $0.preferenceReason == .tooEasy }.count,
+                                          tooHard: turnedDown.filter { $0.preferenceReason == .tooHard || $0.preferenceReason == .notNow }.count) {
+            let zh = LocalizationManager.shared.currentLanguage == .chinese
+            switch hint {
+            case .raise(let n) where level < 5:
+                rationale.notes.append(zh ? "你把 \(n) 个本年龄段的训练评为太简单——可以考虑提高水平" : "you rated \(n) drills at this age too easy — a higher level may fit")
+            case .lower(let n) where level > 1:
+                rationale.notes.append(zh ? "你把 \(n) 个本年龄段的训练评为太难——可以考虑降低水平" : "you rated \(n) drills at this age too hard — a lower level may fit")
+            default: break
+            }
+        }
+
+        let candidates = candidates(drills: ctx.allDrills, window: window, age: age, level: level)
         // Keeping what is planned: it stays first, and only the time left fills.
         let keptWarmup = options.keepExisting ? cur.warmupDrillIds : []
         let keptSkills = options.keepExisting ? cur.skillDrillIds : []
@@ -466,15 +481,17 @@ struct DrillPlanGenerator {
         var preference: DrillPreference = .normal
     }
 
-    private static func candidates(drills: [DrillItem], window: [ActivityAge: Double], age: ActivityAge) -> [Candidate] {
+    private static func candidates(drills: [DrillItem], window: [ActivityAge: Double], age: ActivityAge, level: Int) -> [Candidate] {
         drills.compactMap { drill in
             // A series is not a drill; a drill the coach never uses is never planned.
             guard !drill.isSeries, drill.preference != .never else { return nil }
+            // "Use less" follows its reason at this level (too easy / too hard).
+            let preference = drill.preference(atLevel: level)
             if let a = drill.libraryActivity {
                 guard !a.isRule, let w = window[a.age] else { return nil }
                 return Candidate(id: drill.id, minutes: drill.durationMinutes, block: a.block, type: a.type,
                                  category: drill.category, ageWeight: w, isFavorite: drill.isFavorite,
-                                 attributes: drill.attributes, preference: drill.preference)
+                                 attributes: drill.attributes, preference: preference)
             }
             // A coach's own drill: eligible when untagged or tagged for this age.
             let profile = DrillProfile(drill)
@@ -483,7 +500,7 @@ struct DrillPlanGenerator {
             guard fits else { return nil }
             return Candidate(id: drill.id, minutes: drill.durationMinutes, block: nil, type: nil,
                              category: drill.category, ageWeight: 0.6, isFavorite: drill.isFavorite,
-                             attributes: drill.attributes, preference: drill.preference)
+                             attributes: drill.attributes, preference: preference)
         }
     }
 

@@ -206,7 +206,23 @@ struct StudentQuickPeepView: View {
             attendanceRate: attendanceRate,
             recentAttendance: recentAttendance,
             contract: contract
-        ) + chemistryInsights).sorted { $0.priority > $1.priority }
+        ) + chemistryInsights + sessionPickInsights).sorted { $0.priority > $1.priority }
+    }
+
+    /// Player of the session (25 Nov 2026: the pick was made on each
+    /// session's Notes tab and read nowhere): how often, and when last.
+    private var sessionPickInsights: [StudentInsight] {
+        let picks = dataManager.sessionEvents
+            .filter { $0.manOfTheMatchId == student.id && !SessionLifecycle.didNotHappen($0) }
+            .sorted { $0.startTime > $1.startTime }
+        guard let last = picks.first else { return [] }
+        let day = last.startTime.formatted(date: .abbreviated, time: .omitted)
+        return [StudentInsight(
+            title: "Player of the Session ×\(picks.count)", titleChinese: "当堂最佳 ×\(picks.count)",
+            description: picks.count == 1 ? "Picked once, on \(day). Worth telling the family."
+                                          : "Picked \(picks.count) times, last on \(day). Worth telling the family.",
+            descriptionChinese: "被选为当堂最佳 \(picks.count) 次，最近一次是 \(day)。值得告诉家长。",
+            icon: "star.circle.fill", color: .yellow, priority: 6)]
     }
 
     /// How this player scores and who they play best with, from the games'

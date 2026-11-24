@@ -2943,6 +2943,21 @@ stored and never shown, two rating systems, ~7,500 lines never opened.
    by HW") came to the front mid-test. A UI test failing with another app on
    screen is that, not Hoopwise — rerun.
 
+7. ENTERED AND NEVER READ, NOW USED. PLAYER OF THE SESSION
+   (`manOfTheMatchId`): counted on the progress report and a Quick Peep
+   insight ("Player of the Session ×3 … last on <day>"). THE STAR RATING
+   (`SessionEvent.rating`): the program page's stat strip gains "4.2★ Recent
+   classes" — the average of the last eight rated classes, shown from three
+   (`program.classRating`). DRILL-RATING REASONS steer the engine:
+   `DrillItem.preference(atLevel:)` — a USE LESS drill rated too easy is
+   planned normally for a level 1–2 group, one rated too hard / no one at
+   that stage yet normally for level 4–5; boring is boring at any level;
+   Never stays never. `DrillLevelHint`: three or more drills of the program's
+   library age turned down for one reason (and two more than for the
+   opposite) add a rationale note — "you rated N drills at this age too easy
+   — a higher level may fit" — said, never applied. Tests:
+   DrillPreferenceTests.
+
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including
 Scribble. Not cleared when I leave … save as play or skill in the corner …

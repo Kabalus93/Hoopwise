@@ -93,3 +93,33 @@ extension DrillPreference {
         }
     }
 }
+
+extension DrillItem {
+    /// THE REASON STEERS THE ENGINE (25 Nov 2026, Luther, after the audit:
+    /// reasons were recorded and never read). A "use less" rating is about
+    /// LEVEL when its reason is: too easy does not hold for a weaker group
+    /// (training level 1–2), too hard / no one at that stage yet does not
+    /// hold for a stronger one (level 4–5) — there the drill is planned
+    /// normally. Boring is boring at any level; never stays never.
+    func preference(atLevel level: Int) -> DrillPreference {
+        guard preference == .less else { return preference }
+        switch preferenceReason {
+        case .tooEasy: return level <= 2 ? .normal : .less
+        case .tooHard, .notNow: return level >= 4 ? .normal : .less
+        case .boring, nil: return .less
+        }
+    }
+}
+
+/// What the coach's reasons say about the training LEVEL at one age.
+nonisolated enum DrillLevelHint: Equatable {
+    case raise(Int), lower(Int)
+
+    /// At least three drills turned down for one reason, and clearly more
+    /// than for the opposite reason.
+    static func make(tooEasy: Int, tooHard: Int) -> DrillLevelHint? {
+        if tooEasy >= 3, tooEasy >= tooHard + 2 { return .raise(tooEasy) }
+        if tooHard >= 3, tooHard >= tooEasy + 2 { return .lower(tooHard) }
+        return nil
+    }
+}

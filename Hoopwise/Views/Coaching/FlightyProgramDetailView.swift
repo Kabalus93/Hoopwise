@@ -428,6 +428,15 @@ struct FlightyProgramDetailView: View {
     }
     
     // MARK: - Hero Header with Map Background
+    /// The average of the stars the coach gave this program's last eight
+    /// rated classes — nil with fewer than three.
+    private var classRating: Double? {
+        let rated = dataManager.sessionEvents
+            .filter { $0.programId == program.id && !SessionLifecycle.didNotHappen($0) && ($0.rating ?? 0) > 0 }
+            .sorted { $0.startTime > $1.startTime }.prefix(8).compactMap(\.rating)
+        return rated.count >= 3 ? Double(rated.reduce(0, +)) / Double(rated.count) : nil
+    }
+
     // MARK: - The group's average rating
     /// The average of the enrolled athletes' evaluations on the eight skills
     /// (nil until someone is rated). It averaged a stored A/B/C grade nothing
@@ -509,6 +518,15 @@ struct FlightyProgramDetailView: View {
                 compactStat(value: averageRating.map { String(format: "%.1f", $0) } ?? "–",
                             label: isChinese ? "平均评分" : "Avg rating",
                             color: categoryColor)
+                // How the classes went, by the coach's own stars (25 Nov 2026:
+                // the rating was entered on each session and read nowhere).
+                if let stars = classRating {
+                    compactStatDivider
+                    compactStat(value: String(format: "%.1f★", stars),
+                                label: isChinese ? "近期课堂" : "Recent classes",
+                                color: .orange)
+                        .accessibilityIdentifier("program.classRating")
+                }
             }
             .padding(.vertical, 14)
             .glassEffect(.regular, in: .rect(cornerRadius: 16))
