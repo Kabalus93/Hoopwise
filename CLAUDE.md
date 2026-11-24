@@ -2913,7 +2913,60 @@ tool only sees the coach's real app's window, never a demo copy's).
   `.navigationDestination` routes now mark their pages clear too. Tests:
   AthleteSafetyTests.testADroppedDrillOrPlay…, FilmRoomUITests (drags a
   play onto a class in the simulator; the Mac's mouse drag was not seen).
-- NOT DONE YET: the glass's tint over a BRIGHT desktop was
+- SECOND AND THIRD PASS (25 Nov 2026, overnight; Luther on build 86: "the
+  direction is good. we still struggle at the arrangement of pages as it
+  still screams iPad app" — then "list all pages and windows and treat them
+  one by one … every button, animations, even the student card"). Mac only.
+  · ONE PANE: Views/Mac/FilmGlass.swift — `.filmGlass(...)` replaces every
+    `.glassEffect(...)` in the app (white 7 % fill + a light edge on the
+    Mac, the system glass elsewhere); `.filmMaterial` / `.filmThinMaterial`
+    / `.filmUltraThinMaterial` / `.filmBar` replace SwiftUI's materials and
+    `.bar` (a Material blurs what is behind it INSIDE the window — a
+    transparent window has nothing there, so each came out a black slab).
+    New code uses these, never `.glassEffect` or a raw Material.
+  · LIST ROWS: MacGlass hooks `UICollectionViewListCell` layout — each
+    grouped row is a pane that lights up under the pointer.
+  · PUSHED PAGES: only the top page of a navigation stack is shown
+    (`hw_showOnlyTheTopPage` — clear pages showed the page beneath).
+  · POPUPS: a popup's own window (class plain `NSWindow`) gets a dark tint
+    view over its glass (0.05/0.055/0.075 at 80 %) — a form whose page is
+    clear came up pale grey. Every window is forced dark.
+  · A CLASS OPENS IN THE WINDOW as a WORKSPACE (FlightySessionPageView
+    `macWorkspace`, width ≥ 860): compact header, Plan | Games | Notes
+    (`session.workspace.tab.0|2|3`) beside a fixed ROSTER column
+    (`session.workspace.roster`) — not a popup, no Attend tab.
+  · HOME: its own header (`macHeader`: greeting 30 pt light, the date, a
+    Search field-button with ⌘K `home.search.button`, the coach) — the
+    navigation bar is hidden there. SESSIONS: `macHeader` — "Sessions", a
+    quiet Calendar | Programs switch (`sessions.part.*`), New Session / New
+    Program (`sessions.new`); the calendar is a MONTH beside the day's
+    classes from 820 pt (`calendar.macLayout`; arrows step by month); the
+    Add Session row is hidden there. PROGRAM PAGE: plan (phases, balance,
+    level) | people (athletes one column, group fit) from 860 pt
+    (`program.macLayout`). TEAM PAGE: a glass header with the team colour as
+    a wash (`team.macHeader`) instead of the colour slab. ATHLETES: the two
+    panes laid out by the page (never the system split view on the Mac);
+    the profile opens on Views/Mac/MacAthleteHeader.swift, a glass header,
+    not the trading card (nothing is shared from the Mac — the share-card
+    and report buttons are hidden there). "Hub" in the sidebar is REVENUE
+    (⌘4, the revenue page). Attention and team cards on Home are quiet
+    panes; a tracked drill's plan line is quiet (orange text, no fill).
+  · THE BOARD WINDOW has the room's backdrop and is dark.
+  · DEBUG: HOOPWISE_FILM_OPEN=drill|team|program|coach|lexicon|session|board
+    opens that page at launch on the Mac (the page stays over the sidebar's
+    places until relaunch — a debug artefact).
+  · LOOKING AT IT: scratch script `mac.sh [build] [KEY=VALUE…]` = pkill the
+    demo copy by its build/dd-mac path, build Catalyst into build/dd-mac,
+    `open -n` with HOOPWISE_SCREENSHOT_STORE=1 and connector port 47729;
+    then the computer-use `app_screenshot` / `app_menu` (View menu) /
+    `app_batch` on bundle OKTO.SAMp. A capture taken straight after a click
+    shows the page mid-change (dark, shifted) — take a second one. Clicks
+    are refused while the screen is locked; the menus still work. The Mac
+    demo store was seeded by hand (a class, five Demo athletes, a "Demo
+    Hawks" team, three private programs).
+- NOT DONE YET (Mac): the live game cover and the game recap were not
+  treated or seen; drag-and-drop was never driven by a real mouse.
+- The glass's tint over a BRIGHT desktop was
   never seen (the capture shows glass as flat grey; the one full-screen look
   was over a dark desktop).
 - HOW IT IS LOOKED AT: the layers in the iPad mini simulator with
