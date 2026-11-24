@@ -2640,8 +2640,21 @@ whoever needs a rest, when as the coach's words), `defense: GameDefense?`
 (number, note, guardedBy) — curriculum JSON, written only when used, an
 unknown defense reads as unset; `validSubs(roster:)` drops a sub whose player
 now starts or left. All edited in GameDaySheet (Rotation, Our defense, Their
-players and matchups). Planned subs are a PLAN: nothing on the live scoring
-screen reads them yet. GAME SHEET (Views/Hub/GameSheetDocument.swift,
+players and matchups). THE LIVE SCREEN PROMPTS THE PLANNED SUBS (same day,
+Luther): LiveTeamPanel(plannedSubs:period:elapsedSeconds:) lists the open
+ones above the bench (`live.planned`, chip `live.planned.sub`: tap makes the
+sub — asks "in for…" when no one is named or that player is off the floor —
+✕ `live.planned.skip` drops it). `PlannedSub.period` / `.minute` (optional,
+set in the editor's "Prompt" pickers): with a minute the chip turns ORANGE
+"NOW" and the panel buzzes when that period's clock (counting up) gets
+there; a period alone is due from its start; an earlier period's unmade sub
+is overdue; neither = listed, never "due". `PlannedSubPrompts.pending`
+(pure): not done, this period's, the player still on the bench, due first.
+Done / skipped ids ride in `SessionGame.plannedSubsDone` (games JSON,
+optional) and carry to the next period (startTeamGamePeriod, Next Game); any
+substitution that brings the player on answers their planned subs. Period =
+the game's place in the session's games. On a PHONE the prompt is on our
+team's panel only (one team on screen at a time). GAME SHEET (Views/Hub/GameSheetDocument.swift,
 `gameDay.sheet` → GameSheetShareSheet: preview, PDF / Image / Print): one A4
 page, names only, a SwiftUI page drawn by ImageRenderer into the PDF context
 (text stays text) — starters, bench, planned subs, warm-up | keys, defense,

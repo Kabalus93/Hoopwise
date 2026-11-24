@@ -62,7 +62,7 @@ struct GameSheetFacts {
             let out = sub.playerOut.map { name($0) } ?? ""
             let line = out.isEmpty ? (chinese ? "\(name(sub.playerIn)) 上场" : "\(name(sub.playerIn)) in")
                                    : (chinese ? "\(name(sub.playerIn)) 换下 \(out)" : "\(name(sub.playerIn)) in for \(out)")
-            return Sub(id: sub.id, line: line, when: sub.when.trimmingCharacters(in: .whitespacesAndNewlines))
+            return Sub(id: sub.id, line: line, when: sub.whenLine)
         }
         f.keys = plan.cleanKeys
         let note = plan.defenseNote.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -154,6 +154,25 @@ struct GameDaySheet: View {
                                 }
                                 .accessibilityLabel(isChinese ? "常用时间" : "Common times")
                             }
+                            // When the live screen calls for it.
+                            HStack(spacing: 6) {
+                                Image(systemName: "bell").foregroundStyle(.secondary)
+                                Text(isChinese ? "提醒" : "Prompt").foregroundStyle(.secondary)
+                                Picker(isChinese ? "第几节" : "Period", selection: $sub.period) {
+                                    Text(isChinese ? "任意一节" : "Any period").tag(Int?.none)
+                                    ForEach(1...4, id: \.self) { Text(isChinese ? "第 \($0) 节" : "Period \($0)").tag(Int?.some($0)) }
+                                }
+                                .labelsHidden()
+                                .accessibilityIdentifier("gameDay.sub.period")
+                                Picker(isChinese ? "第几分钟" : "Minute", selection: $sub.minute) {
+                                    Text(isChinese ? "不定时间" : "No set minute").tag(Int?.none)
+                                    ForEach(Array(0...20), id: \.self) { Text(isChinese ? "第 \($0) 分钟" : "at \($0):00").tag(Int?.some($0)) }
+                                }
+                                .labelsHidden()
+                                .accessibilityIdentifier("gameDay.sub.minute")
+                                Spacer(minLength: 0)
+                            }
+                            .font(.subheadline)
                         }
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("gameDay.sub")
@@ -174,7 +193,7 @@ struct GameDaySheet: View {
                 } footer: {
                     Text(benchAthletes.isEmpty
                          ? (isChinese ? "先定首发；其余的人是替补，可以在这里计划换人。" : "Pick the starters first — everyone else is the bench and can be planned in here.")
-                         : (isChinese ? "谁上场、换下谁、大概什么时候。比赛中的换人照常在计分页面操作。" : "Who comes in, for whom, and about when. Subs during the game are still made on the scoring screen."))
+                         : (isChinese ? "谁上场、换下谁、什么时候。计分页面会在替补席上方列出这些换人；定了第几节、第几分钟的，时间一到会变成橙色并震动提醒。" : "Who comes in, for whom, and when. The scoring screen lists these above the bench; one with a period and minute turns orange and buzzes when the clock gets there."))
                 }
 
                 Section {
@@ -597,8 +616,8 @@ struct SessionGamePlanCard: View {
                                 }
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(subLine(sub)).font(.subheadline.weight(.semibold)).lineLimit(2)
-                                    if !sub.when.isEmpty {
-                                        Text(sub.when).font(.caption).foregroundStyle(.secondary)
+                                    if !sub.whenLine.isEmpty {
+                                        Text(sub.whenLine).font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
                                 Spacer(minLength: 0)

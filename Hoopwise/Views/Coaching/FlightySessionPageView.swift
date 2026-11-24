@@ -5237,7 +5237,10 @@ struct SessionGamesTabView: View {
                         session.games.append(next)
                         dataManager.appendSessionGame(toSessionId: session.id, game: next)
                         selectedGame = next
-                    }
+                    },
+                    plannedSubs: isTeamGame ? (session.curriculum.gamePlan ?? GamePlan())
+                        .validSubs(roster: AttendanceMath.expectedIds(of: session, programs: dataManager.programs)) : [],
+                    period: index + 1
                 )
             }
         }
@@ -5433,6 +5436,9 @@ struct SessionGamesTabView: View {
             basketValue: 2,
             status: .ready)
         newGame.playersPerSide = teams.first?.starters
+        // Planned subs made or skipped in earlier periods are not asked again.
+        let done = session.games.flatMap { $0.plannedSubsDone ?? [] }
+        if !done.isEmpty { newGame.plannedSubsDone = Array(Set(done)) }
         session.games.append(newGame)
         dataManager.appendSessionGame(toSessionId: session.id, game: newGame)
         selectedGame = newGame
@@ -5741,6 +5747,10 @@ struct LiveGameScoringView: View {
     /// saved, this new one (same teams; the chosen ones on court) is added
     /// to the session and opened in its place.
     var onNextGame: ((SessionGame) -> Void)? = nil
+    /// A team's game: its planned subs and which period this is — the
+    /// panel of the team they belong to prompts them.
+    var plannedSubs: [PlannedSub] = []
+    var period: Int = 1
     /// The teams preselected when the "who plays next?" sheet opens (nil = closed).
     @State private var nextPick: NextPick?
     struct NextPick: Identifiable { let id = UUID(); let teams: Set<UUID> }
@@ -6310,7 +6320,8 @@ struct LiveGameScoringView: View {
                     basketValueStrip
                 }
                 LiveTeamPanel(game: $game, team: team, students: students,
-                              pointValue: basketValue, onAction: log)
+                              pointValue: basketValue, onAction: log,
+                              plannedSubs: plannedSubs, period: period, elapsedSeconds: timerSeconds)
                     .id(team.id)
                     .transition(.asymmetric(
                         insertion: .move(edge: selectedTeamIndex == 0 ? .leading : .trailing),
@@ -6335,7 +6346,8 @@ struct LiveGameScoringView: View {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(activeTeamsForScoring) { team in
                     LiveTeamPanel(game: $game, team: team, students: students,
-                                  pointValue: basketValue, onAction: log)
+                                  pointValue: basketValue, onAction: log,
+                                  plannedSubs: plannedSubs, period: period, elapsedSeconds: timerSeconds)
                         .allowsHitTesting(game.status != .completed)
                 }
             }
@@ -6951,6 +6963,7 @@ struct LiveGameScoringView: View {
             basketValue: game.basketValue,
             status: .ready)
         next.playersPerSide = game.playersPerSide
+        next.plannedSubsDone = game.plannedSubsDone
         HapticFeedback.impact(.medium)
         onNextGame?(next)
     }

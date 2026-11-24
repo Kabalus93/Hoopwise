@@ -480,6 +480,10 @@ struct SessionGame: Codable, Hashable, Identifiable {
     /// Everyone who came ON or went OFF in a substitution once the game had
     /// started (20 Nov 2026) — they stepped on the floor, so they played.
     var subbedIds: [UUID] = []
+    /// A team game's PLANNED SUBS (GamePlan.subs) already made or skipped,
+    /// by id — carried to the next period so none is asked for twice.
+    /// Optional in the games JSON; nil = none.
+    var plannedSubsDone: [UUID]?
     
     init(id: UUID = UUID(), sessionId: UUID, gameNumber: Int = 1,
          gameType: SessionGameType = .twoTeam, teams: [GameTeam] = [], 
@@ -536,12 +540,14 @@ struct SessionGame: Codable, Hashable, Identifiable {
         baskets = (try? container.decodeIfPresent([GameBasket].self, forKey: .baskets)) ?? []
         playersPerSide = try? container.decodeIfPresent(Int.self, forKey: .playersPerSide)
         subbedIds = (try? container.decodeIfPresent([UUID].self, forKey: .subbedIds)) ?? []
+        plannedSubsDone = try? container.decodeIfPresent([UUID].self, forKey: .plannedSubsDone)
     }
     
     private enum CodingKeys: String, CodingKey {
         case id, sessionId, gameNumber, gameType, teams, activeTeamIds, teamScores
         case playerStats, durationMinutes, basketValue, roundNumber, status, startedAt, endedAt
         case winningTeamId, notes, createdAt, updatedAt, baskets, playersPerSide, subbedIds
+        case plannedSubsDone
     }
     
     /// WHO PLAYED, player → team (20 Nov 2026, Luther: a player who took

@@ -106,6 +106,49 @@ nonisolated struct PlannedSub: Codable, Hashable, Sendable, Identifiable {
     var playerOut: UUID?
     /// "Mid first half", "After 5 minutes" — the coach's words.
     var when = ""
+    /// PROMPT (24 Nov 2026, Luther: "make the live scoring screen prompt the
+    /// planned subs"): the period it belongs to (nil = any) and the minute
+    /// of that period's clock at which the live screen calls for it
+    /// (nil = no moment: it is listed from the period's start).
+    var period: Int?
+    var minute: Int?
+
+    /// Listed on the live screen in this period: no period named, or this
+    /// one, or an earlier one it was not made in.
+    func shows(inPeriod current: Int) -> Bool { period.map { $0 <= current } ?? true }
+
+    /// The moment has come: an earlier period's sub is overdue; with a
+    /// minute, once the clock reaches it; a period alone, from its start.
+    /// A sub with neither is never "due" — it only waits in the list.
+    func isDue(period current: Int, elapsedSeconds: Int) -> Bool {
+        if let period, period < current { return true }
+        if let period, period > current { return false }
+        if let minute { return elapsedSeconds >= minute * 60 }
+        return period != nil
+    }
+
+    /// The coach's words and the prompt together: "Mid first half · P1 · 4:00".
+    var whenLine: String {
+        [when.trimmingCharacters(in: .whitespacesAndNewlines), promptLabel ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// "P2 · 4:00", "P1", "4:00" — nil without a prompt.
+    var promptLabel: String? {
+        let parts = [period.map { "P\($0)" }, minute.map { "\($0):00" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+/// Which planned subs the live screen shows for a team right now.
+nonisolated enum PlannedSubPrompts {
+    /// Not made yet, in this period's list, the player still on the bench —
+    /// due ones first, then in the plan's order.
+    static func pending(_ subs: [PlannedSub], done: [UUID], floor: [UUID], bench: [UUID],
+                        period: Int, elapsedSeconds: Int) -> [PlannedSub] {
+        let open = subs.filter { !done.contains($0.id) && $0.shows(inPeriod: period) && bench.contains($0.playerIn) }
+        let due = open.filter { $0.isDue(period: period, elapsedSeconds: elapsedSeconds) }
+        return due + open.filter { sub in !due.contains { $0.id == sub.id } }
+    }
 }
 
 /// The defense the team means to play.

@@ -172,4 +172,46 @@ final class GameDayTests: XCTestCase {
         }
         XCTAssertNotNil(GameSheetDocument.image(f))
     }
+
+    // MARK: The live screen prompts the planned subs (24 Nov 2026)
+
+    func testAPlannedSubIsDueWhenItsMomentComes() {
+        let p = UUID()
+        let anytime = PlannedSub(playerIn: p)
+        XCTAssertFalse(anytime.isDue(period: 1, elapsedSeconds: 9_999), "no moment: it only waits in the list")
+        XCTAssertTrue(anytime.shows(inPeriod: 3))
+        let minute = PlannedSub(playerIn: p, minute: 4)
+        XCTAssertFalse(minute.isDue(period: 1, elapsedSeconds: 239))
+        XCTAssertTrue(minute.isDue(period: 2, elapsedSeconds: 240), "any period, at its minute")
+        let second = PlannedSub(playerIn: p, period: 2, minute: 3)
+        XCTAssertFalse(second.shows(inPeriod: 1)); XCTAssertFalse(second.isDue(period: 1, elapsedSeconds: 600))
+        XCTAssertFalse(second.isDue(period: 2, elapsedSeconds: 100))
+        XCTAssertTrue(second.isDue(period: 2, elapsedSeconds: 180))
+        XCTAssertTrue(second.isDue(period: 3, elapsedSeconds: 0), "not made in its period: overdue")
+        XCTAssertTrue(PlannedSub(playerIn: p, period: 2).isDue(period: 2, elapsedSeconds: 0), "a period alone: from its start")
+        XCTAssertEqual(second.promptLabel, "P2 · 3:00")
+        XCTAssertEqual(PlannedSub(playerIn: p, when: "Mid half", minute: 5).whenLine, "Mid half · 5:00")
+    }
+
+    func testTheLiveScreenListsOpenSubsDueFirstAndForgetsTheOnesMade() throws {
+        let a = UUID(), b = UUID(), c = UUID(), d = UUID()
+        let early = PlannedSub(playerIn: c)
+        let timed = PlannedSub(playerIn: d, playerOut: a, minute: 2)
+        let later = PlannedSub(playerIn: c, period: 2)
+        let pending = { (done: [UUID], bench: [UUID], period: Int, t: Int) in
+            PlannedSubPrompts.pending([early, timed, later], done: done, floor: [a, b], bench: bench,
+                                      period: period, elapsedSeconds: t).map(\.id)
+        }
+        XCTAssertEqual(pending([], [c, d], 1, 0), [early.id, timed.id], "period 2's sub waits for period 2")
+        XCTAssertEqual(pending([], [c, d], 1, 120), [timed.id, early.id], "the one that is due comes first")
+        XCTAssertEqual(pending([timed.id], [c, d], 1, 120), [early.id], "made or skipped: gone")
+        XCTAssertEqual(pending([], [d], 1, 0), [timed.id], "a player already on the floor is not asked for")
+        XCTAssertEqual(pending([early.id], [c, d], 2, 0), [later.id, timed.id])
+
+        // The done list rides in the game and is absent from a game without one.
+        var game = SessionGame(sessionId: UUID())
+        XCTAssertFalse(String(data: try JSONEncoder().encode(game), encoding: .utf8)!.contains("plannedSubsDone"))
+        game.plannedSubsDone = [timed.id]
+        XCTAssertEqual(try JSONDecoder().decode(SessionGame.self, from: JSONEncoder().encode(game)).plannedSubsDone, [timed.id])
+    }
 }

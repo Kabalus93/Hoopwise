@@ -139,6 +139,15 @@ final class GameDayUITests: XCTestCase {
         let start = app.buttons.matching(NSPredicate(format: "label == 'Start the game'")).firstMatch
         XCTAssertTrue(start.waitForExistence(timeout: 5))
         start.tap()
+        // The planned sub is prompted above the bench; one tap makes it.
+        let planned = app.buttons["live.planned.sub"]
+        XCTAssertTrue(planned.waitForExistence(timeout: 8), "the live screen lists the planned sub")
+        attach(app, "live planned sub")
+        planned.tap()
+        let out = app.buttons["live.sub.out"].firstMatch
+        XCTAssertTrue(out.waitForExistence(timeout: 5), "no one named to come out: it asks for whom")
+        out.tap()
+        XCTAssertFalse(planned.waitForExistence(timeout: 2), "made: no longer asked for")
         let plus2 = app.buttons["live.opponent.add.2"]
         XCTAssertTrue(plus2.waitForExistence(timeout: 8), "the opponent has a score pad")
         plus2.tap()

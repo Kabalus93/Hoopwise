@@ -81,6 +81,11 @@ struct LiveTeamPanel: View {
     /// The basket value a row tap scores (the strip above: +2 default).
     let pointValue: Int
     let onAction: (GameStatAction) -> Void
+    /// A team game's planned subs for THIS team (GamePlan.subs), the period
+    /// being played and its clock — the panel prompts them above the bench.
+    var plannedSubs: [PlannedSub] = []
+    var period: Int = 1
+    var elapsedSeconds: Int = 0
 
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var dragFrom: (id: UUID, start: CGPoint)?
@@ -170,7 +175,8 @@ struct LiveTeamPanel: View {
         GeometryReader { proxy in
             let count = max(players.count, 5)
             let spacing: CGFloat = 8
-            let benchHeight: CGFloat = bench.isEmpty ? 0 : 84
+            let prompts = pendingSubs
+            let benchHeight: CGFloat = (bench.isEmpty ? 0 : 84) + (prompts.isEmpty ? 0 : 60)
             // Tall enough for a thumb, never a slab (an iPad's height / 5).
             let rowHeight = min(150, max(56, (proxy.size.height - benchHeight - spacing * CGFloat(count - 1)) / CGFloat(count)))
             VStack(spacing: spacing) {
@@ -178,6 +184,7 @@ struct LiveTeamPanel: View {
                     row(student, height: rowHeight)
                 }
                 Spacer(minLength: 0)
+                if !prompts.isEmpty { plannedStrip(prompts) }
                 if !bench.isEmpty { benchStrip }
             }
             .overlay { assistLine }
@@ -199,6 +206,90 @@ struct LiveTeamPanel: View {
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: basketTick)
         .sensoryFeedback(.success, trigger: subTick)
+        .sensoryFeedback(.warning, trigger: dueCount)
+    }
+
+    // MARK: Planned subs — the prompt (24 Nov 2026)
+
+    private var pendingSubs: [PlannedSub] {
+        guard !plannedSubs.isEmpty else { return [] }
+        return PlannedSubPrompts.pending(plannedSubs, done: game.plannedSubsDone ?? [],
+                                         floor: players.map(\.id), bench: bench.map(\.id),
+                                         period: period, elapsedSeconds: elapsedSeconds)
+    }
+    /// How many are called for now — a change buzzes.
+    private var dueCount: Int {
+        pendingSubs.filter { $0.isDue(period: period, elapsedSeconds: elapsedSeconds) }.count
+    }
+
+    private func plannedStrip(_ subs: [PlannedSub]) -> some View {
+        let zh = LocalizationManager.shared.currentLanguage == .chinese
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(subs) { sub in
+                    plannedChip(sub, zh: zh)
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+        .frame(height: 52)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("live.planned")
+    }
+
+    private func plannedChip(_ sub: PlannedSub, zh: Bool) -> some View {
+        let due = sub.isDue(period: period, elapsedSeconds: elapsedSeconds)
+        let incoming = students.first { $0.id == sub.playerIn }
+        // Coming in for a named player only while that player is on the floor.
+        let outgoing = sub.playerOut.flatMap { id in players.first { $0.id == id } }
+        let first = { (s: Student?) in s?.primaryDisplayName.components(separatedBy: " ").first ?? "" }
+        let detail = sub.when.isEmpty ? (sub.promptLabel ?? (zh ? "计划换人" : "Planned")) : sub.when
+        return HStack(spacing: 8) {
+            Button {
+                if let outgoing { substitute(in: sub.playerIn, out: outgoing.id) } else { subChoosing = sub.playerIn }
+            } label: {
+                HStack(spacing: 8) {
+                    if let incoming { StudentAvatarView(student: incoming, size: 30) }
+                    Image(systemName: "arrow.right").font(.caption2.weight(.heavy))
+                        .foregroundStyle(due ? Color.white : Color.green)
+                    if let outgoing { StudentAvatarView(student: outgoing, size: 30) }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(outgoing == nil ? (zh ? "\(first(incoming)) 上场" : "\(first(incoming)) in")
+                                             : (zh ? "\(first(incoming)) 换 \(first(outgoing))" : "\(first(incoming)) for \(first(outgoing))"))
+                            .font(.footnote.weight(.bold)).lineLimit(1)
+                        Text(due ? (zh ? "现在" : "NOW") + " · " + detail : detail)
+                            .font(.caption2.weight(due ? .heavy : .regular)).lineLimit(1)
+                            .foregroundStyle(due ? Color.white.opacity(0.9) : Color.secondary)
+                    }
+                }
+                .foregroundStyle(due ? Color.white : Color.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel((zh ? "计划换人：" : "Planned sub: ")
+                + (outgoing == nil ? "\(incoming?.primaryDisplayName ?? "")" : "\(incoming?.primaryDisplayName ?? "") for \(outgoing?.primaryDisplayName ?? "")")
+                + (due ? (zh ? "，现在" : ", now") : ""))
+            .accessibilityIdentifier("live.planned.sub")
+            Button { skip(sub) } label: {
+                Image(systemName: "xmark").font(.caption2.weight(.bold))
+                    .foregroundStyle(due ? Color.white.opacity(0.85) : Color.secondary)
+                    .frame(width: 28, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(zh ? "跳过这次换人" : "Skip this sub")
+            .accessibilityIdentifier("live.planned.skip")
+        }
+        .padding(.leading, 8).padding(.trailing, 2)
+        .frame(height: 46)
+        .background(Capsule().fill(due ? Color.orange : Color(.tertiarySystemFill)))
+        .overlay(Capsule().strokeBorder(due ? Color.clear : teamColor.opacity(0.35), lineWidth: 1))
+    }
+
+    private func skip(_ sub: PlannedSub) {
+        withAnimation(.snappy) {
+            game.plannedSubsDone = (game.plannedSubsDone ?? []) + [sub.id]
+            game.updatedAt = Date()
+        }
     }
 
     // MARK: Bench — subs
@@ -318,6 +409,10 @@ struct LiveTeamPanel: View {
             if game.startedAt != nil || game.status == .inProgress || game.status == .paused {
                 for p in [incoming, outgoing] where !game.subbedIds.contains(p) { game.subbedIds.append(p) }
             }
+            // Coming on answers this player's planned subs, however it was done.
+            let answered = plannedSubs.filter { $0.playerIn == incoming && $0.shows(inPeriod: period) }.map(\.id)
+                .filter { !(game.plannedSubsDone ?? []).contains($0) }
+            if !answered.isEmpty { game.plannedSubsDone = (game.plannedSubsDone ?? []) + answered }
             game.updatedAt = Date()
         }
         subTick += 1
