@@ -322,7 +322,7 @@ struct FilmRoomShell<Main: View>: View {
         case .home, .sessions, .athletes: main(p)
         case .hub: NavigationStack { MonthlyRevenueHistoryView(pushed: true).filmRoomPage() }
         case .plays: NavigationStack { JournalPlaysScreen() }
-        case .drills: NavigationStack { DrillsLibraryView() }
+        case .drills: MacDrillsBrowser()
         case .lexicon: NavigationStack { LexiconScreen() }
         case .teams: NavigationStack { TeamsScreen() }
         case .organization: NavigationStack { OrganizationView() }

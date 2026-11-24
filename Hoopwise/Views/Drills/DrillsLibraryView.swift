@@ -28,6 +28,8 @@ struct DrillsLibraryView: View {
     var pick: Pick? = nil
 
     @EnvironmentObject var dataManager: DataManager
+    @Environment(\.macDrillSelect) private var macDrillSelect
+    @Environment(\.macDrillSelectedId) private var macDrillSelectedId
     @State private var searchText = ""
     @State private var showingAddDrill = false
     // FILTERS (16 November 2026, Luther: "I still need to know which are ball
@@ -277,6 +279,19 @@ struct DrillsLibraryView: View {
                 .accessibilityLabel(added ? (isChinese ? "已添加" : "Added") : (isChinese ? "添加" : "Add"))
                 .accessibilityIdentifier("drillPicker.add")
             }
+        } else if let macDrillSelect {
+            // The Mac: the drill opens beside the list.
+            let on = macDrillSelectedId == drill.id
+            Button { macDrillSelect(drill) } label: {
+                label()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(on ? 0.12 : 0))
+                        .padding(.horizontal, -10).padding(.vertical, -6))
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(on ? .isSelected : [])
         } else {
             NavigationLink(destination: DrillDetailView(drill: drill)) { label() }
         }
