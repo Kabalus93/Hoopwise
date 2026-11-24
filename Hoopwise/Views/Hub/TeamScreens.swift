@@ -270,7 +270,38 @@ struct TeamDetailView: View {
         let coach = team.coachId.flatMap { id in dataManager.staffCoaches.first { $0.id == id } }
         let subtitle = [coach.map { isChinese ? "教练 \($0.name)" : "Coach \($0.name)" }, team.homeVenue]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        return HStack(alignment: .center, spacing: 16) {
+        // The Mac: a glass pane with the team's colour as a quiet wash
+        // from its badge — the colour names the team, it does not fill
+        // the window.
+        if FilmRoom.isOn {
+            return AnyView(HStack(alignment: .center, spacing: 16) {
+                TeamBadge(team: team, size: 56)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(team.name).font(.system(size: 28, weight: .light)).foregroundStyle(.primary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(([isChinese ? "\(roster.count) 名队员" : "\(roster.count) \(roster.count == 1 ? "player" : "players")"]
+                          + (subtitle.isEmpty ? [] : [subtitle])).joined(separator: " · "))
+                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                if !roster.athletes.isEmpty || !roster.coaches.isEmpty {
+                    TodaysRosterCluster(
+                        members: TodaysRosterCluster.members(hero: nil, students: roster.everyone(dataManager),
+                                                             sessions: dataManager.sessionEvents),
+                        total: roster.count,
+                        scale: 1.1,
+                        onSelect: open,
+                        onMore: { })
+                }
+            }
+            .padding(.horizontal, 20).padding(.vertical, 16)
+            .background(LinearGradient(colors: [colour.opacity(0.26), colour.opacity(0.04), .clear],
+                                       startPoint: .leading, endPoint: .trailing),
+                        in: .rect(cornerRadius: 18, style: .continuous))
+            .filmGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityIdentifier("team.macHeader"))
+        }
+        return AnyView(HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 10) {
                 TeamBadge(team: team, size: 64)
                 Text(team.name).font(.largeTitle.weight(.bold)).foregroundStyle(.white)
@@ -292,7 +323,7 @@ struct TeamDetailView: View {
         }
         .padding(20)
         .background(LinearGradient(colors: [colour, colour.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: .rect(cornerRadius: 26, style: .continuous))
+                    in: .rect(cornerRadius: 26, style: .continuous)))
     }
 
     private func open(_ player: Student) {
