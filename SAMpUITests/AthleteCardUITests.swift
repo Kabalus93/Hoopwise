@@ -28,6 +28,27 @@ final class AthleteCardUITests: XCTestCase {
         add(shot)
     }
 
+    /// The progress report (25 Nov 2026): the profile opens it — a period, a
+    /// preview of the page, the next focus, the coach's words, PDF / image / print.
+    func testTheProfileOpensTheProgressReport() {
+        continueAfterFailure = false
+        let app = launch("studentProfile")
+        let report = app.buttons["athlete.report"].firstMatch
+        XCTAssertTrue(report.waitForExistence(timeout: 30), "the profile has a progress report button")
+        report.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["report.preview"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["report.pdf"].exists)
+        XCTAssertTrue(app.buttons["report.image"].exists)
+        app.buttons["All time"].firstMatch.tap()
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "progress report"; shot.lifetime = .keepAlways
+        add(shot)
+        let focus = app.buttons["report.focus.defense"].firstMatch
+        for _ in 0..<3 where !focus.exists || !focus.isHittable { app.swipeUp() }
+        focus.tap()
+        XCTAssertTrue(focus.isSelected, "a focus can be picked for the report")
+    }
+
     func testTheProfileSharesThePlayerCard() {
         continueAfterFailure = false
         let app = launch("studentProfile")

@@ -48,6 +48,7 @@ struct StudentQuickPeepView: View {
 
     /// The player card (AthleteCardShareSheet).
     @State private var showingCard = false
+    @State private var showingReport = false
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     
@@ -428,6 +429,12 @@ struct StudentQuickPeepView: View {
                     }
                     .accessibilityIdentifier("peep.shareCard")
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingReport = true } label: {
+                        Label(isChinese ? "成长报告" : "Progress report", systemImage: "doc.text.below.ecg")
+                    }
+                    .accessibilityIdentifier("peep.report")
+                }
             }
             #if targetEnvironment(macCatalyst)
             .onAppear { macPopupTrace("quick peep on screen") }
@@ -438,6 +445,11 @@ struct StudentQuickPeepView: View {
             }
             .sheet(isPresented: $showingEditStudent) {
                 EditStudentView(student: student, player: player)
+            }
+            .sheet(isPresented: $showingReport) {
+                ProgressReportSheet(student: student)
+                    .environmentObject(dataManager)
+                    .presentationSizing(.page)
             }
             .sheet(isPresented: $showingCard) {
                 AthleteCardShareSheet(student: student)
@@ -1055,6 +1067,11 @@ struct StudentQuickPeepView: View {
                     .foregroundColor(.secondary)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !isEditingSkills {
+                Divider()
+                AthleteFocusPicker(studentId: student.id)
             }
 
             if skills.isEvaluated, let lastDate = skills.lastEvaluatedDate {

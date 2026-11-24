@@ -7,6 +7,7 @@ struct StudentDetailView: View {
     @State private var showingEditSheet = false
     /// The player card (AthleteCardShareSheet): share image or A3 sheet.
     @State private var showingCard = false
+    @State private var showingReport = false
     @State private var contractEdit: ContractEdit?
 
     // Section expansion states
@@ -112,11 +113,22 @@ struct StudentDetailView: View {
                 .accessibilityIdentifier("athlete.shareCard")
             }
             ToolbarItem(placement: .primaryAction) {
+                Button { showingReport = true } label: {
+                    Label(isChinese ? "成长报告" : "Progress report", systemImage: "doc.text.below.ecg")
+                }
+                .accessibilityIdentifier("athlete.report")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Button(isChinese ? "编辑" : "Edit") {
                     showingEditSheet = true
                 }
                 .fontWeight(.semibold)
             }
+        }
+        .sheet(isPresented: $showingReport) {
+            ProgressReportSheet(student: student)
+                .environmentObject(dataManager)
+                .presentationSizing(.page)
         }
         .sheet(isPresented: $showingCard) {
             AthleteCardShareSheet(student: student)

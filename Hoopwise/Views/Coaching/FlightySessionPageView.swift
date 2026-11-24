@@ -2288,6 +2288,7 @@ struct FlightySessionPageView: View {
                         Text(mark.label(isChinese: isChinese))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(mark == .unmarked ? Color.secondary : mark.tint)
+                        AthleteFocusLine(studentId: student.id, font: .caption)
                     }
                 }
                 .contentShape(Rectangle())
@@ -3083,6 +3084,7 @@ struct FlightySessionPageView: View {
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(attendanceState.tint)
                         }
+                        AthleteFocusLine(studentId: student.id)
                     }
                 }
             }

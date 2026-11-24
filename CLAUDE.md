@@ -2851,6 +2851,34 @@ stored and never shown, two rating systems, ~7,500 lines never opened.
    the change; `SkillGrowthRow.rows`, pure). Tests: EvaluationHistoryTests.
    Not looked at on screen.
 
+2. THE PROGRESS REPORT. Services/ProgressReportFacts.swift (`make`, pure
+   apart from names) + Views/Components/ProgressReportViews.swift. One A4
+   page for a parent over a PERIOD (1 month · 3 months · This term = since
+   the latest 1 Sep / 1 Mar · All time): attendance (classes where a mark was
+   taken — unmarked is not absent), games with PTS/REB/AST a game, "player of
+   the session ×N", SKILLS then → now (then = the evaluation in force when
+   the period began, else the first made in it; a black mark on the bar),
+   what the classes they attended worked on most (PlanCoverage), tracked
+   results first → latest per comparable setup (shooting and the coach's own
+   drills), WHAT WE WORK ON NEXT, the coach's words (typed, never stored).
+   A part without data is left out. Opened from the athlete profile
+   (`athlete.report`) and the Quick Peep (`peep.report`) →
+   ProgressReportSheet (`report.preview`, `.period`, `.focus.<axis>`,
+   `.words`, `.pdf` / `.image` / `.print`). A SwiftUI page drawn into the PDF
+   context (text stays text); language = Exported PDFs.
+3. EACH ATHLETE'S FOCUS. `SkillsEvaluation.focus` (one or two DrillAttribute
+   raw values, same JSON, written only when set) = the coach's pick;
+   `AthleteFocus.current` = the pick, else `suggested` (the two lowest
+   ratings, octagon order on a tie; needs ≥ 4 rated skills; never a skill at
+   8+). Writers: `setAthleteFocus` (not an evaluation — ratings and history
+   untouched). Shown on the session roster under the name in orange
+   (AthleteFocusLine, `athlete.focus`, list rows and iPad cards), picked in
+   the Quick Peep under the ratings (AthleteFocusPicker, `peep.focus.choose`),
+   printed on the report (the sheet's chips override for that report only).
+   The plan engine does not read it (it reads the group's ratings).
+   Tests: EvaluationHistoryTests, AthleteCardUITests.testTheProfileOpens
+   TheProgressReport. The roster line and the peep row were not looked at.
+
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including
 Scribble. Not cleared when I leave … save as play or skill in the corner …

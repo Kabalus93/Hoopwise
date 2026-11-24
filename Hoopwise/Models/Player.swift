@@ -861,6 +861,10 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     /// oldest first, the last one equal to `axes`. Inside the same skills
     /// JSON (no schema change), written only when it has entries.
     var history: [EvaluationSnapshot] = []
+    /// What this athlete is working on: the coach's pick of one or two
+    /// skills (DrillAttribute raw values). Empty = not picked — the app
+    /// suggests (AthleteFocus). In the same JSON, written only when set.
+    var focus: [String] = []
 
     /// Call on the NEW evaluation before saving it. The evaluation it
     /// replaces is kept first when there is no history yet; two evaluations
@@ -972,6 +976,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         axes = try container.decodeIfPresent([String: Int].self, forKey: .axes) ?? [:]
         history = (try? container.decodeIfPresent([EvaluationSnapshot].self, forKey: .history)) ?? []
+        focus = (try? container.decodeIfPresent([String].self, forKey: .focus)) ?? []
     }
     
     private enum CodingKeys: String, CodingKey {
@@ -985,6 +990,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         case axes
         // Every evaluation as it stood (25 Nov 2026)
         case history
+        case focus
     }
     
     func encode(to encoder: Encoder) throws {
@@ -999,6 +1005,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         try container.encodeIfPresent(notes, forKey: .notes)
         if !axes.isEmpty { try container.encode(axes, forKey: .axes) }
         if !history.isEmpty { try container.encode(history, forKey: .history) }
+        if !focus.isEmpty { try container.encode(focus, forKey: .focus) }
     }
     
     var overallRating: Double {
