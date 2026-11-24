@@ -17,10 +17,15 @@ enum ScreenshotStore {
     static var isActive = false
 
     static var url: URL? {
-        guard ProcessInfo.processInfo.environment["HOOPWISE_SCREENSHOT_STORE"] == "1",
-              let dir = WidgetShared.containerURL?
+        guard let dir = WidgetShared.containerURL?
                 .appendingPathComponent("Library/Application Support", isDirectory: true)
         else { return nil }
+        // On by the launch environment, or for good on a demo device: a file
+        // `screenshots.store.on` beside the store (25 Nov 2026 — a debug
+        // install on someone else's iPad opened from the home screen, where
+        // no environment is passed).
+        let marked = FileManager.default.fileExists(atPath: dir.appendingPathComponent("screenshots.store.on").path)
+        guard ProcessInfo.processInfo.environment["HOOPWISE_SCREENSHOT_STORE"] == "1" || marked else { return nil }
         return dir.appendingPathComponent("screenshots.store")
     }
 
