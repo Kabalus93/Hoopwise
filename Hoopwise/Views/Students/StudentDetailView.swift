@@ -66,6 +66,9 @@ struct StudentDetailView: View {
                     // Reminders that tag this athlete (14 Nov 2026).
                     StudentRemindersCard(student: student)
 
+                    // The eight ratings over time (25 Nov 2026).
+                    SkillGrowthCard(studentId: student.id)
+
                     // Tracked shooting drills (20 Nov 2026).
                     ShootingProfileSection(studentId: student.id)
                     CustomTrackProfileSection(student: student)

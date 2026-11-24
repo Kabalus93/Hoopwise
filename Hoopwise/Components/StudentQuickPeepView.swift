@@ -1060,8 +1060,12 @@ struct StudentQuickPeepView: View {
             if skills.isEvaluated, let lastDate = skills.lastEvaluatedDate {
                 HStack {
                     Image(systemName: "clock").font(.system(size: 9))
-                    Text(isChinese ? "最近评估: \(lastDate.formatted(date: .abbreviated, time: .omitted))"
-                                   : "Last evaluated: \(lastDate.formatted(date: .abbreviated, time: .omitted))")
+                    Text((isChinese ? "最近评估: \(lastDate.formatted(date: .abbreviated, time: .omitted))"
+                                    : "Last evaluated: \(lastDate.formatted(date: .abbreviated, time: .omitted))")
+                         + (skills.baseline.map { base in
+                             isChinese ? " · 共 \(skills.history.count) 次，变化自 \(base.date.formatted(date: .abbreviated, time: .omitted))"
+                                       : " · \(skills.history.count) evaluations, change since \(base.date.formatted(date: .abbreviated, time: .omitted))"
+                         } ?? ""))
                         .font(.system(size: 10))
                 }
                 .foregroundColor(.secondary)
@@ -1093,6 +1097,13 @@ struct StudentQuickPeepView: View {
                             .fill(Color.accentColor)
                             .frame(width: geo.size.width * CGFloat(value) / 10.0)
                     }
+                    // Where the first evaluation stood: a thin grey mark.
+                    if let then = skills.baseline?.axes[axis.rawValue], then != value {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.primary.opacity(0.45))
+                            .frame(width: 2, height: 10)
+                            .offset(x: max(0, geo.size.width * CGFloat(then) / 10.0 - 1))
+                    }
                     if let suggested, suggested != value {
                         suggestionTick(width: geo.size.width, value: suggested)
                     }
@@ -1103,6 +1114,14 @@ struct StudentQuickPeepView: View {
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundColor(value == nil ? .secondary : .accentColor)
                 .frame(width: 20, alignment: .trailing)
+            if skills.baseline != nil {
+                let change = skills.change(axis) ?? 0
+                Text(change == 0 ? "" : (change > 0 ? "+\(change)" : "\(change)"))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(change > 0 ? .green : .red)
+                    .frame(width: 22, alignment: .trailing)
+                    .accessibilityIdentifier("peep.skill.change")
+            }
         }
     }
 
@@ -1146,7 +1165,7 @@ struct StudentQuickPeepView: View {
     
     private func saveSkills() {
         guard var updatedPlayer = player else { return }
-        editedSkills.lastEvaluatedDate = Date()
+        editedSkills.recordEvaluation(replacing: updatedPlayer.skills)
         updatedPlayer.skills = editedSkills
         updatedPlayer.updatedAt = Date()
         dataManager.updatePlayer(updatedPlayer)

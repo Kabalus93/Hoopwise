@@ -825,6 +825,13 @@ struct ContractInfo: Codable, Hashable, Sendable {
     }
 }
 
+/// One evaluation as it stood on a day.
+nonisolated struct EvaluationSnapshot: Codable, Hashable, Sendable {
+    var date: Date
+    /// DrillAttribute raw value → 1–10.
+    var axes: [String: Int]
+}
+
 /// 6-axis skills evaluation matching the performance radar diagram
 /// Each skill is rated 1-10 by the coach. These blend with game stats for final radar values.
 struct SkillsEvaluation: Codable, Hashable, Sendable {
@@ -847,6 +854,54 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     /// the retired evaluation, still decoded so old data round-trips, no
     /// longer shown or used by the planner.
     var axes: [String: Int] = [:]
+
+    /// EVALUATION HISTORY (25 Nov 2026, Luther, after the audit: a new
+    /// evaluation overwrote the old one, so the app could not say "passing
+    /// went from 4 to 6 since September"). Every evaluation as it stood,
+    /// oldest first, the last one equal to `axes`. Inside the same skills
+    /// JSON (no schema change), written only when it has entries.
+    var history: [EvaluationSnapshot] = []
+
+    /// Call on the NEW evaluation before saving it. The evaluation it
+    /// replaces is kept first when there is no history yet; two evaluations
+    /// on one day are one (the later replaces the earlier); an unchanged
+    /// evaluation adds nothing.
+    mutating func recordEvaluation(replacing previous: SkillsEvaluation, at date: Date = Date(),
+                                   calendar: Calendar = .current) {
+        lastEvaluatedDate = date
+        guard !axes.isEmpty else { return }
+        var seeded = false
+        if history.isEmpty, previous.isEvaluated, previous.axes != axes {
+            history.append(EvaluationSnapshot(date: previous.lastEvaluatedDate ?? date, axes: previous.axes))
+            seeded = true
+        }
+        if let last = history.last, last.axes == axes { return }
+        let now = EvaluationSnapshot(date: date, axes: axes)
+        if !seeded, let last = history.last, calendar.isDate(last.date, inSameDayAs: date) {
+            history[history.count - 1] = now
+        } else {
+            history.append(now)
+        }
+        if history.count > 60 { history.removeFirst(history.count - 60) }
+    }
+
+    /// The first evaluation on record — what growth is measured from. Nil
+    /// until there are two.
+    var baseline: EvaluationSnapshot? { history.count >= 2 ? history.first : nil }
+    /// Points gained or lost on a skill since the baseline (nil when either
+    /// side was not rated).
+    func change(_ axis: DrillAttribute) -> Int? {
+        guard let then = baseline?.axes[axis.rawValue], let now = rating(axis) else { return nil }
+        return now - then
+    }
+    /// A skill's rating at each evaluation, oldest first.
+    func series(_ axis: DrillAttribute) -> [(date: Date, rating: Int)] {
+        history.compactMap { snap in snap.axes[axis.rawValue].map { (snap.date, $0) } }
+    }
+    /// The skill's rating at or before a date (the evaluation in force then).
+    func rating(_ axis: DrillAttribute, asOf date: Date) -> Int? {
+        history.last { $0.date <= date }?.axes[axis.rawValue]
+    }
 
     func rating(_ axis: DrillAttribute) -> Int? { axes[axis.rawValue] }
     mutating func setRating(_ value: Int, for axis: DrillAttribute) {
@@ -916,6 +971,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         lastEvaluatedDate = try container.decodeIfPresent(Date.self, forKey: .lastEvaluatedDate)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         axes = try container.decodeIfPresent([String: Int].self, forKey: .axes) ?? [:]
+        history = (try? container.decodeIfPresent([EvaluationSnapshot].self, forKey: .history)) ?? []
     }
     
     private enum CodingKeys: String, CodingKey {
@@ -927,6 +983,8 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         case lastEvaluatedDate, notes
         // The eight-skill evaluation (17 Nov 2026)
         case axes
+        // Every evaluation as it stood (25 Nov 2026)
+        case history
     }
     
     func encode(to encoder: Encoder) throws {
@@ -940,6 +998,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         try container.encodeIfPresent(lastEvaluatedDate, forKey: .lastEvaluatedDate)
         try container.encodeIfPresent(notes, forKey: .notes)
         if !axes.isEmpty { try container.encode(axes, forKey: .axes) }
+        if !history.isEmpty { try container.encode(history, forKey: .history) }
     }
     
     var overallRating: Double {

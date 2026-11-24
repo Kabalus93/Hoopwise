@@ -2833,6 +2833,24 @@ and the game stats can work together." Decided: keep 1–10, START FRESH.
   (Asked Luther whether parents should see it; shown until he says.)
 Tests: SkillIntegrationTests, PlanGeneratorTests.
 
+## After the audit (25 Nov 2026, Luther: "build all of them, in that order")
+The audit of 24 Nov found: ratings without history, no per-athlete focus, no
+progress report, nothing noticing an athlete outgrowing a program, fields
+stored and never shown, two rating systems, ~7,500 lines never opened.
+1. EVALUATION HISTORY. `SkillsEvaluation.history: [EvaluationSnapshot]`
+   (date + the eight ratings; inside skillsData JSON, written only when it
+   has entries — no schema change). THE writer is
+   `recordEvaluation(replacing:at:)`, called by the Quick Peep's saveSkills:
+   the evaluation being replaced becomes the first entry when there was no
+   history; two evaluations on one day are one; an unchanged save adds
+   nothing; 60 kept. `baseline` (first, once there are two), `change(axis)`,
+   `series(axis)`, `rating(_:asOf:)`. Quick Peep: a grey mark on each bar
+   where the first evaluation stood and "+2" / "−1" beside the rating; the
+   footer says how many evaluations and since when. Profile: SkillGrowthCard
+   (Views/Components — `athlete.skillGrowth`: per skill a sparkline, "4 → 6",
+   the change; `SkillGrowthRow.rows`, pure). Tests: EvaluationHistoryTests.
+   Not looked at on screen.
+
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including
 Scribble. Not cleared when I leave … save as play or skill in the corner …
