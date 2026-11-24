@@ -25,6 +25,9 @@ enum FilmRoom {
         #endif
     }()
 
+    #if DEBUG
+    static let debugOpen = ProcessInfo.processInfo.environment["HOOPWISE_FILM_OPEN"]
+    #endif
     static let sidebarWidth: CGFloat = 236
     /// THE pane: every card on the Mac is this one material — the quiet navy
     /// the system's glass renders as over the window (cards drawn with
@@ -206,13 +209,27 @@ struct FilmRoomShell<Main: View>: View {
                         }
                     }
                 }
-                .opacity(openSession == nil ? 1 : 0)
+                .opacity(openSession == nil && !debugCovers ? 1 : 0)
                 .allowsHitTesting(openSession == nil)
 
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
                 .contentShape(Rectangle())
                 .padding(.leading, FilmRoom.sidebarWidth + 22)
+
+                #if DEBUG
+                if debugPushes {
+                    NavigationStack {
+                        Color.clear
+                            .navigationDestination(isPresented: .constant(true)) {
+                                debugPushedPage.modifier(FilmRoomDestination())
+                            }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .padding(.leading, FilmRoom.sidebarWidth + 22)
+                }
+                #endif
 
                 if let session = openSession {
                     NavigationStack {
@@ -237,7 +254,16 @@ struct FilmRoomShell<Main: View>: View {
             .environment(\.filmRoomWindow, window.size)
         }
         .ignoresSafeArea()
-        .onAppear { visited.insert(place) }
+        .onAppear {
+            visited.insert(place)
+            #if DEBUG
+            if Self.debugOpen == "session" {
+                openSessionId = dataManager.sessionEvents.filter { $0.endTime > Date() && !SessionLifecycle.didNotHappen($0) }
+                    .min { $0.startTime < $1.startTime }?.id ?? dataManager.sessionEvents.first?.id
+            }
+            if Self.debugOpen == "board" { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { openWindow(id: FilmRoom.boardWindowId) } }
+            #endif
+        }
         .onChange(of: selection) { _, _ in visited.insert(place) }
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseFilmRoomOpenSession)) { note in
             openSessionId = note.object as? UUID
@@ -246,6 +272,44 @@ struct FilmRoomShell<Main: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenBoardWindow)) { _ in
             openWindow(id: FilmRoom.boardWindowId)
         }
+    }
+
+    #if DEBUG
+    /// HOOPWISE_FILM_OPEN=drill|play|team|program|coach|lexicon — pushes that
+    /// page in the work area at launch, so the deeper pages can be looked at
+    /// on the real Mac window without a click (clicks do not land while the
+    /// screen is locked). `session` opens the next class as a workspace,
+    /// `board` the Coach board window.
+    private static var debugOpen: String? { FilmRoom.debugOpen }
+
+    @ViewBuilder
+    private var debugPushedPage: some View {
+        switch Self.debugOpen {
+        case "drill":
+            if let d = dataManager.drills.first(where: { $0.isLibraryDrill && !$0.isSeries }) { DrillDetailView(drill: d) }
+        case "team":
+            if let t = dataManager.teams.first { TeamDetailView(teamId: t.id) }
+        case "program":
+            if let p = dataManager.programs.first(where: { !SessionPrivacy.isPrivate($0) }) ?? dataManager.programs.first {
+                FlightyProgramDetailView(program: p)
+            }
+        case "coach":
+            if let c = dataManager.staffCoaches.first { CoachProfileDetailView(coach: c) }
+        case "lexicon":
+            LexiconSectionDebug()
+        default: EmptyView()
+        }
+    }
+
+    private var debugPushes: Bool { ["drill", "team", "program", "coach", "lexicon"].contains(Self.debugOpen ?? "") }
+    #endif
+
+    private var debugCovers: Bool {
+        #if DEBUG
+        return debugPushes
+        #else
+        return false
+        #endif
     }
 
     private var openSession: SessionEvent? {
@@ -443,8 +507,13 @@ private struct SidebarButton: View {
 struct CoachBoardWindow: View {
     @EnvironmentObject private var dataManager: DataManager
     var body: some View {
-        CoachBoardScreen()
-            .environmentObject(dataManager)
+        ZStack {
+            // The same quiet tint over the window's glass as the main window.
+            if FilmRoom.isOn { FilmRoomBackdrop().ignoresSafeArea() }
+            CoachBoardScreen()
+                .environmentObject(dataManager)
+        }
+            .environment(\.colorScheme, .dark)
             .preferredColorScheme(.dark)
             .onAppear {
                 #if targetEnvironment(macCatalyst)
@@ -453,3 +522,10 @@ struct CoachBoardWindow: View {
             }
     }
 }
+
+#if DEBUG
+/// The lexicon's first section, for the Mac's deep-page check.
+private struct LexiconSectionDebug: View {
+    var body: some View { LexiconScreen() }
+}
+#endif

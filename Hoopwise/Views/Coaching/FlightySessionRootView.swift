@@ -2720,6 +2720,7 @@ struct ArchivedProgramsView: View {
                 }
             }
             .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
             .navigationTitle("Archived Programs")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

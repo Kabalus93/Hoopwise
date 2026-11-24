@@ -183,6 +183,7 @@ struct AthletePickerSheet: View {
                 }
             }
             .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
             .navigationTitle(title)
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

@@ -60,6 +60,7 @@ struct AddAthleteFromAttendanceView: View {
                 }
             }
             .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
             .navigationTitle(isChinese ? "添加学员" : "Add Athlete")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -1044,6 +1044,7 @@ struct FlightyEditCoachProfileView: View {
                 .padding(.bottom, 40)
             }
             .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeadingCompat) {

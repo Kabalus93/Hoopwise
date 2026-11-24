@@ -205,4 +205,5 @@ struct StepIndicator: View {
     }
     .padding(AppTheme.spacing)
     .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
 }

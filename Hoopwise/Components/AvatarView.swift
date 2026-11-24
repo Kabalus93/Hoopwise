@@ -343,4 +343,5 @@ struct IconAvatar: View {
     }
     .padding()
     .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
 }

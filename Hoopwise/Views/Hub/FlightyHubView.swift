@@ -2252,6 +2252,7 @@ struct ContractDetailSheet: View {
                 .padding(16)
             }
             .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
             .navigationTitle("Contract Details")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

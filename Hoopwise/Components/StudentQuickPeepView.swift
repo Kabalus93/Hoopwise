@@ -425,6 +425,7 @@ struct StudentQuickPeepView: View {
             }
             .onGeometryChange(for: Int.self) { Self.columns(for: $0.size.width) } action: { measuredColumns = $0 }
             .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
             .navigationTitle(isChinese ? "学员速览" : "Quick Peep")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

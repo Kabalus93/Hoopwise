@@ -968,4 +968,5 @@ struct ProgramBadge: View {
         .padding()
     }
     .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
 }

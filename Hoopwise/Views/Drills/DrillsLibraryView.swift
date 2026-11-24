@@ -1371,6 +1371,7 @@ struct DrillDetailView: View {
             }
         }
         .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
         .navigationBarTitleDisplayModeCompat(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailingCompat) {

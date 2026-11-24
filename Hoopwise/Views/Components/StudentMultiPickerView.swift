@@ -67,6 +67,7 @@ struct StudentMultiPickerView: View {
                 }
             }
             .background(AppTheme.background.ignoresSafeArea())
+        .modifier(FilmRoomDestination())
             .navigationTitle(isChinese ? "选择学员" : "Select Athletes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

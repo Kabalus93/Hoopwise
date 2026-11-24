@@ -71,6 +71,7 @@ struct LiveScoringView: View {
                 recentPlaysSection
             }
             .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
             .navigationTitle("Live Scoring")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

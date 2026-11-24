@@ -456,6 +456,7 @@ struct SessionNotesBoard: View {
             composerBar
         }
         .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
         .photosPicker(
             isPresented: $showPhotoPicker,
             selection: $selectedPhotoItem,
@@ -831,6 +832,7 @@ struct SessionNotesBoard: View {
             .padding(.bottom, 8)
         }
         .background(AppTheme.background)
+        .modifier(FilmRoomDestination())
         .overlay(Divider(), alignment: .top)
         .padding(.bottom, 0)
         } // ZStack

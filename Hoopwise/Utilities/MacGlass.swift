@@ -89,9 +89,14 @@ enum MacGlass {
     static func frostWindows() {
         for scene in UIApplication.shared.connectedScenes {
             guard let scene = scene as? UIWindowScene else { continue }
-            for window in scene.windows where window.backgroundColor != .clear {
-                window.backgroundColor = .clear
-                window.isOpaque = false
+            for window in scene.windows {
+                if window.backgroundColor != .clear {
+                    window.backgroundColor = .clear
+                    window.isOpaque = false
+                }
+                // The film room is a dark room in every window (the Coach
+                // board's own window came up light).
+                if window.overrideUserInterfaceStyle != .dark { window.overrideUserInterfaceStyle = .dark }
             }
         }
         guard let appClass = NSClassFromString("NSApplication") as? NSObject.Type,
@@ -154,19 +159,41 @@ extension UIViewController {
     }
 }
 
+private var glassCellManagedKey: UInt8 = 0
+private var glassCellHoverKey: UInt8 = 0
+
 extension UICollectionViewListCell {
     /// A List row the system would paint as an opaque slab becomes the pane
-    /// (a grouped row) or nothing (a plain row). Rows the app gave their own
-    /// background keep it.
+    /// (a grouped row) or nothing (a plain row), and lights up under the
+    /// pointer. Rows the app gave their own background keep it.
     @objc func hw_glassCellLayout() {
         hw_glassCellLayout()
         guard var config = backgroundConfiguration, config.customView == nil else { return }
-        let resolved = config.resolvedBackgroundColor(for: tintColor)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a), a > 0.9, r < 0.3 else { return }
-        // Dark grey = a grouped row; black = a plain one.
-        config.backgroundColor = r > 0.05 ? UIColor.white.withAlphaComponent(0.07) : .clear
-        backgroundConfiguration = config
+        let managed = objc_getAssociatedObject(self, &glassCellManagedKey) as? Int   // 1 grouped, 2 plain
+        var kind = managed
+        if kind == nil {
+            let resolved = config.resolvedBackgroundColor(for: tintColor)
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            guard resolved.getRed(&r, green: &g, blue: &b, alpha: &a), a > 0.9, r < 0.3 else { return }
+            // Dark grey = a grouped row; black = a plain one.
+            kind = r > 0.05 ? 1 : 2
+            objc_setAssociatedObject(self, &glassCellManagedKey, kind, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            addGestureRecognizer(UIHoverGestureRecognizer(target: self, action: #selector(hw_glassHover(_:))))
+        }
+        let hovered = (objc_getAssociatedObject(self, &glassCellHoverKey) as? Bool) ?? false
+        let alpha: CGFloat = kind == 1 ? (hovered ? 0.13 : 0.07) : (hovered ? 0.07 : 0)
+        let wanted = UIColor.white.withAlphaComponent(alpha)
+        if config.backgroundColor != wanted {
+            config.backgroundColor = wanted
+            backgroundConfiguration = config
+        }
+    }
+
+    @objc func hw_glassHover(_ hover: UIHoverGestureRecognizer) {
+        let over = hover.state == .began || hover.state == .changed
+        guard ((objc_getAssociatedObject(self, &glassCellHoverKey) as? Bool) ?? false) != over else { return }
+        objc_setAssociatedObject(self, &glassCellHoverKey, over, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        setNeedsLayout()
     }
 }
 
@@ -182,6 +209,22 @@ extension UINavigationController {
     }
 
     func hw_showOnlyTheTopPage() {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["HOOPWISE_GLASS_TRACE"] == "1", viewControllers.count > 1 {
+            var lines: [String] = []
+            func walk(_ v: UIView, _ depth: Int) {
+                guard depth < 9, !v.isHidden else { return }
+                let a = v.backgroundColor?.cgColor.alpha ?? 0
+                let layerA = v.layer.backgroundColor?.alpha ?? 0
+                if a > 0.03 || layerA > 0.03 || v is UIVisualEffectView {
+                    lines.append("d\(depth) \(type(of: v)) bg=\(String(format: "%.2f", a)) layer=\(String(format: "%.2f", layerA)) \(Int(v.frame.width))x\(Int(v.frame.height))")
+                }
+                for sub in v.subviews { walk(sub, depth + 1) }
+            }
+            walk(view, 0)
+            Logger(subsystem: "hoopwise.mac", category: "glass").log("GLASSTREE \(lines.prefix(14).joined(separator: " | "), privacy: .public)")
+        }
+        #endif
         let top = topViewController
         for controller in viewControllers where controller.isViewLoaded {
             let hide = controller !== top
