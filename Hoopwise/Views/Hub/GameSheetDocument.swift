@@ -347,7 +347,7 @@ struct GameSheetShareSheet: View {
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(.bar)
+                .background(.filmBar)
             }
             .navigationTitle(isChinese ? "比赛计划单" : "Game sheet")
             .navigationBarTitleDisplayMode(.inline)

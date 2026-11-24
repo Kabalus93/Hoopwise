@@ -120,7 +120,21 @@ enum MacGlass {
             effect.setValue(1, forKey: "state")             // frosted when the window is not in front, too
             if let frame = content.value(forKey: "bounds") { effect.setValue(frame, forKey: "frame") }
             effect.setValue(18, forKey: "autoresizingMask") // width + height
-            content.setValue([effect] + subviews, forKey: "subviews")
+            // A popup is a window of its own and nothing paints the room's
+            // tint in it: a form whose page is clear came up as raw, pale
+            // glass. It gets the tint itself, a little denser than the main
+            // window so it reads as the sheet in front.
+            var under: [NSObject] = [effect]
+            if name.contains("Presentation") || name == "NSWindow", let viewClass = NSClassFromString("NSView") as? NSObject.Type {
+                let tint = viewClass.init()
+                tint.setValue(true, forKey: "wantsLayer")
+                (tint.value(forKey: "layer") as? CALayer)?.backgroundColor =
+                    UIColor(red: 0.05, green: 0.055, blue: 0.075, alpha: 0.8).cgColor
+                if let frame = content.value(forKey: "bounds") { tint.setValue(frame, forKey: "frame") }
+                tint.setValue(18, forKey: "autoresizingMask")
+                under.append(tint)
+            }
+            content.setValue(under + subviews, forKey: "subviews")
             glassLog.log("glass frosted \(name, privacy: .public)")
         }
     }

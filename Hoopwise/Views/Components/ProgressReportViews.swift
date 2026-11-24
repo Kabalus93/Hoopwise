@@ -357,7 +357,7 @@ struct ProgressReportSheet: View {
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(.bar)
+                .background(.filmBar)
             }
             .navigationTitle(isChinese ? "成长报告" : "Progress report")
             .navigationBarTitleDisplayMode(.inline)

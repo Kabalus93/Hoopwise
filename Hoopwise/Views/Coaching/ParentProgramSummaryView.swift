@@ -164,7 +164,7 @@ struct ParentProgramSummaryView: View {
         .disabled(pdfURL == nil)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.bar)
+        .background(.filmBar)
     }
 
     // MARK: Rendering

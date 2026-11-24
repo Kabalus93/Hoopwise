@@ -52,6 +52,10 @@ extension ShapeStyle where Self == AnyShapeStyle {
     static var filmMaterial: AnyShapeStyle {
         FilmRoom.isOn ? AnyShapeStyle(FilmGlass.fill) : AnyShapeStyle(Material.regular)
     }
+    /// A bar's material (`.bar`) off the Mac, the pane's veil on it.
+    static var filmBar: AnyShapeStyle {
+        FilmRoom.isOn ? AnyShapeStyle(FilmGlass.fill) : AnyShapeStyle(.bar)
+    }
     static var filmThinMaterial: AnyShapeStyle {
         FilmRoom.isOn ? AnyShapeStyle(FilmGlass.fill) : AnyShapeStyle(Material.thin)
     }

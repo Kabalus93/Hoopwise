@@ -182,7 +182,7 @@ private struct TransferExportView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(.bar)
+        .background(.filmBar)
     }
 
     private var footerText: String {
@@ -374,7 +374,7 @@ private struct TransferImportView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(.bar)
+            .background(.filmBar)
         }
     }
 

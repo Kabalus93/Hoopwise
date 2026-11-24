@@ -198,7 +198,7 @@ struct AddPhaseOnboardingView: View {
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
         .padding(.top, 8)
-        .background(.bar)
+        .background(.filmBar)
     }
 
     private var continueLabel: String {

@@ -575,7 +575,7 @@ struct PlayerPlaysShareSheet: View {
                 .controlSize(.large)
                 .disabled(!ready || pdf == nil)
                 .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(.bar)
+                .background(.filmBar)
             }
             .navigationTitle(isChinese ? "导出战术" : "Export plays")
             .navigationBarTitleDisplayMode(.inline)

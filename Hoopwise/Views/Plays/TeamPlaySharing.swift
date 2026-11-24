@@ -301,7 +301,7 @@ struct PlaySheetShareSheet: View {
         .disabled(!ready || pdf == nil)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.bar)
+        .background(.filmBar)
     }
 
     @ViewBuilder
