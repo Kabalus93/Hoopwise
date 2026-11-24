@@ -30,9 +30,9 @@ MARKETING_VERSION 3.0); build numbers come from the archive command line.
   operations, no NSPersistentCloudKitContainer. Sync is automatic.
 - Both targets already have the iCloud capability, CloudKit enabled, and
   the SAME container. Never create a second container.
-- Supabase is DEAD. The ~30 supabase_*.sql files and any remaining
-  Supabase code are legacy artifacts from a previous architecture.
-  Do not build against them. They are pending deletion.
+- Supabase is DEAD. Its SQL files, setup guide and edge functions were
+  deleted on 25 Nov 2026; the few Supabase mentions left in Swift only
+  recognise dead-host image URLs in old data.
 
 ## Sync observability (fixed July 2026)
 - CloudSyncMonitor (Hoopwise/Services/, BOTH targets) observes
@@ -2903,6 +2903,45 @@ stored and never shown, two rating systems, ~7,500 lines never opened.
    Luther took them off the profile on purpose (seventeenth exception).
    All in Views/Components/AthleteSafetyViews.swift. Tests:
    AthleteSafetyTests. None of it was looked at on screen.
+
+6. CLEAN-UP (about 9,000 lines of Swift, nothing reachable changed).
+   DELETED, none of them constructed anywhere: the League screens
+   (FlightyLeagueView, CreateTeamView, ScheduleGameView — LiveScoringView
+   STAYS, Home still opens it for a League game marked live), the Basketball
+   Lab (BasketballCourtLab.swift, CourtScheme's last views), SalesView.swift,
+   QuickMeasurementView, StudentLeagueStatsView (CollapsibleTrainingStats
+   Section), SkillsEvaluationView, TrainingStatsGridView, FlightyMacDesign
+   System, SessionReminderSection, the session page's LiveTimelineDrillRow /
+   LiveAttendanceSheet / LiveAttendanceRow / LiveNotesSheet, StudentIntelli
+   gence's scorecard / milestones / alerts, the last `#if os(macOS)`
+   branches, 23 Supabase SQL files + supabase/. The gallery shots
+   trainingStats, contractRow, contractExpired, contractStatus went with them.
+   KEPT ON PURPOSE: Components/SessionNotesBoard.swift — unreferenced, but
+   the only code that can read the old unsynced board notes
+   (`session_notes_board_v1`) until Luther decides what to do with them.
+   FOUND WHILE DELETING: SalesView's ContractDetailView held the ONLY
+   Contract Signed / Jersey Given / Ball Given toggles, and SalesView was
+   already unreachable — those three facts cannot be set from any screen
+   (the contract editor shows jersey/ball as read-only marks). Raised with
+   Luther, not built.
+   ONE RATING: the A/B/C performance grade is gone from the screens —
+   `StudentPerformanceGrader.computeGrade` deleted (`effectiveGradeKey`, the
+   school-grade peer key, stays); Home's Today's-athletes hero shows the
+   SKILL LEVEL (dot + name, "level in the group", `home.hero.level`, nothing
+   when unranked) and its "focus area" is the athlete's FOCUS (it read the
+   retired six-skill evaluation); the program page's "Avg" stat is the
+   enrolled athletes' average evaluation ("Avg rating", "–" until someone is
+   rated — it averaged a stored grade nothing ever set, so it always read
+   0.0) and its letter badge is gone. Student.performanceGrade / gradeHistory
+   stay in the schema, unread.
+   THE SESSION PAGE FILE IS SPLIT: SessionGamesTabView.swift (the Games tab)
+   and LiveGameScoringView.swift (the live game + NextTeamsChooser) moved out
+   of FlightySessionPageView.swift verbatim (7,900 → 5,660 lines).
+   SessionRemindersUITests now finds the due chip by `reminders.due` (its
+   words depend on the data) and cleans up by row.
+   THE iPAD MINI SIMULATOR IS SHARED: during this work another app ("Vitals
+   by HW") came to the front mid-test. A UI test failing with another app on
+   screen is that, not Hoopwise — rerun.
 
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including

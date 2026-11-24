@@ -211,21 +211,6 @@ enum SheetGalleryDebug {
                 missing("studentProfile: no enrolled student")
             }
 
-        case "trainingStats":
-            // The profile's Training Stats over a made-up season.
-            if let program = dm.programs.first,
-               let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
-                ScrollView {
-                    CollapsibleTrainingStatsSection(
-                        studentId: student.id,
-                        sessions: demoSessions(roster: program.enrolledStudentIds))
-                        .padding(16)
-                }
-                .background(Color(.systemGroupedBackground))
-            } else {
-                missing("trainingStats: no enrolled student")
-            }
-
         case "makeUpOffer":
             // The question a cancelled class with a plan asks (SessionPlanShift).
             Color(.systemGroupedBackground)
@@ -809,43 +794,6 @@ enum SheetGalleryDebug {
                     .defaultScrollAnchor(.bottom)
             } else {
                 missing("expiredWarning: fixture student not found")
-            }
-
-        case "contractRow":
-            // The Sales list row. Its "signed" seal was FILLED for every
-            // contract in the store, because isSigned returned true for all of
-            // them; it is now filled only for a contract that was signed.
-            if let student = dm.students.first(where: { $0.id == studentId }),
-               let contract = dm.contracts.first(where: { $0.id == contractId }) {
-                VStack(spacing: 12) {
-                    ContractCard(student: student, contract: contract)
-                    Spacer()
-                }
-                .padding()
-            } else {
-                missing("contractRow: fixture not found")
-            }
-
-        case "contractExpired":
-            if let student = dm.students.first(where: { $0.id == expiredStudentId }),
-               let contract = dm.contracts.first(where: { $0.id == expiredContractId }) {
-                ContractDetailView(student: student, contract: contract)
-            } else {
-                missing("contractExpired: fixture contract not found")
-            }
-
-        case "contractStatus":
-            // The three toggles whose setters used to discard the write while
-            // the row said it saved (Phase 2.9).
-            if let student = dm.students.first(where: { $0.id == studentId }),
-               let contract = dm.contracts.first(where: { $0.id == contractId }) {
-                // Anchored to the bottom: the Status and Equipment toggles sit
-                // below the fold, and a scripted scroll is far less repeatable
-                // than asking the scroll view where to start.
-                ContractDetailView(student: student, contract: contract)
-                    .defaultScrollAnchor(.bottom)
-            } else {
-                missing("contractStatus: fixture student/contract not found")
             }
 
         default:

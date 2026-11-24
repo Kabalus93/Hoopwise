@@ -51,20 +51,6 @@ struct FlightyActionableDashboard: View {
             .sorted { $0.startTime < $1.startTime }
     }
 
-    private func effectivePerformanceGrade(for student: Student) -> PerformanceGrade {
-        if let override = student.performanceGrade {
-            return override
-        }
-
-        let skills = Dictionary(uniqueKeysWithValues: dataManager.players.map { ($0.studentId, $0.skills) })
-        return StudentPerformanceGrader.computeGrade(
-            for: student,
-            allStudents: dataManager.students,
-            sessions: dataManager.sessionEvents,
-            skills: skills
-        )
-    }
-    
     private var todaysPlayers: [Student] {
         // Get players from today's sessions - either from session attendeeIds or from program enrollment
         var playerIds = Set<UUID>()
@@ -1023,7 +1009,10 @@ struct FlightyActionableDashboard: View {
     private var todaysPlayersCard: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         let hero = heroPlayer
-        let heroGrade = hero.map { effectivePerformanceGrade(for: $0) }
+        // ONE rating (25 Nov 2026): the skill level in their group, not the
+        // old A/B/C grade. Unranked athletes show no level.
+        let heroTier = hero.flatMap { dataManager.skillTier(for: $0.id) }
+        let heroFocus = hero.map { dataManager.athleteFocus($0.id).map(\.short).joined(separator: " · ") } ?? ""
         let player = hero.flatMap { s in dataManager.players.first { $0.studentId == s.id } }
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -1061,20 +1050,28 @@ struct FlightyActionableDashboard: View {
                             // and "focus area" sit on the same line even when
                             // the value fonts above them differ in size.
                             HStack(alignment: .lastTextBaseline, spacing: 16) {
-                                if let heroGrade = heroGrade {
+                                if let heroTier {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(heroGrade == .ungraded ? "–" : heroGrade.displayName)
-                                            .font(.title2.weight(.bold).monospacedDigit())
-                                            .foregroundStyle(Color.accentColor)
-                                        Text(isChinese ? "能力评级" : "performance")
+                                        HStack(spacing: 6) {
+                                            Circle().fill(Color(hex: heroTier.hex)).frame(width: 10, height: 10)
+                                            Text(heroTier.title(chinese: isChinese))
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(.primary)
+                                        }
+                                        Text(isChinese ? "组内水平" : "level in the group")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityIdentifier("home.hero.level")
                                 }
 
-                                if let player = player, let focus = player.skills.lowestSkill {
+                                // What THIS athlete is working on (the coach's
+                                // pick, else the lowest ratings) — it read the
+                                // retired six-skill evaluation.
+                                if !heroFocus.isEmpty {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(focus)
+                                        Text(heroFocus)
                                             .font(.subheadline.bold())
                                             .foregroundStyle(.primary)
                                         Text(isChinese ? "重点提升" : "focus area")
@@ -1216,21 +1213,6 @@ struct FlightyActionableDashboard: View {
         case .pink: return .pink
         case .indigo: return .indigo
         }
-    }
-}
-
-// MARK: - Skills Evaluation Extension
-extension SkillsEvaluation {
-    var lowestSkill: String? {
-        let skills: [(String, Int)] = [
-            ("Shooting", shooting),
-            ("Ball Handling", ballHandling),
-            ("Defense", defense),
-            ("Basketball IQ", basketballIQ),
-            ("Athleticism", athleticism),
-            ("Teamwork", teamwork)
-        ]
-        return skills.min(by: { $0.1 < $1.1 })?.0
     }
 }
 

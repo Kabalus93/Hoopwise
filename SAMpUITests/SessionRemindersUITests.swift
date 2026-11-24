@@ -15,7 +15,9 @@ final class SessionRemindersUITests: XCTestCase {
         let field = app.textFields["reminders.quickAdd"]
         XCTAssertTrue(field.waitForExistence(timeout: 30), "the add line")
         XCTAssertEqual(field.placeholderValue, "Add a reminder")
-        let due = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Before next class'")).firstMatch
+        // By identifier: its words depend on the data ("Before next class"
+        // only when the program has a later class; else "Tomorrow").
+        let due = app.descendants(matching: .any).matching(identifier: "reminders.due").firstMatch
         XCTAssertFalse(due.exists, "no options until writing")
         let quiet = XCTAttachment(screenshot: app.screenshot()); quiet.name = "quiet"; quiet.lifetime = .keepAlways; add(quiet)
 
@@ -29,9 +31,17 @@ final class SessionRemindersUITests: XCTestCase {
         XCTAssertFalse(due.waitForExistence(timeout: 2), "the options fold away")
         let saved = XCTAttachment(screenshot: app.screenshot()); saved.name = "saved"; saved.lifetime = .keepAlways; add(saved)
 
-        // Clean up the demo store.
-        row.press(forDuration: 1.0)
-        app.buttons["Delete"].firstMatch.tap()
+        // Clean up the demo store — also what earlier failed runs left.
+        let delete = app.buttons["Delete"].firstMatch
+        let rows = app.descendants(matching: .any).matching(identifier: "reminders.row")
+            .matching(NSPredicate(format: "label CONTAINS %@", "Call Maya"))
+        for _ in 0..<8 where rows.firstMatch.exists {
+            let target = rows.firstMatch
+            if !target.isHittable { app.swipeUp() }
+            target.press(forDuration: 1.6)
+            if delete.waitForExistence(timeout: 4) { delete.tap() } else { app.tap() }
+            _ = row.waitForNonExistence(timeout: 2)
+        }
         XCTAssertFalse(row.waitForExistence(timeout: 3))
     }
 }

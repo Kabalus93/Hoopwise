@@ -71,11 +71,7 @@ struct PanelSectionCard<Content: View>: View {
     }
     
     private var panelCardBackground: some View {
-        #if os(macOS)
-        Color(NSColor.controlBackgroundColor)
-        #else
         Color(UIColor.secondarySystemBackground)
-        #endif
     }
 }
 
@@ -258,11 +254,7 @@ struct PanelSearchBar: View {
     }
     
     private var panelSearchBackground: some View {
-        #if os(macOS)
-        Color(NSColor.controlBackgroundColor)
-        #else
         Color(UIColor.tertiarySystemBackground)
-        #endif
     }
 }
 

@@ -428,40 +428,15 @@ struct FlightyProgramDetailView: View {
     }
     
     // MARK: - Hero Header with Map Background
-    // MARK: - Average Performance (based on existing student grades A/B/C)
-    private var averagePerformance: Double {
-        let gradedStudents = enrolledStudents.filter { $0.performanceGrade != nil && $0.performanceGrade != .ungraded }
-        guard !gradedStudents.isEmpty else { return 0 }
-        
-        // Convert grades to numeric: A=10, B=6.5, C=3
-        let total = gradedStudents.reduce(0.0) { sum, student in
-            switch student.performanceGrade {
-            case .A: return sum + 10.0
-            case .B: return sum + 6.5
-            case .C: return sum + 3.0
-            default: return sum
-            }
+    // MARK: - The group's average rating
+    /// The average of the enrolled athletes' evaluations on the eight skills
+    /// (nil until someone is rated). It averaged a stored A/B/C grade nothing
+    /// ever set, so it always read 0.0 (25 Nov 2026).
+    private var averageRating: Double? {
+        let ratings = enrolledStudents.compactMap { student in
+            dataManager.players.first { $0.studentId == student.id }?.skills.axisAverage
         }
-        return total / Double(gradedStudents.count)
-    }
-    
-    // Average grade letter based on enrolled students' existing grades
-    private var averageGradeLetter: PerformanceGrade {
-        let gradedStudents = enrolledStudents.filter { $0.performanceGrade != nil && $0.performanceGrade != .ungraded }
-        guard !gradedStudents.isEmpty else { return .ungraded }
-        
-        // Count each grade
-        let aCount = gradedStudents.filter { $0.performanceGrade == .A }.count
-        let bCount = gradedStudents.filter { $0.performanceGrade == .B }.count
-        let cCount = gradedStudents.filter { $0.performanceGrade == .C }.count
-        
-        // Find most common, or average if tied
-        let total = aCount * 3 + bCount * 2 + cCount * 1
-        let avg = Double(total) / Double(gradedStudents.count)
-        
-        if avg >= 2.5 { return .A }
-        if avg >= 1.5 { return .B }
-        return .C
+        return ratings.isEmpty ? nil : ratings.reduce(0, +) / Double(ratings.count)
     }
     
     // Look up custom mascot icon from category
@@ -496,13 +471,6 @@ struct FlightyProgramDetailView: View {
 
                         FormatBadge(format: format, size: .compact)
 
-                        if averageGradeLetter != .ungraded {
-                            Text(averageGradeLetter.rawValue)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(categoryColor)
-                                .frame(width: 22, height: 22)
-                                .background(categoryColor.opacity(0.16), in: Circle())
-                        }
                     }
 
                     Text(scheduleDisplay + " · " + (isChinese ? "\(program.durationWeeks) 周" : "\(program.durationWeeks) wks"))
@@ -538,8 +506,8 @@ struct FlightyProgramDetailView: View {
                 .buttonStyle(.plain)
                 .disabled(sessionCount == 0)
                 compactStatDivider
-                compactStat(value: String(format: "%.1f", averagePerformance),
-                            label: isChinese ? "评分" : "Avg",
+                compactStat(value: averageRating.map { String(format: "%.1f", $0) } ?? "–",
+                            label: isChinese ? "平均评分" : "Avg rating",
                             color: categoryColor)
             }
             .padding(.vertical, 14)

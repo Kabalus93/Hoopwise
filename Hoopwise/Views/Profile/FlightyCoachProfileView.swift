@@ -313,26 +313,6 @@ struct FlightyCoachProfileView: View {
         let fileManager = FileManager.default
         let fileName = "coach_profile_\(effectiveCoachId.uuidString).jpg"
         
-        #if os(macOS)
-        // On macOS, use Application Support directory
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let samFolder = appSupportURL.appendingPathComponent("SAM/ProfileImages", isDirectory: true)
-            
-            // Create directory if it doesn't exist
-            if !fileManager.fileExists(atPath: samFolder.path) {
-                try? fileManager.createDirectory(at: samFolder, withIntermediateDirectories: true)
-            }
-            
-            let fileURL = samFolder.appendingPathComponent(fileName)
-            do {
-                try data.write(to: fileURL)
-                return fileURL.path
-            } catch {
-                debugLog("Error saving profile image: \(error)")
-                return ""
-            }
-        }
-        #else
         // On iOS, use Documents directory
         if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
             let profileFolder = documentsURL.appendingPathComponent("ProfileImages", isDirectory: true)
@@ -351,7 +331,6 @@ struct FlightyCoachProfileView: View {
                 return ""
             }
         }
-        #endif
         
         return ""
     }

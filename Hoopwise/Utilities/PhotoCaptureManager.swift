@@ -121,51 +121,6 @@ class PhotoCaptureManager {
     }
     #endif
     
-    #if os(macOS)
-    private func saveAttendancePhotomacOS(_ image: NSImage, for sessionId: UUID) -> String? {
-        // Resize to reasonable dimensions
-        let resizedImage = resizeImageMac(image, maxWidth: 1024)
-
-        // Convert to JPEG data
-        guard let tiffData = resizedImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let imageData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.5]) else {
-            debugLog("❌ Failed to compress image")
-            return nil
-        }
-
-        let relative = relativePath(forSession: sessionId)
-        let filePath = attendancePhotosDirectory.appendingPathComponent("attendance_\(sessionId.uuidString).jpg")
-
-        do {
-            try imageData.write(to: filePath)
-            let sizeKB = Double(imageData.count) / 1024.0
-            debugLog("✅ Saved attendance photo: \(relative) (\(String(format: "%.1f", sizeKB))KB)")
-            return relative
-        } catch {
-            debugLog("❌ Failed to save photo: \(error)")
-            return nil
-        }
-    }
-    
-    private func resizeImageMac(_ image: NSImage, maxWidth: CGFloat) -> NSImage {
-        let size = image.size
-        
-        if size.width <= maxWidth {
-            return image
-        }
-        
-        let ratio = maxWidth / size.width
-        let newSize = CGSize(width: maxWidth, height: size.height * ratio)
-        
-        let resizedImage = NSImage(size: newSize)
-        resizedImage.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: newSize))
-        resizedImage.unlockFocus()
-        
-        return resizedImage
-    }
-    #endif
     
     // MARK: - Load Photo
     /// Resolves `path` to an absolute file path under the *current* Documents
