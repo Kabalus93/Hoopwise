@@ -21,10 +21,19 @@ nonisolated struct GamePlan: Codable, Hashable, Sendable {
     var keys: [String] = []
     /// Who they are and what to watch for.
     var opponentNotes = ""
+    /// Substitutions planned ahead: who comes in, for whom, about when.
+    var subs: [PlannedSub] = []
+    /// The defense the team means to play, and a line on how.
+    var defense: GameDefense?
+    var defenseNote = ""
+    /// Their players to watch, and who guards each.
+    var threats: [OpponentPlayer] = []
 
     init() {}
 
-    private enum CodingKeys: String, CodingKey { case opponent, isHome, starters, keys, opponentNotes }
+    private enum CodingKeys: String, CodingKey {
+        case opponent, isHome, starters, keys, opponentNotes, subs, defense, defenseNote, threats
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -33,6 +42,43 @@ nonisolated struct GamePlan: Codable, Hashable, Sendable {
         starters = try c.decodeIfPresent([UUID].self, forKey: .starters) ?? []
         keys = try c.decodeIfPresent([String].self, forKey: .keys) ?? []
         opponentNotes = try c.decodeIfPresent(String.self, forKey: .opponentNotes) ?? ""
+        // Added 24 Nov 2026 — older plans have none; a value this build does
+        // not know reads as unset instead of failing the whole plan.
+        subs = (try? c.decodeIfPresent([PlannedSub].self, forKey: .subs)) ?? []
+        defense = (try? c.decodeIfPresent(String.self, forKey: .defense)).flatMap { $0 }.flatMap(GameDefense.init)
+        defenseNote = (try? c.decodeIfPresent(String.self, forKey: .defenseNote)) ?? ""
+        threats = (try? c.decodeIfPresent([OpponentPlayer].self, forKey: .threats)) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(opponent, forKey: .opponent)
+        try c.encode(isHome, forKey: .isHome)
+        try c.encode(starters, forKey: .starters)
+        try c.encode(keys, forKey: .keys)
+        try c.encode(opponentNotes, forKey: .opponentNotes)
+        // Written only when used, so a plan without them is unchanged.
+        if !subs.isEmpty { try c.encode(subs, forKey: .subs) }
+        if let defense { try c.encode(defense.rawValue, forKey: .defense) }
+        if !defenseNote.isEmpty { try c.encode(defenseNote, forKey: .defenseNote) }
+        if !threats.isEmpty { try c.encode(threats, forKey: .threats) }
+    }
+
+    /// The planned subs that still make sense: the player coming in is on the
+    /// roster and not a starter; a starter named to come out still starts.
+    func validSubs(roster: [UUID]) -> [PlannedSub] {
+        subs.compactMap { sub in
+            guard roster.contains(sub.playerIn), !starters.contains(sub.playerIn) else { return nil }
+            var s = sub
+            if let out = s.playerOut, !starters.contains(out) { s.playerOut = nil }
+            return s
+        }
+    }
+
+    /// Their players that say something: a number or a note.
+    var cleanThreats: [OpponentPlayer] {
+        threats.filter { !$0.number.trimmingCharacters(in: .whitespaces).isEmpty
+            || !$0.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     /// The opponent has no players in the app: one fixed id names "them" in
@@ -49,6 +95,75 @@ nonisolated struct GamePlan: Codable, Hashable, Sendable {
     /// "<team> vs <opponent>" / "<team> @ <opponent>".
     func title(team: String, chinese: Bool) -> String {
         "\(team) \(isHome ? "vs" : "@") \(opponentName(chinese: chinese))"
+    }
+}
+
+/// One substitution planned before the game.
+nonisolated struct PlannedSub: Codable, Hashable, Sendable, Identifiable {
+    var id = UUID()
+    var playerIn: UUID
+    /// nil = whoever needs a rest.
+    var playerOut: UUID?
+    /// "Mid first half", "After 5 minutes" — the coach's words.
+    var when = ""
+}
+
+/// The defense the team means to play.
+nonisolated enum GameDefense: String, Codable, CaseIterable, Sendable, Identifiable {
+    case man, zone23, zone32, press, mixed
+    var id: String { rawValue }
+    func title(chinese: Bool) -> String {
+        switch self {
+        case .man: return chinese ? "人盯人" : "Man to man"
+        case .zone23: return chinese ? "2-3 联防" : "2-3 zone"
+        case .zone32: return chinese ? "3-2 联防" : "3-2 zone"
+        case .press: return chinese ? "全场紧逼" : "Full-court press"
+        case .mixed: return chinese ? "混合防守" : "Mixed"
+        }
+    }
+}
+
+/// One of their players to watch.
+nonisolated struct OpponentPlayer: Codable, Hashable, Sendable, Identifiable {
+    var id = UUID()
+    /// Jersey number, as written ("7", "#23").
+    var number = ""
+    /// What to know: "left hand, shoots from the corner".
+    var note = ""
+    /// Who of ours guards them.
+    var guardedBy: UUID?
+
+    var label: String {
+        let n = number.trimmingCharacters(in: .whitespaces)
+        return n.isEmpty ? "" : (n.hasPrefix("#") ? n : "#" + n)
+    }
+}
+
+/// The game's plays, sorted by the situation the team's playbook files them
+/// under — what the coach calls from the bench.
+enum GameCalls {
+    struct Group: Identifiable {
+        /// nil = plays the playbook does not hold.
+        let kind: TeamPlaybook.Kind?
+        let plays: [SessionPlayRef]
+        var id: String { kind?.rawValue ?? "none" }
+        func title(chinese: Bool) -> String { kind?.title ?? (chinese ? "其他战术" : "Other plays") }
+    }
+
+    static func groups(plays: [SessionPlayRef], playbook: TeamPlaybook?) -> [Group] {
+        var left = plays
+        var out: [Group] = []
+        if let playbook {
+            for kind in TeamPlaybook.Kind.allCases {
+                let keys = Set(playbook[kind].plays.map(\.key))
+                let here = left.filter { keys.contains($0.key) }
+                guard !here.isEmpty else { continue }
+                out.append(Group(kind: kind, plays: here))
+                left.removeAll { keys.contains($0.key) }
+            }
+        }
+        if !left.isEmpty { out.append(Group(kind: nil, plays: left)) }
+        return out
     }
 }
 

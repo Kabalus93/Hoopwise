@@ -1075,6 +1075,17 @@ struct FlightySessionPageView: View {
         }
     }
 
+    /// A game's plays read as calls by situation, with the planned defense.
+    private var gameCalls: SessionPlanPlaysSection.Calls? {
+        guard session.sessionType == .game else { return nil }
+        let chinese = LocalizationManager.shared.currentLanguage == .chinese
+        let plan = session.curriculum.gamePlan ?? GamePlan()
+        let note = plan.defenseNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = [plan.defense?.title(chinese: chinese), note.isEmpty ? nil : note].compactMap { $0 }
+        return .init(playbook: session.curriculum.teamId.flatMap { id in dataManager.teams.first { $0.id == id } }?.playbook,
+                     defense: parts.isEmpty ? nil : parts.joined(separator: " — "))
+    }
+
     private var planTab: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         return ScrollView(showsIndicators: false) {
@@ -1099,7 +1110,10 @@ struct FlightySessionPageView: View {
                 // What the plan trains vs what it should (November 2026).
                 // Not on a private lesson (20 Nov 2026, Luther: plan balance
                 // and plays are not relevant there).
-                if !isPrivateSession {
+                // Nor on a GAME (24 Nov 2026, Luther: "plan balance, warmup
+                // and skills is actually useless here") — a game keeps only a
+                // short pre-game warm-up, without minutes.
+                if !isPrivateSession, session.sessionType != .game {
                 SessionPlanDashboard(
                     curriculum: session.curriculum,
                     drills: dataManager.drills,
@@ -1119,7 +1133,9 @@ struct FlightySessionPageView: View {
                     })
                 }
 
-                // Warmup
+                // Warmup (a game's short pre-game routine comes last, under
+                // the calls).
+                if session.sessionType != .game {
                 curriculumSection(
                     title: isChinese ? "热身" : "WARMUP",
                     icon: "flame.fill",
@@ -1128,8 +1144,10 @@ struct FlightySessionPageView: View {
                     minutes: session.curriculum.warmupMinutes,
                     section: .warmup
                 )
+                }
 
                 // Skills
+                if session.sessionType != .game {
                 curriculumSection(
                     title: isChinese ? "技能" : "SKILLS",
                     icon: "figure.basketball",
@@ -1138,6 +1156,7 @@ struct FlightySessionPageView: View {
                     minutes: session.curriculum.skillsMinutes,
                     section: .main
                 )
+                }
 
                 // Tracked drills with results that left the plan.
                 shootingAddOns
@@ -1149,7 +1168,19 @@ struct FlightySessionPageView: View {
                     canEdit: accessMode.canEdit,
                     color: Color.accentColor,
                     onChange: saveSession,
-                    teamId: session.curriculum.teamId
+                    teamId: session.curriculum.teamId,
+                    calls: gameCalls
+                )
+                }
+
+                if session.sessionType == .game {
+                curriculumSection(
+                    title: isChinese ? "赛前热身" : "PRE-GAME WARM-UP",
+                    icon: "flame.fill",
+                    color: Color.accentColor,
+                    drillIds: session.curriculum.warmupDrillIds,
+                    minutes: session.curriculum.warmupMinutes,
+                    section: .warmup
                 )
                 }
 
@@ -1479,7 +1510,8 @@ struct FlightySessionPageView: View {
 
                 Spacer()
 
-                // Duration chip
+                // Duration chip (a game's pre-game warm-up has no minutes)
+                if session.sessionType != .game {
                 Text(isChinese ? "\(actualDuration) 分钟" : "\(actualDuration) min")
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
@@ -1488,6 +1520,7 @@ struct FlightySessionPageView: View {
                     .padding(.vertical, 5)
                     .glassEffect(.regular, in: Capsule())
                     .contentTransition(.numericText())
+                }
 
                 // + menu
                 if accessMode.canEdit {

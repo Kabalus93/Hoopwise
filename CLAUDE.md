@@ -2619,6 +2619,34 @@ Home's type tint use the same gold (red is a cancelled class).
 NOT YET: the live screen's own button still says "Next Game"; no
 quarter/foul/time-out tracking; the plan is not on a printable sheet.
 Tests: GameDayTests, GameDayUITests (iPad mini; creates and deletes its team).
+THE GAME'S PLAN PAGE (24 Nov 2026, Luther, markup on a game's Plan tab: "how
+can we make the plan page for games actually useful? Plan balance, warmup and
+skills is actually useless here"; decided: lineup and rotation with PLANNED
+SUBS, calls by situation, opponent and matchups, a short pre-game warm-up
+routine, a printable game sheet now; form / after-the-game review not chosen).
+On a `.game` session the Plan tab has NO Plan Balance and NO Skills block. In
+order: the game card (opponent, score, Game sheet, Edit, KEYS large) →
+LINEUP AND ROTATION (`game.lineup`: starters and bench with photos and names,
+"Not here" once roll call started and they are not present, planned subs
+`game.sub`) beside THE OPPONENT (`game.opponent`: notes, their players with
+number, note and who guards them — `game.threat`; side by side from 700 pt)
+→ CALLS (the plays card in `calls:` mode — SessionPlanPlaysSection.Calls:
+the defense line `game.calls.defense`, plays grouped by the team playbook's
+situations via `GameCalls.groups`, plays outside the playbook under "Other
+plays"; no move up/down there) → PRE-GAME WARM-UP (curriculum.warmupDrillIds,
+no minutes chip). GamePlan gained `subs: [PlannedSub]` (in, out or nil =
+whoever needs a rest, when as the coach's words), `defense: GameDefense?`
+(man, 2-3, 3-2, press, mixed) + `defenseNote`, `threats: [OpponentPlayer]`
+(number, note, guardedBy) — curriculum JSON, written only when used, an
+unknown defense reads as unset; `validSubs(roster:)` drops a sub whose player
+now starts or left. All edited in GameDaySheet (Rotation, Our defense, Their
+players and matchups). Planned subs are a PLAN: nothing on the live scoring
+screen reads them yet. GAME SHEET (Views/Hub/GameSheetDocument.swift,
+`gameDay.sheet` → GameSheetShareSheet: preview, PDF / Image / Print): one A4
+page, names only, a SwiftUI page drawn by ImageRenderer into the PDF context
+(text stays text) — starters, bench, planned subs, warm-up | keys, defense,
+calls, opponent and matchups, then ruled NOTES; language = Exported PDFs.
+Tests: GameDayTests, GameDayUITests (iPad mini).
 A PLAYER ON A TEAM (23 Nov 2026, Luther, markup on the roster's player page:
 "make this page better — useful, complete, expressive … add a scheduler, for
 example a session to have the athlete work on the skills he'll need for his

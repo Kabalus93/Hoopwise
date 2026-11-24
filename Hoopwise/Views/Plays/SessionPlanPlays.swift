@@ -14,6 +14,15 @@ struct SessionPlanPlaysSection: View {
     let onChange: () -> Void
     /// A team practice's team: its plays open with the team's faces and sharing.
     var teamId: UUID? = nil
+    /// A GAME's plays (24 Nov 2026): titled "Calls", sorted by the situation
+    /// the team's playbook files each under, with the defense on top.
+    var calls: Calls? = nil
+
+    struct Calls {
+        var playbook: TeamPlaybook?
+        /// "Man to man — switch every screen".
+        var defense: String?
+    }
 
     @Query(sort: [SortDescriptor(\JournalPlay.order), SortDescriptor(\JournalPlay.createdAt)])
     private var library: [JournalPlay]
@@ -34,6 +43,18 @@ struct SessionPlanPlaysSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if let defense = calls?.defense, !defense.isEmpty {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "shield.lefthalf.filled").font(.footnote).foregroundStyle(color)
+                    Text(isChinese ? "防守" : "Defense").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(defense).font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("game.calls.defense")
+            }
             if plays.isEmpty {
                 HStack {
                     Text(isChinese ? "点击 + 从战术库添加" : "Tap + to add plays from your library")
@@ -44,6 +65,27 @@ struct SessionPlanPlaysSection: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             } else {
+                if let calls {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(GameCalls.groups(plays: plays, playbook: calls.playbook)) { group in
+                            HStack(spacing: 6) {
+                                if let kind = group.kind {
+                                    Image(systemName: kind.icon).font(.caption2).foregroundStyle(kind.tint)
+                                }
+                                Text(group.title(chinese: isChinese).uppercased())
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                            .padding(.bottom, 2)
+                            ForEach(group.plays, id: \.self) { ref in
+                                row(ref, index: plays.firstIndex(of: ref) ?? 0, reorders: false)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 6)
+                } else {
                 VStack(spacing: 0) {
                     ForEach(Array(plays.enumerated()), id: \.element) { index, ref in
                         row(ref, index: index)
@@ -51,6 +93,7 @@ struct SessionPlanPlaysSection: View {
                             Divider().padding(.leading, 76)
                         }
                     }
+                }
                 }
             }
         }
@@ -77,7 +120,7 @@ struct SessionPlanPlaysSection: View {
     private var header: some View {
         HStack(spacing: 10) {
             Label {
-                Text(isChinese ? "战术" : "PLAYS")
+                Text(calls != nil ? (isChinese ? "战术口令" : "CALLS") : (isChinese ? "战术" : "PLAYS"))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.primary)
             } icon: {
@@ -114,7 +157,7 @@ struct SessionPlanPlaysSection: View {
     }
 
     @ViewBuilder
-    private func row(_ ref: SessionPlayRef, index: Int) -> some View {
+    private func row(_ ref: SessionPlayRef, index: Int, reorders: Bool = true) -> some View {
         let found = play(for: ref)
         HStack(spacing: 12) {
             if let found {
@@ -145,12 +188,12 @@ struct SessionPlanPlaysSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if canEdit {
                 Menu {
-                    if index > 0 {
+                    if reorders, index > 0 {
                         Button { move(index, by: -1) } label: {
                             Label(isChinese ? "上移" : "Move Up", systemImage: "arrow.up")
                         }
                     }
-                    if index < plays.count - 1 {
+                    if reorders, index < plays.count - 1 {
                         Button { move(index, by: 1) } label: {
                             Label(isChinese ? "下移" : "Move Down", systemImage: "arrow.down")
                         }

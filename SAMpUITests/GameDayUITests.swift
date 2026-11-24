@@ -82,9 +82,24 @@ final class GameDayUITests: XCTestCase {
         XCTAssertEqual(players.count, 2, "the team's athletes")
         players.element(boundBy: 0).tap()
         XCTAssertTrue(players.element(boundBy: 0).label.contains("Starter 1"), players.element(boundBy: 0).label)
-        let key = any(app, "gameDay.key")
-        for _ in 0..<4 where !key.exists || !key.isHittable { app.swipeUp() }
+        // Rotation, defense and a matchup (24 Nov 2026).
+        func reach(_ id: String) -> XCUIElement {
+            let e = any(app, id)
+            for _ in 0..<8 where !e.exists || !e.isHittable { app.swipeUp(velocity: .slow) }
+            return e
+        }
+        reach("gameDay.addSub").tap()
+        let when = reach("gameDay.sub.when")
+        when.tap(); when.typeText("Mid first half\n")
+        reach("gameDay.defense").tap()
+        app.buttons["2-3 zone"].firstMatch.tap()
+        let key = reach("gameDay.key")
         key.tap(); key.typeText("Box out on every shot")
+        reach("gameDay.addThreat").tap()
+        let number = reach("gameDay.threat.number")
+        number.tap(); number.typeText("7")
+        let note = any(app, "gameDay.threat.note")
+        note.tap(); note.typeText("Left hand")
         attach(app, "schedule sheet")
         app.buttons["gameDay.save"].tap()
 
@@ -99,6 +114,25 @@ final class GameDayUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 8), "the session opens on the game plan")
         XCTAssertTrue(app.staticTexts["Box out on every shot"].firstMatch.exists)
         attach(app, "session plan")
+        // The page is about the game: lineup and rotation, the defense, the
+        // matchup — and none of a training plan's cards.
+        XCTAssertTrue(any(app, "game.lineup").exists, "lineup and rotation")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'comes in'")).firstMatch.exists,
+                      "the planned sub")
+        XCTAssertTrue(app.staticTexts["Mid first half"].firstMatch.exists)
+        XCTAssertTrue(any(app, "game.threat").exists, "their player")
+        XCTAssertTrue(any(app, "game.calls.defense").label.contains("2-3 zone"), any(app, "game.calls.defense").label)
+        XCTAssertFalse(app.staticTexts["PLAN BALANCE"].exists)
+        XCTAssertFalse(app.staticTexts["SKILLS"].exists)
+        for _ in 0..<3 where !app.staticTexts["PRE-GAME WARM-UP"].exists { app.swipeUp() }
+        XCTAssertTrue(app.staticTexts["PRE-GAME WARM-UP"].exists)
+        attach(app, "session plan lower")
+        for _ in 0..<3 { app.swipeDown() }
+        app.buttons["gameDay.sheet"].firstMatch.tap()
+        XCTAssertTrue(any(app, "gameSheet.preview").waitForExistence(timeout: 8), "the game sheet")
+        XCTAssertTrue(app.buttons["gameSheet.pdf"].exists)
+        attach(app, "game sheet")
+        app.buttons["Done"].firstMatch.tap()
 
         // Played against the opponent's score.
         app.buttons["Games"].firstMatch.tap()
