@@ -2860,14 +2860,36 @@ tool only sees the coach's real app's window, never a demo copy's).
   one on screen. The sidebar is drawn ABOVE the work area and the work area
   is clipped: a page holding a NavigationSplitView (Athletes) otherwise took
   the sidebar's clicks.
-- THE COURT BEHIND PAGES: every page-level `Color(.systemGroupedBackground)`
-  became `FilmRoomPageBackground()` (27 files): off the Mac the same system
-  colour; on the Mac the SAME court at the WINDOW's size, offset by the
-  page's place in the window (`\.filmRoomWindow`), so pages do not ghost
-  through one another while pushing and the lines never jump. CARDS:
-  `Color(.secondarySystemGroupedBackground)` → `Color.filmCard` and
-  `AppTheme.cardBackground` (a 7.5 % white pane on the Mac, the system
-  colour elsewhere); List rows take it with `.filmRoomListRow()`.
+- NO COURT — THE WINDOW IS FROSTED GLASS (same day, Luther, after seeing
+  the first pass: "I like the direction so far but not so much having the
+  basketball court in the background. How about nothing? Just a frosted
+  glass? Also let other layers adopt the new look. Thoughtfully"). Nothing is
+  painted behind the app. Utilities/MacGlass.swift (`MacGlass.install()`,
+  SAMApp.init, only when FilmRoom.isOn): every AppKit window of the app —
+  the main one, the board, and each POPUP (a window of its own on the Mac) —
+  gets an NSVisualEffectView under its content (material hudWindow, behind
+  the window, always active), reached by name (NSApplication → windows;
+  public AppKit classes addressed dynamically, Catalyst cannot import
+  AppKit); it logs "glass frosted <class>" to hoopwise.mac. Above the glass
+  every layer is CLEAR: UIWindow, hosting / navigation / split controllers'
+  views (a `viewWillLayoutSubviews` hook), navigation bars (transparent
+  appearance), List backgrounds (UICollectionView / UITableView appearance),
+  `FilmRoomPageBackground` (clear on the Mac), `AppTheme.background` and
+  `JPalette.background`. PUSHED PAGES: SwiftUI paints an opaque background
+  behind every pushed destination unless it says `containerBackground(.clear,
+  for: .navigation)` — so the app's `NavigationLink` is a thin WRAPPER around
+  SwiftUI's on the Mac and in simulator DEBUG builds (Views/Mac/
+  FilmRoomNavigation.swift; it marks destinations clear when the film room
+  is on; iPhone / iPad RELEASE builds use SwiftUI's own type), and pages
+  call `.filmRoomPage()` (background + the same mark) in place of the old
+  grouped background. Pushes do not slide on the Mac (two clear pages
+  sliding over each other show through): push / pop are un-animated there.
+  `FilmRoomBackdrop` is now a faint cool tint on the Mac and a plain dark
+  gradient standing in for the glass in the simulator preview. CARDS stay
+  `Color.filmCard` / `AppTheme.cardBackground` (7.5 % white panes). The
+  selected athlete row is a neutral pane on the Mac, not the accent colour.
+  Destinations opened through `.navigationDestination(…)` (13 places) are
+  clear only when the page itself calls `.filmRoomPage()`.
 - ALWAYS DARK on the Mac: the theme switch is hidden there and the mode is
   set to dark at launch.
 - HOVER: `.filmRoomHover()` (nothing off the Mac) on calendar session rows,
@@ -2877,13 +2899,20 @@ tool only sees the coach's real app's window, never a demo copy's).
   only) — `INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=macosx*]`
   is now YES, which is what lets a second window open.
 - NOT DONE YET: dragging things where they belong (a drill onto a plan, an
-  athlete onto a team or class); glass with blur on cards (they are tinted
-  panes); the pushed pages' navigation bars; lists inside pages that keep
-  the system's grouped background; the Athletes detail pane's look. Verified:
-  the shell on the iPad mini simulator in landscape (FilmRoomUITests — its
-  screenshots come out sideways and cut at 1488 pt), the Mac build compiles
-  and a demo copy LAUNCHES with the shell ("window configured"); the real Mac
-  window was never seen.
+  athlete onto a team or class); the glass's tint over a BRIGHT desktop was
+  never seen (the capture shows glass as flat grey; the one full-screen look
+  was over a dark desktop).
+- HOW IT IS LOOKED AT: the layers in the iPad mini simulator with
+  HOOPWISE_FILM_ROOM=1 (FilmRoomUITests: every sidebar place, a pushed
+  session, an athlete, a drill, a popup; DEBUG HOOPWISE_GLASS_TRACE=1 logs
+  any ancestor still painting a background). The REAL Mac window with the
+  computer-use tool once the coach's own Hoopwise is closed (it only ever
+  sees one Hoopwise): `open -n --env HOOPWISE_SCREENSHOT_STORE=1 --env
+  HOOPWISE_CONNECTOR_PORT=47729 <Debug-maccatalyst app>` (+
+  HOOPWISE_MAC_COMMAND=newSession for a popup), app_screenshot, then
+  `pkill -f dd-mac/…/Hoopwise.app` (killing by that path works). The Mac
+  demo store is nearly empty. Background clicks are refused while his screen
+  is in a full-screen Space; the View menu (app_menu) still works.
 
 ## After the audit (25 Nov 2026, Luther: "build all of them, in that order")
 The audit of 24 Nov found: ratings without history, no per-athlete focus, no

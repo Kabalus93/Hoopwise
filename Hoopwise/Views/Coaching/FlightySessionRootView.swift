@@ -30,7 +30,7 @@ struct FlightySessionRootView: View {
                     FlightySessionsCalendarView()
                 }
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             #if os(iOS)
             .navigationBarHidden(true)
             #endif
@@ -1666,7 +1666,7 @@ struct FlightySessionsCalendarView: View {
                 .padding(.top, 4)
             sessionsListView
         }
-        .background(FilmRoomPageBackground().ignoresSafeArea())
+        .filmRoomPage()
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAddSession)) { _ in
             showingCreateSession = true      // ⌘N on the Mac
         }

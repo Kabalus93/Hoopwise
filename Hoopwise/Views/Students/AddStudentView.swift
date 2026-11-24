@@ -248,7 +248,7 @@ struct EditStudentView: View {
                 }
                 .padding(16)
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .onAppear {
                 // Load contracts for this student
                 refreshContracts()
@@ -1554,7 +1554,7 @@ struct ContractEditSheet: View {
                 }
                 .padding(16)
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .navigationTitle(isNewContract ? (isChinese ? "新合同" : "New Contract") : (isChinese ? "编辑合同" : "Edit Contract"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

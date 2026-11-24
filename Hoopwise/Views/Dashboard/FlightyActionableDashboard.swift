@@ -337,7 +337,7 @@ struct FlightyActionableDashboard: View {
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollContentBackground(.hidden)
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .navigationTitle(navTitle)
             .toolbar {
                 #if os(iOS)

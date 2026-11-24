@@ -40,6 +40,9 @@ final class DrillSeriesUITests: XCTestCase {
         for i in 0..<2 {
             addLevel.tap()
             let pick = app.buttons.matching(identifier: "drillPicker.add").element(boundBy: i)
+            // The library's rows are lazy and sit under the skill chips and
+            // the tracked-shooting rows: scroll to the first ones.
+            for _ in 0..<6 where !pick.exists { app.swipeUp() }
             XCTAssertTrue(pick.waitForExistence(timeout: 10))
             pick.tap()
             XCTAssertTrue(addLevel.waitForExistence(timeout: 8))

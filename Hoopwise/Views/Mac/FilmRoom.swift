@@ -45,43 +45,29 @@ extension EnvironmentValues {
 
 // MARK: - The court behind everything
 
-/// A deep blue wash, lit softly from the top left, with the court's lines
-/// running faintly across it.
+/// What sits between the window's glass and the app. On the Mac: a faint
+/// cool tint, nothing else (the court artwork is gone — Luther: "how about
+/// nothing? just a frosted glass?"). On the iPad simulator's DEBUG preview
+/// there is no window glass, so a plain deep blue stands in.
 struct FilmRoomBackdrop: View {
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 0.045, green: 0.105, blue: 0.225),
-                                    Color(red: 0.030, green: 0.070, blue: 0.160),
-                                    Color(red: 0.018, green: 0.040, blue: 0.098)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            // The room's light.
-            RadialGradient(colors: [Color.white.opacity(0.10), .clear],
-                           center: UnitPoint(x: 0.22, y: 0.0), startRadius: 0, endRadius: 760)
-            CourtArtwork(style: .fullCourt, lineOpacity: 0.085)
-            // The far corner falls away.
-            LinearGradient(colors: [.clear, Color.black.opacity(0.28)], startPoint: .center, endPoint: .bottomTrailing)
-        }
-        .drawingGroup()
+        #if targetEnvironment(macCatalyst)
+        Color(red: 0.05, green: 0.09, blue: 0.18).opacity(0.22)
+        #else
+        // A stand-in for the frosted window: a blurred desktop, roughly.
+        LinearGradient(colors: [Color(red: 0.16, green: 0.18, blue: 0.24), Color(red: 0.09, green: 0.10, blue: 0.14)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        #endif
     }
 }
 
 /// A PAGE's background. Off the Mac: the system's grouped background, as
-/// before. On the Mac: the same court as the window's, drawn at the window's
-/// size and held in the window's place — so pages do not show through one
-/// another while they push, and the lines never jump between pages.
+/// before. On the Mac: nothing — the window's glass is the background of
+/// every page.
 struct FilmRoomPageBackground: View {
-    @Environment(\.filmRoomWindow) private var window
-
     var body: some View {
         if FilmRoom.isOn {
-            GeometryReader { geo in
-                let frame = geo.frame(in: .global)
-                let size = window == .zero ? geo.size : window
-                FilmRoomBackdrop()
-                    .frame(width: size.width, height: size.height)
-                    .offset(x: window == .zero ? 0 : -frame.minX, y: window == .zero ? 0 : -frame.minY)
-            }
-            .clipped()
+            Color.clear
         } else {
             Color(.systemGroupedBackground)
         }
@@ -90,7 +76,7 @@ struct FilmRoomPageBackground: View {
 
 extension Color {
     /// A CARD's fill. Off the Mac: the system's secondary grouped background,
-    /// as before. On the Mac: a thin pane the court shows through.
+    /// as before. On the Mac: a thin pane of glass over the window's.
     static var filmCard: Color {
         FilmRoom.isOn ? Color.white.opacity(0.075) : Color(.secondarySystemGroupedBackground)
     }

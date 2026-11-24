@@ -133,7 +133,7 @@ struct GameRecapView: View {
                 .frame(maxWidth: 720)
                 .frame(maxWidth: .infinity)
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isChinese ? "比赛回顾" : "Game Recap")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

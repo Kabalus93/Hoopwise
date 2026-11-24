@@ -133,7 +133,7 @@ struct AddPhaseOnboardingView: View {
 
                 bottomBar
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(localized(en: "Cancel", zh: "取消", es: "Cancelar")) { dismiss() }

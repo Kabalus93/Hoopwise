@@ -106,7 +106,7 @@ struct AddProgramOnboardingView: View {
 
                 bottomBar
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }

@@ -817,7 +817,7 @@ struct ReassignProgramSheet: View {
                 Spacer()
             }
             .padding(.top, 16)
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isChinese ? "转移项目" : "Reassign Program")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1087,7 +1087,7 @@ struct AddEditLocationView: View {
                 }
                 .padding(16)
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isEditing ? "Edit Location" : "Add Location")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1428,7 +1428,7 @@ struct AddEditCategoryView: View {
                 }
                 .padding(16)
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isEditing ? "Edit Category" : "Add Category")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1729,7 +1729,7 @@ struct LocationDetailView: View {
                     .padding(16)
                 }
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(location.name)
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

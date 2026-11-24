@@ -79,7 +79,7 @@ struct FlightyHubView: View {
             }
             .ignoresSafeArea(edges: .top)
             .scrollEdgeEffectHidden(true, for: .top)
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
         }
         .onReceive(timer) { _ in currentTime = Date() }
         // Revenue is a full page (15 Nov 2026, Luther: it opened in a popup).

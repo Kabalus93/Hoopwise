@@ -117,7 +117,7 @@ struct AthleteCardShareSheet: View {
                 .padding(20)
                 .frame(maxWidth: .infinity)
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isChinese ? "球员卡" : "Player card")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

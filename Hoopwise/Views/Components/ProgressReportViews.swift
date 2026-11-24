@@ -332,7 +332,7 @@ struct ProgressReportSheet: View {
                 .frame(maxWidth: 700)
                 .frame(maxWidth: .infinity)
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .safeAreaInset(edge: .bottom) {
                 HStack(spacing: 10) {
                     action("PDF", "doc.richtext", id: "report.pdf") {

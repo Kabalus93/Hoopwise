@@ -190,7 +190,7 @@ struct CustomTrackStationSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(16)
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(drillName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

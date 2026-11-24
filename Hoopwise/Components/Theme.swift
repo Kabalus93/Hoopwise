@@ -104,7 +104,9 @@ struct AppTheme {
     
     // Backgrounds
     static var background: Color {
-        isDark ? Color(hex: "#0D0D0D") : Color(hex: "#FFFFFF")
+        // The Mac's film room: pages sit straight on the window's glass.
+        if FilmRoom.isOn { return .clear }
+        return isDark ? Color(hex: "#0D0D0D") : Color(hex: "#FFFFFF")
     }
     
     static var cardBackground: Color {

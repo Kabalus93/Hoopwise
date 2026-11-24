@@ -107,7 +107,7 @@ struct StudentDetailView: View {
                 Spacer(minLength: 100)
             }
         }
-        .background(FilmRoomPageBackground().ignoresSafeArea())
+        .filmRoomPage()
         .navigationTitle(student.displayName)
         #if os(iOS)
         .navigationBarTitleDisplayModeCompat(.inline)

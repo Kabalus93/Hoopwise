@@ -1,0 +1,142 @@
+import SwiftUI
+import UIKit
+import ObjectiveC
+import os
+
+// THE MAC WINDOW IS FROSTED GLASS (25 Nov 2026, Luther, after the first film
+// room: "I like the direction so far but not so much having the basketball
+// court in the background. How about nothing? Just a frosted glass? Also let
+// other layers adopt the new look."). Nothing is painted behind the app: the
+// window itself is glass — what is behind it on the desktop shows through,
+// blurred and dimmed — and every layer above (pushed pages, lists, bars,
+// popups) is clear so the same glass runs through all of them.
+//
+// Mac Catalyst has no SwiftUI or UIKit way to blur BEHIND the window, so the
+// AppKit window is reached by name (NSApplication → windows) and given an
+// NSVisualEffectView under the app's content. Only public AppKit classes and
+// properties, addressed dynamically because Catalyst cannot import AppKit.
+
+private let glassLog = Logger(subsystem: "hoopwise.mac", category: "glass")
+
+enum MacGlass {
+    private static var installed = false
+    private static var timer: Timer?
+    /// NSVisualEffectView.Material.hudWindow — dark, translucent, the same in
+    /// light and dark system appearance.
+    private static let material = 13
+
+    /// Once at launch: page-level view controllers stop painting an opaque
+    /// background, pushes stop sliding (two clear pages sliding over each
+    /// other show through one another), and every window is frosted as it
+    /// appears.
+    static func install() {
+        // The Mac — and the iPad simulator's DEBUG film-room preview, so the
+        // layers can be looked at there (the glass itself is the Mac's).
+        guard FilmRoom.isOn, !installed else { return }
+        installed = true
+        swap(#selector(UIViewController.viewWillLayoutSubviews), #selector(UIViewController.hw_glassLayout), on: UIViewController.self)
+        swap(#selector(UINavigationController.pushViewController(_:animated:)),
+             #selector(UINavigationController.hw_glassPush(_:animated:)), on: UINavigationController.self)
+        swap(#selector(UINavigationController.popViewController(animated:)),
+             #selector(UINavigationController.hw_glassPop(animated:)), on: UINavigationController.self)
+
+        // Bars and lists sit on the glass, not on their own slabs.
+        let bar = UINavigationBarAppearance()
+        bar.configureWithTransparentBackground()
+        UINavigationBar.appearance().standardAppearance = bar
+        UINavigationBar.appearance().scrollEdgeAppearance = bar
+        UINavigationBar.appearance().compactAppearance = bar
+        UICollectionView.appearance().backgroundColor = .clear
+        UITableView.appearance().backgroundColor = .clear
+
+        #if targetEnvironment(macCatalyst)
+        // Windows come and go (popups are windows of their own on the Mac).
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            MainActor.assumeIsolated { frostWindows() }
+        }
+        DispatchQueue.main.async { frostWindows() }
+        #endif
+    }
+
+    private static func swap(_ a: Selector, _ b: Selector, on type: AnyClass) {
+        guard let x = class_getInstanceMethod(type, a), let y = class_getInstanceMethod(type, b) else { return }
+        method_exchangeImplementations(x, y)
+    }
+
+    #if targetEnvironment(macCatalyst)
+    private static var frosted = Set<ObjectIdentifier>()
+
+    /// Every AppKit window of the app gets the glass under its content, once.
+    static func frostWindows() {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let scene = scene as? UIWindowScene else { continue }
+            for window in scene.windows where window.backgroundColor != .clear {
+                window.backgroundColor = .clear
+                window.isOpaque = false
+            }
+        }
+        guard let appClass = NSClassFromString("NSApplication") as? NSObject.Type,
+              let app = appClass.value(forKey: "sharedApplication") as? NSObject,
+              let windows = app.value(forKey: "windows") as? [NSObject],
+              let effectClass = NSClassFromString("NSVisualEffectView") as? NSObject.Type,
+              let clear = (NSClassFromString("NSColor") as? NSObject.Type)?.value(forKey: "clearColor")
+        else { return }
+        for window in windows where !frosted.contains(ObjectIdentifier(window)) {
+            // Menus, tooltips and the like are not the app's content windows.
+            let name = NSStringFromClass(type(of: window))
+            guard name.contains("UINSWindow") || name.contains("Presentation") || name == "NSWindow",
+                  let content = window.value(forKey: "contentView") as? NSObject,
+                  let subviews = content.value(forKey: "subviews") as? [NSObject] else { continue }
+            frosted.insert(ObjectIdentifier(window))
+            window.setValue(false, forKey: "opaque")
+            window.setValue(clear, forKey: "backgroundColor")
+            let effect = effectClass.init()
+            effect.setValue(material, forKey: "material")
+            effect.setValue(0, forKey: "blendingMode")      // behind the window
+            effect.setValue(1, forKey: "state")             // frosted when the window is not in front, too
+            if let frame = content.value(forKey: "bounds") { effect.setValue(frame, forKey: "frame") }
+            effect.setValue(18, forKey: "autoresizingMask") // width + height
+            content.setValue([effect] + subviews, forKey: "subviews")
+            glassLog.log("glass frosted \(name, privacy: .public)")
+        }
+    }
+    #endif
+}
+
+extension UIViewController {
+    /// Hosting, navigation and split controllers paint systemBackground by
+    /// default — on the glass they are clear. Pickers, cameras, alerts and
+    /// other system screens keep their own background.
+    @objc func hw_glassLayout() {
+        hw_glassLayout()
+        guard isViewLoaded, view.backgroundColor != .clear else { return }
+        let name = String(describing: type(of: self))
+        if name.contains("Hosting") || name.contains("Navigation") || name.contains("SplitView")
+            || name.contains("NavigationStack") || name.contains("Sidebar") {
+            view.backgroundColor = .clear
+        }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["HOOPWISE_GLASS_TRACE"] == "1" {
+            var chain: [String] = []
+            var v: UIView? = view
+            while let x = v {
+                if let c = x.backgroundColor, c != .clear { chain.append("\(type(of: x))=\(c.cgColor.components?.map { String(format: "%.2f", $0) }.joined(separator: ",") ?? "?")") }
+                v = x.superview
+            }
+            if !chain.isEmpty {
+                let line = name + " <- " + chain.joined(separator: " | ")
+                Logger(subsystem: "hoopwise.mac", category: "glass").log("GLASSTRACE \(line, privacy: .public)")
+            }
+        }
+        #endif
+    }
+}
+
+extension UINavigationController {
+    @objc func hw_glassPush(_ controller: UIViewController, animated: Bool) {
+        hw_glassPush(controller, animated: false)
+    }
+    @objc func hw_glassPop(animated: Bool) -> UIViewController? {
+        hw_glassPop(animated: false)
+    }
+}

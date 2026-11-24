@@ -161,7 +161,7 @@ struct FlightyProgramDetailView: View {
                 .padding(.bottom, 20)
             }
         }
-        .background(FilmRoomPageBackground().ignoresSafeArea())
+        .filmRoomPage()
         .sheet(isPresented: $showingCyclePlanner) {
             CyclePlannerSheet(
                 program: program,
@@ -1051,7 +1051,7 @@ struct FlightyMicroCycleDetailView: View {
                 .padding(20)
             }
         }
-        .background(FilmRoomPageBackground().ignoresSafeArea())
+        .filmRoomPage()
         .navigationBarTitleDisplayModeCompat(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .navigationBarTrailingCompat) {
@@ -1394,7 +1394,7 @@ struct ProgramSkillTargetsSheet: View {
                 }
                 .padding(16)
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .navigationTitle("Skill Targets")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

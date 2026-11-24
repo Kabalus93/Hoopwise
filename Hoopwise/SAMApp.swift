@@ -35,6 +35,9 @@ struct SAMApp: App {
     @State private var hasOnboarded = UserDefaults.standard.bool(forKey: "hasOnboarded")
 
     init() {
+        // The Mac's window is frosted glass and every layer above it is
+        // clear (MacGlass; nothing off the Mac).
+        MacGlass.install()
         #if targetEnvironment(macCatalyst)
         // Every popup on the Mac: no slide-up, window-sized (MacPresentation).
         MacPopups.install()

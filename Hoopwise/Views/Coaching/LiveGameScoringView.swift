@@ -104,7 +104,7 @@ struct LiveGameScoringView: View {
                     liveEntry
                 }
             }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isBattleRoyal ? (isChinese ? "大乱斗 \(game.gameNumber)" : "Battle Royal \(game.gameNumber)") : "Game \(game.gameNumber)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

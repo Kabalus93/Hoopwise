@@ -178,7 +178,7 @@ struct CreateGameSheet: View {
             .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
             .sensoryFeedback(.impact(weight: .light), trigger: dropTick)
             .sensoryFeedback(.selection, trigger: dropTargetKey)
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
             .navigationTitle(isChinese ? "创建比赛" : "Create Game")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

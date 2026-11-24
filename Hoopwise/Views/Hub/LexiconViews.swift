@@ -91,7 +91,7 @@ struct LexiconScreen: View {
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity)
         }
-        .background(FilmRoomPageBackground())
+        .filmRoomPage()
     }
 
     private func sectionTile(_ section: Lexicon.Section) -> some View {
@@ -366,7 +366,7 @@ struct LexiconCompareView: View {
             }
             .padding(16)
         }
-        .background(FilmRoomPageBackground())
+        .filmRoomPage()
         .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
     }

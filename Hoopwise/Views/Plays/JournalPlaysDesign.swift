@@ -26,7 +26,7 @@ enum JTouchTarget {
 }
 
 enum JPalette {
-    static let background = Color(.systemBackground)
+    static var background: Color { FilmRoom.isOn ? .clear : Color(.systemBackground) }
     static let ink = Color(.label)
     static let card = Color(.secondarySystemBackground)
     static let fill = Color(.tertiarySystemFill)

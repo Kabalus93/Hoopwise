@@ -62,7 +62,7 @@ struct ParentProgramSummaryView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 shareBar
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .navigationTitle(isChinese ? "家长版计划指南" : "Parent Guide")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

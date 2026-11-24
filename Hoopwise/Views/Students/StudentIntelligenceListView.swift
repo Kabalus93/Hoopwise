@@ -353,7 +353,7 @@ struct StudentIntelligenceListView: View {
     @ViewBuilder
     private var mainContent: some View {
         studentListSection
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .navigationTitle(shouldUseSplitView
                 ? (LocalizationManager.shared.currentLanguage == .chinese ? "学员" : "Athletes")
                 : (LocalizationManager.shared.currentLanguage == .chinese ? "学员档案" : "Student Intelligence"))
@@ -765,7 +765,8 @@ struct StudentIntelligenceListView: View {
                             .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                             .listRowBackground(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(selected ? Color.accentColor : Color.clear)
+                                    // The Mac: a quiet pane, not a block of colour.
+                                    .fill(selected ? (FilmRoom.isOn ? Color.white.opacity(0.16) : Color.accentColor) : Color.clear)
                                     .padding(.horizontal, 8))
                             .listRowSeparator(selected ? .hidden : .visible)
                         } else {

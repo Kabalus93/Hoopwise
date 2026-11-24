@@ -365,7 +365,7 @@ struct FlightySessionPageView: View {
         // the Dynamic Island over the hero's blue on a pushed page.
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
-        .background(FilmRoomPageBackground().ignoresSafeArea())
+        .filmRoomPage()
         .background { allPresentConfirmation(Color.clear) }
         // The REAL top inset (status bar / Dynamic Island): the GeometryReader
         // above sits inside ignoresSafeArea and always reads 0, which put Back
@@ -3351,7 +3351,7 @@ struct FlightySessionPageView: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { notesTabWidth = $0 }
-            .background(FilmRoomPageBackground())
+            .filmRoomPage()
 
             if showMentionPicker { notesMentionPickerOverlay }
             if showTagPicker { notesTagPickerOverlay }
@@ -4981,7 +4981,7 @@ private struct QuickCreateDrillSheet: View {
                 }
                 .padding(16)
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .navigationTitle(isChinese ? "快速创建训练" : "Quick Create Drill")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -5372,7 +5372,7 @@ struct ManageSessionStudentsSheet: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .background(FilmRoomPageBackground().ignoresSafeArea())
+            .filmRoomPage()
             .searchable(text: $searchText, prompt: isChinese ? "搜索学员" : "Search students")
             .navigationTitle(isChinese ? "管理学员" : "Manage Students")
             .navigationBarTitleDisplayModeCompat(.inline)

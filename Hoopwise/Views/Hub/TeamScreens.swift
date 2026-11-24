@@ -99,7 +99,7 @@ struct TeamsScreen: View {
                 .padding(16)
             }
         }
-        .background(FilmRoomPageBackground())
+        .filmRoomPage()
         .navigationTitle(isChinese ? "球队" : "Teams")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -209,7 +209,7 @@ struct TeamDetailView: View {
             .padding(16)
             .padding(.bottom, 60)
         }
-        .background(FilmRoomPageBackground())
+        .filmRoomPage()
         .navigationTitle(team.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -955,7 +955,7 @@ struct PlayBreakdownView: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .background(FilmRoomPageBackground())
+        .filmRoomPage()
         .navigationTitle(play?.name ?? ref.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: Binding(get: { editingRole.map { RoleRef(number: $0) } }, set: { editingRole = $0?.number })) { role in

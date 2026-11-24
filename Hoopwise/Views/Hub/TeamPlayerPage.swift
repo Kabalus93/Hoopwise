@@ -59,7 +59,7 @@ struct TeamWorkoutView: View {
             .padding(16)
             .padding(.bottom, 80)
         }
-        .background(FilmRoomPageBackground())
+        .filmRoomPage()
         .navigationTitle(person?.primaryDisplayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $openDrill) { drill in
@@ -525,7 +525,7 @@ struct PlayerPlaysShareSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(FilmRoomPageBackground())
+                .filmRoomPage()
                 Form {
                     Section {
                         ForEach(found, id: \.0.id) { role, play in
