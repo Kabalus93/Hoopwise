@@ -88,7 +88,7 @@ struct ShootingAddOnCard: View {
         }
         .padding(station ? 0 : 16)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(station ? Color.clear : Color(.secondarySystemGroupedBackground)))
+            .fill(station ? Color.clear : Color.filmCard))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
             .strokeBorder(station ? Color.clear : Color.orange.opacity(0.22), lineWidth: 1))
         .sheet(isPresented: $editingSetup) {

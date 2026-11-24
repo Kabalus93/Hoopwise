@@ -199,7 +199,7 @@ struct CoachProfileDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
+        .background(Color.filmCard, in: .rect(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: On the floor

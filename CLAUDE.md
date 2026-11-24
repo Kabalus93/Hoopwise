@@ -2833,6 +2833,58 @@ and the game stats can work together." Decided: keep 1–10, START FRESH.
   (Asked Luther whether parents should see it; shown until he says.)
 Tests: SkillIntegrationTests, PlanGeneratorTests.
 
+## The Mac is a film room (25 Nov 2026, Luther)
+"HoopWise on the Mac (not iPad, not iOS) should feel like a quiet, well-lit
+film room rather than a dashboard … the court is already there, a deep blue
+wash with faint lines running behind everything, and the controls float over
+it on thin panes of frosted glass … The sidebar sits on the left like a
+clipboard you never put down … colour appears only where a team, a status or
+a decision needs it … rows that light up under the cursor, things you can
+drag where they belong, and a second window when you want the board beside
+the plan." This SUPERSEDES, on the Mac only, "the Mac app is the iPad app",
+"tab bar at the bottom" and "MAC WINDOW: only chrome". iPhone and iPad are
+untouched. FIRST PASS — Views/Mac/FilmRoom.swift; `FilmRoom.isOn` is the one
+switch (Mac Catalyst; DEBUG HOOPWISE_FILM_ROOM=1 shows the shell on an iPad
+simulator, the only way it can be LOOKED AT from here — the computer-use
+tool only sees the coach's real app's window, never a demo copy's).
+- SHELL: on the Mac MainTabView shows `FilmRoomShell` instead of the TabView:
+  the court (`FilmRoomBackdrop` — deep blue gradient, a soft light from the
+  top left, CourtArtwork .fullCourt at 8.5 %) behind everything; the glass
+  SIDEBAR on the left (`filmRoom.sidebar`, 236 pt, edge highlight, always in
+  dark type colours): Home · Sessions · Athletes · Hub (⌘1–⌘4, as before),
+  LIBRARY Plays · Drills · Lexicon (⌘5–⌘7), PEOPLE Teams · Organization
+  (⌘8 ⌘9) — each its own page (`FilmRoomPlace`; the raw values ARE the tab
+  numbers, rows `filmRoom.place.<n>`), TOOLS Coach board (⇧⌘B, its own
+  window), TODAY's classes (time, name, a dot only when live or done — a
+  click opens the session) and the date. Pages opened stay alive behind the
+  one on screen. The sidebar is drawn ABOVE the work area and the work area
+  is clipped: a page holding a NavigationSplitView (Athletes) otherwise took
+  the sidebar's clicks.
+- THE COURT BEHIND PAGES: every page-level `Color(.systemGroupedBackground)`
+  became `FilmRoomPageBackground()` (27 files): off the Mac the same system
+  colour; on the Mac the SAME court at the WINDOW's size, offset by the
+  page's place in the window (`\.filmRoomWindow`), so pages do not ghost
+  through one another while pushing and the lines never jump. CARDS:
+  `Color(.secondarySystemGroupedBackground)` → `Color.filmCard` and
+  `AppTheme.cardBackground` (a 7.5 % white pane on the Mac, the system
+  colour elsewhere); List rows take it with `.filmRoomListRow()`.
+- ALWAYS DARK on the Mac: the theme switch is hidden there and the mode is
+  set to dark at launch.
+- HOVER: `.filmRoomHover()` (nothing off the Mac) on calendar session rows,
+  program rows, athlete rows, Hub tiles, the sidebar and its Today rows.
+- SECOND WINDOW: `WindowGroup(id: "coachBoard")` → CoachBoardWindow. The Mac
+  build had NO scene manifest (the generation key was set for the iOS SDKs
+  only) — `INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=macosx*]`
+  is now YES, which is what lets a second window open.
+- NOT DONE YET: dragging things where they belong (a drill onto a plan, an
+  athlete onto a team or class); glass with blur on cards (they are tinted
+  panes); the pushed pages' navigation bars; lists inside pages that keep
+  the system's grouped background; the Athletes detail pane's look. Verified:
+  the shell on the iPad mini simulator in landscape (FilmRoomUITests — its
+  screenshots come out sideways and cut at 1488 pt), the Mac build compiles
+  and a demo copy LAUNCHES with the shell ("window configured"); the real Mac
+  window was never seen.
+
 ## After the audit (25 Nov 2026, Luther: "build all of them, in that order")
 The audit of 24 Nov found: ratings without history, no per-athlete focus, no
 progress report, nothing noticing an athlete outgrowing a program, fields

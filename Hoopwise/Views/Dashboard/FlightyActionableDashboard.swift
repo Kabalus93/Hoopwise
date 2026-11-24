@@ -337,7 +337,7 @@ struct FlightyActionableDashboard: View {
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollContentBackground(.hidden)
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .navigationTitle(navTitle)
             .toolbar {
                 #if os(iOS)
@@ -1821,7 +1821,7 @@ struct LiveSessionActivityCard: View {
                     .tint(Color.accentColor)
             }
             .padding(14)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: engine.currentDrillIndex)

@@ -315,7 +315,7 @@ struct StudentIntelligenceListView: View {
             .id(student.id)
         } else {
             ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+                FilmRoomPageBackground().ignoresSafeArea()
                 VStack(spacing: 10) {
                     Image(systemName: "person.crop.circle")
                         .font(.system(size: 44, weight: .light))
@@ -353,7 +353,7 @@ struct StudentIntelligenceListView: View {
     @ViewBuilder
     private var mainContent: some View {
         studentListSection
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .navigationTitle(shouldUseSplitView
                 ? (LocalizationManager.shared.currentLanguage == .chinese ? "学员" : "Athletes")
                 : (LocalizationManager.shared.currentLanguage == .chinese ? "学员档案" : "Student Intelligence"))
@@ -757,6 +757,7 @@ struct StudentIntelligenceListView: View {
                             let selected = selectedStudent?.id == student.id && !isSelecting
                             Button(action: { selectStudent(student) }) {
                                 contactsRow(student: student, selected: selected)
+                                    .filmRoomHover(cornerRadius: 10)
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("athletes.row")

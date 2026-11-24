@@ -190,7 +190,7 @@ struct CustomTrackStationSheet: View {
                 .frame(maxWidth: .infinity)
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(drillName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -519,6 +519,6 @@ struct CustomTrackStationSheet: View {
             .accessibilityIdentifier("track.stopwatch")
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.filmCard))
     }
 }

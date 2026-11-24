@@ -178,7 +178,7 @@ struct CreateGameSheet: View {
             .sensoryFeedback(.impact(weight: .medium), trigger: liftTick)
             .sensoryFeedback(.impact(weight: .light), trigger: dropTick)
             .sensoryFeedback(.selection, trigger: dropTargetKey)
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(isChinese ? "创建比赛" : "Create Game")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1145,7 +1145,7 @@ private struct SetupCard<Content: View, Header: View, Footer: View>: View {
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground)))
+                    .fill(Color.filmCard))
             footer
                 .font(.footnote)
                 .foregroundStyle(.secondary)

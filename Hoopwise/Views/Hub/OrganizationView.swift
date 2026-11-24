@@ -263,7 +263,7 @@ struct OrganizationView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14, style: .continuous))
+            .background(Color.filmCard, in: .rect(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -612,7 +612,7 @@ struct BundleImportPreviewSheet: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+        .background(Color.filmCard, in: .rect(cornerRadius: 14))
         .padding(.horizontal, 16)
         .padding(.top, 8)
     }
@@ -817,7 +817,7 @@ struct ReassignProgramSheet: View {
                 Spacer()
             }
             .padding(.top, 16)
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(isChinese ? "转移项目" : "Reassign Program")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1087,7 +1087,7 @@ struct AddEditLocationView: View {
                 }
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(isEditing ? "Edit Location" : "Add Location")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1428,7 +1428,7 @@ struct AddEditCategoryView: View {
                 }
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(isEditing ? "Edit Category" : "Add Category")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -1729,7 +1729,7 @@ struct LocationDetailView: View {
                     .padding(16)
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(location.name)
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {

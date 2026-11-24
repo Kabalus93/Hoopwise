@@ -30,7 +30,7 @@ struct FlightySessionRootView: View {
                     FlightySessionsCalendarView()
                 }
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             #if os(iOS)
             .navigationBarHidden(true)
             #endif
@@ -156,7 +156,8 @@ struct FlightySessionRootView: View {
             }
             }
             .padding(.vertical, 8)
-            .background(.regularMaterial)
+            // On the Mac the header sits straight on the court, not on a grey band.
+            .background(FilmRoom.isOn ? AnyShapeStyle(Color.clear) : AnyShapeStyle(.regularMaterial))
             .sensoryFeedback(.selection, trigger: selectedSegment)
 
             Divider()
@@ -293,7 +294,9 @@ struct FlightyProgramsListView: View {
                     ForEach(dayGroup.programs) { program in
                         NavigationLink(destination: FlightyProgramDetailView(program: program)) {
                             minimalProgramRow(program: program, sectionDay: dayGroup.group)
+                                .filmRoomHover()
                         }
+                        .filmRoomListRow()
                     }
                 } header: {
                     HStack(spacing: 6) {
@@ -1663,7 +1666,7 @@ struct FlightySessionsCalendarView: View {
                 .padding(.top, 4)
             sessionsListView
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(FilmRoomPageBackground().ignoresSafeArea())
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenAddSession)) { _ in
             showingCreateSession = true      // ⌘N on the Mac
         }
@@ -1798,6 +1801,8 @@ struct FlightySessionsCalendarView: View {
                         .font(.body.weight(.semibold))
                 }
                 .sensoryFeedback(.selection, trigger: showingCreateSession)
+                .filmRoomHover()
+                .filmRoomListRow()
             }
         }
         .listStyle(.insetGrouped)
@@ -2118,6 +2123,8 @@ struct FlightySessionsCalendarView: View {
         }
         .buttonStyle(.plain)
         .sessionMacMenu(session)
+        .filmRoomHover()
+        .filmRoomListRow()
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 dataManager.deleteSessionEvent(session)

@@ -322,7 +322,7 @@ struct GameSheetShareSheet: View {
                     .accessibilityLabel(isChinese ? "比赛计划单预览" : "Game sheet preview")
                     .accessibilityIdentifier("gameSheet.preview")
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .safeAreaInset(edge: .bottom) {
                 HStack(spacing: 10) {
                     action(isChinese ? "PDF" : "PDF", "doc.richtext", id: "gameSheet.pdf") {

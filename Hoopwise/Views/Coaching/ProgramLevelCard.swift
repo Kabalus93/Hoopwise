@@ -69,7 +69,7 @@ struct ProgramLevelCard: View {
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(.secondarySystemGroupedBackground)))
+            .fill(Color.filmCard))
         .onAppear { draft = Double(stored ?? suggestion?.level ?? 3) }
         .sensoryFeedback(.selection, trigger: level)
     }

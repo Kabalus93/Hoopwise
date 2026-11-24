@@ -323,7 +323,7 @@ struct ProgressReportSheet: View {
                                   text: $coachWords, axis: .vertical)
                             .lineLimit(3...8)
                             .padding(10)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.filmCard))
                             .accessibilityIdentifier("report.words")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,7 +332,7 @@ struct ProgressReportSheet: View {
                 .frame(maxWidth: 700)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .safeAreaInset(edge: .bottom) {
                 HStack(spacing: 10) {
                     action("PDF", "doc.richtext", id: "report.pdf") {

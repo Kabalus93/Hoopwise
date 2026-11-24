@@ -55,7 +55,7 @@ struct StudentRemindersCard: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .sheet(item: $editing) { reminder in
                 // Hand the store on explicitly: inside the quick peep (itself a
                 // sheet) the environment object did not reach this sheet and

@@ -194,7 +194,7 @@ struct PlaySheetShareSheet: View {
             previewView
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color(.systemGroupedBackground))
+                .background(FilmRoomPageBackground())
             Form {
                 if let cast, cast.hasPeople {
                     Section(isChinese ? "战术单" : "Sheet") {

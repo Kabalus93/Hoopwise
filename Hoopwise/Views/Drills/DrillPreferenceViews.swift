@@ -51,7 +51,7 @@ struct DrillPreferenceCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityIdentifier("drill.preferenceCard")
     }
 

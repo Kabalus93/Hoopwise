@@ -726,7 +726,7 @@ private extension View {
     func gamePlanCard(tint: Color?) -> some View {
         padding(16)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.filmCard))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder((tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.25), lineWidth: 1))
     }

@@ -99,7 +99,7 @@ struct TeamsScreen: View {
                 .padding(16)
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(FilmRoomPageBackground())
         .navigationTitle(isChinese ? "球队" : "Teams")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -209,7 +209,7 @@ struct TeamDetailView: View {
             .padding(16)
             .padding(.bottom, 60)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(FilmRoomPageBackground())
         .navigationTitle(team.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -394,7 +394,7 @@ struct TeamDetailView: View {
         let first = section.plays.first.flatMap { ref in library.first { $0.isNamed(by: ref) } }
         return VStack(alignment: .leading, spacing: 8) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemGroupedBackground))
+                RoundedRectangle(cornerRadius: 10).fill(Color.filmCard)
                 if let first {
                     JournalPlayThumbnail(diagram: first.conceptPart?.sortedSteps.first?.diagram, court: first.court,
                                          width: 120, height: 60)
@@ -955,7 +955,7 @@ struct PlayBreakdownView: View {
             .frame(maxWidth: 760)
             .frame(maxWidth: .infinity)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(FilmRoomPageBackground())
         .navigationTitle(play?.name ?? ref.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: Binding(get: { editingRole.map { RoleRef(number: $0) } }, set: { editingRole = $0?.number })) { role in
@@ -1571,7 +1571,7 @@ struct TeamWorkoutProfileSection: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+            .background(Color.filmCard, in: .rect(cornerRadius: 16))
         }
     }
 }

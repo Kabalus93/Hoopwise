@@ -168,7 +168,7 @@ private struct NumberKeyStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(plain ? (configuration.isPressed ? Color(.systemFill) : .clear)
-                                : (configuration.isPressed ? Color(.systemGray4) : Color(.secondarySystemGroupedBackground)))
+                                : (configuration.isPressed ? Color(.systemGray4) : Color.filmCard))
                     .shadow(color: .black.opacity(plain ? 0 : 0.08), radius: 0.5, y: 1)
             )
     }

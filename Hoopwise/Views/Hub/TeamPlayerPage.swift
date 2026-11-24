@@ -59,7 +59,7 @@ struct TeamWorkoutView: View {
             .padding(16)
             .padding(.bottom, 80)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(FilmRoomPageBackground())
         .navigationTitle(person?.primaryDisplayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $openDrill) { drill in
@@ -187,7 +187,7 @@ struct TeamWorkoutView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.filmCard))
     }
 
     private func skillTitle(_ raw: String) -> String { ActivityType(rawValue: raw)?.title ?? raw }
@@ -525,7 +525,7 @@ struct PlayerPlaysShareSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color(.systemGroupedBackground))
+                .background(FilmRoomPageBackground())
                 Form {
                     Section {
                         ForEach(found, id: \.0.id) { role, play in

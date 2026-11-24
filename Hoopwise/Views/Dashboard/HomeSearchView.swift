@@ -300,7 +300,7 @@ struct HomeSearchView: View {
                     }
                 }
             }
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 

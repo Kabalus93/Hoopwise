@@ -62,7 +62,7 @@ struct ParentProgramSummaryView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 shareBar
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .navigationTitle(isChinese ? "家长版计划指南" : "Parent Guide")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -132,7 +132,7 @@ struct ParentProgramSummaryView: View {
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(Color.filmCard)
             )
         }
         .buttonStyle(.plain)

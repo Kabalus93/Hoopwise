@@ -104,7 +104,7 @@ struct LiveGameScoringView: View {
                     liveEntry
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(isBattleRoyal ? (isChinese ? "大乱斗 \(game.gameNumber)" : "Battle Royal \(game.gameNumber)") : "Game \(game.gameNumber)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -249,7 +249,7 @@ struct LiveGameScoringView: View {
                     }
                 }
             }
-        }.padding(24).background(Color(.secondarySystemGroupedBackground))
+        }.padding(24).background(Color.filmCard)
     }
     
     // MARK: - Battle Royal Compact Header
@@ -305,7 +305,7 @@ struct LiveGameScoringView: View {
                     Spacer()
                 }
             }
-        }.padding(.horizontal, 16).padding(.vertical, 12).background(Color(.secondarySystemGroupedBackground))
+        }.padding(.horizontal, 16).padding(.vertical, 12).background(Color.filmCard)
     }
     
     // MARK: - Compact Game Header (smaller to show more players)
@@ -432,7 +432,7 @@ struct LiveGameScoringView: View {
                     }
                 }.padding(.top, 8)
             }
-        }.padding(24).background(Color(.secondarySystemGroupedBackground))
+        }.padding(24).background(Color.filmCard)
     }
     
     // MARK: - Live entry (iPhone)
@@ -686,7 +686,7 @@ struct LiveGameScoringView: View {
         .padding(.leading, 12)
         .padding(.trailing, 4)
         .padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.secondarySystemGroupedBackground)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.filmCard))
         .sensoryFeedback(.warning, trigger: undoTick)
     }
 
@@ -815,10 +815,10 @@ struct LiveGameScoringView: View {
                 }
                 .padding(8)
             }
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(Color.filmCard)
             .cornerRadius(12, corners: [.bottomLeft, .bottomRight])
         }
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }

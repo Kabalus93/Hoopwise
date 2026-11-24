@@ -492,7 +492,7 @@ struct DrillsLibraryView: View {
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(active ? Color.white : Color.primary)
         .padding(.horizontal, 12)
-        .background(Capsule().fill(active ? Color.accentColor : Color(.secondarySystemGroupedBackground)))
+        .background(Capsule().fill(active ? Color.accentColor : Color.filmCard))
     }
 
     // MARK: The list
@@ -763,7 +763,7 @@ struct DrillsLibraryView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .foregroundStyle(selected ? Color.white : Color.primary)
-            .background(Capsule().fill(selected ? Color.accentColor : Color(.secondarySystemGroupedBackground)))
+            .background(Capsule().fill(selected ? Color.accentColor : Color.filmCard))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -1490,7 +1490,7 @@ struct DrillDetailView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(Color(.secondarySystemGroupedBackground),
+                .background(Color.filmCard,
                             in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -3015,7 +3015,7 @@ struct DrillTrackingCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drill.tracking")
     }

@@ -200,7 +200,7 @@ struct DrillMediaCarousel: View {
         .frame(width: tileSize, height: tileSize)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
+                .fill(Color.filmCard)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)

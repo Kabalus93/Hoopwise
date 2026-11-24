@@ -108,7 +108,9 @@ struct AppTheme {
     }
     
     static var cardBackground: Color {
-        isDark ? Color(hex: "#1A1A1A") : Color(hex: "#F5F5F7")
+        // The Mac's film room: cards are thin panes over the court.
+        if FilmRoom.isOn { return Color.white.opacity(0.075) }
+        return isDark ? Color(hex: "#1A1A1A") : Color(hex: "#F5F5F7")
     }
     
     static var surfaceColor: Color {

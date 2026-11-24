@@ -91,7 +91,7 @@ struct LexiconScreen: View {
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(FilmRoomPageBackground())
     }
 
     private func sectionTile(_ section: Lexicon.Section) -> some View {
@@ -113,7 +113,7 @@ struct LexiconScreen: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16, style: .continuous))
+        .background(Color.filmCard, in: .rect(cornerRadius: 16, style: .continuous))
         .contentShape(.rect)
     }
 
@@ -366,7 +366,7 @@ struct LexiconCompareView: View {
             }
             .padding(16)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(FilmRoomPageBackground())
         .navigationTitle(group.title)
         .navigationBarTitleDisplayMode(.inline)
     }

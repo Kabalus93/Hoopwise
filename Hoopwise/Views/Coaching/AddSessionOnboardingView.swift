@@ -99,7 +99,7 @@ struct AddSessionOnboardingView: View {
 
                 bottomBar
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -269,7 +269,7 @@ struct AddSessionOnboardingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(Color.filmCard)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
@@ -294,7 +294,7 @@ struct AddSessionOnboardingView: View {
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color.filmCard)
                 )
                 .padding(.horizontal, 20)
             }
@@ -326,7 +326,7 @@ struct AddSessionOnboardingView: View {
                             .padding(.vertical, 18)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color(.secondarySystemGroupedBackground))
+                                    .fill(Color.filmCard)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
@@ -394,7 +394,7 @@ struct AddSessionOnboardingView: View {
                                 .padding(.horizontal, 16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.secondarySystemGroupedBackground))
+                                        .fill(Color.filmCard)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
@@ -463,7 +463,7 @@ struct AddSessionOnboardingView: View {
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color.filmCard)
                 )
                 .padding(.horizontal, 20)
             }
@@ -517,7 +517,7 @@ struct AddSessionOnboardingView: View {
             .padding(.horizontal, 16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(Color.filmCard)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -562,7 +562,7 @@ struct AddSessionOnboardingView: View {
                                 if on { Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Color.accentColor) }
                             }
                             .padding(.vertical, 12).padding(.horizontal, 16)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemGroupedBackground)))
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.filmCard))
                             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(on ? Color.accentColor : .clear, lineWidth: 2))
                         }
                         .buttonStyle(.plain)
@@ -606,7 +606,7 @@ struct AddSessionOnboardingView: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color.filmCard)
                 )
                 .padding(.horizontal, 20)
 

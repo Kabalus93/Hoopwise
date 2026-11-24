@@ -151,7 +151,7 @@ struct ShootingStationSheet: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(drill.title(chinese: isChinese))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

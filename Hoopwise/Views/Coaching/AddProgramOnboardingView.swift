@@ -106,7 +106,7 @@ struct AddProgramOnboardingView: View {
 
                 bottomBar
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(isChinese ? "取消" : "Cancel") { dismiss() }
@@ -281,7 +281,7 @@ struct AddProgramOnboardingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                    .fill(Color.filmCard)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
@@ -316,7 +316,7 @@ struct AddProgramOnboardingView: View {
                             .padding(.horizontal, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.secondarySystemGroupedBackground))
+                                    .fill(Color.filmCard)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
@@ -378,7 +378,7 @@ struct AddProgramOnboardingView: View {
                             .padding(.vertical, 18)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color(.secondarySystemGroupedBackground))
+                                    .fill(Color.filmCard)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
@@ -412,7 +412,7 @@ struct AddProgramOnboardingView: View {
                                 .padding(.vertical, 16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.secondarySystemGroupedBackground))
+                                        .fill(Color.filmCard)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
@@ -497,7 +497,7 @@ struct AddProgramOnboardingView: View {
                                 .padding(.horizontal, 16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.secondarySystemGroupedBackground))
+                                        .fill(Color.filmCard)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
@@ -555,7 +555,7 @@ struct AddProgramOnboardingView: View {
                             .padding(.horizontal, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.secondarySystemGroupedBackground))
+                                    .fill(Color.filmCard)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
@@ -599,7 +599,7 @@ struct AddProgramOnboardingView: View {
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color.filmCard)
                 )
                 .padding(.horizontal, 20)
             }
@@ -636,7 +636,7 @@ struct AddProgramOnboardingView: View {
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color.filmCard)
                 )
                 .padding(.horizontal, 20)
             }
@@ -666,7 +666,7 @@ struct AddProgramOnboardingView: View {
                         .padding(.horizontal, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.secondarySystemGroupedBackground))
+                                .fill(Color.filmCard)
                         )
                     }
                     .buttonStyle(.plain)
@@ -718,7 +718,7 @@ struct AddProgramOnboardingView: View {
                         .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.secondarySystemGroupedBackground))
+                                .fill(Color.filmCard)
                         )
                     Text(isChinese
                          ? "留空则使用「\(autoNamePreview)」。"
@@ -762,7 +762,7 @@ struct AddProgramOnboardingView: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color.filmCard)
                 )
                 .padding(.horizontal, 20)
 

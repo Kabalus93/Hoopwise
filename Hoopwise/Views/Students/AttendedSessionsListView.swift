@@ -72,7 +72,7 @@ struct AttendedSessionsListView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(FilmRoomPageBackground().ignoresSafeArea())
         .navigationTitle(isChinese ? "出勤历史" : "Attendance History")
         #if os(iOS)
         .navigationBarTitleDisplayModeCompat(.inline)

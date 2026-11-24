@@ -248,7 +248,7 @@ struct EditStudentView: View {
                 }
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .onAppear {
                 // Load contracts for this student
                 refreshContracts()
@@ -394,7 +394,7 @@ struct EditStudentView: View {
             .tint(.purple)
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+        .background(Color.filmCard, in: .rect(cornerRadius: 14))
     }
 
     // MARK: - Expandable Section Helper
@@ -966,7 +966,7 @@ struct EditStudentView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.red)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .padding(.top, 12)
         .accessibilityIdentifier("athlete.delete")
     }
@@ -1554,7 +1554,7 @@ struct ContractEditSheet: View {
                 }
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .navigationTitle(isNewContract ? (isChinese ? "新合同" : "New Contract") : (isChinese ? "编辑合同" : "Edit Contract"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

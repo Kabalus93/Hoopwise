@@ -107,7 +107,7 @@ struct StudentDetailView: View {
                 Spacer(minLength: 100)
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(FilmRoomPageBackground().ignoresSafeArea())
         .navigationTitle(student.displayName)
         #if os(iOS)
         .navigationBarTitleDisplayModeCompat(.inline)
@@ -288,7 +288,7 @@ struct StudentDetailView: View {
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+        .background(Color.filmCard, in: .rect(cornerRadius: 16))
     }
 
     @ViewBuilder

@@ -79,7 +79,7 @@ struct FlightyHubView: View {
             }
             .ignoresSafeArea(edges: .top)
             .scrollEdgeEffectHidden(true, for: .top)
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
         }
         .onReceive(timer) { _ in currentTime = Date() }
         // Revenue is a full page (15 Nov 2026, Luther: it opened in a popup).
@@ -165,6 +165,10 @@ struct FlightyHubView: View {
         .glassEffect(.regular.interactive(), in: .circle)
         .sensoryFeedback(.impact(weight: .light), trigger: themeManager.isDarkMode)
         .accessibilityLabel(isChinese ? "切换外观" : "Switch appearance")
+        // The Mac's film room is always dark: no switch there.
+        .opacity(FilmRoom.isOn ? 0 : 1)
+        .allowsHitTesting(!FilmRoom.isOn)
+        .accessibilityHidden(FilmRoom.isOn)
     }
 
     // MARK: - Private lessons tracker
@@ -458,6 +462,7 @@ struct FlightyHubView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect(cornerRadius: 20))
+        .filmRoomHover(cornerRadius: 20)
     }
 
     private func hubWideTile(_ kind: HubGlyph.Kind, tint: Color? = nil, title: String, detail: String) -> some View {

@@ -365,7 +365,7 @@ struct FlightySessionPageView: View {
         // the Dynamic Island over the hero's blue on a pushed page.
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(FilmRoomPageBackground().ignoresSafeArea())
         .background { allPresentConfirmation(Color.clear) }
         // The REAL top inset (status bar / Dynamic Island): the GeometryReader
         // above sits inside ignoresSafeArea and always reads 0, which put Back
@@ -1018,7 +1018,7 @@ struct FlightySessionPageView: View {
                         shootingTracker(drill)
                     }
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.filmCard))
                 }
                 ForEach(customOrphans) { run in
                     let name = dataManager.drills.first { $0.id == run.drillId }?.localizedName ?? ""
@@ -1027,7 +1027,7 @@ struct FlightySessionPageView: View {
                         customTracker(run.drillId, name: name)
                     }
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.filmCard))
                 }
             }
         }
@@ -1482,7 +1482,7 @@ struct FlightySessionPageView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(Color.filmCard)
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -2193,7 +2193,7 @@ struct FlightySessionPageView: View {
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
     }
@@ -2238,7 +2238,7 @@ struct FlightySessionPageView: View {
             attendanceGrid
         } else {
             attendanceList
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(Color.filmCard)
         }
     }
 
@@ -2270,7 +2270,7 @@ struct FlightySessionPageView: View {
                             .fill(mark.tint)
                             .frame(width: 18, height: 18)
                             .overlay(Image(systemName: mark.icon).font(.system(size: 9, weight: .bold)).foregroundColor(.white))
-                            .overlay(Circle().strokeBorder(Color(.secondarySystemGroupedBackground), lineWidth: 2))
+                            .overlay(Circle().strokeBorder(Color.filmCard, lineWidth: 2))
                             .offset(x: 2, y: 2)
                     }
                     VStack(alignment: .leading, spacing: 3) {
@@ -2304,7 +2304,7 @@ struct FlightySessionPageView: View {
             .disabled(!accessMode.canTakeAttendance)
         }
         .padding(14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(mark == .present ? mark.tint.opacity(0.45) : Color.clear, lineWidth: 1.5)
@@ -2350,7 +2350,7 @@ struct FlightySessionPageView: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { newHeight in
                         rosterRowHeights[student.id] = newHeight
                     }
-                    .attendancePageRow(background: Color(.secondarySystemGroupedBackground))
+                    .attendancePageRow(background: Color.filmCard)
             }
         }
         .listStyle(.plain)
@@ -2653,7 +2653,7 @@ struct FlightySessionPageView: View {
                     }
                 }
             }
-            .background(Color(.secondarySystemGroupedBackground))
+            .background(Color.filmCard)
         }
     }
 
@@ -2832,7 +2832,7 @@ struct FlightySessionPageView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .padding(14)
-                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 14))
+                .background(Color.filmCard, in: .rect(cornerRadius: 14))
             }
             .buttonStyle(.plain)
         }
@@ -3351,7 +3351,7 @@ struct FlightySessionPageView: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { notesTabWidth = $0 }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
 
             if showMentionPicker { notesMentionPickerOverlay }
             if showTagPicker { notesTagPickerOverlay }
@@ -3422,7 +3422,7 @@ struct FlightySessionPageView: View {
                 .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityIdentifier(target == .session ? "notes.notebook" : "notes.reflection")
     }
 
@@ -3730,7 +3730,7 @@ struct FlightySessionPageView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             if !done.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -3757,7 +3757,7 @@ struct FlightySessionPageView: View {
                     }
                 }
                 .padding(16)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
         // A container: its identifier must not override the field's and rows'.
@@ -3895,7 +3895,7 @@ struct FlightySessionPageView: View {
                         .padding(.bottom, 14)
                     }
                 }
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
         }
     }
@@ -4076,7 +4076,7 @@ struct FlightySessionPageView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(14)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -4169,7 +4169,7 @@ struct FlightySessionPageView: View {
             .disabled(!accessMode.canAddNotes)
         }
         .padding(10)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(12)
     }
 
@@ -4223,7 +4223,7 @@ struct FlightySessionPageView: View {
             .cornerRadius(10)
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(12)
     }
 
@@ -4294,7 +4294,7 @@ struct FlightySessionPageView: View {
             }
         }
         .padding(12)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(12)
     }
 
@@ -4311,7 +4311,7 @@ struct FlightySessionPageView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(Color.filmCard)
                 .cornerRadius(12)
             } else if notesViewMode == .sticky {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -4435,7 +4435,7 @@ struct FlightySessionPageView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(12)
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(Color.filmCard)
                     .cornerRadius(12)
                 }
                 .buttonStyle(.plain)
@@ -4492,7 +4492,7 @@ struct FlightySessionPageView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(14)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -4561,7 +4561,7 @@ struct FlightySessionPageView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(Color.filmCard)
         .cornerRadius(14)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
@@ -4670,7 +4670,7 @@ struct FlightySessionPageView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var ratingSection: some View {
@@ -4925,7 +4925,7 @@ private struct QuickCreateDrillSheet: View {
                         .font(.system(size: 15, weight: .medium))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 11)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(Color.filmCard)
                         .cornerRadius(10)
 
                     TextField(isChinese ? "训练描述（可选）" : "Description (optional)", text: $details, axis: .vertical)
@@ -4933,7 +4933,7 @@ private struct QuickCreateDrillSheet: View {
                         .font(.system(size: 14))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(Color.filmCard)
                         .cornerRadius(10)
 
                     TextField(
@@ -4945,7 +4945,7 @@ private struct QuickCreateDrillSheet: View {
                     .font(.system(size: 14))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(Color.filmCard)
                     .cornerRadius(10)
 
                     HStack(spacing: 10) {
@@ -4965,7 +4965,7 @@ private struct QuickCreateDrillSheet: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(Color.filmCard)
                     .cornerRadius(10)
 
                     Picker(isChinese ? "可见性" : "Visibility", selection: $visibility) {
@@ -4976,12 +4976,12 @@ private struct QuickCreateDrillSheet: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(Color.filmCard)
                     .cornerRadius(10)
                 }
                 .padding(16)
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .navigationTitle(isChinese ? "快速创建训练" : "Quick Create Drill")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -5372,7 +5372,7 @@ struct ManageSessionStudentsSheet: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .searchable(text: $searchText, prompt: isChinese ? "搜索学员" : "Search students")
             .navigationTitle(isChinese ? "管理学员" : "Manage Students")
             .navigationBarTitleDisplayModeCompat(.inline)

@@ -240,7 +240,7 @@ struct DrillAttributesCard: View {
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 16))
+        .background(Color.filmCard, in: .rect(cornerRadius: 16))
         .sheet(isPresented: $editing) {
             AttributeEditorSheet(profile: profile, onSave: onSave,
                                  onReset: drill.attributesSource == .coach ? onReset : nil)

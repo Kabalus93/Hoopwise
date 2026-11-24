@@ -85,7 +85,7 @@ struct AthleteCardShareSheet: View {
                                   text: $coachLine, axis: .vertical)
                             .lineLimit(1...3)
                             .padding(12)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .accessibilityIdentifier("athleteCard.coachLine")
                     }
                     .frame(maxWidth: 620)
@@ -117,7 +117,7 @@ struct AthleteCardShareSheet: View {
                 .padding(20)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(FilmRoomPageBackground())
             .navigationTitle(isChinese ? "球员卡" : "Player card")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -234,7 +234,7 @@ struct CardBackdropPicker: View {
                                 .font(.subheadline.weight(.semibold))
                         }
                         .padding(.horizontal, 12).frame(minHeight: 40)
-                        .background(Capsule().fill(Color(.secondarySystemGroupedBackground)))
+                        .background(Capsule().fill(Color.filmCard))
                         .overlay(Capsule().strokeBorder(backdrop == .level ? Color.accentColor : .clear, lineWidth: 2))
                     }
                     .buttonStyle(.plain)

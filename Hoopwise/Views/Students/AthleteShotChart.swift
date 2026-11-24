@@ -187,7 +187,7 @@ struct AthleteShotChartScreen: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.secondarySystemGroupedBackground)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.filmCard))
     }
 
     @MainActor

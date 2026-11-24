@@ -453,7 +453,7 @@ struct FlightyDrillPickerSheet: View {
                     .listStyle(.insetGrouped)
                 }
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .background(FilmRoomPageBackground().ignoresSafeArea())
             .searchable(text: $searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: Text(isChinese ? "搜索训练" : "Search drills"))

@@ -24,7 +24,7 @@ struct ShootingProfileSection: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.filmCard))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("athlete.shooting")
         }

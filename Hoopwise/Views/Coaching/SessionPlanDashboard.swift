@@ -118,7 +118,7 @@ struct SessionPlanDashboard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+        .background(Color.filmCard, in: .rect(cornerRadius: 18))
     }
 
     private func legend(dashed: Bool, text: String) -> some View {
@@ -231,6 +231,6 @@ struct PhaseCoverageCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 18))
+        .background(Color.filmCard, in: .rect(cornerRadius: 18))
     }
 }

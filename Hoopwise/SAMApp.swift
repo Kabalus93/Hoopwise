@@ -118,6 +118,11 @@ struct SAMApp: App {
                 )
             }
         }
+        #if targetEnvironment(macCatalyst)
+        // Never a second MAIN window: ⌘N is New Session, and the one extra
+        // window is the Coach board (below).
+        .handlesExternalEvents(matching: ["*"])
+        #endif
         #if os(iOS)
         // Requested by SessionLiveActivityManager for a class's end time: a
         // finished class's Live Activity is removed without opening the app.
@@ -160,10 +165,28 @@ struct SAMApp: App {
                 Button(zh ? "课程" : "Sessions") { selectTab(1) }.keyboardShortcut("2")
                 Button(zh ? "学员" : "Athletes") { selectTab(2) }.keyboardShortcut("3")
                 Button(zh ? "中心" : "Hub") { selectTab(3) }.keyboardShortcut("4")
+                Button(zh ? "战术" : "Plays") { selectTab(4) }.keyboardShortcut("5")
+                Button(zh ? "训练" : "Drills") { selectTab(5) }.keyboardShortcut("6")
+                Button(zh ? "术语" : "Lexicon") { selectTab(6) }.keyboardShortcut("7")
+                Button(zh ? "球队" : "Teams") { selectTab(7) }.keyboardShortcut("8")
+                Button(zh ? "机构" : "Organization") { selectTab(8) }.keyboardShortcut("9")
+                Divider()
+                Button(zh ? "战术板窗口" : "Coach Board Window") {
+                    NotificationCenter.default.post(name: .hoopwiseOpenBoardWindow, object: nil)
+                }.keyboardShortcut("b", modifiers: [.command, .shift])
                 Divider()
             }
         }
         #endif
+
+        // The Coach board beside the plan (the Mac; also what the DEBUG
+        // film-room flag opens on an iPad simulator).
+        WindowGroup(id: FilmRoom.boardWindowId) {
+            CoachBoardWindow()
+                .environmentObject(dataManager)
+                .modelContainer(dataManager.modelContainer)
+        }
+        .defaultSize(width: 1100, height: 820)
     }
 
     private func selectTab(_ tab: Int) {

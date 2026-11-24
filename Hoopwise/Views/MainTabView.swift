@@ -49,6 +49,18 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // THE MAC: a sidebar over the court instead of the tab bar
+            // (25 Nov 2026 — Views/Mac/FilmRoom.swift). Mac Catalyst only.
+            if FilmRoom.isOn {
+                FilmRoomShell(selection: $selectedTab) { place in
+                    switch place {
+                    case .sessions: FlightySessionRootView()
+                    case .athletes: StudentIntelligenceListView()
+                    case .hub: FlightyHubView()
+                    default: FlightyActionableDashboard()
+                    }
+                }
+            } else {
             TabView(selection: $selectedTab) {
                 Tab(isChinese ? "首页" : "Home", systemImage: "house.fill", value: 0) {
                     FlightyActionableDashboard()
@@ -78,6 +90,7 @@ struct MainTabView: View {
             // tab's content gets the real size class back — the iPad split
             // views still see .regular.
             .environment(\.horizontalSizeClass, .compact)
+            }
 
             // No in-app live pill (October 2026, Luther): it floated over
             // the app's own screens. The live session lives where iOS puts
@@ -87,7 +100,8 @@ struct MainTabView: View {
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: liveEngine.isActive)
         .tint(Color.accentColor)
-        .preferredColorScheme(themeManager.isDarkMode ? .dark : .light)
+        // The film room is a dark room: the Mac does not follow the theme switch.
+        .preferredColorScheme(FilmRoom.isOn || themeManager.isDarkMode ? .dark : .light)
         .sensoryFeedback(.selection, trigger: selectedTab)
         .onChange(of: liveEngine.rollCallPromptPending) { _, pending in
             // The engine's 5-minute reminder: a global sheet so it is seen
@@ -102,6 +116,7 @@ struct MainTabView: View {
         // when the URL arrived before this view existed.
         .onAppear {
             consumePendingWidgetRoute()
+            if FilmRoom.isOn, themeManager.currentMode != .dark { themeManager.currentMode = .dark }
             #if DEBUG
             ProfileBackgroundDebugShot.importDemoCutouts(dataManager: dataManager)
             #endif
