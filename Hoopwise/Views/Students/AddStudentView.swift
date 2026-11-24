@@ -102,6 +102,12 @@ struct EditStudentView: View {
     @State private var parentPhone: String
     @State private var parentEmail: String
     @State private var parentWechat: String
+    /// A second guardian and the medical note (25 Nov 2026): both were in
+    /// the store with no field to enter them.
+    @State private var parent2Name: String
+    @State private var parent2Phone: String
+    @State private var medicalNotes: String
+    @State private var showHealthSection = false
 
     // Profile Image
     @State private var showingImagePicker = false
@@ -172,6 +178,9 @@ struct EditStudentView: View {
         _parentPhone = State(initialValue: player?.parentInfo.phone ?? "")
         _parentEmail = State(initialValue: player?.parentInfo.email ?? "")
         _parentWechat = State(initialValue: player?.parentInfo.wechatId ?? "")
+        _parent2Name = State(initialValue: player?.secondaryParentInfo?.name ?? "")
+        _parent2Phone = State(initialValue: player?.secondaryParentInfo?.phone ?? "")
+        _medicalNotes = State(initialValue: player?.medicalNotes ?? "")
 
         // Contracts - will be loaded from dataManager in onAppear
         _contracts = State(initialValue: [])
@@ -203,6 +212,31 @@ struct EditStudentView: View {
                         isExpanded: $showParentSection
                     ) {
                         parentInfoSection
+                    }
+
+                    editableExpandableSection(
+                        title: isChinese ? "健康与安全" : "Health and safety",
+                        icon: "cross.case.fill",
+                        iconColor: .red,
+                        isExpanded: $showHealthSection
+                    ) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(isChinese ? "过敏、哮喘、旧伤等上课时要知道的事" : "Allergies, asthma, old injuries — what to know in class")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            TextField(isChinese ? "例如：花生过敏；右脚踝旧伤" : "Like: peanut allergy; old right-ankle sprain",
+                                      text: $medicalNotes, axis: .vertical)
+                                .lineLimit(2...6)
+                                .textFieldStyle(.plain)
+                                .padding(12)
+                                .background(.quaternary)
+                                .cornerRadius(10)
+                                .accessibilityIdentifier("editStudent.medical")
+                            Text(isChinese ? "会显示在课堂名单、快速查看和学员页面上；不会出现在任何分享给家长的内容里。"
+                                           : "Shown on the class roster, the Quick Peep and the profile; never on anything shared.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     // Sharing — exclude private students from organization exports
@@ -409,7 +443,8 @@ struct EditStudentView: View {
     
     // MARK: - Parent Info Section
     private var parentInfoSection: some View {
-        VStack(spacing: 16) {
+        let isChinese = LocalizationManager.shared.currentLanguage == .chinese
+        return VStack(spacing: 16) {
             // Parent Name
             VStack(alignment: .leading, spacing: 6) {
                 Text("Parent/Guardian Name")
@@ -481,6 +516,27 @@ struct EditStudentView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                 TextField("WeChat ID", text: $parentWechat)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(.quaternary)
+                    .cornerRadius(10)
+            }
+
+            // A second guardian
+            VStack(alignment: .leading, spacing: 6) {
+                Text(isChinese ? "第二位监护人" : "Second guardian")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                TextField(isChinese ? "姓名" : "Full name", text: $parent2Name)
+                    .textFieldStyle(.plain)
+                    .padding(12)
+                    .background(.quaternary)
+                    .cornerRadius(10)
+                    .accessibilityIdentifier("editStudent.parent2.name")
+                TextField(isChinese ? "电话" : "Phone number", text: $parent2Phone)
+                    #if os(iOS)
+                    .keyboardType(.phonePad)
+                    #endif
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(.quaternary)
@@ -1130,7 +1186,8 @@ struct EditStudentView: View {
         dataManager.setExcludedFromExport(studentId: student.id, excludeFromExport)
 
         // Update Player with parent info + header image (other player fields are managed elsewhere).
-        if !parentName.isEmpty || !parentPhone.isEmpty || !parentEmail.isEmpty || headerImageURL != nil || player != nil {
+        if !parentName.isEmpty || !parentPhone.isEmpty || !parentEmail.isEmpty || headerImageURL != nil || player != nil
+            || !parent2Name.isEmpty || !parent2Phone.isEmpty || !medicalNotes.isEmpty {
             var updatedPlayer = player ?? Player(
                 id: UUID(),
                 studentId: student.id,
@@ -1150,6 +1207,7 @@ struct EditStudentView: View {
             if let newHeaderURL = headerImageURL {
                 updatedPlayer.headerImageURL = newHeaderURL
             }
+            applyGuardianAndHealth(to: &updatedPlayer)
             updatedPlayer.updatedAt = Date()
 
             dataManager.updatePlayer(updatedPlayer)
@@ -1158,6 +1216,20 @@ struct EditStudentView: View {
         dismiss()
     }
     
+    /// The second guardian and the medical note, onto the player being saved.
+    private func applyGuardianAndHealth(to player: inout Player) {
+        let name2 = parent2Name.trimmingCharacters(in: .whitespaces), phone2 = parent2Phone.trimmingCharacters(in: .whitespaces)
+        if name2.isEmpty && phone2.isEmpty {
+            player.secondaryParentInfo = nil
+        } else {
+            var second = player.secondaryParentInfo ?? ParentInfo(relationship: "Guardian")
+            second.name = name2; second.phone = phone2
+            player.secondaryParentInfo = second
+        }
+        let medical = medicalNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        player.medicalNotes = medical.isEmpty ? nil : medical
+    }
+
     private func createStudent() {
         // The name field holds pinyin; hanzi typed there, or a Chinese name
         // alone, becomes pinyin (the convention the import also follows).
@@ -1192,6 +1264,7 @@ struct EditStudentView: View {
             )
         }
         newPlayer.headerImageURL = headerImageURL
+        applyGuardianAndHealth(to: &newPlayer)
 
         dataManager.addStudent(newStudent, player: newPlayer)
         dataManager.setExcludedFromExport(studentId: newStudent.id, excludeFromExport)

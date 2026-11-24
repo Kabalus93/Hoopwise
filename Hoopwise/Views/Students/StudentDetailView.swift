@@ -61,6 +61,9 @@ struct StudentDetailView: View {
                 
                 // Main content sections
                 VStack(spacing: 12) {
+                    // What to know before anything else (25 Nov 2026).
+                    MedicalNoteBanner(studentId: student.id)
+
                     // Contract & Risk Analysis section (comprehensive)
                     contractAndRiskSection
 
@@ -90,6 +93,10 @@ struct StudentDetailView: View {
                     if let player = player, !player.parentInfo.name.isEmpty {
                         parentSection(player)
                     }
+                    if let second = player?.secondaryParentInfo, !(second.name.isEmpty && second.phone.isEmpty) {
+                        secondGuardianRow(second)
+                    }
+                    ParentContactCard(studentId: student.id)
 
                     // About this athlete — provenance footer (Phase 1 of export/import)
                     AboutAthleteCard(studentId: student.id)
@@ -395,6 +402,28 @@ struct StudentDetailView: View {
         }
         .padding(14)
         .glassEffect(.regular, in: .rect(cornerRadius: 14))
+    }
+
+    private func secondGuardianRow(_ info: ParentInfo) -> some View {
+        HStack(spacing: 12) {
+            Circle().fill(Color.accentColor.opacity(0.15)).frame(width: 40, height: 40)
+                .overlay(Text(String(info.name.prefix(1)).uppercased()).font(.callout.weight(.semibold)).foregroundStyle(Color.accentColor))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(info.name.isEmpty ? info.phone : info.name).font(.subheadline.weight(.medium))
+                Text(isChinese ? "第二位监护人" : "Second guardian").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !info.phone.isEmpty, let url = URL(string: "tel:\(info.phone.filter { !$0.isWhitespace })") {
+                Link(destination: url) {
+                    Image(systemName: "phone.fill").font(.subheadline).foregroundStyle(.green)
+                        .padding(10).background(Color.green.opacity(0.12), in: Circle())
+                }
+            }
+        }
+        .padding(14)
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("athlete.secondGuardian")
     }
 
     // MARK: - Notes Section

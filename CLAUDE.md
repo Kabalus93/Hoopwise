@@ -2879,6 +2879,31 @@ stored and never shown, two rating systems, ~7,500 lines never opened.
    Tests: EvaluationHistoryTests, AthleteCardUITests.testTheProfileOpens
    TheProgressReport. The roster line and the peep row were not looked at.
 
+4. GROUP FIT. Views/Coaching/GroupFitCard.swift on the program page under
+   the athletes (`program.groupFit`, hidden when empty, never for a private
+   program): `GroupFit.signals` (pure) lists who is OLDER than the group's
+   age band (`band(forAge:)` on the age on 1 September of the school year;
+   playing UP is the coach's choice and is not listed), who is the skill
+   level's Best in THIS program ("could move up") and who is its Bottom.
+   For the coach only; not an attention rule, nothing on Home.
+5. STORED AND NEVER SHOWN. Edit Athlete gained a SECOND GUARDIAN (name,
+   phone, under Parent/Guardian → Player.secondaryParentInfo) and a HEALTH
+   AND SAFETY section (Player.medicalNotes, `editStudent.medical`). A
+   medical note shows where the child is: a red cross beside the name on the
+   session roster (MedicalFlag) and a red banner at the top of the Quick
+   Peep and the profile (MedicalNoteBanner) — never on anything shared.
+   CONTACT WITH THE FAMILY (ParentContactCard, profile and peep,
+   `contact.card` / `contact.log`): the last three contacts (all on tap) and
+   Log → call, message, in person, email, report sent, parent meeting + an
+   optional note → `logParentContact` (appends to Student.parentalTouch
+   points, sets lastParentContact — which the Athletes list's "no recent
+   contact" filter and churn risk already read; until now only the Claude
+   connector could write it). Sharing a progress report logs "Report sent"
+   once. MEASUREMENTS (height, weight, wingspan, handedness) stay hidden:
+   Luther took them off the profile on purpose (seventeenth exception).
+   All in Views/Components/AthleteSafetyViews.swift. Tests:
+   AthleteSafetyTests. None of it was looked at on screen.
+
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including
 Scribble. Not cleared when I leave … save as play or skill in the corner …

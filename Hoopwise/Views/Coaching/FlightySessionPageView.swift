@@ -2274,11 +2274,14 @@ struct FlightySessionPageView: View {
                             .offset(x: 2, y: 2)
                     }
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(student.primaryDisplayName)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                        HStack(spacing: 6) {
+                            Text(student.primaryDisplayName)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                            MedicalFlag(studentId: student.id)
+                        }
                         if let second = student.secondaryNameLine {
                             Text(second)
                                 .font(.subheadline)
@@ -3065,10 +3068,13 @@ struct FlightySessionPageView: View {
                     
                     // Name info
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(student.primaryDisplayName)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
+                        HStack(spacing: 5) {
+                            Text(student.primaryDisplayName)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            MedicalFlag(studentId: student.id)
+                        }
                         
                         if let chinese = student.secondaryNameLine {
                             Text(chinese)

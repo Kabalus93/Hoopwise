@@ -254,6 +254,8 @@ struct ProgressReportSheet: View {
     @State private var coachWords = ""
     @State private var focus: [DrillAttribute]?
     @State private var sharing: [Any]?
+    /// A report that left this sheet is logged once in the family contacts.
+    @State private var logged = false
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
     private var skills: SkillsEvaluation? { dataManager.players.first { $0.studentId == student.id }?.skills }
@@ -378,7 +380,14 @@ struct ProgressReportSheet: View {
     }
 
     private func action(_ title: String, _ symbol: String, id: String, run: @escaping () -> Void) -> some View {
-        Button(action: run) {
+        Button {
+            run()
+            if !logged {
+                logged = true
+                dataManager.logParentContact(studentId: student.id, type: .reportCard,
+                                             note: isChinese ? "成长报告" : "Progress report")
+            }
+        } label: {
             Label(title, systemImage: symbol).font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 30)
         }
         .buttonStyle(.borderedProminent)

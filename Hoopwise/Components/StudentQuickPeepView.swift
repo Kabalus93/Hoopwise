@@ -467,6 +467,7 @@ struct StudentQuickPeepView: View {
             AthleteCardFlip(student: student)
                 .frame(maxWidth: 420)
             VStack(spacing: 16) {
+                MedicalNoteBanner(studentId: student.id)
                 skillsSection
                 ShootingProfileSection(studentId: student.id)
                 CustomTrackProfileSection(student: student)
@@ -480,6 +481,7 @@ struct StudentQuickPeepView: View {
                     insightsSection
                 }
                 StudentRemindersCard(student: student)
+                ParentContactCard(studentId: student.id)
                 contractInfoSection
                 AboutAthleteCard(studentId: student.id)
             }
@@ -498,6 +500,7 @@ struct StudentQuickPeepView: View {
             // while the right column ran long).
             VStack(spacing: 16) {
                 AthleteCardFlip(student: student)
+                MedicalNoteBanner(studentId: student.id)
                 skillsSection
                 if let notes = player?.coachNotes, !notes.isEmpty {
                     coachNotesSection(notes)
@@ -517,6 +520,7 @@ struct StudentQuickPeepView: View {
                 }
 
                 StudentRemindersCard(student: student)
+                ParentContactCard(studentId: student.id)
 
                 contractInfoSection
             }
@@ -533,6 +537,7 @@ struct StudentQuickPeepView: View {
             AthleteCardFlip(student: student)
             
             // Skills evaluation with editable sliders
+            MedicalNoteBanner(studentId: student.id)
             skillsSection
 
             // Tracked shooting, as on the profile (21 Nov 2026).
@@ -550,6 +555,7 @@ struct StudentQuickPeepView: View {
             }
 
             StudentRemindersCard(student: student)
+                ParentContactCard(studentId: student.id)
             
             // Contract info section (same as Intelligence Profile)
             contractInfoSection
