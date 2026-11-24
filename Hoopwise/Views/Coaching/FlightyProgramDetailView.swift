@@ -145,6 +145,9 @@ struct FlightyProgramDetailView: View {
                     
                     // Enrolled athletes - elegant display
                     athletesSection
+
+                    // Who has outgrown the group, in age or level (25 Nov 2026).
+                    GroupFitCard(program: program)
                     
                     // Objectives (moved to bottom)
                     if !program.objectives.isEmpty {

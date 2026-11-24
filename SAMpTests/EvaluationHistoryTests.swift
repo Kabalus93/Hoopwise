@@ -115,4 +115,18 @@ final class EvaluationHistoryTests: XCTestCase {
         let text = doc.page(at: 0)?.string ?? ""
         for word in ["Maya Chen", "2/3", "Great term.", "Passing"] { XCTAssertTrue(text.contains(word), word) }
     }
+
+    // MARK: Group fit
+
+    func testGroupFitNamesWhoOutgrewTheGroupInAgeOrLevel() {
+        let older = UUID(), top = UUID(), behind = UUID(), fine = UUID(), young = UUID(), unknown = UUID()
+        let signals = GroupFit.signals(
+            programAge: .u10,
+            members: [(fine, 9), (behind, 8), (top, 9), (older, 10), (young, 7), (unknown, nil)],
+            tiers: [fine: .average, behind: .bottom, top: .best, older: .best, young: .better])
+        XCTAssertEqual(signals.map(\.studentId), [older, top, behind], "older first, then the top, then the bottom")
+        XCTAssertEqual(signals[0].reasons, [.older(.u12), .top])
+        XCTAssertEqual(GroupFit.band(forAge: 7), .u8); XCTAssertEqual(GroupFit.band(forAge: 8), .u10)
+        XCTAssertTrue(GroupFit.signals(programAge: .u10, members: [(young, 7)], tiers: [:]).isEmpty, "playing up is the coach's choice")
+    }
 }
