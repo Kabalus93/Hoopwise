@@ -440,6 +440,9 @@ struct StudentQuickPeepView: View {
                     .fontWeight(.semibold)
                 }
 
+                // Nothing is shared from the Mac (cards and reports go out
+                // from the iPad and iPhone).
+                if !FilmRoom.isOn {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingCard = true } label: {
                         Label(isChinese ? "球员卡" : "Player card", systemImage: "square.and.arrow.up")
@@ -451,6 +454,7 @@ struct StudentQuickPeepView: View {
                         Label(isChinese ? "成长报告" : "Progress report", systemImage: "doc.text.below.ecg")
                     }
                     .accessibilityIdentifier("peep.report")
+                }
                 }
             }
             #if targetEnvironment(macCatalyst)
@@ -479,9 +483,15 @@ struct StudentQuickPeepView: View {
     // (24 Nov 2026, Luther: "the empty side left and right could be used to
     // show more"). The card | the evaluation and results | notes, insights,
     // reminders, contract.
+    /// The collectible card on the iPhone and iPad; on the Mac the glass
+    /// header the profile opens on.
+    @ViewBuilder private var peepCard: some View {
+        if FilmRoom.isOn { MacAthleteHeader(student: student) } else { AthleteCardFlip(student: student) }
+    }
+
     private var wideContent: some View {
         HStack(alignment: .top, spacing: 20) {
-            AthleteCardFlip(student: student)
+            peepCard
                 .frame(maxWidth: 420)
             VStack(spacing: 16) {
                 MedicalNoteBanner(studentId: student.id)
@@ -516,7 +526,7 @@ struct StudentQuickPeepView: View {
             // it (24 Nov 2026, Luther: the space under the card was empty
             // while the right column ran long).
             VStack(spacing: 16) {
-                AthleteCardFlip(student: student)
+                peepCard
                 MedicalNoteBanner(studentId: student.id)
                 skillsSection
                 if let notes = player?.coachNotes, !notes.isEmpty {
@@ -551,7 +561,7 @@ struct StudentQuickPeepView: View {
         VStack(spacing: 16) {
             // Flippable profile card (same as Intelligence Profile)
             // The card that is shared and printed (AthleteCardFlip).
-            AthleteCardFlip(student: student)
+            peepCard
             
             // Skills evaluation with editable sliders
             MedicalNoteBanner(studentId: student.id)
@@ -1759,6 +1769,7 @@ private struct QuickPeepHost<Item: Identifiable, Peep: View>: ViewModifier {
             }
             .onChange(of: item?.id) { _, id in
                 guard sizeClass == .regular else { return }
+                MacGlass.clearCover = id != nil      // the Mac paints other covers solid
                 var t = Transaction(); t.disablesAnimations = true
                 withTransaction(t) { staged = id == nil ? nil : item }
             }
@@ -1813,7 +1824,10 @@ struct QuickPeepStage<Peep: View>: View {
                     .onTapGesture { close() }
                     .accessibilityHidden(true)
                 ZStack(alignment: .top) {
-                    AppTheme.background
+                    // On the Mac the theme's background is clear (the window
+                    // is glass): the panel floats over its page and needs a
+                    // backing of its own.
+                    if FilmRoom.isOn { Color(MacGlass.coverColor) } else { AppTheme.background }
                     peep
                         .environment(\.peepClose, close)
                         .environment(\.peepLayoutWidth, pageW)

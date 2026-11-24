@@ -19,6 +19,10 @@ import os
 private let glassLog = Logger(subsystem: "hoopwise.mac", category: "glass")
 
 enum MacGlass {
+    /// Set while the Quick Peep's stage is up: its cover stays clear.
+    static var clearCover = false
+    /// What a full-screen cover is painted with on the Mac.
+    static let coverColor = UIColor(red: 0.105, green: 0.11, blue: 0.125, alpha: 1)
     private static var installed = false
     private static var timer: Timer?
     /// NSVisualEffectView.Material.hudWindow — dark, translucent, the same in
@@ -150,6 +154,22 @@ extension UIViewController {
         // Clear pages are see-through: only the top page of a stack shows
         // (the page underneath was readable through the one pushed over it).
         if let stack = self as? UINavigationController { stack.hw_showOnlyTheTopPage() }
+        // A full-screen cover (Create Game, the live game, the recap) shares
+        // the main window with the page that opened it, and that page stays
+        // drawn: a clear cover showed it through, unreadable. A cover is a
+        // solid dark stage. The Quick Peep's stage is the one cover that is
+        // meant to float over its page (MacGlass.clearCover).
+        if isViewLoaded, parent == nil, presentingViewController != nil, !MacGlass.clearCover,
+           modalPresentationStyle == .fullScreen || modalPresentationStyle == .overFullScreen,
+           String(describing: type(of: self)).contains("Hosting") {
+            if view.backgroundColor != MacGlass.coverColor { view.backgroundColor = MacGlass.coverColor }
+            // The cover's view starts under the title bar; its container
+            // fills the window, so the strip above is covered too.
+            if let container = view.superview, container !== view.window, container.backgroundColor != MacGlass.coverColor {
+                container.backgroundColor = MacGlass.coverColor
+            }
+            return
+        }
         guard isViewLoaded, view.backgroundColor != .clear else { return }
         let name = String(describing: type(of: self))
         if name.contains("Hosting") || name.contains("Navigation") || name.contains("SplitView")
