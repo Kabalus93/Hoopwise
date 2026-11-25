@@ -3088,10 +3088,21 @@ tool only sees the coach's real app's window, never a demo copy's).
   "Settings" title — MacWindow.configure skips that scene), no Done, the
   bar's title is the category. ⌘, , Help and Home's coach button post
   `.hoopwiseOpenSettingsWindow`; the shell opens it with a value so a second
-  ⌘, brings the same window forward. STILL iPad CONTROLS INSIDE: the rows
-  are the system's inset-grouped Form (rounded cards, the iOS switch) —
-  Catalyst's iPad idiom draws them; Mac-drawn controls need "Optimize for
-  Mac" (declined before) or hand-drawn rows. Asked Luther which.
+  ⌘, brings the same window forward. HAND-DRAWN ROWS (26 Nov 2026, Luther:
+  "yes, hand-draw the Mac-style rows for Settings"): Views/Mac/
+  MacSettingsForm.swift — a container that takes the SAME `Section`s as the
+  phone's Form (`ForEach(sections:)` / `ForEach(subviews:)`) and draws a
+  caption over a quiet 9 pt box, 40 pt rows split by hairlines, the footnote
+  under it; `MacSwitchToggleStyle` (a 38 × 22 switch, the switch alone is
+  the target), `MacSettingsLabelStyle`, `SettingsPickerRow` (words left,
+  pop-up menu right — a Picker outside a List shows only its value) and
+  `.macSettingsLinkLabel()` (chevron; a NavigationLink outside a List draws
+  none). New rows added to a Settings section need those two helpers for a
+  picker or a link. The stepper is still the system's. DEBUG
+  HOOPWISE_SETTINGS_PANE=<pane> opens on a category. Seen on the Mac demo
+  copy: General, Profile, Notifications, Claude, Sync and Data. Not seen:
+  Coaching, Keyboard Shortcuts, About, a pushed page (Languages by Area),
+  clicking a switch.
 - DRILLS IN THREE PANES (25 Nov 2026, later; Luther: "still feels like it's
   trying to work with a tiny tablet screen"). From 1000 pt the Mac browser
   sets env `macDrillFilterPanel` and DrillsLibraryView draws its filters as a

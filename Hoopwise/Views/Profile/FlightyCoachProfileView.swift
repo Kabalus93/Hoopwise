@@ -32,7 +32,14 @@ struct FlightyCoachProfileView: View {
     /// Shown in the Mac's Settings window: no Done (the window closes), the
     /// title is the category.
     var asWindow = false
-    @State private var macPane: MacSettingsPane = .general
+    @State private var macPane: MacSettingsPane = {
+        #if DEBUG
+        // HOOPWISE_SETTINGS_PANE=<pane> opens the Mac's Settings on it.
+        if let raw = ProcessInfo.processInfo.environment["HOOPWISE_SETTINGS_PANE"],
+           let pane = MacSettingsPane(rawValue: raw) { return pane }
+        #endif
+        return .general
+    }()
     @State private var macTextSize = MacTextSize.current
 
     private var coach: Coach {
@@ -178,7 +185,7 @@ struct FlightyCoachProfileView: View {
 
             Divider().opacity(0.4)
 
-            Form {
+            MacSettingsForm {
                 switch macPane {
                 case .general:
                     macTextSizeSection
@@ -206,15 +213,6 @@ struct FlightyCoachProfileView: View {
                     legalSection
                 }
             }
-            .scrollContentBackground(.visible)
-            // Mac density: shorter rows, smaller controls, tighter sections
-            // (the phone's 44 pt rows and large switches read as an iPad).
-            .environment(\.defaultMinListRowHeight, 36)
-            .controlSize(.small)
-            .listSectionSpacing(.compact)
-            .contentMargins(.top, 4, for: .scrollContent)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityIdentifier("settings.mac")
     }
@@ -766,7 +764,8 @@ struct FlightyCoachProfileView: View {
     // MARK: - Preferences Section
     private var preferencesSection: some View {
         Section {
-            Picker(selection: Binding(
+            SettingsPickerRow(title: isChinese ? "语言" : "Language", systemImage: "globe",
+                              selection: Binding(
                     get: { LocalizationManager.shared.currentLanguage },
                     set: { newLang in
                         LocalizationManager.shared.setLanguage(newLang)
@@ -775,23 +774,21 @@ struct FlightyCoachProfileView: View {
                 Text("English").tag(AppLanguage.english)
                 Text("中文").tag(AppLanguage.chinese)
                 Text("Español").tag(AppLanguage.spanish)
-            } label: {
-                Label(isChinese ? "语言" : "Language", systemImage: "globe")
             }
 
             NavigationLink {
                 AreaLanguageSettingsView()
             } label: {
                 Label(isChinese ? "分区语言" : "Languages by Area", systemImage: "character.bubble")
+                    .macSettingsLinkLabel()
             }
             .accessibilityIdentifier("profile.areaLanguages")
 
-            Picker(selection: $localSettings.currency) {
+            SettingsPickerRow(title: isChinese ? "货币" : "Currency", systemImage: "dollarsign.circle",
+                              selection: $localSettings.currency) {
                 ForEach(CurrencyType.allCases, id: \.self) { currency in
                     Text(currency.displayName).tag(currency)
                 }
-            } label: {
-                Label(isChinese ? "货币" : "Currency", systemImage: "dollarsign.circle")
             }
 
             // A Mac has no haptics to switch.
@@ -829,6 +826,7 @@ struct FlightyCoachProfileView: View {
                     .environmentObject(dataManager)
             } label: {
                 Label(isChinese ? "训练阶段模板" : "Phase Templates", systemImage: "rectangle.stack.fill")
+                    .macSettingsLinkLabel()
             }
         } header: {
             Text(isChinese ? "教练" : "Coaching")
