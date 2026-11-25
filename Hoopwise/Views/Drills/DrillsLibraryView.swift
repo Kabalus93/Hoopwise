@@ -2436,6 +2436,8 @@ struct AddDrillView: View {
         _keyPoints = State(initialValue: (editing?.keyPoints).flatMap { $0.isEmpty ? nil : $0 } ?? [""])
         _minPlayers = State(initialValue: editing?.minPlayers ?? 1)
         _tracking = State(initialValue: editing?.tracking)
+        _skills = State(initialValue: editing?.attributes ?? AttributeProfile(scores: [:]))
+        _skillsByCoach = State(initialValue: editing?.tags.contains(AttributeProfile.coachTag) ?? false)
     }
     /// "Track results" (23 Nov 2026, Luther): nil = not tracked.
     @State private var tracking: TrackDefinition?
@@ -2456,6 +2458,15 @@ struct AddDrillView: View {
     /// Claude's attribute rating from the same answer — saved as the drill's
     /// attr: tags unless the coach rated it themselves.
     @State private var writtenAttributes: AttributeProfile?
+    /// What the drill develops, on the eight octagon skills — shown and
+    /// editable in the form (25 Nov 2026, Luther: one Category cannot say a
+    /// drill works offense AND defense). Claude's reading of the description
+    /// fills it until the coach sets a row himself.
+    @State private var skills: AttributeProfile
+    @State private var skillsByCoach: Bool
+    /// The rows changed in this visit (by the coach or by Claude), so an
+    /// untouched edit never rewrites a drill's rating.
+    @State private var skillsChanged = false
     
     var body: some View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
@@ -2500,6 +2511,8 @@ struct AddDrillView: View {
                     }
                 }
                 
+                skillsSection(isChinese: isChinese)
+
                 Section(isChinese ? "说明" : "Instructions") {
                     ForEach(instructions.indices, id: \.self) { index in
                         TextField(isChinese ? "步骤 \(index + 1)" : "Step \(index + 1)", text: $instructions[index])
@@ -2934,9 +2947,70 @@ struct AddDrillView: View {
                 keyPoints = result.keyPoints
             }
             lastWritten = result
-            if let scores = result.attributes { writtenAttributes = AttributeProfile(array: scores) }
+            if let scores = result.attributes {
+                let read = AttributeProfile(array: scores)
+                writtenAttributes = read
+                // Claude's reading shows in the form, unless the coach rated it.
+                if !skillsByCoach { skills = read; skillsChanged = true }
+            }
             suggestedTracking = result.tracking?.definition(chinese: LocalizationManager.shared.currentLanguage == .chinese)
         }
+    }
+
+    /// The eight skills, each None · Touched · Worked · Main, with the octagon
+    /// drawn from them as they change.
+    private func skillsSection(isChinese: Bool) -> some View {
+        Section {
+            if !skills.isEmpty {
+                AttributeOctagon(values: skills.normalized)
+                    .frame(height: 190)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("newDrill.skills.octagon")
+            }
+            ForEach(DrillAttribute.allCases) { axis in
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(axis.title(chinese: isChinese), systemImage: axis.icon).font(.subheadline.weight(.medium))
+                    Picker(axis.title(chinese: isChinese), selection: Binding(get: { skills[axis] }, set: {
+                        skills[axis] = $0
+                        skillsByCoach = true
+                        skillsChanged = true
+                    })) {
+                        Text(isChinese ? "无" : "None").tag(0)
+                        Text(isChinese ? "涉及" : "Touched").tag(1)
+                        Text(isChinese ? "练到" : "Worked").tag(2)
+                        Text(isChinese ? "重点" : "Main").tag(3)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .accessibilityIdentifier("newDrill.skill.\(axis.rawValue)")
+                }
+                .padding(.vertical, 2)
+            }
+        } header: {
+            HStack(spacing: 6) {
+                Text(isChinese ? "训练能力" : "What it develops")
+                if writing { ProgressView().controlSize(.mini) }
+            }
+        } footer: {
+            Text(skillsFooter(isChinese: isChinese))
+        }
+    }
+
+    private func skillsFooter(isChinese: Bool) -> String {
+        if skillsByCoach {
+            return isChinese ? "你的评分。课程计划的能力图和训练库的技能筛选都用它。"
+                             : "Your rating. The plan's balance chart and the library's skill filter use it."
+        }
+        if writtenAttributes != nil {
+            return isChinese ? "Claude 根据描述的评估。改任何一行就以你的为准。"
+                             : "Claude's reading of the description. Change any row and yours is kept."
+        }
+        let canAsk = AnthropicKeyStore.key != nil
+        return isChinese
+            ? (canAsk ? "一个训练可以练到多项能力。在描述里按回车，Claude 会根据描述填写；也可以自己选。"
+                      : "一个训练可以练到多项能力，逐项选择。")
+            : (canAsk ? "A drill can work several skills. Press Return in the description and Claude fills these from it — or set them yourself."
+                      : "A drill can work several skills — set each one.")
     }
 
     /// Tracking as saved: blank spot names dropped, one spot = none.
@@ -2963,9 +3037,7 @@ struct AddDrillView: View {
         updated.keyPoints = keyPoints.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         updated.minPlayers = minPlayers
         updated.tags = DrillItem.tags(updated.tags, tracking: cleanedTracking)
-        if let writtenAttributes, !updated.tags.contains(AttributeProfile.coachTag) {
-            updated.tags = writtenAttributes.replacing(in: updated.tags, byCoach: false)
-        }
+        if skillsChanged { updated.tags = skills.replacing(in: updated.tags, byCoach: skillsByCoach) }
         updated.updatedAt = Date()
         dataManager.updateDrill(updated)
         joinSeries(updated.id)
@@ -2990,7 +3062,7 @@ struct AddDrillView: View {
             minPlayers: minPlayers,
             media: media
         )
-        if let writtenAttributes { drill.tags = writtenAttributes.replacing(in: drill.tags, byCoach: false) }
+        if skillsChanged, !skills.isEmpty { drill.tags = skills.replacing(in: drill.tags, byCoach: skillsByCoach) }
         drill.tags = DrillItem.tags(drill.tags, tracking: cleanedTracking)
         dataManager.addDrill(drill)
         joinSeries(id)

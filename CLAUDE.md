@@ -2747,6 +2747,15 @@ Claude's ratings without review, target = BOTH phase focus and program goals.
   come back unusable — re-run MISSING with small batches. Don't hand-edit.
 - PERSONAL DRILLS: DrillWriter's Return answer now includes `attributes`;
   New/Edit Drill saves them as attr: tags unless the coach rated the drill.
+- IN THE FORM (25 Nov 2026, Luther: "the category can be more than just
+  one … the oct attribute should appear"): New / Edit Drill has a WHAT IT
+  DEVELOPS section after the description — the octagon and the eight skills
+  as None · Touched · Worked · Main rows (`newDrill.skill.<axis>`). Return in
+  the description fills it from Claude's answer (verified live on the Mac
+  demo copy) unless the coach set a row; a row the coach sets marks the
+  rating his (`attr:by:coach`). Saved only when changed in that visit, so an
+  untouched edit never rewrites a rating. The single Category stays (it
+  colours the drill page).
 - DRILL PAGE: DrillAttributesCard (Views/Components/AttributeOctagon.swift)
   after the description — octagon, main axes as ●●○, "Also:", source
   (Rated by Claude / Adjusted by you / Estimated); Adjust = 8 segmented
