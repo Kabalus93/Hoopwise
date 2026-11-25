@@ -20,7 +20,10 @@ final class SessionNotesAutosaveUITests: XCTestCase {
         app.launchArguments += ["-app_language", "en", "-hasOnboarded", "YES"]
         app.launch()
         // The first launch of a run can come up without its environment.
-        if !app.descendants(matching: .any).matching(identifier: "notes.pane").firstMatch.waitForExistence(timeout: 15) {
+        // (An iPad upright has no Reminders | Notes switch — the notebook is
+        // simply there, above the reminders.)
+        if !app.descendants(matching: .any).matching(identifier: "notes.pane").firstMatch.waitForExistence(timeout: 8),
+           !app.textViews.firstMatch.waitForExistence(timeout: 8) {
             app.terminate(); app.launch()
         }
         return app
@@ -28,8 +31,8 @@ final class SessionNotesAutosaveUITests: XCTestCase {
 
     private func notebook(_ app: XCUIApplication) -> XCUIElement {
         let pane = app.descendants(matching: .any).matching(identifier: "notes.pane").firstMatch
-        XCTAssertTrue(pane.waitForExistence(timeout: 20), "the Notes tab")
-        pane.buttons["Notes"].firstMatch.tap()
+        // The switch exists on a phone and in a narrow window only.
+        if pane.waitForExistence(timeout: 8) { pane.buttons["Notes"].firstMatch.tap() }
         // The card's identifier covers its children, so the editor carries it.
         let editor = app.textViews.matching(identifier: "notes.notebook").firstMatch
         if editor.waitForExistence(timeout: 5) { return editor }
