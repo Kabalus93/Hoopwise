@@ -148,7 +148,9 @@ struct OrganizationView: View {
         .filmRoomList()
             .listSectionSpacing(.compact)
             // A readable column on a wide window, like a settings page.
-            .contentMargins(.horizontal, max(20, (pageWidth - 860) / 2), for: .scrollContent)
+            // Centred column on iPhone / iPad; on the Mac it starts under the title.
+            .contentMargins(.leading, FilmRoom.isOn ? 4 : max(20, (pageWidth - 860) / 2), for: .scrollContent)
+            .contentMargins(.trailing, FilmRoom.isOn ? max(20, pageWidth - 900) : max(20, (pageWidth - 860) / 2), for: .scrollContent)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
         }
         .navigationTitle(isChinese ? "组织" : "Organization")

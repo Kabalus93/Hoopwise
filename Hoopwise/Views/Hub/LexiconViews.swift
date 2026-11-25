@@ -89,7 +89,9 @@ struct LexiconScreen: View {
             }
             .padding(16)
             .frame(maxWidth: 900)
-            .frame(maxWidth: .infinity)
+            // On the Mac the page starts under its title, not in the middle of the window.
+            .padding(.leading, FilmRoom.isOn ? 4 : 0)
+            .frame(maxWidth: .infinity, alignment: FilmRoom.isOn ? .leading : .center)
         }
         .filmRoomPage()
     }
@@ -106,7 +108,9 @@ struct LexiconScreen: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
-                .lineLimit(2)
+                .lineLimit(3)
+                .minimumScaleFactor(0.9)
+                .fixedSize(horizontal: false, vertical: true)
             Text(isChinese ? "\(section.entryCount) 条" : "\(section.entryCount) terms")
                 .font(.caption)
                 .foregroundStyle(.secondary)

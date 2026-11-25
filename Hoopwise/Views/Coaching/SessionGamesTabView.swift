@@ -49,12 +49,17 @@ struct SessionGamesTabView: View {
     }
     
     @State private var gameToDelete: SessionGame?
+    /// The tab's own width; 1000 until measured so an iPad's first draw is the wide one.
+    @State private var tabWidth: CGFloat = 1000
     
     var body: some View {
         ScrollView(showsIndicators: false) {
             // The record of games and, beside it on iPad / Mac (under it on
             // the phone), the dashboard of how they were played (14 Nov 2026).
-            if horizontalSizeClass == .regular {
+            // By the tab's OWN width: in the Mac's class workspace the tab
+            // shares the window with the roster and the sidebar, and at
+            // ~400 pt the dashboard's tiles broke their words letter by letter.
+            if horizontalSizeClass == .regular && tabWidth >= 620 {
                 HStack(alignment: .top, spacing: 20) {
                     gamesColumn
                         .frame(minWidth: 320, idealWidth: 420, maxWidth: 480)
@@ -75,6 +80,7 @@ struct SessionGamesTabView: View {
                 .padding(.top, 8)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { tabWidth = $0 }
         .alert(LocalizationManager.shared.currentLanguage == .chinese ? "删除比赛" : "Delete Game", isPresented: Binding(
             get: { gameToDelete != nil },
             set: { if !$0 { gameToDelete = nil } }

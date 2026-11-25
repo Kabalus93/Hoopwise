@@ -647,7 +647,8 @@ struct MonthlyRevenueHistoryView: View {
             .listStyle(.insetGrouped)
         .filmRoomList()
             .navigationTitle("Revenue")
-            .navigationBarTitleDisplayModeCompat(.inline)
+            // A large title on the Mac, like Plays and Drills beside it in the sidebar.
+            .navigationBarTitleDisplayModeCompat(FilmRoom.isOn ? .large : .inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     monthMenu

@@ -1712,7 +1712,7 @@ struct FlightySessionPageView: View {
             // Drills
             if drillIds.isEmpty {
                 HStack {
-                    Text(isChinese ? "点击 + 添加训练" : "Tap + to add drills")
+                    Text(isChinese ? "点击 + 添加训练" : (FilmRoom.isOn ? "Click + to add drills" : "Tap + to add drills"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -2639,7 +2639,9 @@ struct FlightySessionPageView: View {
                          ? (isChinese ? "加入本节课（不加入项目）" : "Add someone to this session only")
                          : (isChinese ? "将新学员加入此项目" : "Enroll a new student in this program"))
                         .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+                        // On the Mac the button's tint made this a dim blue on blue.
+                        .foregroundStyle(FilmRoom.isOn ? AnyShapeStyle(Color.white.opacity(0.55)) : AnyShapeStyle(.tertiary))
+                        .multilineTextAlignment(.leading)
                 }
                 
                 Spacer()

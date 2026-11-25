@@ -619,7 +619,9 @@ struct DrillsLibraryView: View {
         // The filters sit right on top of the list (Luther, November 2026:
         // there was a section gap between ages, blocks and the list).
         .listSectionSpacing(.compact)
-        .navigationTitle(pick?.title ?? (isChinese ? "训练库" : "Activity library"))
+        // On the Mac the sidebar calls this place Drills; the page says the same.
+        .navigationTitle(pick?.title ?? (FilmRoom.isOn ? (isChinese ? "训练" : "Drills")
+                                         : (isChinese ? "训练库" : "Activity library")))
         .searchable(text: $searchText, prompt: isChinese ? "搜索全部训练" : "Search all drills")
         #if targetEnvironment(macCatalyst)
         // Typing filters as before; Return asks Claude about the whole library.

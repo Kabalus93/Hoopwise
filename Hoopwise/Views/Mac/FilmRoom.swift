@@ -255,6 +255,11 @@ struct FilmRoomShell<Main: View>: View {
         }
         .ignoresSafeArea()
         .onAppear {
+            #if DEBUG
+            // HOOPWISE_FILM_PLACE=<0–8> opens on that sidebar place (for looking at pages).
+            if let raw = ProcessInfo.processInfo.environment["HOOPWISE_FILM_PLACE"], let n = Int(raw),
+               FilmRoomPlace(rawValue: n) != nil { selection = n }
+            #endif
             visited.insert(place)
             #if DEBUG
             if Self.debugOpen == "session" {
@@ -360,7 +365,7 @@ struct FilmRoomSidebar: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("HOOPWISE").font(.system(size: 10, weight: .heavy)).kerning(2).foregroundStyle(.white.opacity(0.45))
                 Text(ProgramGuideStore.academyName).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(1)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 14).padding(.bottom, 14)
 
@@ -433,7 +438,7 @@ struct FilmRoomSidebar: View {
                     if !isToday { Text(day).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(.white.opacity(0.4)) }
                     Text(time).font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundStyle(.white.opacity(0.55))
                 }
-                .frame(width: 38, alignment: .leading)
+                .frame(width: 46, alignment: .leading)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(session.title).font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.88)).lineLimit(1)
                     if let note {

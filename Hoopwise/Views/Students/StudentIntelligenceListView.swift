@@ -782,7 +782,9 @@ struct StudentIntelligenceListView: View {
                     }
                 } header: {
                     HStack(spacing: 6) {
-                        Text(gradeGroup.gradeName)
+                        Text(gradeGroup.gradeName == "—"
+                             ? (LocalizationManager.shared.currentLanguage == .chinese ? "未填年级" : "No grade")
+                             : gradeGroup.gradeName)
                             .textCase(nil)
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.primary)

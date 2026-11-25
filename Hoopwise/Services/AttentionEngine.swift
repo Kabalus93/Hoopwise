@@ -265,6 +265,27 @@ enum AttentionEngine {
         return formatter.date(from: String(stamp))
     }
 
+    /// "Today · 18:30", "Yesterday · 18:30", else "Tue, Nov 24 · 18:30" — what
+    /// the card shows (it showed the raw 2026-11-24 used for keys).
+    static func readableDay(_ date: Date, now: Date = Date(), chinese: Bool) -> String {
+        let calendar = Calendar.current
+        let time = DateFormatter()
+        time.dateFormat = "HH:mm"
+        let day: String
+        if calendar.isDate(date, inSameDayAs: now) {
+            day = chinese ? "今天" : "Today"
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
+                  calendar.isDate(date, inSameDayAs: yesterday) {
+            day = chinese ? "昨天" : "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: chinese ? "zh_CN" : "en_US")
+            formatter.setLocalizedDateFormatFromTemplate("EEE MMM d")
+            day = formatter.string(from: date)
+        }
+        return day + " · " + time.string(from: date)
+    }
+
     // MARK: - Tier 2 — the attention list
 
     /// Every item satisfies: concrete action, deadline inside ~48h, and an
@@ -309,7 +330,7 @@ enum AttentionEngine {
                 key: "recovery:\(session.id)",
                 kind: .rollCallRecovery, category: .closeOut,
                 title: isChinese ? "未点名 · \(session.title)" : "Take attendance · \(session.title)",
-                subtitle: dayStamp(session.date),
+                subtitle: readableDay(session.date, now: now, chinese: isChinese),
                 urgency: 2,
                 deadline: session.endTime.addingTimeInterval(
                     TimeInterval(AttentionRules.recoveryWindowHours * 3600)),

@@ -1192,8 +1192,7 @@ struct FlightyActionableDashboard: View {
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
             }
-            .buttonStyle(.glass)
-            .controlSize(.large)
+            .modifier(SeeAllPlayersBarStyle())
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .sensoryFeedback(.selection, trigger: showingAllPlayers)
@@ -1886,4 +1885,25 @@ struct LiveSessionActivityCard: View {
 #Preview {
     FlightyActionableDashboard()
         .environmentObject(DataManager.shared)
+}
+
+
+/// The "See all N players" bar: the system glass button on iPhone and iPad;
+/// on the Mac a quiet pane like the rest of the room (the glass button came
+/// out as a navy slab on the transparent window).
+private struct SeeAllPlayersBarStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if FilmRoom.isOn {
+            content
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Capsule().fill(FilmGlass.fill))
+                .overlay(Capsule().strokeBorder(FilmGlass.edge, lineWidth: 0.5))
+                .contentShape(Capsule())
+                .filmRoomHover()
+        } else {
+            content.buttonStyle(.glass).controlSize(.large)
+        }
+    }
 }
