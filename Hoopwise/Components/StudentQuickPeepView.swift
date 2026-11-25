@@ -424,6 +424,7 @@ struct StudentQuickPeepView: View {
                 }
             }
             .onGeometryChange(for: Int.self) { Self.columns(for: $0.size.width) } action: { measuredColumns = $0 }
+            .modifier(PeepPullDown())
             .background(AppTheme.background.ignoresSafeArea())
         .modifier(FilmRoomDestination())
             .navigationTitle(isChinese ? "学员速览" : "Quick Peep")
@@ -1706,6 +1707,34 @@ private struct PeepCloseKey: EnvironmentKey {
     static let defaultValue: (() -> Void)? = nil
 }
 
+private struct PeepPullDownKey: EnvironmentKey {
+    static let defaultValue: (() -> Void)? = nil
+}
+
+/// FULL SCREEN: pulling the page down from its top — anywhere on the screen,
+/// not only on the handle — brings the peep back to its small form (25 Nov
+/// 2026, Luther). The page is a scroll view, so the pull is its overscroll:
+/// let go past 56 pt and the stage settles down. Nothing happens in the
+/// small form or in the phone's sheet (no closure there).
+private struct PeepPullDown: ViewModifier {
+    @Environment(\.peepPullDown) private var pullDown
+    @State private var overscroll: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        if pullDown == nil {
+            content
+        } else {
+            content
+                .onScrollGeometryChange(for: CGFloat.self) { -($0.contentOffset.y + $0.contentInsets.top) } action: { _, new in
+                    overscroll = new
+                }
+                .onScrollPhaseChange { old, new in
+                    if old == .interacting, new != .interacting, overscroll > 56 { pullDown?() }
+                }
+        }
+    }
+}
+
 private struct PeepLayoutWidthKey: EnvironmentKey {
     static let defaultValue: CGFloat? = nil
 }
@@ -1714,6 +1743,10 @@ extension EnvironmentValues {
     var peepClose: (() -> Void)? {
         get { self[PeepCloseKey.self] }
         set { self[PeepCloseKey.self] = newValue }
+    }
+    var peepPullDown: (() -> Void)? {
+        get { self[PeepPullDownKey.self] }
+        set { self[PeepPullDownKey.self] = newValue }
     }
     var peepLayoutWidth: CGFloat? {
         get { self[PeepLayoutWidthKey.self] }
@@ -1831,11 +1864,18 @@ struct QuickPeepStage<Peep: View>: View {
                     peep
                         .environment(\.peepClose, close)
                         .environment(\.peepLayoutWidth, pageW)
+                        .environment(\.peepPullDown, full ? { settle(full: false) } : nil)
                         .transaction { $0.animation = nil }
                         .frame(width: pageW, height: max(pageH, (height - top) / max(scale, 0.01)), alignment: .top)
                         .scaleEffect(scale, anchor: .top)
                         .frame(width: width, height: max(0, height - top), alignment: .top)
                         .padding(.top, top)
+                        // The whole header — the grabber AND the bar with
+                        // Edit Student / Quick Peep / Done — is the handle
+                        // (25 Nov 2026, Luther): a drag that STARTS there
+                        // grows or shrinks the peep; the buttons still tap.
+                        .simultaneousGesture(dragGesture(peepH: peepH, screenH: screenH,
+                                                         onlyAbove: (screenH - base) + top + 84))
                     handle
                         .padding(.top, safeTop * grow)
                         .gesture(dragGesture(peepH: peepH, screenH: screenH))
@@ -1878,13 +1918,17 @@ struct QuickPeepStage<Peep: View>: View {
         }
     }
 
-    private func dragGesture(peepH: CGFloat, screenH: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+    /// `onlyAbove`: when set, only a drag that starts above this screen y
+    /// (the header) moves the panel.
+    private func dragGesture(peepH: CGFloat, screenH: CGFloat, onlyAbove: CGFloat? = nil) -> some Gesture {
+        DragGesture(minimumDistance: onlyAbove == nil ? 2 : 8, coordinateSpace: .global)
             .updating($dragging) { value, state, t in
+                if let onlyAbove, value.startLocation.y > onlyAbove { return }
                 t.animation = nil
                 state = value.translation.height
             }
             .onEnded { value in
+                if let onlyAbove, value.startLocation.y > onlyAbove { return }
                 let base = full ? screenH : peepH
                 // Keep the panel where the finger left it; the settle starts there.
                 var t = Transaction(); t.disablesAnimations = true

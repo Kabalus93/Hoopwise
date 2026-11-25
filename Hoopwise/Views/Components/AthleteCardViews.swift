@@ -423,6 +423,11 @@ struct AthleteCardFlip: View {
                 .opacity(flipped ? 1 : 0)
                 .rotation3DEffect(.degrees(degrees + 180), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
         }
+        // The flip's animation is set HERE, on the card, keyed to the turn —
+        // not by withAnimation at the tap. The Quick Peep's stage strips
+        // animations from everything inside it (so a drag never animates the
+        // page's layout), and that took the flip with it (25 Nov 2026).
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: degrees)
         .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
         .scaleEffect(scale)
         .frame(width: AthleteCardLayout.size.width * scale, height: AthleteCardLayout.size.height * scale)
@@ -430,10 +435,8 @@ struct AthleteCardFlip: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = max(120, $0) }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                flipped.toggle()
-                degrees += 180
-            }
+            flipped.toggle()
+            degrees += 180
         }
         .accessibilityElement()
         .accessibilityLabel(LocalizationManager.shared.currentLanguage == .chinese ? "球员卡，轻点翻面" : "Player card, tap to flip")

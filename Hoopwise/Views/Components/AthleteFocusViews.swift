@@ -15,12 +15,22 @@ struct AthleteFocusLine: View {
     var body: some View {
         let focus = dataManager.athleteFocus(studentId)
         if !focus.isEmpty {
-            HStack(spacing: 3) {
-                Image(systemName: "scope")
-                Text(focus.map(\.short).joined(separator: " · "))
+            // One small chip a skill, each with the skill's own icon (the
+            // crosshair before the words read as nothing, and the line was
+            // cut to "Create · D…" — 25 Nov 2026, Luther).
+            HStack(spacing: 4) {
+                ForEach(focus) { axis in
+                    HStack(spacing: 3) {
+                        Image(systemName: axis.icon).imageScale(.small)
+                        Text(axis.short)
+                    }
+                    .font(font.weight(.semibold))
+                    .foregroundStyle(Color.orange)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.14), in: Capsule())
+                    .fixedSize()
+                }
             }
-            .font(font.weight(.semibold))
-            .foregroundStyle(Color.orange)
             .lineLimit(1)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel((LocalizationManager.shared.currentLanguage == .chinese ? "重点：" : "Working on: ")

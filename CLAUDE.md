@@ -2725,6 +2725,29 @@ page stores a column COUNT, not its width. Never size the peep's page from a
 drag again. Tests: QuickPeepSheetUITests
 (iPad mini, sessionPage Attend tab; skips on a phone). Not checked on the Mac.
 
+IPAD MARKUPS (25 Nov 2026, Luther, four screenshots; builds 97/98).
+· THE PEEP'S HEADER IS THE HANDLE: a drag that STARTS on the grabber or the
+  bar (Edit Student / title / Done — the top 84 pt under the grabber) grows
+  or shrinks the stage (`dragGesture(onlyAbove:)`, a simultaneous gesture on
+  the page, so the buttons still tap). FULL SCREEN: pulling the page down
+  from its top anywhere (`PeepPullDown`: the scroll view's overscroll, let go
+  past 56 pt; env `peepPullDown`, set only while full) settles back to the
+  small form — it triggers on release, it does not follow the finger.
+· THE CARD FLIPS IN THE PEEP AGAIN: the stage's `.transaction { animation =
+  nil }` (there so a drag never animates the page) had taken the flip with
+  it; AthleteCardFlip now sets its own `.animation(value: degrees)`.
+· ATTENDANCE CARDS: under ~420 pt a card (an iPad upright) the names get the
+  card's width and status · focus · control sit on a line under them
+  (`attendanceCardsStacked`, measured on the grid) — "Liú Chén…" was cut by
+  the control beside it. AthleteFocusLine is small orange CHIPS, one a
+  skill, with the skill's own icon (was a crosshair + "Create · D…").
+· NOTES TAB from 600 pt to the wide threshold (an iPad upright): no
+  Reminders | Notes switch — the notebook first, the reminders under it.
+  The phone keeps the switch; ≥ 1100 pt keeps side by side.
+Seen on the iPad mini simulator: the Attend and Notes tabs. NOT seen: either
+peep gesture, the flip, a long pinyin name. The UI tests for these had not
+finished when 97/98 were archived at Luther's word.
+
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan
 becomes a dashboard … feeds back into the program." Decided: 8 axes, ship

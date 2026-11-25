@@ -104,6 +104,7 @@ struct FlightySessionPageView: View {
     /// Notes tab: this session's reminders (the default, on the left) or
     /// the notebook (14 Nov 2026 — Reminders replaced the Reflection tab).
     @State private var notesPane: NotesPane = .reminders
+    @State private var attendanceCardsStacked = false
     /// The Notes tab's width: from 1100 pt (a Mac window, a 13" iPad in
     /// landscape) Reminders and Notes sit side by side, no switch.
     @State private var notesTabWidth: CGFloat = 0
@@ -2366,53 +2367,88 @@ struct FlightySessionPageView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        // Two cards across: under ~420 pt each, the names and the control
+        // do not fit on one line.
+        .onGeometryChange(for: Bool.self) { ($0.size.width - 44) / 2 < 420 } action: { attendanceCardsStacked = $0 }
     }
 
     private func attendanceCard(student: Student) -> some View {
         let mark: AttendanceMark = session.effectiveAttendanceMark(for: student.id)
-        return HStack(spacing: 14) {
-            Button {
-                selectedStudentForPeep = student
-            } label: {
-                HStack(spacing: 14) {
-                    ZStack(alignment: .bottomTrailing) {
-                        StudentAvatarView(student: student, size: 56)
-                        Circle()
-                            .fill(mark.tint)
-                            .frame(width: 18, height: 18)
-                            .overlay(Image(systemName: mark.icon).font(.system(size: 9, weight: .bold)).foregroundColor(.white))
-                            .overlay(Circle().strokeBorder(Color.filmCard, lineWidth: 2))
-                            .offset(x: 2, y: 2)
+        let control = AttendanceMarkControl(mark: mark) { newMark in
+            setAttendanceState(for: student.id, state: newMark)
+        }
+        .disabled(!accessMode.canTakeAttendance)
+        let avatar = ZStack(alignment: .bottomTrailing) {
+            StudentAvatarView(student: student, size: 56)
+            Circle()
+                .fill(mark.tint)
+                .frame(width: 18, height: 18)
+                .overlay(Image(systemName: mark.icon).font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                .overlay(Circle().strokeBorder(Color.filmCard, lineWidth: 2))
+                .offset(x: 2, y: 2)
+        }
+        let names = VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(student.primaryDisplayName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                MedicalFlag(studentId: student.id)
+            }
+            if let second = student.secondaryNameLine {
+                Text(second)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        let status = Text(mark.label(isChinese: isChinese))
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(mark == .unmarked ? Color.secondary : mark.tint)
+        return Group {
+            if attendanceCardsStacked {
+                // A narrow card (an iPad upright): the control beside the
+                // names cut "Liú Chén Lín" to "Liú Chén…" (25 Nov 2026,
+                // Luther). The names get the card's width; the status, the
+                // focus and the control sit on the line under them.
+                VStack(alignment: .leading, spacing: 10) {
+                    Button { selectedStudentForPeep = student } label: {
+                        HStack(spacing: 14) {
+                            avatar
+                            names
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(student.primaryDisplayName)
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                            MedicalFlag(studentId: student.id)
+                    .buttonStyle(.plain)
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            status
+                            AthleteFocusLine(studentId: student.id, font: .caption)
                         }
-                        if let second = student.secondaryNameLine {
-                            Text(second)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        Text(mark.label(isChinese: isChinese))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(mark == .unmarked ? Color.secondary : mark.tint)
-                        AthleteFocusLine(studentId: student.id, font: .caption)
+                        Spacer(minLength: 8)
+                        control
                     }
                 }
-                .contentShape(Rectangle())
+            } else {
+                HStack(spacing: 14) {
+                    Button { selectedStudentForPeep = student } label: {
+                        HStack(spacing: 14) {
+                            avatar
+                            VStack(alignment: .leading, spacing: 3) {
+                                names
+                                status
+                                AthleteFocusLine(studentId: student.id, font: .caption)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 8)
+                    control
+                }
             }
-            .buttonStyle(.plain)
-            Spacer(minLength: 8)
-            AttendanceMarkControl(mark: mark) { newMark in
-                setAttendanceState(for: student.id, state: newMark)
-            }
-            .disabled(!accessMode.canTakeAttendance)
         }
         .padding(14)
         .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -3447,6 +3483,18 @@ struct FlightySessionPageView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 14)
                     .padding(.bottom, 120)
+                } else if notesTabWidth >= 600 {
+                    // An iPad upright (25 Nov 2026, Luther's markup): no
+                    // switch — the notes first, the reminders under them.
+                    VStack(spacing: 20) {
+                        notebookColumn
+                        sessionRemindersPane
+                        Spacer(minLength: 120)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .frame(maxWidth: 860)
+                    .frame(maxWidth: .infinity)
                 } else {
                     VStack(spacing: 14) {
                         notesTypeToggle
@@ -3468,7 +3516,7 @@ struct FlightySessionPageView: View {
 
             if showMentionPicker { notesMentionPickerOverlay }
             if showTagPicker { notesTagPickerOverlay }
-            if showFloatingActionBar && (notesPane == .notes || notesTabWidth >= notesWideAt) { notesFloatingActionBar }
+            if showFloatingActionBar && (notesPane == .notes || notesTabWidth >= 600) { notesFloatingActionBar }
         }
         .gesture(DragGesture(minimumDistance: 30).onEnded { v in if v.translation.height < -40 { showFloatingBar() } })
         .onChange(of: focusedNotesEditor) { _, target in
