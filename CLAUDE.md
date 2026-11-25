@@ -3079,6 +3079,15 @@ tool only sees the coach's real app's window, never a demo copy's).
   are the system's inset-grouped Form (rounded cards, the iOS switch) —
   Catalyst's iPad idiom draws them; Mac-drawn controls need "Optimize for
   Mac" (declined before) or hand-drawn rows. Asked Luther which.
+- DRILLS IN THREE PANES (25 Nov 2026, later; Luther: "still feels like it's
+  trying to work with a tiny tablet screen"). From 1000 pt the Mac browser
+  sets env `macDrillFilterPanel` and DrillsLibraryView draws its filters as a
+  240 pt PANEL beside the list (`macFilterPanel`: every skill a row, Age ·
+  Block · Type · Source · Order as labelled menus, Clear all filters) and
+  leaves the chip rows out of the list; the list is 360–480 pt, the drill
+  takes the rest. Narrower windows, the plan picker, iPhone and iPad keep
+  the chips. Seen on the Mac demo copy. The search field and + still float
+  in the library's own bar above the panel.
 - NOT DONE YET (Mac): the live game and the game recap were not seen (the
   Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was

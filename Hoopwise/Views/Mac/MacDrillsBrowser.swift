@@ -17,7 +17,17 @@ private struct MacDrillSelectedKey: EnvironmentKey {
     static let defaultValue: UUID? = nil
 }
 
+private struct MacDrillFilterPanelKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
+    /// Set by the Mac's browser when the window is wide: the library shows
+    /// its filters as a panel beside the list instead of chips above it.
+    var macDrillFilterPanel: Bool {
+        get { self[MacDrillFilterPanelKey.self] }
+        set { self[MacDrillFilterPanelKey.self] = newValue }
+    }
     /// Set by the Mac's browser: a drill row calls it instead of pushing.
     var macDrillSelect: ((DrillItem) -> Void)? {
         get { self[MacDrillSelectKey.self] }
@@ -44,10 +54,13 @@ struct MacDrillsBrowser: View {
         Group {
             if width >= 900 {
                 HStack(spacing: 0) {
+                    // Three panes from 1000 pt: filters | drills | the drill.
                     NavigationStack { DrillsLibraryView() }
                         .environment(\.macDrillSelect) { selectedId = $0.id }
                         .environment(\.macDrillSelectedId, selectedId)
-                        .frame(width: min(430, width * 0.42))
+                        .environment(\.macDrillFilterPanel, width >= 1000)
+                        .frame(width: width >= 1000 ? 241 + min(480, max(360, (width - 241) * 0.42))
+                                                    : min(430, width * 0.42))
                     Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
                     detail.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

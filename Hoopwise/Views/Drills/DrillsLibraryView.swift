@@ -30,6 +30,7 @@ struct DrillsLibraryView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.macDrillSelect) private var macDrillSelect
     @Environment(\.macDrillSelectedId) private var macDrillSelectedId
+    @Environment(\.macDrillFilterPanel) private var macDrillFilterPanel
     @State private var searchText = ""
     @State private var showingAddDrill = false
     // FILTERS (16 November 2026, Luther: "I still need to know which are ball
@@ -408,6 +409,125 @@ struct DrillsLibraryView: View {
         }
     }
 
+    // MARK: The Mac's filter panel
+
+    /// THE MAC'S FILTER PANEL (25 Nov 2026, Luther: the Drills page "still
+    /// feels like it's trying to work with a tiny tablet screen" — two rows of
+    /// chips scrolling sideways, half of them cut off, in a 430 pt column of a
+    /// wide window). Every skill is a row, every filter a labelled menu, all
+    /// in sight at once; the list and the drill sit beside it.
+    private var macFilterPanel: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 2) {
+                panelHeader(isChinese ? "技能" : "SKILL")
+                panelRow(isChinese ? "全部技能" : "All skills", icon: "square.grid.2x2", selected: skill == nil) { skillChoice = "" }
+                    .accessibilityIdentifier("library.panel.skill.all")
+                ForEach(DrillAttribute.allCases) { axis in
+                    panelRow(axis.title, icon: axis.icon, selected: skill == axis) {
+                        skillChoice = skill == axis ? "" : axis.rawValue
+                    }
+                    .accessibilityIdentifier("library.panel.skill.\(axis.rawValue)")
+                }
+
+                panelHeader(isChinese ? "筛选" : "FILTER").padding(.top, 14)
+                panelMenu(isChinese ? "年龄" : "Age", value: age?.title ?? (isChinese ? "全部" : "Any"), active: age != nil) {
+                    Picker(isChinese ? "年龄" : "Age", selection: $ageChoice) {
+                        Text(isChinese ? "所有年龄" : "Any age").tag("")
+                        ForEach(ActivityAge.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                }
+                panelMenu(isChinese ? "环节" : "Block", value: block?.title ?? (isChinese ? "全部" : "Any"), active: block != nil) {
+                    Picker(isChinese ? "环节" : "Block", selection: $block) {
+                        Text(isChinese ? "所有环节" : "Any block").tag(ActivityBlock?.none)
+                        ForEach(ActivityBlock.allCases) { Text($0.title).tag(ActivityBlock?.some($0)) }
+                    }
+                }
+                panelMenu(isChinese ? "类型" : "Type", value: type?.title ?? (isChinese ? "全部" : "Any"), active: type != nil) {
+                    Picker(isChinese ? "类型" : "Type", selection: $type) {
+                        Text(isChinese ? "所有类型" : "Any type").tag(ActivityType?.none)
+                        ForEach(typeCounts, id: \.0) { t, count in
+                            Text("\(t.title) · \(count)").tag(ActivityType?.some(t))
+                        }
+                    }
+                }
+                panelMenu(isChinese ? "来源" : "Source", value: source.title(isChinese), active: source != .all) {
+                    Picker(isChinese ? "来源" : "Source", selection: $source) {
+                        ForEach(DrillOrigin.allCases, id: \.self) { Text($0.title(isChinese)).tag($0) }
+                    }
+                }
+
+                panelHeader(isChinese ? "排序" : "SORT").padding(.top, 14)
+                panelMenu(isChinese ? "顺序" : "Order", value: sort.title(isChinese, skill: skill), active: false) {
+                    Picker(isChinese ? "排序" : "Sort", selection: $sortChoice) {
+                        ForEach(DrillSort.allCases, id: \.self) { Text($0.title(isChinese, skill: skill)).tag($0.rawValue) }
+                    }
+                }
+
+                if hasFilters {
+                    Button(isChinese ? "全部清除" : "Clear all filters") { clearFilters() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 10).padding(.top, 14)
+                        .accessibilityIdentifier("library.panel.clear")
+                }
+                if includeEarlier, let age, age != .u6 {
+                    earlierAgesNote(age).padding(.horizontal, 10).padding(.top, 10)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 18)
+            .padding(.bottom, 24)
+        }
+        .accessibilityIdentifier("library.panel")
+    }
+
+    private func panelHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10.5, weight: .bold)).kerning(1.4)
+            .foregroundStyle(.white.opacity(0.4))
+            .padding(.horizontal, 10).padding(.bottom, 4)
+    }
+
+    private func panelRow(_ title: String, icon: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: icon).font(.system(size: 13, weight: .medium)).frame(width: 20)
+                Text(title).font(.system(size: 14, weight: selected ? .semibold : .regular)).lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white.opacity(selected ? 0.95 : 0.75))
+            .padding(.horizontal, 10).frame(height: 32)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(selected ? FilmGlass.fillActive : Color.clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .filmRoomHover(cornerRadius: 9)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func panelMenu<Choices: View>(_ label: String, value: String, active: Bool,
+                                          @ViewBuilder choices: () -> Choices) -> some View {
+        Menu {
+            choices()
+        } label: {
+            HStack(spacing: 6) {
+                Text(label).font(.system(size: 14)).foregroundStyle(.white.opacity(0.6))
+                Spacer(minLength: 6)
+                Text(value).font(.system(size: 14, weight: active ? .semibold : .regular))
+                    .foregroundStyle(active ? Color.accentColor : Color.white.opacity(0.85))
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            .padding(.horizontal, 10).frame(height: 32)
+            .contentShape(Rectangle())
+        }
+        .filmRoomHover(cornerRadius: 9)
+    }
+
     /// All skills, then the octagon's eight.
     private var skillChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -595,7 +715,7 @@ struct DrillsLibraryView: View {
         .swipeActions(edge: .leading, allowsFullSwipe: true) { favoriteButton(entry.drill) }
     }
 
-    var body: some View {
+    private var libraryList: some View {
         List {
             // One Group so every row takes the Mac's pane (nil = the
             // system's own row background everywhere else).
@@ -606,7 +726,8 @@ struct DrillsLibraryView: View {
             if isSearching {
                 searchResults
             } else {
-                filterSection
+                // On a wide Mac window the filters are a panel beside the list.
+                if !showsMacPanel { filterSection }
                 trackedSection
                 if pick == nil { seriesEntry }
                 drillList
@@ -619,6 +740,23 @@ struct DrillsLibraryView: View {
         // The filters sit right on top of the list (Luther, November 2026:
         // there was a section gap between ages, blocks and the list).
         .listSectionSpacing(.compact)
+    }
+
+    /// The Mac's wide Drills page: the filters as a panel of their own.
+    private var showsMacPanel: Bool { macDrillFilterPanel && pick == nil }
+
+    var body: some View {
+        Group {
+            if showsMacPanel {
+                HStack(spacing: 0) {
+                    macFilterPanel.frame(width: 240)
+                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1)
+                    libraryList
+                }
+            } else {
+                libraryList
+            }
+        }
         .onMacMenu(.newDrill) { if pick == nil { showingAddDrill = true } }
         // On the Mac the sidebar calls this place Drills; the page says the same.
         .navigationTitle(pick?.title ?? (FilmRoom.isOn ? (isChinese ? "训练" : "Drills")
