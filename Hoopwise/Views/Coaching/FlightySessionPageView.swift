@@ -63,7 +63,6 @@ struct FlightySessionPageView: View {
     @State private var cardExportError: String?
     @State private var drillPickerSection: CurriculumSection = .warmup
     /// Set when the plan dashboard's "Find drills" opens the picker.
-    @State private var pickerAttribute: DrillAttribute?
     @State private var selectedDrillForDetail: DrillItem?
     /// Open media viewer keyed to a (drillId, index) pair so the cover
     /// rebuilds correctly when the user taps different tiles.
@@ -77,7 +76,15 @@ struct FlightySessionPageView: View {
         var id: String { "\(drillId.uuidString)#\(index)" }
     }
 
-    @State private var showingSmartDrillPicker = false
+    /// The library picker, WITH the block it adds to. It was a Bool plus a
+    /// separate "which block" state set in the same tap: the sheet could be
+    /// built with the block from the time before, so a drill added from
+    /// Warm-up's + sometimes landed in Skills (25 Nov 2026, Luther).
+    @State private var drillPickerRequest: DrillPickerRequest?
+    @State private var planDragId: UUID?
+    @State private var planDragOffset: CGFloat = 0
+    @State private var planDragConsumed: CGFloat = 0
+    @State private var planRowHeights: [UUID: CGFloat] = [:]
     @State private var showingManageStudents = false
     @State private var showingInlineDrillInputFor: CurriculumSection?
     @State private var showingSessionPhotoCapture = false
@@ -1237,9 +1244,7 @@ struct FlightySessionPageView: View {
                         players: dataManager.players),
                     canEdit: accessMode.canEdit,
                     onFind: { axis in
-                        drillPickerSection = .main
-                        pickerAttribute = axis
-                        showingSmartDrillPicker = true
+                        drillPickerRequest = DrillPickerRequest(section: .main, attribute: axis)
                     })
                 }
 
@@ -1336,17 +1341,17 @@ struct FlightySessionPageView: View {
                                   drawing: drawing)
             }
         }
-        .sheet(isPresented: $showingSmartDrillPicker) {
+        .sheet(item: $drillPickerRequest) { request in
             SmartDrillPickerSheet(
                 session: $session,
-                section: drillPickerSection,
+                section: request.section,
                 program: parentProgram,
                 phase: parentPhase,
                 students: enrolledStudents,
                 allDrills: dataManager.drills,
                 currentCoachId: currentCoachId,
                 onSave: saveSession,
-                attribute: pickerAttribute
+                attribute: request.attribute
             )
         }
     }
@@ -1638,9 +1643,7 @@ struct FlightySessionPageView: View {
                     // "From Library / Quick Text" choice). Quick Text is a
                     // long press on the +.
                     Button {
-                        drillPickerSection = section
-                        pickerAttribute = nil
-                        showingSmartDrillPicker = true
+                        drillPickerRequest = DrillPickerRequest(section: section, attribute: nil)
                     } label: {
                         Image(systemName: "plus")
                             .font(.footnote.weight(.bold))
@@ -1725,6 +1728,15 @@ struct FlightySessionPageView: View {
                     ForEach(Array(drillIds.enumerated()), id: \.element) { index, drillId in
                         if let drill = dataManager.drills.first(where: { $0.id == drillId }) {
                             drillRow(drill: drill, color: color, section: section, index: index, totalCount: drillIds.count)
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { planRowHeights[drillId] = $0 }
+                                // The row being carried rides with the finger above the others.
+                                .background(planDragId == drillId
+                                            ? AnyShapeStyle(Color.filmCard.opacity(0.95)) : AnyShapeStyle(Color.clear),
+                                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .shadow(color: .black.opacity(planDragId == drillId ? 0.3 : 0), radius: 10, y: 4)
+                                .offset(y: planDragId == drillId ? planDragOffset : 0)
+                                .zIndex(planDragId == drillId ? 1 : 0)
+                                .transaction { if planDragId == drillId { $0.animation = nil } }
                             if drillId != drillIds.last {
                                 Divider().padding(.leading, 60)
                             }
@@ -1744,10 +1756,18 @@ struct FlightySessionPageView: View {
             // Main row
             HStack(spacing: 12) {
                 if accessMode.canEdit {
+                    // DRAG TO REORDER (25 Nov 2026, Luther): the grip was only
+                    // a picture. Press it and carry the drill up or down its block.
                     Image(systemName: "line.3.horizontal")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(planDragId == drill.id ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
                         .frame(width: 16)
+                        .padding(.horizontal, 10).padding(.vertical, 12)
+                        .contentShape(Rectangle())
+                        // High priority: the page's own scrolling must not take a quick pull on the grip.
+                        .highPriorityGesture(planReorderGesture(drill.id, in: section))
+                        .padding(.horizontal, -10).padding(.vertical, -12)
+                        .accessibilityIdentifier("plan.drag")
                 }
 
                 // Lead with the first media thumbnail when present —
@@ -2126,6 +2146,63 @@ struct FlightySessionPageView: View {
     }
     
     // MARK: - Drill Reordering
+
+    private func planIds(_ section: CurriculumSection) -> [UUID] {
+        switch section {
+        case .warmup: return session.curriculum.warmupDrillIds
+        case .main: return session.curriculum.skillDrillIds
+        case .cooldown: return session.curriculum.gameDrillIds
+        }
+    }
+
+    private func setPlanIds(_ ids: [UUID], _ section: CurriculumSection) {
+        switch section {
+        case .warmup: session.curriculum.warmupDrillIds = ids
+        case .main: session.curriculum.skillDrillIds = ids
+        case .cooldown: session.curriculum.gameDrillIds = ids
+        }
+    }
+
+    /// The carried row follows the finger; each time it passes the middle of
+    /// a neighbour the two swap places (the others slide, a tick is felt).
+    /// The order is written once, on letting go.
+    private func planReorderGesture(_ id: UUID, in section: CurriculumSection) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .onChanged { value in
+                if planDragId != id {
+                    planDragId = id
+                    planDragConsumed = 0
+                    HapticFeedback.impact(.light)
+                }
+                var ids = planIds(section)
+                guard var index = ids.firstIndex(of: id) else { return }
+                var offset = value.translation.height - planDragConsumed
+                while index < ids.count - 1 {
+                    let h = (planRowHeights[ids[index + 1]] ?? 60) + 1
+                    guard offset > h * 0.55 else { break }
+                    ids.swapAt(index, index + 1); index += 1
+                    planDragConsumed += h; offset -= h
+                }
+                while index > 0 {
+                    let h = (planRowHeights[ids[index - 1]] ?? 60) + 1
+                    guard offset < -h * 0.55 else { break }
+                    ids.swapAt(index, index - 1); index -= 1
+                    planDragConsumed -= h; offset += h
+                }
+                if ids != planIds(section) {
+                    HapticFeedback.impact(.selection)
+                    withAnimation(.snappy(duration: 0.18)) { setPlanIds(ids, section) }
+                }
+                planDragOffset = offset
+            }
+            .onEnded { _ in
+                planDragId = nil
+                withAnimation(.snappy(duration: 0.2)) { planDragOffset = 0 }
+                planDragConsumed = 0
+                saveSession()
+            }
+    }
+
     private func moveDrill(from sourceIndex: Int, to destIndex: Int, in section: CurriculumSection) {
         switch section {
         case .warmup:
@@ -5823,3 +5900,10 @@ private extension View {
     }
 }
 #endif
+
+/// What the plan's library picker was opened for.
+struct DrillPickerRequest: Identifiable {
+    let id = UUID()
+    let section: CurriculumSection
+    let attribute: DrillAttribute?
+}

@@ -2744,6 +2744,19 @@ IPAD MARKUPS (25 Nov 2026, Luther, four screenshots; builds 97/98).
 · NOTES TAB from 600 pt to the wide threshold (an iPad upright): no
   Reminders | Notes switch — the notebook first, the reminders under it.
   The phone keeps the switch; ≥ 1100 pt keeps side by side.
+· THE PLAN (same night, markup on the Plan tab). DRAG TO REORDER: the grip
+  (≡) on a plan row carries the drill up or down its block
+  (`planReorderGesture`, a high-priority drag on the grip: the row follows
+  the finger, swaps with a neighbour past 55 % of its height, the order is
+  saved once on release; within a block only — not between Warm-up and
+  Skills). Seen on the iPad mini simulator with a slow drag (one row down);
+  a fast flick did not take there before the gesture was made high-priority
+  and was not retried. THE + ADDED TO THE WRONG BLOCK: the library picker was
+  `sheet(isPresented:)` plus a separate "which block" state set in the same
+  tap, so the sheet could be built with the previous block (Warm-up's +
+  adding to Skills, now and then). It is `sheet(item: DrillPickerRequest)` —
+  the block travels with the request. Not reproduced before the fix (it was
+  intermittent); fixed by construction.
 Seen on the iPad mini simulator: the Attend and Notes tabs. NOT seen: either
 peep gesture, the flip, a long pinyin name. The UI tests for these had not
 finished when 97/98 were archived at Luther's word.
