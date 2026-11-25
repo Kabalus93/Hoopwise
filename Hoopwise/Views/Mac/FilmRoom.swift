@@ -248,7 +248,10 @@ struct FilmRoomShell<Main: View>: View {
                                                    set: { openSessionId = nil; selection = $0 }),
                                 openSessionId: $openSessionId) { openWindow(id: FilmRoom.boardWindowId) }
                     .frame(width: FilmRoom.sidebarWidth)
-                    .padding(.leading, 10).padding(.vertical, 10)
+                    // The pane starts BELOW the window's close / minimise / zoom
+                    // buttons, its left edge under theirs (the red button used
+                    // to straddle the pane's rounded corner).
+                    .padding(.leading, 10).padding(.top, 34).padding(.bottom, 10)
                     .zIndex(2)
             }
             .environment(\.filmRoomWindow, window.size)
@@ -360,12 +363,13 @@ struct FilmRoomSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The window's close / minimise / zoom buttons sit here.
-            Color.clear.frame(height: 34)
+            Color.clear.frame(height: 14)
             VStack(alignment: .leading, spacing: 2) {
                 Text("HOOPWISE").font(.system(size: 10, weight: .heavy)).kerning(2).foregroundStyle(.white.opacity(0.45))
-                Text(ProgramGuideStore.academyName).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                if !ProgramGuideStore.academyName.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Text(ProgramGuideStore.academyName).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.92))
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 14).padding(.bottom, 14)
 

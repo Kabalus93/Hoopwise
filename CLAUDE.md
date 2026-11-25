@@ -2978,6 +2978,35 @@ tool only sees the coach's real app's window, never a demo copy's).
     are refused while the screen is locked; the menus still work. The Mac
     demo store was seeded by hand (a class, five Demo athletes, a "Demo
     Hawks" team, three private programs).
+- DETAIL PASS (25 Nov 2026, evening, builds 89/90 + after; Luther: "clean up
+  the details"). A `macos-redesign` branch (opaque court gradient, system
+  sidebar) was started from a pasted brief and DELETED at his word the same
+  day — the frosted-glass room stays. Fixed: the sidebar pane starts BELOW
+  the window's close / minimise / zoom buttons, left edges aligned (the red
+  button straddled the pane's corner); the academy name wraps to two lines
+  and is hidden when empty; Up Next's time column is 46 pt ("20:0" clipped);
+  the attention row says "Today · 08:00" (`AttentionEngine.readableDay`, all
+  platforms — it showed the key's 2026-11-25); the Games tab is two columns
+  only from 620 pt of its OWN width (in the class workspace the dashboard
+  tiles broke letter by letter); Drills is titled "Drills", Revenue has a
+  large title; Organization and Lexicon start under their titles (they were
+  centred), Lexicon tiles show three lines; "See all N players" is a quiet
+  pane; "Click + to add drills"; athletes without a grade sit under "No
+  grade" (iPad too). DEBUG HOOPWISE_FILM_PLACE=<0–8> opens on a sidebar
+  place. LOOKING AT IT NOW: `screencapture -x -o -l <window id>` works on the
+  demo copy's window (id from CGWindowList by pid — scratch `win.swift`), so
+  the coach's own app can stay open; computer-use still only sees HIS app —
+  never click there.
+- THE DEMO COPY SHARES THE REAL APP'S PREFERENCES ON THE MAC (same bundle
+  id, same sandbox container). The demo store used to WRITE
+  `programGuide.academyName` = "Riverside Basketball Academy", which replaced
+  the coach's real academy name in his own Mac app (he saw it in the sidebar,
+  25 Nov 2026; his old value could not be read back). Now the demo store
+  answers from its own key (`….demo`) and writes nothing to the real one, and
+  the real app reads that leaked literal as "not set". RULE: a DEBUG hook on
+  the Mac must never write a UserDefaults key the real app reads — other
+  demo hooks (remembered shooting setups, Home pins, play activity) have the
+  same exposure and were NOT audited.
 - NOT DONE YET (Mac): the live game and the game recap were not seen (the
   Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was

@@ -136,8 +136,9 @@ enum ScreenshotStore {
 
         enrichCoachPhoto(dataManager: dm)
         // App Store screenshots must not carry the coach's real business
-        // name (App Review 4.1(a)): the Parent Guide prints the academy.
-        ProgramGuideStore.academyName = "Riverside Basketball Academy"
+        // name (App Review 4.1(a)): while the demo store is open,
+        // ProgramGuideStore.academyName answers with the demo academy from
+        // its own key — nothing is written to the real one.
     }
 
     /// Demo content for the screenshots, on the unmirrored store only. The

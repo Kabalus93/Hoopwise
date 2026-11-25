@@ -65,8 +65,34 @@ enum ProgramGuideStore {
     /// organization-name field in the data model; until there is, the coach
     /// types it once here. Empty falls back to the coach's name.
     static var academyName: String {
-        get { UserDefaults.standard.string(forKey: academyKey) ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: academyKey) }
+        get {
+            let stored = UserDefaults.standard.string(forKey: activeAcademyKey)
+            // The demo name a demo copy once wrote into the real key reads as
+            // "not set" in the real app, until the coach types the real one.
+            if demoAcademyName == nil, stored == leakedDemoName { return "" }
+            return stored ?? demoAcademyName ?? ""
+        }
+        set { UserDefaults.standard.set(newValue, forKey: activeAcademyKey) }
+    }
+
+    /// The demo store keeps its academy name under ITS OWN key. On the Mac a
+    /// demo copy shares the real app's preferences (same bundle id), and the
+    /// demo name written to the one key replaced the coach's real academy
+    /// name in his own app (found 25 Nov 2026).
+    private static var activeAcademyKey: String {
+        #if DEBUG
+        if ScreenshotStore.url != nil { return academyKey + ".demo" }
+        #endif
+        return academyKey
+    }
+
+    private static let leakedDemoName = "Riverside Basketball Academy"
+
+    private static var demoAcademyName: String? {
+        #if DEBUG
+        if ScreenshotStore.url != nil { return leakedDemoName }
+        #endif
+        return nil
     }
 
     private static func loadAll() -> [String: ProgramGuideNotes] {
