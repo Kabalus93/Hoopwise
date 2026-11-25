@@ -3086,6 +3086,13 @@ stored and never shown, two rating systems, ~7,500 lines never opened.
    already unreachable — those three facts cannot be set from any screen
    (the contract editor shows jersey/ball as read-only marks). Raised with
    Luther, not built.
+   DECIDED 25 Nov 2026 (Luther: "don't add them, remove that code"): the
+   Bools `isSigned` / `jerseyGiven` / `ballGiven`, the contract row's jersey
+   and ball marks and the DEBUG HOOPWISE_HANDOVER report are DELETED. The
+   three date columns (signedDate, jerseyGivenDate, ballGivenDate) STAY on
+   Contract and SDContract — CloudKit columns cannot be removed — and are
+   carried through every save untouched (ContractHandoverTests). Nothing
+   sets or shows them; do not add toggles back.
    ONE RATING: the A/B/C performance grade is gone from the screens —
    `StudentPerformanceGrader.computeGrade` deleted (`effectiveGradeKey`, the
    school-grade peer key, stays); Home's Today's-athletes hero shows the

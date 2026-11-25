@@ -366,16 +366,11 @@ struct Contract: Identifiable, Codable, Hashable {
     /// prints as a fill-in rule rather than a fabricated term.
     var validityMonths: Int
 
-    // MARK: - Handover facts (Phase 2.9)
+    // MARK: - Handover facts — STORED ONLY (25 Nov 2026, Luther: no toggles)
     //
-    // These three were compile-time shims that returned a constant and threw
-    // their setters away, while SalesView offered a toggle for each and called
-    // save. The coach ticked "Jersey Given", the row said it saved, and the
-    // next launch showed it untouched.
-    //
-    // The DATE is stored and the Bool derives, as with the consent ledger: a
-    // Bool loses when it happened, and the row already wanted to print
-    // "Given on <date>".
+    // Nothing in the app sets or shows these. The columns exist in the
+    // CloudKit schema and cannot be removed, so the values are carried
+    // through every save untouched.
     var signedDate: Date?
     var jerseyGivenDate: Date?
     var ballGivenDate: Date?
@@ -699,24 +694,6 @@ struct Contract: Identifiable, Codable, Hashable {
     // from the payment ledger. Travel is excluded — see the money section.
     var outstandingBalance: Double { max(0, sessionAmountOwed) }
     var isFullyPaid: Bool { sessionAmountOwed <= 0 }
-    /// Derived from `signedDate`. Setting it stamps or clears that date —
-    /// it never touches `enrollmentDate`, which an earlier setter did: it
-    /// overwrote the enrollment date with today and persisted it, and because
-    /// bundle revenue is attributed via `effectiveBundlePurchaseDate` (which
-    /// falls back to `enrollmentDate`), ticking "Contract Signed" silently
-    /// moved revenue between months.
-    var isSigned: Bool {
-        get { signedDate != nil }
-        set { signedDate = newValue ? (signedDate ?? Date()) : nil }
-    }
-    var jerseyGiven: Bool {
-        get { jerseyGivenDate != nil }
-        set { jerseyGivenDate = newValue ? (jerseyGivenDate ?? Date()) : nil }
-    }
-    var ballGiven: Bool {
-        get { ballGivenDate != nil }
-        set { ballGivenDate = newValue ? (ballGivenDate ?? Date()) : nil }
-    }
     /// Still not stored, and now honest about it: nothing ever wrote a jersey
     /// number or size to a CONTRACT (Player.jerseyNumber is the real one), so
     /// there is no value to recover. The two read sites are guarded on nil.

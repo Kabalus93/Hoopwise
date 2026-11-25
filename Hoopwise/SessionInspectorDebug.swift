@@ -760,44 +760,6 @@ enum SessionInspectorDebug {
         write(out, to: url)
     }
 
-    /// HOOPWISE_HANDOVER=1 — read-only: the signed / jersey / ball facts as
-    /// this device sees them. Used to prove the Mac→CloudKit→iOS round trip
-    /// for the three columns Phase 2.9 added.
-    static func handoverReportIfRequested(dataManager dm: DataManager) {
-        guard ProcessInfo.processInfo.environment["HOOPWISE_HANDOVER"] != nil,
-              let url = WidgetShared.containerURL?
-                .appendingPathComponent("Library/Caches/handover.txt") else { return }
-
-        func name(_ id: UUID) -> String {
-            dm.students.first { $0.id == id }.map { student in
-                [student.chineseName, student.name].compactMap { $0 }
-                    .filter { !$0.isEmpty }.joined(separator: " / ")
-            } ?? "unknown \(short(id))"
-        }
-
-        var lines = ["HANDOVER FACTS — read only, nothing was written", ""]
-        lines.append("read at \(stamp(Date())) \(time(Date())) · \(dm.contracts.count) contracts")
-        lines.append("")
-
-        let marked = dm.contracts.filter {
-            $0.signedDate != nil || $0.jerseyGivenDate != nil || $0.ballGivenDate != nil
-        }
-        lines.append("ANY FACT RECORDED: \(marked.count)")
-        for contract in marked.sorted(by: { $0.updatedAt > $1.updatedAt }) {
-            lines.append("  · \(name(contract.studentId)) — #\(contract.contractNumber) [\(short(contract.id))]")
-            lines.append("      signed \(contract.signedDate.map { stamp($0) + " " + time($0) } ?? "—")")
-            lines.append("      jersey \(contract.jerseyGivenDate.map { stamp($0) + " " + time($0) } ?? "—")")
-            lines.append("      ball   \(contract.ballGivenDate.map { stamp($0) + " " + time($0) } ?? "—")")
-            lines.append("      updated \(stamp(contract.updatedAt)) \(time(contract.updatedAt))")
-        }
-        lines.append("")
-        lines.append("FIVE MOST RECENTLY UPDATED CONTRACTS (for picking a round-trip target)")
-        for contract in dm.contracts.sorted(by: { $0.updatedAt > $1.updatedAt }).prefix(5) {
-            lines.append("  · \(name(contract.studentId)) — #\(contract.contractNumber) [\(short(contract.id))] · \(contract.kind.rawValue) · updated \(stamp(contract.updatedAt)) \(time(contract.updatedAt))")
-        }
-        write(lines, to: url)
-    }
-
     /// HOOPWISE_EXPIRY_FLIP=1 — read-only: exactly which contracts start
     /// reading as expired now that `isExpired` derives from validityMonths
     /// instead of returning false. Nothing should reach a coach's screen as a

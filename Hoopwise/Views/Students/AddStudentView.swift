@@ -650,17 +650,6 @@ struct EditStudentView: View {
                         .font(.system(size: 12))
                         .foregroundColor(contract.isFullyPaid ? .green : .orange)
                     
-                    if contract.jerseyGiven {
-                        Image(systemName: "tshirt.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.blue)
-                    }
-                    if contract.ballGiven {
-                        Image(systemName: "basketball.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.orange)
-                    }
-                    
                     Spacer()
                 }
             }

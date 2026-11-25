@@ -266,7 +266,6 @@ struct SAMApp: App {
         SessionInspectorDebug.phaseLanguageReportIfRequested(dataManager: dataManager)
         SessionInspectorDebug.dedupeRuleComparisonIfRequested(dataManager: dataManager)
         SessionInspectorDebug.expiryFlipReportIfRequested(dataManager: dataManager)
-        SessionInspectorDebug.handoverReportIfRequested(dataManager: dataManager)
         #endif
     }
 

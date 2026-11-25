@@ -1,18 +1,12 @@
 import XCTest
 @testable import Hoopwise
 
-/// Phase 2.9 — the Contract shims that lied.
+/// Contract expiry, and the stored hand-over dates.
 ///
-/// `isSigned` returned `true` always. `jerseyGiven` and `ballGiven` returned
-/// `false` always, and all three setters threw the write away — while
-/// SalesView offered a toggle for each and called save. The coach ticked
-/// "Jersey Given", the row said it saved, and the next launch showed it
-/// untouched. `isExpired` returned `false` always, behind a red warning in
-/// four screens that could therefore never fire.
-///
-/// These pin the values AND the write path: `applyContract` hand-lists its
-/// columns, which is exactly how four session fields were silently dropped on
-/// every save before SessionRoundTripTests existed.
+/// `isExpired` used to return `false` always, behind a red warning that could
+/// never fire. The signed / jersey / ball toggles are gone (25 Nov 2026); the
+/// three date columns stay in the schema and must survive every save —
+/// `applyContract` hand-lists its columns.
 @MainActor
 final class ContractHandoverTests: XCTestCase {
 
@@ -25,50 +19,6 @@ final class ContractHandoverTests: XCTestCase {
                  pricePerSession: 300, bundleSize: 10,
                  bundlePurchaseDate: purchased,
                  validityMonths: validityMonths)
-    }
-
-    // MARK: - The toggles
-
-    func testUntickedIsTheDefaultAndNothingIsAssumed() {
-        let contract = bundle()
-        XCTAssertFalse(contract.isSigned, "isSigned used to return true for every contract ever created.")
-        XCTAssertFalse(contract.jerseyGiven)
-        XCTAssertFalse(contract.ballGiven)
-        XCTAssertNil(contract.signedDate)
-    }
-
-    func testTickingStampsTheDateAndUntickingClearsIt() {
-        var contract = bundle()
-
-        contract.isSigned = true
-        XCTAssertTrue(contract.isSigned)
-        XCTAssertNotNil(contract.signedDate, "The date is the truth; the Bool derives from it.")
-
-        contract.isSigned = false
-        XCTAssertFalse(contract.isSigned)
-        XCTAssertNil(contract.signedDate)
-    }
-
-    func testRetickingKeepsTheOriginalDate() {
-        var contract = bundle()
-        let handover = Date(timeIntervalSince1970: 1_770_000_000)
-        contract.jerseyGivenDate = handover
-        contract.jerseyGiven = true
-        XCTAssertEqual(contract.jerseyGivenDate, handover,
-                       "Setting an already-true toggle must not restamp the day it happened.")
-    }
-
-    func testSigningNeverMovesTheEnrollmentDate() {
-        // The old setter wrote enrollmentDate, and bundle revenue is
-        // attributed via effectiveBundlePurchaseDate — which falls back to
-        // enrollmentDate — so ticking "Contract Signed" moved revenue between
-        // months.
-        let enrolled = Date(timeIntervalSince1970: 1_760_000_000)
-        var contract = Contract(studentId: student, kind: .privateBundle,
-                                enrollmentDate: enrolled, bundleSize: 10)
-        contract.isSigned = true
-        XCTAssertEqual(contract.enrollmentDate, enrolled)
-        XCTAssertEqual(contract.effectiveBundlePurchaseDate, enrolled)
     }
 
     // MARK: - Expiry
@@ -119,35 +69,24 @@ final class ContractHandoverTests: XCTestCase {
 
     // MARK: - The write path
 
-    func testHandoverFactsSurviveASaveAndReload() {
+    func testStoredHandoverDatesAreCarriedThroughASave() {
+        // Nothing sets these any more, but contracts that have them must keep
+        // them: `applyContract` hand-lists its columns.
         let dm = SwiftDataManager.inMemoryForTesting()
+        let day = Date(timeIntervalSince1970: 1_770_000_000)
         var contract = bundle(validityMonths: 6)
+        contract.signedDate = day
+        contract.jerseyGivenDate = day
+        contract.ballGivenDate = day
         dm.addContract(contract)
 
-        contract.isSigned = true
-        contract.jerseyGiven = true
-        contract.ballGiven = true
+        contract.notes = "edited"
         dm.updateContract(contract)
 
         let reloaded = dm.contracts.first { $0.id == contract.id }
-        XCTAssertEqual(reloaded?.isSigned, true, "applyContract hand-lists columns — a new field is silently dropped unless it is added there.")
-        XCTAssertEqual(reloaded?.jerseyGiven, true)
-        XCTAssertEqual(reloaded?.ballGiven, true)
-        XCTAssertEqual(reloaded?.signedDate?.timeIntervalSince1970,
-                       contract.signedDate?.timeIntervalSince1970)
-    }
-
-    func testUntickingSurvivesTooSoAMistakeCanBeUndone() {
-        let dm = SwiftDataManager.inMemoryForTesting()
-        var contract = bundle()
-        contract.jerseyGiven = true
-        dm.addContract(contract)
-
-        contract.jerseyGiven = false
-        dm.updateContract(contract)
-
-        XCTAssertEqual(dm.contracts.first { $0.id == contract.id }?.jerseyGiven, false,
-                       "Clearing has to persist as surely as setting, or a mis-tick is permanent.")
+        XCTAssertEqual(reloaded?.signedDate, day)
+        XCTAssertEqual(reloaded?.jerseyGivenDate, day)
+        XCTAssertEqual(reloaded?.ballGivenDate, day)
     }
 
     // MARK: - Coverage guard
