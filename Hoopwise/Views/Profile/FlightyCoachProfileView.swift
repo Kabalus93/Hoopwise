@@ -29,6 +29,9 @@ struct FlightyCoachProfileView: View {
     @State private var showingImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var profileImage: Image?
+    /// Shown in the Mac's Settings window: no Done (the window closes), the
+    /// title is the category.
+    var asWindow = false
     @State private var macPane: MacSettingsPane = .general
     @State private var macTextSize = MacTextSize.current
 
@@ -76,12 +79,14 @@ struct FlightyCoachProfileView: View {
                     .scrollContentBackground(.visible)
                 }
             }
-            .navigationTitle(isChinese ? "设置" : "Settings")
+            .navigationTitle(asWindow ? macPane.title(isChinese) : (isChinese ? "设置" : "Settings"))
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isChinese ? "完成" : "Done") { dismiss() }
-                        .fontWeight(.semibold)
+                if !asWindow {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(isChinese ? "完成" : "Done") { dismiss() }
+                            .fontWeight(.semibold)
+                    }
                 }
             }
             .sheet(isPresented: $showingEditProfile) {
@@ -154,9 +159,9 @@ struct FlightyCoachProfileView: View {
                             Text(pane.title(isChinese))
                             Spacer(minLength: 0)
                         }
-                        .font(.system(size: 15, weight: macPane == pane ? .semibold : .regular))
+                        .font(.system(size: 14, weight: macPane == pane ? .semibold : .regular))
                         .foregroundStyle(.white.opacity(macPane == pane ? 0.95 : 0.75))
-                        .padding(.horizontal, 12).frame(height: 36)
+                        .padding(.horizontal, 10).frame(height: 32)
                         .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
                             .fill(macPane == pane ? FilmGlass.fillActive : Color.clear))
                         .contentShape(Rectangle())
@@ -167,8 +172,8 @@ struct FlightyCoachProfileView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(12)
-            .frame(width: 230)
+            .padding(10)
+            .frame(width: 210)
             .frame(maxHeight: .infinity, alignment: .top)
 
             Divider().opacity(0.4)
@@ -202,7 +207,13 @@ struct FlightyCoachProfileView: View {
                 }
             }
             .scrollContentBackground(.visible)
-            .frame(maxWidth: 680)
+            // Mac density: shorter rows, smaller controls, tighter sections
+            // (the phone's 44 pt rows and large switches read as an iPad).
+            .environment(\.defaultMinListRowHeight, 36)
+            .controlSize(.small)
+            .listSectionSpacing(.compact)
+            .contentMargins(.top, 4, for: .scrollContent)
+            .frame(maxWidth: 720)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityIdentifier("settings.mac")

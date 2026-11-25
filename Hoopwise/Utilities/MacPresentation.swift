@@ -334,6 +334,8 @@ enum MacWindow {
 
     static func configure() {
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            // The Settings window has its own fixed size and a visible title.
+            if scene.sizeRestrictions?.maximumSize == MacSettingsWindow.size { continue }
             scene.titlebar?.titleVisibility = .hidden
             scene.titlebar?.toolbar = nil
             scene.sizeRestrictions?.minimumSize = minimumSize

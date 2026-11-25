@@ -34,6 +34,8 @@ enum FilmRoom {
     /// `.glassEffect` and cards filled with a colour looked like two apps).
     static let pane = FilmGlass.fill
     static let boardWindowId = "coachBoard"
+    /// Settings is a window of its own on the Mac (⌘,), not a page over the app.
+    static let settingsWindowId = "settings"
 }
 
 extension Notification.Name {
@@ -41,6 +43,7 @@ extension Notification.Name {
     static let hoopwiseFilmRoomOpenSession = Notification.Name("hoopwiseFilmRoomOpenSession")
     /// ⇧⌘B on the Mac: the Coach board in its own window (the shell opens it).
     static let hoopwiseOpenBoardWindow = Notification.Name("hoopwiseOpenBoardWindow")
+    static let hoopwiseOpenSettingsWindow = Notification.Name("hoopwiseOpenSettingsWindow")
 }
 
 private struct FilmRoomWindowKey: EnvironmentKey { static let defaultValue: CGSize = .zero }
@@ -277,6 +280,10 @@ struct FilmRoomShell<Main: View>: View {
             openSessionId = note.object as? UUID
         }
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseSelectTab)) { _ in openSessionId = nil }
+        .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenSettingsWindow)) { _ in
+            // One Settings window: the value makes a second ⌘, bring it forward.
+            openWindow(id: FilmRoom.settingsWindowId, value: "settings")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .hoopwiseOpenBoardWindow)) { _ in
             openWindow(id: FilmRoom.boardWindowId)
         }
@@ -538,3 +545,51 @@ private struct LexiconSectionDebug: View {
     var body: some View { LexiconScreen() }
 }
 #endif
+
+
+/// SETTINGS AS A MAC WINDOW (25 Nov 2026, Luther, on the first Mac Settings:
+/// "why is it just a port of iPad?"). A small fixed window like System
+/// Settings — categories on the left, compact rows on the right, closed with
+/// the window's own close button (no Done), titled in the title bar.
+struct MacSettingsWindow: View {
+    @EnvironmentObject private var dataManager: DataManager
+    /// In app points; the Mac draws the app at 77 %, so about 740 × 540 on screen.
+    static let size = CGSize(width: 960, height: 700)
+
+    var body: some View {
+        ZStack {
+            if FilmRoom.isOn { FilmRoomBackdrop().ignoresSafeArea() }
+            FlightyCoachProfileView(asWindow: true)
+                .environmentObject(dataManager)
+        }
+        .environment(\.colorScheme, .dark)
+        .preferredColorScheme(.dark)
+        .background(SceneReader { scene in
+            scene.title = LocalizationManager.shared.currentLanguage == .chinese ? "设置" : "Settings"
+            scene.sizeRestrictions?.minimumSize = Self.size
+            scene.sizeRestrictions?.maximumSize = Self.size
+            #if targetEnvironment(macCatalyst)
+            scene.titlebar?.titleVisibility = .visible
+            scene.titlebar?.toolbar = nil
+            #endif
+        })
+    }
+}
+
+/// Hands the view's own window scene to `configure` once it is in a window.
+private struct SceneReader: UIViewRepresentable {
+    let configure: (UIWindowScene) -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        DispatchQueue.main.async { [weak view] in
+            if let scene = view?.window?.windowScene { configure(scene) }
+        }
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        if let scene = view.window?.windowScene { configure(scene) }
+    }
+}

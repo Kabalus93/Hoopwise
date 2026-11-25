@@ -147,7 +147,7 @@ struct SAMApp: App {
         .commands {
             // HOOPWISE ▸ Settings…
             CommandGroup(replacing: .appSettings) {
-                Button(zh ? "设置…" : "Settings…") { menu(.settings) }.keyboardShortcut(",")
+                Button(zh ? "设置…" : "Settings…") { openSettingsWindow() }.keyboardShortcut(",")
             }
             // FILE ▸ what a coach makes, then Reload.
             CommandGroup(replacing: .newItem) {
@@ -207,7 +207,7 @@ struct SAMApp: App {
             // HELP ▸ where Claude is set up (the system Help had no book to open).
             CommandGroup(replacing: .help) {
                 Button(zh ? "设置 Claude Desktop 与应用内 Claude…" : "Set Up Claude Desktop and Claude in the App…") {
-                    menu(.settings)
+                    openSettingsWindow()
                 }
             }
         }
@@ -221,6 +221,14 @@ struct SAMApp: App {
                 .modelContainer(dataManager.modelContainer)
         }
         .defaultSize(width: 1100, height: 820)
+
+        // Settings: a window of its own on the Mac.
+        WindowGroup(id: FilmRoom.settingsWindowId, for: String.self) { _ in
+            MacSettingsWindow()
+                .environmentObject(dataManager)
+                .modelContainer(dataManager.modelContainer)
+        }
+        .defaultSize(width: MacSettingsWindow.size.width, height: MacSettingsWindow.size.height)
     }
 
     private var zh: Bool { LocalizationManager.shared.currentLanguage == .chinese }
@@ -232,6 +240,11 @@ struct SAMApp: App {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             NotificationCenter.default.post(name: .hoopwiseMenuAction, object: action.rawValue)
         }
+    }
+
+    private func openSettingsWindow() {
+        macCommandTrace("settings")
+        NotificationCenter.default.post(name: .hoopwiseOpenSettingsWindow, object: nil)
     }
 
     /// Go ▸ Next Class: the class on now, else the next one to start.

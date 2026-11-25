@@ -361,7 +361,7 @@ struct FlightyActionableDashboard: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
-            .onMacMenu(.settings) { showingProfile = true }
+            .onMacMenu(.settings) { NotificationCenter.default.post(name: .hoopwiseOpenSettingsWindow, object: nil) }
             .onMacMenu(.search) { showingSearch.toggle() }
             .fullScreenCoverCompat(isPresented: $showingProfile) {
                 FlightyCoachProfileView()
@@ -520,7 +520,12 @@ struct FlightyActionableDashboard: View {
 
     private var profileToolbarButton: some View {
         Button {
-            showingProfile = true
+            // The Mac: Settings is its own window. Elsewhere: the page.
+            if FilmRoom.isOn {
+                NotificationCenter.default.post(name: .hoopwiseOpenSettingsWindow, object: nil)
+            } else {
+                showingProfile = true
+            }
         } label: {
             profileAvatar
                 .frame(width: 32, height: 32)

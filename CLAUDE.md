@@ -3068,6 +3068,17 @@ tool only sees the coach's real app's window, never a demo copy's).
   preferences). Seen at 1.3 on Sessions (the calendar falls back to its week
   layout — less room); NOT seen: a popup or cover at a scale, changing the
   size live from the picker, the board window.
+- SETTINGS IS ITS OWN WINDOW (25 Nov 2026, later; Luther on build 96: "why
+  is it just a port of iPad?"). `WindowGroup(id: "settings", for:
+  String.self)` → `MacSettingsWindow` (FilmRoom.swift): fixed 960 × 700 app
+  points (≈ 740 × 540 on screen; `SceneReader` sets min = max and a visible
+  "Settings" title — MacWindow.configure skips that scene), no Done, the
+  bar's title is the category. ⌘, , Help and Home's coach button post
+  `.hoopwiseOpenSettingsWindow`; the shell opens it with a value so a second
+  ⌘, brings the same window forward. STILL iPad CONTROLS INSIDE: the rows
+  are the system's inset-grouped Form (rounded cards, the iOS switch) —
+  Catalyst's iPad idiom draws them; Mac-drawn controls need "Optimize for
+  Mac" (declined before) or hand-drawn rows. Asked Luther which.
 - NOT DONE YET (Mac): the live game and the game recap were not seen (the
   Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was
