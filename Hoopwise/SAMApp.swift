@@ -145,39 +145,70 @@ struct SAMApp: App {
         #if targetEnvironment(macCatalyst)
         // The Mac's menu bar: View → the four tabs, ⌘1–⌘4.
         .commands {
+            // HOOPWISE ▸ Settings…
+            CommandGroup(replacing: .appSettings) {
+                Button(zh ? "设置…" : "Settings…") { menu(.settings) }.keyboardShortcut(",")
+            }
+            // FILE ▸ what a coach makes, then Reload.
             CommandGroup(replacing: .newItem) {
-                let zh = LocalizationManager.shared.currentLanguage == .chinese
                 Button(zh ? "新建课程…" : "New Session…") {
                     NotificationCenter.default.post(name: .hoopwiseNewSessionCommand, object: nil)
                 }.keyboardShortcut("n")
                 Button(zh ? "新建学员…" : "New Athlete…") {
                     NotificationCenter.default.post(name: .hoopwiseNewAthlete, object: nil)
                 }.keyboardShortcut("n", modifiers: [.command, .shift])
+                Divider()
+                Button(zh ? "新建项目…" : "New Program…") { menu(.newProgram) }
+                    .keyboardShortcut("n", modifiers: [.command, .option])
+                Button(zh ? "新建训练…" : "New Drill…") { menu(.newDrill) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                Button(zh ? "新建战术…" : "New Play…") { menu(.newPlay) }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                Button(zh ? "新建球队…" : "New Team…") { menu(.newTeam) }
+                Divider()
+                Button(zh ? "重新载入数据" : "Reload Data") {
+                    Task { await dataManager.refreshAllCaches() }
+                }.keyboardShortcut("r")
             }
-            // REPLACES the system Find group, whose ⌘F reached the text
-            // system instead of this command (Luther: ⌘F did nothing).
+            // EDIT ▸ finding things. REPLACES the system Find group, whose ⌘F
+            // reached the text system instead of this command.
             CommandGroup(replacing: .textEditing) {
-                Button(LocalizationManager.shared.currentLanguage == .chinese ? "查找学员" : "Find Athlete") {
+                Button(zh ? "搜索全部…" : "Search Everything…") { menu(.search) }.keyboardShortcut("k")
+                Button(zh ? "查找学员" : "Find Athlete") {
                     macCommandTrace("find")
                     NotificationCenter.default.post(name: .hoopwiseFindAthlete, object: nil)
                 }.keyboardShortcut("f")
             }
+            // VIEW ▸ the second window (Enter Full Screen is the system's).
             CommandGroup(before: .toolbar) {
-                let zh = LocalizationManager.shared.currentLanguage == .chinese
-                Button(zh ? "首页" : "Home") { selectTab(0) }.keyboardShortcut("1")
-                Button(zh ? "课程" : "Sessions") { selectTab(1) }.keyboardShortcut("2")
-                Button(zh ? "学员" : "Athletes") { selectTab(2) }.keyboardShortcut("3")
-                Button(zh ? "收入" : "Revenue") { selectTab(3) }.keyboardShortcut("4")
-                Button(zh ? "战术" : "Plays") { selectTab(4) }.keyboardShortcut("5")
-                Button(zh ? "训练" : "Drills") { selectTab(5) }.keyboardShortcut("6")
-                Button(zh ? "术语" : "Lexicon") { selectTab(6) }.keyboardShortcut("7")
-                Button(zh ? "球队" : "Teams") { selectTab(7) }.keyboardShortcut("8")
-                Button(zh ? "机构" : "Organization") { selectTab(8) }.keyboardShortcut("9")
-                Divider()
                 Button(zh ? "战术板窗口" : "Coach Board Window") {
                     NotificationCenter.default.post(name: .hoopwiseOpenBoardWindow, object: nil)
                 }.keyboardShortcut("b", modifiers: [.command, .shift])
                 Divider()
+            }
+            // GO ▸ every place in the sidebar, today, and the next class.
+            CommandMenu(zh ? "前往" : "Go") {
+                Button(zh ? "今天" : "Today") { menu(.today) }.keyboardShortcut("t")
+                Button(zh ? "下一节课" : "Next Class") { openNextClass() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
+                Divider()
+                Button(zh ? "首页" : "Home") { selectTab(0) }.keyboardShortcut("1")
+                Button(zh ? "课程" : "Sessions") { selectTab(1) }.keyboardShortcut("2")
+                Button(zh ? "学员" : "Athletes") { selectTab(2) }.keyboardShortcut("3")
+                Button(zh ? "收入" : "Revenue") { selectTab(3) }.keyboardShortcut("4")
+                Divider()
+                Button(zh ? "战术" : "Plays") { selectTab(4) }.keyboardShortcut("5")
+                Button(zh ? "训练" : "Drills") { selectTab(5) }.keyboardShortcut("6")
+                Button(zh ? "术语" : "Lexicon") { selectTab(6) }.keyboardShortcut("7")
+                Divider()
+                Button(zh ? "球队" : "Teams") { selectTab(7) }.keyboardShortcut("8")
+                Button(zh ? "机构" : "Organization") { selectTab(8) }.keyboardShortcut("9")
+            }
+            // HELP ▸ where Claude is set up (the system Help had no book to open).
+            CommandGroup(replacing: .help) {
+                Button(zh ? "设置 Claude Desktop 与应用内 Claude…" : "Set Up Claude Desktop and Claude in the App…") {
+                    menu(.settings)
+                }
             }
         }
         #endif
@@ -190,6 +221,27 @@ struct SAMApp: App {
                 .modelContainer(dataManager.modelContainer)
         }
         .defaultSize(width: 1100, height: 820)
+    }
+
+    private var zh: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    /// A menu command: show the place that carries it out, then ask it.
+    private func menu(_ action: MacMenuAction) {
+        macCommandTrace(action.rawValue)
+        selectTab(action.place)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            NotificationCenter.default.post(name: .hoopwiseMenuAction, object: action.rawValue)
+        }
+    }
+
+    /// Go ▸ Next Class: the class on now, else the next one to start.
+    private func openNextClass() {
+        macCommandTrace("nextClass")
+        let now = Date()
+        guard let next = dataManager.sessionEvents
+            .filter({ $0.endTime > now && !SessionLifecycle.didNotHappen($0) })
+            .min(by: { $0.startTime < $1.startTime }) else { return }
+        NotificationCenter.default.post(name: .hoopwiseOpenSessionRequest, object: next.id)
     }
 
     private func selectTab(_ tab: Int) {

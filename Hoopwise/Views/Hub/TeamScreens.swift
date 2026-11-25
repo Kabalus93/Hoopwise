@@ -108,6 +108,7 @@ struct TeamsScreen: View {
                     .accessibilityIdentifier("teams.new")
             }
         }
+        .onMacMenu(.newTeam) { creating = true }
         .sheet(isPresented: $creating) { TeamEditorSheet(team: nil) }
     }
 }

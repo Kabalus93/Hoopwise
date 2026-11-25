@@ -151,6 +151,7 @@ extension UIViewController {
     /// other system screens keep their own background.
     @objc func hw_glassLayout() {
         hw_glassLayout()
+        hw_applyTextScale()
         // Clear pages are see-through: only the top page of a stack shows
         // (the page underneath was readable through the one pushed over it).
         if let stack = self as? UINavigationController { stack.hw_showOnlyTheTopPage() }

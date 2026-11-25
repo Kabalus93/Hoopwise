@@ -17,6 +17,35 @@ extension Notification.Name {
     static let hoopwiseNewSessionCommand = Notification.Name("hoopwiseNewSessionCommand")
     static let hoopwiseNewSession = Notification.Name("hoopwiseNewSession")
     static let hoopwiseOpenAddSession = Notification.Name("hoopwiseOpenAddSession")
+    /// A menu-bar command for the page now on screen (object: MacMenuAction
+    /// raw value). SAMApp shows the page first, then posts this.
+    static let hoopwiseMenuAction = Notification.Name("hoopwiseMenuAction")
+}
+
+/// What the Mac's menu bar can ask a page to do (25 Nov 2026, Luther: "a
+/// proper menu bar with actual useful and relevant stuff").
+enum MacMenuAction: String {
+    case settings, search, newProgram, newDrill, newPlay, newTeam, today
+
+    /// The sidebar place that carries the command out.
+    var place: Int {
+        switch self {
+        case .settings, .search: return 0
+        case .newProgram, .today: return 1
+        case .newPlay: return 4
+        case .newDrill: return 5
+        case .newTeam: return 7
+        }
+    }
+}
+
+extension View {
+    /// Runs `action` when the menu bar asks this page for `command`.
+    func onMacMenu(_ command: MacMenuAction, perform action: @escaping () -> Void) -> some View {
+        onReceive(NotificationCenter.default.publisher(for: .hoopwiseMenuAction)) { note in
+            if (note.object as? String) == command.rawValue { action() }
+        }
+    }
 }
 
 extension View {

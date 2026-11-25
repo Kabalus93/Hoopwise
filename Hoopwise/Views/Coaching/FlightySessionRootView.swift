@@ -37,6 +37,8 @@ struct FlightySessionRootView: View {
             .onReceive(timer) { _ in
                 currentTime = Date()
             }
+            .onMacMenu(.newProgram) { showingAddProgram = true }
+            .onMacMenu(.today) { selectedSegment = 1 }
             // ⌘N on the Mac: the calendar, then its Add Session sheet.
             .onReceive(NotificationCenter.default.publisher(for: .hoopwiseNewSession)) { _ in
                 selectedSegment = 1
@@ -1725,6 +1727,10 @@ struct FlightySessionsCalendarView: View {
         calendarMaster
             .onAppear {
                 currentWeekStart = selectedDate
+            }
+            .onMacMenu(.today) {
+                selectedDate = Date()
+                currentWeekStart = Date()
             }
     }
 

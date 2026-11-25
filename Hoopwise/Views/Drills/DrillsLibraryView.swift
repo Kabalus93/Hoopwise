@@ -619,6 +619,7 @@ struct DrillsLibraryView: View {
         // The filters sit right on top of the list (Luther, November 2026:
         // there was a section gap between ages, blocks and the list).
         .listSectionSpacing(.compact)
+        .onMacMenu(.newDrill) { if pick == nil { showingAddDrill = true } }
         // On the Mac the sidebar calls this place Drills; the page says the same.
         .navigationTitle(pick?.title ?? (FilmRoom.isOn ? (isChinese ? "训练" : "Drills")
                                          : (isChinese ? "训练库" : "Activity library")))

@@ -291,10 +291,13 @@ struct FlightyActionableDashboard: View {
             .background {
                 // ⌘K opens it from a keyboard (iPad keyboards, the Mac — a
                 // mouse does not pull a page down).
+                // (On the Mac ⌘K is Edit → Search Everything in the menu bar.)
+                #if !targetEnvironment(macCatalyst)
                 Button("") { showingSearch.toggle() }
                     .keyboardShortcut("k", modifiers: .command)
                     .opacity(0)
                     .accessibilityHidden(true)
+                #endif
             }
     }
 
@@ -358,6 +361,8 @@ struct FlightyActionableDashboard: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
             #endif
+            .onMacMenu(.settings) { showingProfile = true }
+            .onMacMenu(.search) { showingSearch.toggle() }
             .fullScreenCoverCompat(isPresented: $showingProfile) {
                 FlightyCoachProfileView()
             }

@@ -85,6 +85,7 @@ struct JournalPlaysScreen: View {
                     }
                 }
             }
+            .onMacMenu(.newPlay) { creating = true }
             .sheet(isPresented: $creating) {
                 JournalNewPlaySheet { play in
                     created = Opened(play: play, route: play.conceptPart.map {

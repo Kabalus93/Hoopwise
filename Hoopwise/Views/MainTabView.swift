@@ -125,11 +125,22 @@ struct MainTabView: View {
             #if DEBUG
             // Agent check of the Mac commands without a keyboard:
             // HOOPWISE_MAC_COMMAND=newSession|newAthlete|find.
+            // Also any MacMenuAction (settings, search, newProgram, newDrill,
+            // newPlay, newTeam, today): its place, then the action.
             if let command = ProcessInfo.processInfo.environment["HOOPWISE_MAC_COMMAND"] {
-                let name: Notification.Name = command == "newSession" ? .hoopwiseNewSessionCommand
-                    : command == "newAthlete" ? .hoopwiseNewAthlete : .hoopwiseFindAthlete
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    NotificationCenter.default.post(name: name, object: nil)
+                if let action = MacMenuAction(rawValue: command) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        NotificationCenter.default.post(name: .hoopwiseSelectTab, object: action.place)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            NotificationCenter.default.post(name: .hoopwiseMenuAction, object: action.rawValue)
+                        }
+                    }
+                } else {
+                    let name: Notification.Name = command == "newSession" ? .hoopwiseNewSessionCommand
+                        : command == "newAthlete" ? .hoopwiseNewAthlete : .hoopwiseFindAthlete
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        NotificationCenter.default.post(name: name, object: nil)
+                    }
                 }
             }
             #endif

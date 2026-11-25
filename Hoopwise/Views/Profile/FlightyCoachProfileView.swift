@@ -29,7 +29,9 @@ struct FlightyCoachProfileView: View {
     @State private var showingImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var profileImage: Image?
-    
+    @State private var macPane: MacSettingsPane = .general
+    @State private var macTextSize = MacTextSize.current
+
     private var coach: Coach {
         dataManager.coach
     }
@@ -53,21 +55,27 @@ struct FlightyCoachProfileView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                profileHeaderSection
-                statsSection
-                notificationsSection
-                #if targetEnvironment(macCatalyst)
-                claudeDesktopSection
-                claudeKeySection
-                #endif
-                preferencesSection
-                coachingSection
-                syncSection
-                aboutSection
-                legalSection
+            Group {
+                if FilmRoom.isOn {
+                    macSettings
+                } else {
+                    Form {
+                        profileHeaderSection
+                        statsSection
+                        notificationsSection
+                        #if targetEnvironment(macCatalyst)
+                        claudeDesktopSection
+                        claudeKeySection
+                        #endif
+                        preferencesSection
+                        coachingSection
+                        syncSection
+                        aboutSection
+                        legalSection
+                    }
+                    .scrollContentBackground(.visible)
+                }
             }
-            .scrollContentBackground(.visible)
             .navigationTitle(isChinese ? "设置" : "Settings")
             .navigationBarTitleDisplayModeCompat(.inline)
             .toolbar {
@@ -99,6 +107,159 @@ struct FlightyCoachProfileView: View {
         }
     }
     
+    // MARK: - Settings on the Mac
+
+    /// The Mac's Settings (25 Nov 2026, Luther: "tailored and relevant to
+    /// quality of life and ease of use on a Mac"): categories on the left,
+    /// one category's settings on the right in a readable column — instead
+    /// of the phone's single long list stretched across the window.
+    private enum MacSettingsPane: String, CaseIterable, Identifiable {
+        case general, profile, notifications, claude, coaching, sync, keyboard, about
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .general: return "gearshape"
+            case .profile: return "person.crop.circle"
+            case .notifications: return "bell"
+            case .claude: return "sparkles"
+            case .coaching: return "figure.basketball"
+            case .sync: return "icloud"
+            case .keyboard: return "keyboard"
+            case .about: return "info.circle"
+            }
+        }
+
+        func title(_ zh: Bool) -> String {
+            switch self {
+            case .general: return zh ? "通用" : "General"
+            case .profile: return zh ? "个人资料" : "Profile"
+            case .notifications: return zh ? "通知" : "Notifications"
+            case .claude: return "Claude"
+            case .coaching: return zh ? "教学" : "Coaching"
+            case .sync: return zh ? "同步与数据" : "Sync and Data"
+            case .keyboard: return zh ? "键盘快捷键" : "Keyboard Shortcuts"
+            case .about: return zh ? "关于" : "About"
+            }
+        }
+    }
+
+    private var macSettings: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(MacSettingsPane.allCases) { pane in
+                    Button { macPane = pane } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: pane.icon).frame(width: 22)
+                            Text(pane.title(isChinese))
+                            Spacer(minLength: 0)
+                        }
+                        .font(.system(size: 15, weight: macPane == pane ? .semibold : .regular))
+                        .foregroundStyle(.white.opacity(macPane == pane ? 0.95 : 0.75))
+                        .padding(.horizontal, 12).frame(height: 36)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(macPane == pane ? FilmGlass.fillActive : Color.clear))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .filmRoomHover(cornerRadius: 9)
+                    .accessibilityIdentifier("settings.pane.\(pane.rawValue)")
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(width: 230)
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            Divider().opacity(0.4)
+
+            Form {
+                switch macPane {
+                case .general:
+                    macTextSizeSection
+                    preferencesSection
+                case .profile:
+                    profileHeaderSection
+                    statsSection
+                case .notifications:
+                    notificationsSection
+                case .claude:
+                    #if targetEnvironment(macCatalyst)
+                    claudeDesktopSection
+                    claudeKeySection
+                    #else
+                    EmptyView()
+                    #endif
+                case .coaching:
+                    coachingSection
+                case .sync:
+                    syncSection
+                case .keyboard:
+                    macShortcutsSections
+                case .about:
+                    aboutSection
+                    legalSection
+                }
+            }
+            .scrollContentBackground(.visible)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityIdentifier("settings.mac")
+    }
+
+    private var macTextSizeSection: some View {
+        Section {
+            Picker(isChinese ? "文字大小" : "Text size", selection: $macTextSize) {
+                ForEach(MacTextSize.allCases) { size in
+                    Text(size.title(chinese: isChinese)).tag(size)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("settings.textSize")
+            .onChange(of: macTextSize) { _, size in
+                #if targetEnvironment(macCatalyst)
+                MacTextSize.set(size)
+                #endif
+            }
+        } header: {
+            Text(isChinese ? "文字大小" : "Text size")
+        } footer: {
+            Text(isChinese ? "窗口里的一切一起放大或缩小——文字、照片、球场和按钮——所以每页显示的内容会略少或略多。仅此 Mac。"
+                           : "Everything in the window grows or shrinks together — type, photos, courts and buttons — so a page shows a little less or a little more. This Mac only.")
+        }
+    }
+
+    @ViewBuilder
+    private var macShortcutsSections: some View {
+        let zh = isChinese
+        shortcutSection(zh ? "新建" : "Create", [
+            ("⌘N", zh ? "新建课程" : "New Session"), ("⇧⌘N", zh ? "新建学员" : "New Athlete"),
+            ("⌥⌘N", zh ? "新建项目" : "New Program"), ("⇧⌘D", zh ? "新建训练" : "New Drill"),
+            ("⇧⌘P", zh ? "新建战术" : "New Play")])
+        shortcutSection(zh ? "查找" : "Find", [
+            ("⌘K", zh ? "搜索全部" : "Search Everything"), ("⌘F", zh ? "查找学员" : "Find Athlete")])
+        shortcutSection(zh ? "前往" : "Go", [
+            ("⌘T", zh ? "今天" : "Today"), ("⇧⌘T", zh ? "下一节课" : "Next Class"),
+            ("⌘1 – ⌘9", zh ? "侧边栏的各个页面" : "The places in the sidebar"),
+            ("⇧⌘B", zh ? "战术板窗口" : "Coach Board Window")])
+        shortcutSection(zh ? "窗口" : "Window", [
+            ("⌘,", zh ? "设置" : "Settings"), ("⌘R", zh ? "重新载入数据" : "Reload Data"),
+            ("Esc · ⌘W", zh ? "关闭弹窗" : "Close a popup")])
+    }
+
+    private func shortcutSection(_ title: String, _ rows: [(String, String)]) -> some View {
+        Section(title) {
+            ForEach(rows, id: \.0) { row in
+                HStack {
+                    Text(row.1)
+                    Spacer()
+                    Text(row.0).font(.system(.body, design: .rounded).weight(.medium)).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     // MARK: - Profile Header Section (Form-styled, Apple Settings)
     @ViewBuilder
     private var profileHeaderSection: some View {
@@ -124,7 +285,7 @@ struct FlightyCoachProfileView: View {
                         .font(.headline)
                         .foregroundStyle(.primary)
                     Text(coach.email.isEmpty
-                         ? (isChinese ? "点按头像或编辑开始" : "Tap photo or Edit to get started")
+                         ? (isChinese ? "点按头像或编辑开始" : (FilmRoom.isOn ? "Click the photo or Edit to get started" : "Tap photo or Edit to get started"))
                          : coach.email)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -622,6 +783,8 @@ struct FlightyCoachProfileView: View {
                 Label(isChinese ? "货币" : "Currency", systemImage: "dollarsign.circle")
             }
 
+            // A Mac has no haptics to switch.
+            if !FilmRoom.isOn {
             Toggle(isOn: Binding(
                 get: { localSettings.hapticFeedbackEnabled },
                 set: { newValue in
@@ -630,6 +793,7 @@ struct FlightyCoachProfileView: View {
                 })) {
                     Label(isChinese ? "触感反馈" : "Haptic Feedback", systemImage: "hand.tap")
                 }
+            }
 
             // ProfileBackgroundRemoval: after a profile photo, the subject is
             // cut out on this device and a background colour picked.

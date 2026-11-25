@@ -3016,6 +3016,35 @@ tool only sees the coach's real app's window, never a demo copy's).
   the Mac must never write a UserDefaults key the real app reads — other
   demo hooks (remembered shooting setups, Home pins, play activity) have the
   same exposure and were NOT audited.
+- THE MENU BAR (25 Nov 2026, Luther: "a proper menu bar with actual useful
+  and relevant stuff"). SAMApp `.commands`: Hoopwise ▸ Settings… ⌘, · File ▸
+  New Session ⌘N, New Athlete ⇧⌘N, New Program ⌥⌘N, New Drill ⇧⌘D, New Play
+  ⇧⌘P, New Team, Reload Data ⌘R · Edit ▸ Search Everything ⌘K (Home's
+  search; the hidden ⌘K button is iPad-only now), Find Athlete ⌘F · View ▸
+  Coach Board Window ⇧⌘B · GO ▸ Today ⌘T, Next Class ⇧⌘T (the class on now,
+  else the next to start), the nine sidebar places ⌘1–⌘9 · Help ▸ Set Up
+  Claude…. `MacMenuAction` (MacMenus.swift): SAMApp shows the action's place
+  (.hoopwiseSelectTab, which also closes an open class) then posts
+  `.hoopwiseMenuAction`; a page answers with `.onMacMenu(.newDrill) { … }`.
+  DEBUG HOOPWISE_MAC_COMMAND=<action> fires one at launch. Seen that way:
+  newPlay, newDrill, newTeam, newProgram (popups open), settings. NOT seen:
+  search, today, Next Class, and the menus themselves in the menu bar.
+- SETTINGS ON THE MAC (same day: "set font size … tailored to quality of
+  life and ease of use on a Mac"). FlightyCoachProfileView `macSettings`:
+  categories on the left (General · Profile · Notifications · Claude ·
+  Coaching · Sync and Data · Keyboard Shortcuts · About), the category's
+  sections in a ≤ 680 pt column; the phone / iPad keep the one long list.
+  No Haptic Feedback row on the Mac. TEXT SIZE (General): Small 0.9 · Default
+  · Large 1.1 · Larger 1.2 · Largest 1.3 — Views/Mac/MacTextSize.swift
+  (`mac.textScale`, this Mac). It is a ZOOM, not Dynamic Type (most type is
+  in fixed points): MacGlass's layout hook gives the root view of every
+  window, popup and cover a scale transform (`hw_applyTextScale`), and UIKit
+  then lays the page out at frame ÷ scale. Alerts, menus, popovers and
+  system pickers are left alone. DEBUG HOOPWISE_TEXT_SCALE=<n> shows a scale
+  WITHOUT writing the setting (a demo copy shares the real app's
+  preferences). Seen at 1.3 on Sessions (the calendar falls back to its week
+  layout — less room); NOT seen: a popup or cover at a scale, changing the
+  size live from the picker, the board window.
 - NOT DONE YET (Mac): the live game and the game recap were not seen (the
   Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was
