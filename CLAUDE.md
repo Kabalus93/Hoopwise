@@ -2861,7 +2861,15 @@ and the game stats can work together." Decided: keep 1–10, START FRESH.
   block's header adds up (`sectionDuration`); the stored warmupMinutes /
   skillsMinutes (set at generation, never shown) are no longer shared out.
   No axis can exceed the visible plan (+ 10 per play). Test:
-  SkillIntegrationTests.testMinutesNeverExceedWhatThePlanShows. The TARGET now adds the GROUP'S WEAK SKILLS
+  SkillIntegrationTests.testMinutesNeverExceedWhatThePlanShows. THIRD TIME
+  (26 Nov 2026, Luther: "the math still does not add up" — a 35 + 38 = 73
+  minute plan read ~46 min footwork, ~40 finishing, ~40 game IQ): a drill
+  counted its whole length for EACH skill by score/3, so the skills summed to
+  far more than the plan. Now a drill's minutes are SHARED among its skills
+  in proportion to their scores (`minutes × score ÷ the drill's scores`), so
+  the eight skills ADD UP to the plan's minutes (+ 10 per play). Every reader
+  of `PlanCoverage.minutes` follows: the dashboard, phase balance, the plan
+  engine's gaps, the player card and the progress report. The TARGET now adds the GROUP'S WEAK SKILLS
   (`groupRatings` = per-skill average of the expected athletes who were
   rated; average ≤ 5 → target 0.6 + (5 − avg) × 0.08, `groupWeakness`); the
   dashboard says "Group's weakest: Shooting (avg 4.1)" (`plan.groupWeakest`).

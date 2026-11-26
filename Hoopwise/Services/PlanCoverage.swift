@@ -7,15 +7,25 @@ import Foundation
 // coverage and Generate Plan all read it.
 
 enum PlanCoverage {
-    /// Axis → weighted minutes. Each drill's 0–3 scores count over the drill's
-    /// own minutes (what the Plan tab shows); a play counts like a ten-minute
-    /// drill shaped by its skills.
+    /// Axis → minutes. Each drill's own minutes (what the Plan tab shows) are
+    /// shared among its skills by their 0–3 scores, so the eight add up to
+    /// the plan; a play counts like a ten-minute drill shaped by its skills.
     static func minutes(of curriculum: SessionCurriculum, drills: [DrillItem],
                         playProfile: (SessionPlayRef) -> AttributeProfile = { _ in defaultPlayProfile }) -> [DrillAttribute: Double] {
         let byId = Dictionary(drills.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var total: [DrillAttribute: Double] = [:]
+        // A drill's minutes are SHARED among the skills it works, by their
+        // scores — so the minutes of all eight skills add up to the plan's
+        // own minutes (26 Nov 2026, Luther: "the math still does not add
+        // up" — a 73-minute plan read ~46 min footwork, ~40 finishing, ~40
+        // game IQ, because a 20-minute drill counted 20 minutes for EACH
+        // skill it had as Main).
         func add(_ profile: AttributeProfile, minutes: Double) {
-            for axis in DrillAttribute.allCases { total[axis, default: 0] += minutes * Double(profile[axis]) / 3 }
+            let sum = DrillAttribute.allCases.reduce(0) { $0 + profile[$1] }
+            guard sum > 0 else { return }
+            for axis in DrillAttribute.allCases where profile[axis] > 0 {
+                total[axis, default: 0] += minutes * Double(profile[axis]) / Double(sum)
+            }
         }
         // Each drill counts for ITS OWN minutes — the same numbers the Plan
         // tab adds up in each block's header (18 Nov 2026, Luther: "still

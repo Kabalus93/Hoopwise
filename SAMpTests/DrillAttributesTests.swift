@@ -56,9 +56,12 @@ final class DrillAttributesTests: XCTestCase {
         plan.skillsMinutes = 30
         plan.gameMinutes = 0
         let minutes = PlanCoverage.minutes(of: plan, drills: [passing, dribbling])
-        XCTAssertEqual(minutes[.passing] ?? 0, 30, accuracy: 0.01, "a 3 in a 30-minute block = 30 minutes")
+        // A drill's minutes are shared among its skills by their scores, so
+        // the skills add up to the plan: 30 min at passing 3 + IQ 1 = 22.5 + 7.5.
+        XCTAssertEqual(minutes[.passing] ?? 0, 22.5, accuracy: 0.01)
         XCTAssertEqual(minutes[.ballHandling] ?? 0, 10, accuracy: 0.01)
-        XCTAssertEqual(minutes[.gameIQ] ?? 0, 10, accuracy: 0.01)
+        XCTAssertEqual(minutes[.gameIQ] ?? 0, 7.5, accuracy: 0.01)
+        XCTAssertEqual(minutes.values.reduce(0, +), 40, accuracy: 0.01, "the skills add up to the plan's 40 minutes")
         XCTAssertEqual(PlanCoverage.emphasis(minutes).first, .passing)
 
         let target = PlanCoverage.target(phaseFocus: [.defense, .passing], skillTargets: nil)

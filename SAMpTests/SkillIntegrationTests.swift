@@ -68,7 +68,11 @@ final class SkillIntegrationTests: XCTestCase {
         plan.warmupDrillIds = warm.map(\.id); plan.warmupMinutes = 40
         plan.skillDrillIds = [skill.id]; plan.skillsMinutes = 30
         let minutes = PlanCoverage.minutes(of: plan, drills: warm + [skill])
-        XCTAssertEqual(minutes[.ballHandling] ?? 0, 34, accuracy: 0.01, "24 + 10, as the block headers say")
+        // 24 + 10 minutes on screen. Each drill's minutes are shared among
+        // its skills: 3 × 8 × 3/5 + 10 × 3/6 = 19.4 of ball handling, and all
+        // the skills together are exactly the 34 minutes the headers show.
+        XCTAssertEqual(minutes[.ballHandling] ?? 0, 19.4, accuracy: 0.01)
+        XCTAssertEqual(minutes.values.reduce(0, +), 34, accuracy: 0.01, "the skills add up to the plan")
     }
 
     func testTheGroupsWeakSkillsJoinTheTarget() {
