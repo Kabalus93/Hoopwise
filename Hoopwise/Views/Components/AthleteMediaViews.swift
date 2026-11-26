@@ -24,6 +24,18 @@ struct VaultThumbnail: View {
                 }
             }
             .clipped()
+            .overlay(alignment: .bottomTrailing) {
+                if asset.mediaType == .video {
+                    HStack(spacing: 3) {
+                        Image(systemName: "play.fill").font(.system(size: 9, weight: .bold))
+                        Text(VideoTime.text(asset.duration)).font(.caption2.weight(.semibold).monospacedDigit())
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(Capsule().fill(.black.opacity(0.55)))
+                    .padding(5)
+                }
+            }
             .task(id: asset.localIdentifier) { image = await PhotoVault.image(asset, side: side) }
     }
 }
@@ -56,7 +68,7 @@ struct AthleteMediaCard: View {
                         .font(.subheadline.weight(.semibold))
                         .accessibilityIdentifier("media.all")
                 }
-                PhotosPicker(selection: $picked, matching: .images, photoLibrary: .shared()) {
+                PhotosPicker(selection: $picked, matching: .any(of: [.images, .videos]), photoLibrary: .shared()) {
                     Image(systemName: "plus").font(.subheadline.weight(.bold))
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color(.tertiarySystemFill)))
@@ -71,8 +83,8 @@ struct AthleteMediaCard: View {
                         .font(.subheadline)
                 }
             } else if entries.isEmpty {
-                Text(isChinese ? "你给这位学员拍的照片：用 + 添加，或在课程的 ⋯ → 本节课的照片 里选。"
-                               : "Photos you shot of this athlete. Add them with +, or from a class's ⋯ → Photos from this class.")
+                Text(isChinese ? "你给这位学员拍的照片和视频：用 + 添加，或在课程的 ⋯ → 本节课的照片 里选。"
+                               : "Photos and videos you shot of this athlete. Add them with +, or from a class's ⋯ → Photos from this class.")
                     .font(.subheadline).foregroundStyle(.secondary)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -176,6 +188,14 @@ struct VaultPhotoView: View {
     private var asset: PHAsset? { PhotoVault.assets(for: [entry]).first?.asset }
 
     var body: some View {
+        if let asset, asset.mediaType == .video {
+            VaultVideoView(studentId: studentId, entry: entry, asset: asset, pushed: pushed)
+        } else {
+            photoBody
+        }
+    }
+
+    private var photoBody: some View {
         VStack(spacing: 16) {
             Group {
                 if let image {

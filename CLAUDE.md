@@ -3698,6 +3698,39 @@ store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
   smaller polaroid, swiss lists three). HOOPWISE_POST_ASPECT=square exports the
   1:1 set. All thirteen were looked at as exports (portrait and square) on the
   simulator; never with a real cut-out.
+- VIDEOS (26 Nov 2026, Luther: "now let's do overlay templates for videos").
+  The vault takes VIDEOS too — same index (a VaultPhoto names any asset), the
+  picker offers images and videos, thumbnails show ▶ and the length, a class's
+  ⋯ → Photos from this class lists its clips. A video opens VaultVideoView
+  (plays; "Make a video with their stats" `media.makeVideo`) →
+  VideoPostComposer (Views/Components/VideoPostViews.swift): six ANIMATED
+  overlays (`videoPost.template.<raw>`): LOWER THIRD (broadcast name bar and
+  stat strip slide in, and out before the end), SCORE BUG (corner box, its
+  stat turning over every 2.4 s), TITLE CARD (a colour card opens the clip
+  and slides away; from 7 s it returns to close it), COUNT-UP (the best stat
+  runs up from 0, a colour glow behind, the others under it), CINEMA
+  (letterbox bars, the name in the bar, a subtitle typing itself), NEON (a
+  tube of light drawn round the frame, the name flickering on); the stats
+  range; 9:16 · 4:5 · 1:1; the part of the clip (start + length, ≤ 60 s).
+  Services/VideoPost.swift: `cut` (trim, upright + centred fill, sound kept),
+  `export` (.mp4, temporary, for the share sheet), `VideoTrack` (keyframes on
+  the clip's clock; `frames` for counting / typing). The overlay is ONE
+  CALayer tree (Views/Components/VideoOverlayTemplates.swift — parts drawn
+  once by SwiftUI, moved by Core Animation): the preview rides it on an
+  AVSynchronizedLayer, the export burns the same tree in through
+  AVVideoCompositionCoreAnimationTool. THE SIMULATOR CAN DO NEITHER: playing
+  a composed clip fails (-12784) and the export's overlay pass CRASHES there
+  (IOSurface in CA's GLES renderer) — export refuses in the Simulator with a
+  message. The Mac runs both: DEBUG HOOPWISE_SHOT=videoPost (a clip made in
+  the app: the athlete's photo, a ball, 8 s landscape; HOOPWISE_POST_SAMPLE=1
+  sample numbers) + HOOPWISE_VIDEOPOST_EXPORT=1 exports every overlay
+  (HOOPWISE_VIDEOPOST_ONLY=a,b; HOOPWISE_POST_ASPECT=portrait|square) and
+  logs "videoPost <template> exported in N s" (~1.5 s for 8 s) to
+  hoopwise.mac; + HOOPWISE_VIDEOPOST_SHEET=1 lays the frames out in the
+  window to capture by window id (the Mac's App Group cannot be read from
+  the terminal). Seen on the Mac: all six exported (frames at 0.3–7.6 s) and
+  the preview playing Lower third. NOT seen: a real iPhone / iPad (play and
+  export), a clip from Photos, iCloud downloads, 4:5 / 1:1 exports, Chinese.
 - DEBUG: HOOPWISE_SHOT=athletePost (+ HOOPWISE_POST_EXPORT=1 writes
   post-<template>-<source>.jpg, sample numbers when the demo athlete has no
   games); HOOPWISE_DEMO_VAULT=1 on studentProfile files the newest six library

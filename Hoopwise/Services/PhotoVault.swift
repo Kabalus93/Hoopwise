@@ -115,14 +115,15 @@ enum PhotoVault {
 
     // MARK: A class's photos
 
-    /// Photos shot from 30 minutes before a class to an hour after it.
+    /// Photos and videos shot from 30 minutes before a class to an hour after it.
     static func photos(during session: SessionEvent) -> [PHAsset] {
         guard hasAccess else { return [] }
         let from = session.startTime.addingTimeInterval(-30 * 60)
         let to = session.endTime.addingTimeInterval(60 * 60)
         let options = PHFetchOptions()
-        options.predicate = NSPredicate(format: "mediaType == %d AND creationDate >= %@ AND creationDate <= %@",
-                                        PHAssetMediaType.image.rawValue, from as NSDate, to as NSDate)
+        // Photos and videos (videos since 26 Nov 2026).
+        options.predicate = NSPredicate(format: "(mediaType == %d OR mediaType == %d) AND creationDate >= %@ AND creationDate <= %@",
+                                        PHAssetMediaType.image.rawValue, PHAssetMediaType.video.rawValue, from as NSDate, to as NSDate)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
         var out: [PHAsset] = []
         PHAsset.fetchAssets(with: options).enumerateObjects { a, _, _ in out.append(a) }

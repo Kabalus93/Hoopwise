@@ -1,4 +1,5 @@
 import Photos
+import AVFoundation
 #if DEBUG
 import SwiftUI
 import SwiftData
@@ -767,6 +768,28 @@ enum SheetGalleryDebug {
                 missing("athletePost: needs a demo athlete with a photo")
             }
 
+        case "videoPost":
+            // The video composer over a clip made here (26 Nov 2026): the demo
+            // athlete's photo panning on a stand-in court, a ball bouncing, 8 s
+            // landscape — so the crop is exercised too. HOOPWISE_POST_SAMPLE=1
+            // gives sample numbers. HOOPWISE_VIDEOPOST_EXPORT=1 exports every
+            // overlay (9:16, or HOOPWISE_POST_ASPECT=portrait|square) to
+            // video-<template>.mp4 and frames video-<template>-<t>.jpg in the
+            // App Group Library/Caches, logging "videoPost …" to hoopwise.mac.
+            if let student = dm.students.max(by: { ($0.profileImageData?.count ?? 0) < ($1.profileImageData?.count ?? 0) }) {
+                // A drawn stand-in when the athlete has no photo (the Mac demo store).
+                let face = student.profileImageData.flatMap(UIImage.init(data:))
+                    ?? UIGraphicsImageRenderer(size: CGSize(width: 800, height: 800)).image { ctx in
+                        UIColor(red: 0.85, green: 0.62, blue: 0.48, alpha: 1).setFill()
+                        ctx.cgContext.fillEllipse(in: CGRect(x: 200, y: 120, width: 400, height: 480))
+                        UIColor(red: 0.85, green: 0.25, blue: 0.2, alpha: 1).setFill()
+                        ctx.cgContext.fill(CGRect(x: 120, y: 600, width: 560, height: 200))
+                    }
+                VideoPostDebugHost(student: student, face: face)
+            } else {
+                missing("videoPost: needs a demo athlete")
+            }
+
         case "athleteCard", "athleteCardExport":
             // The player card share sheet for an enrolled demo athlete with a
             // photo. =athleteCardExport also writes, 2 s later, the share image
@@ -1107,6 +1130,22 @@ enum AthletePostDebug {
         }
     }
 
+    /// The demo store has few games: sample numbers to judge a layout.
+    static func sample(_ f: AthletePostFacts) -> AthletePostFacts {
+        var facts = f
+        let source = f.source
+        facts.games = source == .lastGame ? 1 : 9
+        let decimals = source != .lastGame
+        let values: [(String, String, String, Double)] = [("pts", "PTS", "Points", 18.4), ("reb", "REB", "Rebounds", 7.2),
+                                                          ("ast", "AST", "Assists", 5.1), ("stl", "STL", "Steals", 2.3), ("blk", "BLK", "Blocks", 0.8)]
+        facts.stats = values.map { .init(key: $0.0, label: $0.1, word: $0.2, value: decimals ? $0.3 : $0.3.rounded(),
+                                          text: decimals ? String(format: "%.1f", $0.3) : String(Int($0.3.rounded()))) }
+        if decimals { facts.stats.append(.init(key: "gp", label: "GAMES", word: "Games", value: 9, text: "9")) }
+        facts.subtitle = source == .lastGame ? "vs Riverside Eagles" : "9 games · per game"
+        facts.eyebrow = source == .lastGame ? "GAME · 21 NOV" : (source == .month ? "NOVEMBER" : "ALL GAMES")
+        return facts
+    }
+
     static func export(student: Student, photo: UIImage, dm: DataManager) {
         guard let caches = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.OKTO.SAMp")?
             .appendingPathComponent("Library/Caches") else { return }
@@ -1115,18 +1154,7 @@ enum AthletePostDebug {
             var facts = AthletePostFacts.make(student: student, jersey: dm.player(for: student.id)?.jerseyNumber,
                                               colorHex: program?.colorHex ?? "#2A78D6", academy: ProgramGuideStore.academyName,
                                               sessions: dm.sessionEvents, source: source, chinese: false)
-            if !facts.hasStats {
-                // The demo store has few games: sample numbers to judge the layout.
-                facts.games = source == .lastGame ? 1 : 9
-                let decimals = source != .lastGame
-                let values: [(String, String, String, Double)] = [("pts", "PTS", "Points", 18.4), ("reb", "REB", "Rebounds", 7.2),
-                                                                  ("ast", "AST", "Assists", 5.1), ("stl", "STL", "Steals", 2.3), ("blk", "BLK", "Blocks", 0.8)]
-                facts.stats = values.map { .init(key: $0.0, label: $0.1, word: $0.2, value: decimals ? $0.3 : $0.3.rounded(),
-                                                  text: decimals ? String(format: "%.1f", $0.3) : String(Int($0.3.rounded()))) }
-                if decimals { facts.stats.append(.init(key: "gp", label: "GAMES", word: "Games", value: 9, text: "9")) }
-                facts.subtitle = source == .lastGame ? "vs Riverside Eagles" : "9 games · per game"
-                facts.eyebrow = source == .lastGame ? "GAME · 21 NOV" : (source == .month ? "NOVEMBER" : "ALL GAMES")
-            }
+            if !facts.hasStats { facts = sample(facts) }
             for template in AthletePostTemplate.allCases {
                 let aspect: AthletePostAspect = ProcessInfo.processInfo.environment["HOOPWISE_POST_ASPECT"] == "square" ? .square : .portrait
                 let renderer = ImageRenderer(content: AthletePostCanvas(template: template, facts: facts, photo: photo,
@@ -1136,6 +1164,144 @@ enum AthletePostDebug {
                     .write(to: caches.appendingPathComponent("post-\(template.rawValue)-\(source.rawValue).jpg"))
             }
         }
+    }
+}
+
+/// Makes the stand-in clip, then shows the composer over it (and exports).
+struct VideoPostDebugHost: View {
+    let student: Student
+    let face: UIImage
+    @EnvironmentObject var dataManager: DataManager
+    @State private var clip: AVAsset?
+    @State private var sheet: [(String, UIImage)] = []
+
+    var body: some View {
+        Group {
+            if !sheet.isEmpty {
+                // HOOPWISE_VIDEOPOST_SHEET=1: the exported frames laid out, to be
+                // captured (the Mac's App Group cannot be read from outside).
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 6), spacing: 4) {
+                        ForEach(sheet.indices, id: \.self) { i in
+                            Image(uiImage: sheet[i].1).resizable().scaledToFit()
+                        }
+                    }
+                }
+                .background(.black)
+            } else if let clip {
+                VideoPostComposer(student: student, clip: .asset(clip))
+            } else {
+                ProgressView("Making a clip…")
+            }
+        }
+        .task {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("videopost-source.mov")
+            if !FileManager.default.fileExists(atPath: url.path) {
+                await VideoPostDebug.makeClip(face: AthletePostDebug.standIn(face), to: url)
+            }
+            let asset = AVURLAsset(url: url)
+            clip = asset
+            if ProcessInfo.processInfo.environment["HOOPWISE_VIDEOPOST_EXPORT"] == "1" {
+                let frames = await VideoPostDebug.exportAll(asset: asset, student: student, dm: dataManager)
+                if ProcessInfo.processInfo.environment["HOOPWISE_VIDEOPOST_SHEET"] == "1" { sheet = frames }
+            }
+        }
+    }
+}
+
+@MainActor
+enum VideoPostDebug {
+    static let log = Logger(subsystem: "hoopwise.mac", category: "videoPost")
+
+    /// 8 s, 1920×1080, 30 fps: the photo slowly zooming, a ball bouncing.
+    static func makeClip(face: UIImage, to url: URL) async {
+        try? FileManager.default.removeItem(at: url)
+        guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return }
+        let size = CGSize(width: 1920, height: 1080)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: size.width, AVVideoHeightKey: size.height])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: size.width, kCVPixelBufferHeightKey as String: size.height])
+        writer.add(input)
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+        let frames = 240
+        for i in 0..<frames {
+            while !input.isReadyForMoreMediaData { try? await Task.sleep(for: .milliseconds(5)) }
+            guard let pool = adaptor.pixelBufferPool else { break }
+            var buffer: CVPixelBuffer?
+            CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
+            guard let buffer else { break }
+            CVPixelBufferLockBaseAddress(buffer, [])
+            if let ctx = CGContext(data: CVPixelBufferGetBaseAddress(buffer), width: Int(size.width), height: Int(size.height),
+                                   bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+                                   space: CGColorSpaceCreateDeviceRGB(),
+                                   bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) {
+                let t = Double(i) / Double(frames)
+                ctx.setFillColor(UIColor(red: 0.16, green: 0.12, blue: 0.1, alpha: 1).cgColor)
+                ctx.fill(CGRect(origin: .zero, size: size))
+                if let cg = face.cgImage {
+                    let zoom = 1.0 + 0.12 * t
+                    let h = size.height * 1.05 * zoom, w = h * 0.8
+                    ctx.draw(cg, in: CGRect(x: (size.width - w) / 2, y: (size.height - h) / 2, width: w, height: h))
+                }
+                // A ball crossing and bouncing.
+                let bx = 200 + (size.width - 400) * t
+                let by = 160 + abs(sin(t * .pi * 4)) * 600
+                ctx.setFillColor(UIColor.orange.cgColor)
+                ctx.fillEllipse(in: CGRect(x: bx - 50, y: by - 50, width: 100, height: 100))
+            }
+            CVPixelBufferUnlockBaseAddress(buffer, [])
+            adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(i), timescale: 30))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        log.log("videoPost clip \(writer.status == .completed ? "made" : "failed", privacy: .public)")
+    }
+
+    @discardableResult
+    static func exportAll(asset: AVAsset, student: Student, dm: DataManager) async -> [(String, UIImage)] {
+        var frames: [(String, UIImage)] = []
+        guard let caches = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.OKTO.SAMp")?
+            .appendingPathComponent("Library/Caches") else { return frames }
+        let env = ProcessInfo.processInfo.environment
+        let aspect: VideoPostAspect = env["HOOPWISE_POST_ASPECT"] == "square" ? .square : (env["HOOPWISE_POST_ASPECT"] == "portrait" ? .portrait : .story)
+        let program = dm.programs.first { $0.id == student.programId }
+        var facts = AthletePostFacts.make(student: student, jersey: dm.player(for: student.id)?.jerseyNumber,
+                                          colorHex: program?.colorHex ?? "#2A78D6", academy: ProgramGuideStore.academyName,
+                                          sessions: dm.sessionEvents, source: .month, chinese: false)
+        if !facts.hasStats { facts = AthletePostDebug.sample(facts) }
+        if facts.jersey == nil { facts.jersey = 8 }
+        guard let cut = try? await VideoPost.cut(asset, start: 0, length: 8, aspect: aspect) else {
+            log.log("videoPost cut failed"); return frames
+        }
+        let only = env["HOOPWISE_VIDEOPOST_ONLY"]?.split(separator: ",").map(String.init)
+        for template in VideoOverlayTemplate.allCases where only?.contains(template.rawValue) ?? true {
+            let started = Date()
+            let layer = VideoOverlay.layer(template, facts: facts, size: cut.renderSize, duration: cut.duration)
+            do {
+                let url = try await VideoPost.export(cut, overlay: layer, name: "video-\(template.rawValue)")
+                let out = caches.appendingPathComponent("video-\(template.rawValue).mp4")
+                try? FileManager.default.removeItem(at: out)
+                try? FileManager.default.copyItem(at: url, to: out)
+                let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+                generator.requestedTimeToleranceBefore = .zero
+                generator.requestedTimeToleranceAfter = .zero
+                for t in [0.3, 1.0, 1.6, 2.6, 4.5, 7.6] {
+                    if let (img, _) = try? await generator.image(at: CMTime(seconds: t, preferredTimescale: 600)) {
+                        frames.append(("\(template.rawValue) \(t)", UIImage(cgImage: img)))
+                        try? UIImage(cgImage: img).jpegData(compressionQuality: 0.8)?
+                            .write(to: caches.appendingPathComponent("video-\(template.rawValue)-\(t).jpg"))
+                    }
+                }
+                log.log("videoPost \(template.rawValue, privacy: .public) exported in \(Date().timeIntervalSince(started), privacy: .public) s")
+            } catch {
+                log.log("videoPost \(template.rawValue, privacy: .public) failed \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        log.log("videoPost done")
+        return frames
     }
 }
 #endif

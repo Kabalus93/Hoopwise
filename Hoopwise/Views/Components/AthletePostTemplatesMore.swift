@@ -13,7 +13,8 @@ import UIKit
 private let ink = Color(red: 0.07, green: 0.07, blue: 0.09)
 
 /// The stats worth printing: non-zero counted ones (GAMES kept apart).
-private extension AthletePostFacts {
+/// (Also read by the video overlays.)
+extension AthletePostFacts {
     var shown: [Stat] { stats.filter { $0.key != "gp" && $0.value > 0 } }
     var gamesStat: Stat? { stats.first { $0.key == "gp" } }
     var fullName: String { firstName.isEmpty ? lastName : firstName + " " + lastName }
@@ -50,7 +51,7 @@ private struct PostSubject: View {
 }
 
 private func glow(_ c: Color) -> some ViewModifier { GlowModifier(color: c) }
-private struct GlowModifier: ViewModifier {
+struct GlowModifier: ViewModifier {
     let color: Color
     func body(content: Content) -> some View {
         content
