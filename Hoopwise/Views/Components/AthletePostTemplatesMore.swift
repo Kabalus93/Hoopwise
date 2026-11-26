@@ -708,3 +708,187 @@ struct NeonPost: View {
         }
     }
 }
+
+// MARK: - 14. Torn paper — a half face in the program colour, torn paper and grid,
+// the name huge, a signature, the numbers stacked with their tags, the athlete
+// standing beside them (27 Nov 2026, Luther, with a season-poster reference:
+// "add something similar to photo templates"). No league or team marks: the
+// academy's name stands where a logo would.
+
+struct TornPaperPost: View {
+    let facts: AthletePostFacts
+    let photo: UIImage
+    let cutout: UIImage?
+    let size: CGSize
+
+    private let paper = Color(red: 0.94, green: 0.94, blue: 0.93)
+
+    var body: some View {
+        let w = size.width, h = size.height
+        let square = h < w * 1.1
+        let edge = w * 0.36
+        let rows = Array(facts.headline.prefix(3))
+        let numberSize = h * (square ? 0.105 : 0.11)
+        ZStack(alignment: .topLeading) {
+            paper
+            // Grid paper, torn in on the right of the strip.
+            PostGrid()
+                .frame(width: w * 0.42, height: h * 0.62)
+                .clipShape(TornEdge(seed: 11, side: .both, depth: 12))
+                .offset(x: edge - 30, y: h * 0.2)
+            // The strip: the program colour and a half face in black and white.
+            ZStack {
+                facts.color.mix(with: .black, by: 0.15)
+                PostPhotoFill(photo: photo)
+                    .grayscale(1).contrast(1.35)
+                    .frame(width: edge * 2, height: h)
+                    .offset(x: edge * 0.5)
+                    .mask(LinearGradient(colors: [.clear, .black, .black], startPoint: .leading, endPoint: .trailing))
+            }
+            .frame(width: edge + 30, height: h)
+            .clipped()
+            .clipShape(TornEdge(seed: 3, side: .trailing, depth: 16))
+            // The paper's white rim along the tear.
+            .background {
+                paper.frame(width: edge + 44, height: h)
+                    .clipShape(TornEdge(seed: 5, side: .trailing, depth: 18))
+                    .shadow(color: .black.opacity(0.35), radius: 10, x: 4)
+            }
+            // The athlete, standing at the right — or, without a cut-out, the
+            // photo as a print torn out of a page.
+            if let cutout {
+                Image(uiImage: cutout).resizable().scaledToFit()
+                    .frame(width: w * 0.42, height: h * (square ? 0.66 : 0.68), alignment: .bottom)
+                    .background(alignment: .bottom) {
+                        Ellipse().fill(.black.opacity(0.28)).frame(width: w * 0.28, height: 26).blur(radius: 10).offset(y: 10)
+                    }
+                    .offset(x: w * 0.57, y: h * (square ? 0.3 : 0.29))
+            } else {
+                let pw = w * (square ? 0.34 : 0.37), ph = h * (square ? 0.5 : 0.47)
+                PostPhotoFill(photo: photo)
+                    .frame(width: pw, height: ph)
+                    .clipShape(TornEdge(seed: 21, side: .both, depth: 9))
+                    .padding(10)
+                    .background(.white)
+                    .clipShape(TornEdge(seed: 17, side: .both, depth: 11))
+                    .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
+                    .rotationEffect(.degrees(3))
+                    .offset(x: w - pw - 56, y: h * (square ? 0.38 : 0.41))
+            }
+            // Name and signature, top right.
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 12) {
+                    VStack(spacing: 5) {
+                        ForEach(0..<4, id: \.self) { _ in Rectangle().fill(facts.color).frame(width: 4, height: 4) }
+                    }
+                    Text(facts.eyebrow).font(.system(size: square ? 24 : 28, weight: .heavy)).tracking(2)
+                        .foregroundStyle(ink).lineLimit(1)
+                }
+                Text(facts.lastName.uppercased())
+                    .font(postHeavy(h * (square ? 0.15 : 0.16))).foregroundStyle(ink)
+                    .lineLimit(1).minimumScaleFactor(0.35)
+                    .padding(.top, -8)
+                if !facts.firstName.isEmpty {
+                    Text(facts.firstName)
+                        .font(.custom("SnellRoundhand-Bold", size: square ? 74 : 86))
+                        .foregroundStyle(facts.color)
+                        .lineLimit(1).minimumScaleFactor(0.5)
+                        .rotationEffect(.degrees(-7))
+                        .padding(.top, -h * 0.05).padding(.leading, w * 0.16)
+                }
+            }
+            .frame(width: w - edge - 70, alignment: .leading)
+            .offset(x: edge + 40, y: h * 0.05)
+            // The numbers, stacked, each with its tag.
+            VStack(alignment: .trailing, spacing: -numberSize * 0.12) {
+                ForEach(rows) { s in
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(s.text).font(postHeavy(numberSize)).foregroundStyle(ink)
+                            .lineLimit(1).fixedSize()
+                        Text(s.label).font(.system(size: square ? 22 : 26, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .background(facts.color)
+                            .frame(width: square ? 72 : 84, alignment: .leading)
+                            .padding(.bottom, numberSize * 0.12)
+                    }
+                }
+            }
+            .shadow(color: paper, radius: 8)
+            .offset(x: edge + 40, y: h * (square ? 0.42 : 0.38))
+            // The academy, foot of the strip.
+            Text(facts.academy.uppercased())
+                .font(.system(size: square ? 22 : 26, weight: .black)).tracking(3)
+                .foregroundStyle(.white)
+                .lineLimit(2).minimumScaleFactor(0.6)
+                .frame(width: edge - 70, alignment: .leading)
+                .shadow(color: .black.opacity(0.5), radius: 6)
+                .offset(x: 46, y: h - (square ? 100 : 120))
+            // The subtitle, foot right.
+            if !facts.subtitle.isEmpty {
+                Text(facts.subtitle.uppercased())
+                    .font(.system(size: 20, weight: .bold)).tracking(3).foregroundStyle(ink.opacity(0.7))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .frame(width: w - edge - 90, alignment: .trailing)
+                    .offset(x: edge + 40, y: h - 56)
+            }
+        }
+    }
+}
+
+/// Faint grid paper.
+private struct PostGrid: View {
+    var body: some View {
+        Canvas { context, s in
+            context.fill(Path(CGRect(origin: .zero, size: s)), with: .color(.white))
+            var p = Path()
+            var x: CGFloat = 0
+            while x <= s.width { p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: s.height)); x += 22 }
+            var y: CGFloat = 0
+            while y <= s.height { p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: s.width, y: y)); y += 22 }
+            context.stroke(p, with: .color(.black.opacity(0.12)), lineWidth: 1)
+        }
+    }
+}
+
+/// A rectangle whose side(s) look torn by hand — the same tear every time.
+private struct TornEdge: Shape {
+    enum Side { case trailing, both }
+    let seed: UInt64
+    let side: Side
+    let depth: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var n = seed &* 2654435761 &+ 1
+        func next() -> CGFloat {
+            n = n &* 6364136223846793005 &+ 1442695040888963407
+            return CGFloat((n >> 33) % 1000) / 1000
+        }
+        func tear(x: CGFloat, inward: CGFloat, down: Bool) -> [CGPoint] {
+            var pts: [CGPoint] = []
+            var y: CGFloat = 0
+            while y < rect.height {
+                // Mostly small teeth, now and then a deeper bite.
+                let bite = next() < 0.12 ? depth * 1.6 : depth * next()
+                pts.append(CGPoint(x: x + inward * bite, y: y))
+                y += 8 + next() * 16
+            }
+            pts.append(CGPoint(x: x + inward * depth * 0.5, y: rect.height))
+            return down ? pts : pts.reversed()
+        }
+        var p = Path()
+        let right = tear(x: rect.maxX - depth * 1.6, inward: 1, down: true)
+        if side == .both {
+            let left = tear(x: rect.minX + depth * 1.6, inward: -1, down: false)
+            // (addLines would start a new subpath each time.)
+            p.move(to: left.last!)
+            for q in right + left { p.addLine(to: q) }
+        } else {
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            for q in right { p.addLine(to: q) }
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        }
+        p.closeSubpath()
+        return p
+    }
+}

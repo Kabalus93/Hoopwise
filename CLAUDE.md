@@ -3683,7 +3683,7 @@ store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
   fine to post; else share with the family only), Share image (JPEG).
   Language = Languages by Area → Player card.
 - TEN MORE TEMPLATES (26 Nov 2026, Luther: "be creative … 10 more remarkable
-  templates"), Views/Components/AthletePostTemplatesMore.swift — thirteen in
+  templates"), Views/Components/AthletePostTemplatesMore.swift — fourteen in
   all, picked from a chip strip (`post.template.<raw>`): DUOTONE (the photo in
   the program colour, last name up the edge), SCOREBOARD (an amber LED board
   under the photo), MAGAZINE (academy masthead behind the lifted athlete, cover
@@ -3692,7 +3692,13 @@ store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
   behind the athlete), SCRAPBOOK (a taped polaroid, handwritten stats, the top
   one circled, a stamp), FILM STRIP (a frame with a subtitle line), SWISS
   (cream grid, ultralight numbers, a red rule), NEON (glowing tubes on a night
-  scene). `liftsSubject` (poster, magazine, giant number) asks Vision for the
+  scene), and (27 Nov 2026, Luther, from a season-poster reference) TORN
+  PAPER (a half face in black and white on the program colour, torn white
+  edges, grid paper, the last name huge with the first name as a signature,
+  up to three numbers stacked with coloured tags, the athlete cut out beside
+  them — without a cut-out the photo is a torn-out print; the academy's name
+  where a logo would stand). `liftsSubject` (poster, magazine, giant number,
+  torn) asks Vision for the
   cut-out; without one the photo fades out. Every template shows only non-zero
   stats and works in 4:5 and 1:1 (square: scrapbook's notes go beside a
   smaller polaroid, swiss lists three). HOOPWISE_POST_ASPECT=square exports the

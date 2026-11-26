@@ -10,7 +10,7 @@ import UIKit
 enum AthletePostTemplate: String, CaseIterable, Identifiable {
     case gameLine, statCard, poster
     // Ten more (26 Nov 2026) — AthletePostTemplatesMore.swift.
-    case duotone, scoreboard, magazine, holoCard, diagonal, giantNumber, scrapbook, filmStrip, swiss, neon
+    case duotone, scoreboard, magazine, holoCard, diagonal, giantNumber, scrapbook, filmStrip, swiss, neon, torn
     var id: String { rawValue }
     func title(chinese: Bool) -> String {
         switch self {
@@ -27,6 +27,7 @@ enum AthletePostTemplate: String, CaseIterable, Identifiable {
         case .filmStrip: chinese ? "胶片" : "Film"
         case .swiss: chinese ? "瑞士风格" : "Swiss"
         case .neon: chinese ? "霓虹" : "Neon"
+        case .torn: chinese ? "撕纸拼贴" : "Torn paper"
         }
     }
     var symbol: String {
@@ -44,13 +45,14 @@ enum AthletePostTemplate: String, CaseIterable, Identifiable {
         case .filmStrip: "film"
         case .swiss: "square.grid.3x3"
         case .neon: "lightbulb.max"
+        case .torn: "scissors"
         }
     }
 }
 
 extension AthletePostTemplate {
     /// Templates that stand the athlete out of the photo (Vision cut-out).
-    var liftsSubject: Bool { self == .poster || self == .magazine || self == .giantNumber }
+    var liftsSubject: Bool { self == .poster || self == .magazine || self == .giantNumber || self == .torn }
 }
 
 enum AthletePostAspect: String, CaseIterable, Identifiable {
@@ -85,6 +87,7 @@ struct AthletePostCanvas: View {
             case .filmStrip: FilmStripPost(facts: facts, photo: photo, size: size)
             case .swiss: SwissPost(facts: facts, photo: photo, size: size)
             case .neon: NeonPost(facts: facts, photo: photo, size: size)
+            case .torn: TornPaperPost(facts: facts, photo: photo, cutout: cutout, size: size)
             }
         }
         .frame(width: size.width, height: size.height)
