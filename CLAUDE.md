@@ -2032,6 +2032,12 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Widget photo files flatten a cut-out over its level colour (part of the
   re-encode hash). PHOTOS TAKEN BEFORE THIS have the old colour burned in
   and show no level until re-cut (Edit Student → Remove Background).
+  THE LEVEL MARK ON iPHONE AND iPAD (26 Nov 2026, Luther, pointing at the
+  Mac header's "● Below average" pill): Views/Components/SkillLevelMark.swift
+  (`athlete.levelMark`) — the level's colour as a dot and its name in a small
+  pill UNDER the player card on the profile and in the Quick Peep; beside
+  the card, never on it (the card is shared). Nothing for an unranked
+  athlete. Seen on the iPad mini simulator's profile.
   DEBUG HOOPWISE_DEMO_CUTOUTS=<folder of <athlete id>.heic> (+
   HOOPWISE_DEMO_EVALUATIONS=1) loads Mac-made cut-outs (the simulator cannot
   run Vision) into the DEMO store and logs "bg level <name> <tier>". Tests:

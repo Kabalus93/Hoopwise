@@ -487,7 +487,15 @@ struct StudentQuickPeepView: View {
     /// The collectible card on the iPhone and iPad; on the Mac the glass
     /// header the profile opens on.
     @ViewBuilder private var peepCard: some View {
-        if FilmRoom.isOn { MacAthleteHeader(student: student) } else { AthleteCardFlip(student: student) }
+        if FilmRoom.isOn {
+            MacAthleteHeader(student: student)
+        } else {
+            VStack(spacing: 10) {
+                AthleteCardFlip(student: student)
+                // Their level in the group, for the coach — beside the card, not on it.
+                SkillLevelMark(studentId: student.id)
+            }
+        }
     }
 
     private var wideContent: some View {

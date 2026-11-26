@@ -61,6 +61,9 @@ struct StudentDetailView: View {
                     .frame(maxWidth: 420)
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                // Their level in the group, for the coach — beside the card, not on it.
+                SkillLevelMark(studentId: student.id)
+                    .padding(.top, 10)
                 }
                 
                 // Quick stats row
