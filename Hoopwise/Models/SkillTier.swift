@@ -42,11 +42,12 @@ enum SkillTier: Int, CaseIterable, Codable, Sendable {
     /// The petal it is coloured with (Photos logo).
     var hex: String {
         switch self {
-        case .best: PhotoPalette.red
-        case .better: PhotoPalette.yellow
-        case .average: PhotoPalette.green
-        case .belowAverage: PhotoPalette.blue
-        case .bottom: PhotoPalette.purple
+        // Luther's own five (26 Nov 2026), in place of the Photos petals.
+        case .best: "#E5484D"          // red
+        case .better: "#F0B429"        // amber
+        case .average: "#2FA58C"       // teal
+        case .belowAverage: "#3D9BE9"  // blue
+        case .bottom: "#8E7CE0"        // purple
         }
     }
 
@@ -87,7 +88,7 @@ enum PhotoPalette {
     /// Around the flower, in the logo's order.
     static let all = [red, orange, yellow, green, teal, blue, purple, pink]
     /// Behind a cut-out photo with no level (not enough to compare yet).
-    static let unranked = "#D9DDE3"
+    static let unranked = "#5B6577"   // slate (Luther, 26 Nov 2026; was a light grey)
 }
 
 enum SkillLevel {

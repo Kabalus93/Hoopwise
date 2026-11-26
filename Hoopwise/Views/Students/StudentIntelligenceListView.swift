@@ -35,6 +35,7 @@ struct StudentIntelligenceListView: View {
     @FocusState private var searchFocused: Bool
     @State private var transferMode: StudentTransferView.Mode? = nil
     @State private var showingClassListImport = false
+    @State private var showingPhotoBatch = false
     @State private var classListExportFile: ClassListExportFile?
     @State private var expandedGroups: Set<String> = []
     @State private var currentVisibleGrade: String = ""
@@ -404,6 +405,9 @@ struct StudentIntelligenceListView: View {
             .sheet(item: $transferMode) { mode in
                 StudentTransferView(initialMode: mode)
             }
+            .sheet(isPresented: $showingPhotoBatch) {
+                PhotoBackgroundBatchSheet().environmentObject(dataManager)
+            }
             .sheet(isPresented: $showingClassListImport) {
                 ClassListImportView()
             }
@@ -466,6 +470,15 @@ struct StudentIntelligenceListView: View {
                         } label: {
                             Label("Select Multiple", systemImage: "checkmark.circle")
                         }
+                        Divider()
+                        Button {
+                            showingPhotoBatch = true
+                        } label: {
+                            Label(LocalizationManager.shared.currentLanguage == .chinese
+                                  ? "去除所有照片的背景…" : "Remove Photo Backgrounds…",
+                                  systemImage: "person.crop.circle.badge.minus")
+                        }
+                        .accessibilityIdentifier("athletes.photoBatch")
                         Divider()
                         Button {
                             transferMode = .export

@@ -18,12 +18,13 @@ final class SkillLevelTests: XCTestCase {
         XCTAssertEqual(SkillLevel.tier(forDelta: -1.5), .bottom)
     }
 
-    func testTheFiveColoursAreThePhotosPetals() {
-        XCTAssertEqual(SkillTier.best.hex, PhotoPalette.red)
-        XCTAssertEqual(SkillTier.better.hex, PhotoPalette.yellow)
-        XCTAssertEqual(SkillTier.average.hex, PhotoPalette.green)
-        XCTAssertEqual(SkillTier.belowAverage.hex, PhotoPalette.blue)
-        XCTAssertEqual(SkillTier.bottom.hex, PhotoPalette.purple)
+    func testTheFiveLevelColours() {
+        XCTAssertEqual(SkillTier.best.hex, "#E5484D")
+        XCTAssertEqual(SkillTier.better.hex, "#F0B429")
+        XCTAssertEqual(SkillTier.average.hex, "#2FA58C")
+        XCTAssertEqual(SkillTier.belowAverage.hex, "#3D9BE9")
+        XCTAssertEqual(SkillTier.bottom.hex, "#8E7CE0")
+        XCTAssertEqual(PhotoPalette.unranked, "#5B6577")
         XCTAssertEqual(Set(SkillTier.allCases.map(\.hex)).count, 5)
     }
 

@@ -119,6 +119,7 @@ struct MainTabView: View {
             if FilmRoom.isOn, themeManager.currentMode != .dark { themeManager.currentMode = .dark }
             #if DEBUG
             ProfileBackgroundDebugShot.importDemoCutouts(dataManager: dataManager)
+            ProfileBackgroundBatch.debugRunIfAsked(dataManager: dataManager)
             #endif
             #if targetEnvironment(macCatalyst)
             MacWindow.configure()

@@ -2032,6 +2032,27 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   Widget photo files flatten a cut-out over its level colour (part of the
   re-encode hash). PHOTOS TAKEN BEFORE THIS have the old colour burned in
   and show no level until re-cut (Edit Student → Remove Background).
+  THE LEVEL COLOURS ARE LUTHER'S OWN (26 Nov 2026, "use these"), no longer
+  the Photos petals: Best #E5484D red · Better #F0B429 amber · Average
+  #2FA58C teal · Below average #3D9BE9 blue · Bottom #8E7CE0 purple · no
+  level #5B6577 slate (`SkillTier.hex`, `PhotoPalette.unranked`). The eight
+  petals stay as the hand-picked swatches when sharing or printing a card.
+  Widget photo files re-encode by themselves (the colour is in their hash).
+  EVERY PHOTO AT ONCE (same day: "a button to auto remove background from
+  all photos and fill backgrounds … maybe in the plus menu"): Athletes → + →
+  "Remove Photo Backgrounds…" (`athletes.photoBatch`) →
+  PhotoBackgroundBatchSheet (Services/ProfileBackgroundBatch.swift): counts
+  the photos that still have a background (`candidates` — not transparent),
+  says the originals are not kept and it cannot be undone, then cuts each
+  out on the device one by one (`cutOut`, off the main thread), writes
+  photo + thumbnail through updateStudent on the record as it is then, and
+  reports done / left as they were (no person found). Stop cancels between
+  photos. Vision does not run on the simulator (every photo comes back "left
+  as it was" there). RUN ON THE MAC DEMO COPY through DEBUG
+  HOOPWISE_PHOTO_BATCH=1 (demo store only; logs counts to hoopwise.mac /
+  background): 1 photo of 1 cut out, 0 left — the one demo photo then showed
+  on the slate "no level" disc. The sheet itself was not driven, and it was
+  never run over a real roster (≈180 photos, one save each).
   THE LEVEL MARK ON iPHONE AND iPAD (26 Nov 2026, Luther, pointing at the
   Mac header's "● Below average" pill): Views/Components/SkillLevelMark.swift
   (`athlete.levelMark`) — the level's colour as a dot and its name in a small
