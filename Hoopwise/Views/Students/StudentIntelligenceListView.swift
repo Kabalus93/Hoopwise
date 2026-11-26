@@ -36,6 +36,7 @@ struct StudentIntelligenceListView: View {
     @State private var transferMode: StudentTransferView.Mode? = nil
     @State private var showingClassListImport = false
     @State private var showingPhotoBatch = false
+    @State private var showingLevels = false
     @State private var classListExportFile: ClassListExportFile?
     @State private var expandedGroups: Set<String> = []
     @State private var currentVisibleGrade: String = ""
@@ -408,6 +409,9 @@ struct StudentIntelligenceListView: View {
             .sheet(isPresented: $showingPhotoBatch) {
                 PhotoBackgroundBatchSheet().environmentObject(dataManager)
             }
+            .sheet(isPresented: $showingLevels) {
+                LevelEvaluationSheet().environmentObject(dataManager)
+            }
             .sheet(isPresented: $showingClassListImport) {
                 ClassListImportView()
             }
@@ -479,6 +483,14 @@ struct StudentIntelligenceListView: View {
                                   systemImage: "person.crop.circle.badge.minus")
                         }
                         .accessibilityIdentifier("athletes.photoBatch")
+                        Button {
+                            showingLevels = true
+                        } label: {
+                            Label(LocalizationManager.shared.currentLanguage == .chinese
+                                  ? "评估水平并设置背景…" : "Evaluate Levels and Set Backgrounds…",
+                                  systemImage: "chart.bar.doc.horizontal")
+                        }
+                        .accessibilityIdentifier("athletes.levels")
                         Divider()
                         Button {
                             transferMode = .export

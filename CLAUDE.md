@@ -2038,21 +2038,36 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   level #5B6577 slate (`SkillTier.hex`, `PhotoPalette.unranked`). The eight
   petals stay as the hand-picked swatches when sharing or printing a card.
   Widget photo files re-encode by themselves (the colour is in their hash).
-  EVERY PHOTO AT ONCE (same day: "a button to auto remove background from
-  all photos and fill backgrounds … maybe in the plus menu"): Athletes → + →
-  "Remove Photo Backgrounds…" (`athletes.photoBatch`) →
+  TWO BUTTONS IN ATHLETES → + (same day; first "a button to auto remove
+  background from all photos and fill backgrounds", then: "that's too high
+  risk, I still want to be able to undo … make it two buttons").
+  (1) "Remove Photo Backgrounds…" (`athletes.photoBatch`) →
   PhotoBackgroundBatchSheet (Services/ProfileBackgroundBatch.swift): counts
   the photos that still have a background (`candidates` — not transparent),
-  says the originals are not kept and it cannot be undone, then cuts each
-  out on the device one by one (`cutOut`, off the main thread), writes
-  photo + thumbnail through updateStudent on the record as it is then, and
-  reports done / left as they were (no person found). Stop cancels between
-  photos. Vision does not run on the simulator (every photo comes back "left
-  as it was" there). RUN ON THE MAC DEMO COPY through DEBUG
-  HOOPWISE_PHOTO_BATCH=1 (demo store only; logs counts to hoopwise.mac /
-  background): 1 photo of 1 cut out, 0 left — the one demo photo then showed
-  on the slate "no level" disc. The sheet itself was not driven, and it was
-  never run over a real roster (≈180 photos, one save each).
+  cuts each out on the device one by one (`cutOut`, off the main thread) and
+  writes photo + thumbnail through updateStudent. IT CAN BE UNDONE: each
+  ORIGINAL is first put aside as a file (Application Support/PhotoOriginals/
+  <id>.original + a SHA-256 of the cut-out in <id>.cutout); a photo whose
+  original could not be kept is NOT replaced. "Put N original photos back"
+  (`photoBatch.undo`) restores an original only while the athlete's photo is
+  still that cut-out (`restorable`) — a photo retaken since is never
+  overwritten — then forgets it. The originals are DEVICE-LOCAL, not synced
+  (a synced original is a schema field): undo works on the device that ran
+  it, and not after the app is deleted. Edit Student's single Remove
+  Background still keeps no original.
+  (2) "Evaluate Levels and Set Backgrounds…" (`athletes.levels`) →
+  LevelEvaluationSheet: rebuilds the levels now (`rebuildSkillTiers`) and
+  shows how many athletes are at each level in its colour, how many have
+  none, and how many photos are cut out / still have a background. Nothing
+  is written into photos: the colour behind a cut-out IS the level, drawn
+  live — so there is nothing to undo there.
+  Vision does not run on the simulator (every photo comes back "left as it
+  was"). The cut-out half ran once on the Mac demo copy through DEBUG
+  HOOPWISE_PHOTO_BATCH=1 (=undo puts originals back; demo store only) BEFORE
+  the originals were kept: 1 photo of 1. Keeping and restoring is pinned by
+  PhotoBatchUndoTests; the full round trip on real photos, and both sheets,
+  were NOT run. DrillPreferenceTests.testTheEngineFollowsTheCoach was made
+  deterministic the same day (it picked its drill out of a dictionary).
   THE LEVEL MARK ON iPHONE AND iPAD (26 Nov 2026, Luther, pointing at the
   Mac header's "● Below average" pill): Views/Components/SkillLevelMark.swift
   (`athlete.levelMark`) — the level's colour as a dot and its name in a small

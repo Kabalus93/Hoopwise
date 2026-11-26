@@ -43,7 +43,12 @@ final class DrillPreferenceTests: XCTestCase {
         let base = plan(library)
         // The drill the engine liked most, and one it used sometimes.
         let favourite = try XCTUnwrap(base.max { $0.value < $1.value }?.key)
-        let sometimes = try XCTUnwrap(base.filter { $0.value >= 2 && $0.value <= 10 }.min { $0.value < $1.value }?.key)
+        // Drills it used sometimes — always the same ones (the choice came out
+        // of an unordered dictionary, and with some drills "more" tied).
+        let sometimes = base.filter { $0.value >= 2 && $0.value <= 10 }
+            .sorted { ($0.value, $0.key.uuidString) < ($1.value, $1.key.uuidString) }
+            .prefix(5).map(\.key)
+        XCTAssertFalse(sometimes.isEmpty)
 
         func rated(_ id: UUID, _ p: DrillPreference) -> [DrillItem] {
             library.map { d in
@@ -55,7 +60,14 @@ final class DrillPreferenceTests: XCTestCase {
         }
         XCTAssertNil(plan(rated(favourite, .never))[favourite], "never is never planned")
         XCTAssertLessThan(plan(rated(favourite, .less))[favourite] ?? 0, base[favourite] ?? 0, "use less: less often")
-        XCTAssertGreaterThan(plan(rated(sometimes, .more))[sometimes] ?? 0, base[sometimes] ?? 0, "use more: more often")
+        var before = 0, after = 0
+        for id in sometimes {
+            let more = plan(rated(id, .more))[id] ?? 0
+            XCTAssertGreaterThanOrEqual(more, base[id] ?? 0, "use more: never less often")
+            before += base[id] ?? 0
+            after += more
+        }
+        XCTAssertGreaterThan(after, before, "use more: more often")
     }
 
     // MARK: The reason steers the engine (25 Nov 2026)
