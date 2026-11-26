@@ -9,9 +9,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Hoopwise needs camera access to take profile photos of students.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Hoopwise needs photo library access to select profile photos for students.</string>
+	<string>Hoopwise reads your photo library to pick profile photos and to show each athlete's media vault — the photos stay in your library.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Hoopwise needs permission to save photos to your library.</string>
+	<string>Hoopwise saves photos and puts athletes' photos in Hoopwise albums in your library.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Hoopwise uses speech recognition to transcribe voice notes during sessions.</string>
 	<key>NSMicrophoneUsageDescription</key>

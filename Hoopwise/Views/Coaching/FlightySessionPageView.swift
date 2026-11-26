@@ -37,6 +37,7 @@ struct FlightySessionPageView: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingCancelConfirmation = false
     @State private var showingSessionVersions = false
+    @State private var showingClassPhotos = false
     @State private var showingSkipSheet = false
     @State private var skipReason: SkipReason = .holiday
     /// The student whose profile photo the leading swipe is retaking.
@@ -441,6 +442,14 @@ struct FlightySessionPageView: View {
                             }
                         }
 
+                        // The photos shot during this class, into the
+                        // athletes' media vaults (26 Nov 2026).
+                        Button(action: { showingClassPhotos = true }) {
+                            Label(LocalizationManager.shared.currentLanguage == .chinese ? "本节课的照片" : "Photos from this class",
+                                  systemImage: "photo.stack")
+                        }
+                        .accessibilityIdentifier("session.photos")
+
                         // Recovery: every attendance mark, game change and
                         // overwrite keeps a copy (SessionVersionsSheet).
                         Button(action: { showingSessionVersions = true }) {
@@ -522,6 +531,9 @@ struct FlightySessionPageView: View {
         .makeUpOfferAlert()
         .sheet(isPresented: $showingSessionVersions) {
             SessionVersionsSheet(sessionId: session.id, students: dataManager.students)
+        }
+        .sheet(isPresented: $showingClassPhotos) {
+            SessionPhotosSheet(session: session).environmentObject(dataManager)
         }
         .sheet(isPresented: $showingSkipSheet) {
             SkipSessionSheet(reason: $skipReason) {

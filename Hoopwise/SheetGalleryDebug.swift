@@ -1,3 +1,4 @@
+import Photos
 #if DEBUG
 import SwiftUI
 import SwiftData
@@ -207,6 +208,18 @@ enum SheetGalleryDebug {
             if let program = dm.programs.first,
                let student = dm.students.first(where: { program.enrolledStudentIds.contains($0.id) }) {
                 NavigationStack { StudentDetailView(student: student) }
+                    .task {
+                        // HOOPWISE_DEMO_VAULT=1: the newest photos in this
+                        // simulator's library go in the athlete's vault (demo store).
+                        guard ScreenshotStore.isActive, ProcessInfo.processInfo.environment["HOOPWISE_DEMO_VAULT"] == "1",
+                              await PhotoVault.requestAccess() else { return }
+                        let options = PHFetchOptions()
+                        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                        options.fetchLimit = 6
+                        var ids: [String] = []
+                        PHAsset.fetchAssets(with: .image, options: options).enumerateObjects { a, _, _ in ids.append(a.localIdentifier) }
+                        dm.addToVaults(PhotoVault.entries(localIds: ids), studentIds: [student.id])
+                    }
             } else {
                 missing("studentProfile: no enrolled student")
             }
@@ -737,6 +750,23 @@ enum SheetGalleryDebug {
                 showSelectionCounter: false
             ) { _ in }
 
+        case "athletePost":
+            // The media vault's post composer on a demo athlete (26 Nov 2026):
+            // the athlete's profile photo over a stand-in court as "the photo".
+            // HOOPWISE_POST_EXPORT=1 writes post-<template>-<source>.jpg for
+            // every template to the App Group Library/Caches.
+            if let student = dm.students.max(by: { ($0.profileImageData?.count ?? 0) < ($1.profileImageData?.count ?? 0) }),
+               let data = student.profileImageData, let face = UIImage(data: data) {
+                let photo = AthletePostDebug.standIn(face)
+                AthletePostComposer(student: student, photo: photo)
+                    .task {
+                        guard ProcessInfo.processInfo.environment["HOOPWISE_POST_EXPORT"] == "1" else { return }
+                        AthletePostDebug.export(student: student, photo: photo, dm: dm)
+                    }
+            } else {
+                missing("athletePost: needs a demo athlete with a photo")
+            }
+
         case "athleteCard", "athleteCardExport":
             // The player card share sheet for an enrolled demo athlete with a
             // photo. =athleteCardExport also writes, 2 s later, the share image
@@ -1059,3 +1089,50 @@ struct LibraryRatingRun: View {
     }
 }
 #endif
+
+
+/// DEBUG: a stand-in "action photo" and the export of every template.
+@MainActor
+enum AthletePostDebug {
+    static func standIn(_ face: UIImage) -> UIImage {
+        let size = CGSize(width: 1600, height: 2000)
+        return UIGraphicsImageRenderer(size: size).image { ctx in
+            let colors = [UIColor(red: 0.55, green: 0.38, blue: 0.24, alpha: 1).cgColor,
+                          UIColor(red: 0.18, green: 0.14, blue: 0.12, alpha: 1).cgColor] as CFArray
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1])!
+            ctx.cgContext.drawLinearGradient(gradient, start: CGPoint(x: 0, y: size.height), end: .zero, options: [])
+            let side: CGFloat = 1300
+            face.draw(in: CGRect(x: (size.width - side) / 2, y: 260, width: side, height: side))
+        }
+    }
+
+    static func export(student: Student, photo: UIImage, dm: DataManager) {
+        guard let caches = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.OKTO.SAMp")?
+            .appendingPathComponent("Library/Caches") else { return }
+        let program = dm.programs.first { $0.id == student.programId }
+        for source in AthletePostFacts.Source.allCases {
+            var facts = AthletePostFacts.make(student: student, jersey: dm.player(for: student.id)?.jerseyNumber,
+                                              colorHex: program?.colorHex ?? "#2A78D6", academy: ProgramGuideStore.academyName,
+                                              sessions: dm.sessionEvents, source: source, chinese: false)
+            if !facts.hasStats {
+                // The demo store has few games: sample numbers to judge the layout.
+                facts.games = source == .lastGame ? 1 : 9
+                let decimals = source != .lastGame
+                let values: [(String, String, String, Double)] = [("pts", "PTS", "Points", 18.4), ("reb", "REB", "Rebounds", 7.2),
+                                                                  ("ast", "AST", "Assists", 5.1), ("stl", "STL", "Steals", 2.3), ("blk", "BLK", "Blocks", 0.8)]
+                facts.stats = values.map { .init(key: $0.0, label: $0.1, word: $0.2, value: decimals ? $0.3 : $0.3.rounded(),
+                                                  text: decimals ? String(format: "%.1f", $0.3) : String(Int($0.3.rounded()))) }
+                if decimals { facts.stats.append(.init(key: "gp", label: "GAMES", word: "Games", value: 9, text: "9")) }
+                facts.subtitle = source == .lastGame ? "vs Riverside Eagles" : "9 games · per game"
+                facts.eyebrow = source == .lastGame ? "GAME · 21 NOV" : (source == .month ? "NOVEMBER" : "ALL GAMES")
+            }
+            for template in AthletePostTemplate.allCases {
+                let renderer = ImageRenderer(content: AthletePostCanvas(template: template, facts: facts, photo: photo,
+                                                                        cutout: nil, aspect: .portrait))
+                renderer.scale = 1
+                try? renderer.uiImage?.jpegData(compressionQuality: 0.85)?
+                    .write(to: caches.appendingPathComponent("post-\(template.rawValue)-\(source.rawValue).jpg"))
+            }
+        }
+    }
+}

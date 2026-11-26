@@ -3535,6 +3535,66 @@ consent.
 - NEXT (agreed, not built): a BOOKLET — every play of a playbook section or
   the focus plays in one PDF.
 
+## The media vault (26 Nov 2026, Luther)
+"A media vault per player … the photos or videos I shot of the athlete … quickly
+find media from a player and post it or share it with them or parents …
+Hoopwise can automatically overlay a cool stat on it, well designed templates
+that adjust to the player's stats … NBA like overlays." Decided (his "go with
+your recommendations, start with photos"): the coach's PHOTOS LIBRARY is the
+store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
+- THE INDEX: `VaultPhoto` (Models/AthleteVault.swift: localId, iCloud Photos'
+  `cloudId`, addedAt, takenAt, sessionId) in `MediaAssetStatus.vault` — inside
+  the athlete's EXISTING synced `mediaAssetsData` JSON (a legacy column nothing
+  read): NO schema change, older builds ignore the key. THE writer is
+  `SwiftDataManager.setVault(studentId:)` / `addToVaults(_:studentIds:)` (a
+  photo by either identifier is never added twice; one photo may be in several
+  athletes' vaults); `updateStudent` KEEPS the stored vault, so an older copy's
+  whole-athlete save cannot undo photos filed since.
+- PHOTOS (Services/PhotoVault.swift): read-write permission; `entries` stores
+  each photo's PHCloudIdentifier so the iPad / Mac turn it back into their own
+  photo (`localIdentifierMappings`) — a photo deleted from Photos or not synced
+  yet is simply left out (the card says so). `file(localIds:inAlbumFor:)` also
+  puts them in Photos › folder "Hoopwise" › an album per athlete (best effort).
+  `photos(during:)` = photos shot 30 min before a class to 1 h after it. On the
+  MAC the sandbox now allows the Photos library
+  (ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = YES → photos-library entitlement).
+- SCREENS (Views/Components/AthleteMediaViews.swift): `AthleteMediaCard`
+  (`athlete.media`, on the profile under the tracked drills and in all three
+  Quick Peep layouts): count, See all (`media.all` → AthleteMediaVaultView
+  grid), + (`media.add`, PhotosPicker on the library), a strip of the newest
+  12. A photo (`media.photo`) → VaultPhotoView: the photo, "Make a post with
+  their stats" (`media.makePost`), ⋯ Share the original / Remove from vault
+  (stays in Photos). Session page ⋯ → "Photos from this class"
+  (`session.photos` → SessionPhotosSheet): the class window's photos, tap to
+  pick, then WHO is in them — only that class's athletes (present once roll
+  call started, else expected) — "Add N photos to M athletes". No face
+  recognition: iOS does not give apps the People albums.
+- POSTS: Services/AthletePostFacts.swift (pure) — Last game = the BEST game
+  (most counted) of the latest class with games, "vs <opponent>" (game plan,
+  else the other team); This month / All games = per-game averages + GAMES;
+  `headline` = the three biggest NON-ZERO stats in the usual order; nothing
+  invented when there are no games. Views/Components/AthletePostTemplates.swift
+  — 1080 px wide, 4:5 or 1:1, the athlete's program colour, the academy's name
+  where a league's would stand (NO league marks — App Review 4.1):
+  GAME LINE (the photo, FIRST light + LAST heavy compressed, three stat tiles,
+  eyebrow and academy, a colour rule), STAT CARD (colour gradient + halftone,
+  framed photo, white panel: names, six numbers), POSTER (colour wash, the last
+  name repeated behind, a faded portrait, the athlete LIFTED OUT by Vision —
+  else the photo fading out on every side —, the jersey number or biggest stat
+  huge, the non-zero stats as "Points 12.4" lines). AthletePostComposer (full
+  screen): preview, template (`post.template`), stats (`post.source`),
+  aspect, the CONSENT line (`post.consent`: publication consent on record →
+  fine to post; else share with the family only), Share image (JPEG).
+  Language = Languages by Area → Player card.
+- DEBUG: HOOPWISE_SHOT=athletePost (+ HOOPWISE_POST_EXPORT=1 writes
+  post-<template>-<source>.jpg, sample numbers when the demo athlete has no
+  games); HOOPWISE_DEMO_VAULT=1 on studentProfile files the newest six library
+  photos under the athlete (grant Photos first: `xcrun simctl privacy <udid>
+  grant photos OKTO.SAMp`). Tests: MediaVaultTests, MediaVaultUITests (iPad
+  mini; skips without library photos). The simulator cannot run Vision, so the
+  poster's cut-out was NOT seen; nor the Hoopwise albums in Photos, nor two
+  devices resolving the same photo, nor the Mac.
+
 ## The ball rule (17 Nov 2026, Luther)
 "A pass can only be drawn from a player with a ball, otherwise nothing is
 drawn; a dribble same." In the step editor (every play and drill, not only

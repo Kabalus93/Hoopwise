@@ -88,6 +88,9 @@ struct StudentDetailView: View {
                     ShootingProfileSection(studentId: student.id)
                     CustomTrackProfileSection(student: student)
 
+                    // The media vault (26 Nov 2026).
+                    AthleteMediaCard(studentId: student.id)
+
                     // Team workout (Hub → Teams): drills from the roles
                     // this athlete plays in a team's play breakdowns.
                     TeamWorkoutProfileSection(memberId: student.id)

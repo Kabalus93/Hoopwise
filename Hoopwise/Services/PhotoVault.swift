@@ -163,9 +163,8 @@ enum PhotoVault {
                     } else {
                         let request = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: athleteName)
                         request.addAssets(assets)
-                        if let placeholder = request.placeholderForCreatedAssetCollection {
-                            PHCollectionListChangeRequest(for: parent)?.addChildCollections([placeholder] as NSArray)
-                        }
+                        let placeholder = request.placeholderForCreatedAssetCollection
+                        PHCollectionListChangeRequest(for: parent)?.addChildCollections([placeholder] as NSArray)
                     }
                 }
             } catch {

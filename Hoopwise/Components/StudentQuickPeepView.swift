@@ -507,6 +507,7 @@ struct StudentQuickPeepView: View {
                 skillsSection
                 ShootingProfileSection(studentId: student.id)
                 CustomTrackProfileSection(student: student)
+                AthleteMediaCard(studentId: student.id)
             }
             .frame(maxWidth: .infinity)
             VStack(spacing: 16) {
@@ -550,6 +551,7 @@ struct StudentQuickPeepView: View {
                 // Tracked shooting, as on the profile (21 Nov 2026).
                 ShootingProfileSection(studentId: student.id)
                 CustomTrackProfileSection(student: student)
+                AthleteMediaCard(studentId: student.id)
 
                 if !insights.isEmpty {
                     insightsSection
@@ -579,6 +581,7 @@ struct StudentQuickPeepView: View {
             // Tracked shooting, as on the profile (21 Nov 2026).
             ShootingProfileSection(studentId: student.id)
             CustomTrackProfileSection(student: student)
+            AthleteMediaCard(studentId: student.id)
             
             // Coach notes (only show if has custom notes)
             if let notes = player?.coachNotes, !notes.isEmpty {
