@@ -276,11 +276,28 @@ struct AthletePostComposer: View {
                                    : "No game stats for this — try another range, or score a game first.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
-                Picker("", selection: $template) {
-                    ForEach(AthletePostTemplate.allCases) { Label($0.title(chinese: isChinese), systemImage: $0.symbol).tag($0) }
+                // Thirteen templates: a strip of chips (26 Nov 2026).
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(AthletePostTemplate.allCases) { t in
+                                let on = template == t
+                                Button { withAnimation(.snappy) { template = t } } label: {
+                                    Label(t.title(chinese: isChinese), systemImage: t.symbol)
+                                        .font(.subheadline.weight(on ? .semibold : .regular))
+                                        .padding(.horizontal, 14).frame(minHeight: 38)
+                                        .foregroundStyle(on ? Color.white : Color.primary)
+                                        .background(Capsule().fill(on ? Color.accentColor : Color(.tertiarySystemFill)))
+                                }
+                                .buttonStyle(.plain)
+                                .id(t)
+                                .accessibilityIdentifier("post.template.\(t.rawValue)")
+                                .accessibilityAddTraits(on ? .isSelected : [])
+                            }
+                        }
+                    }
+                    .onChange(of: template) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
                 }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("post.template")
                 HStack {
                     Picker(isChinese ? "数据" : "Stats", selection: $source) {
                         ForEach(AthletePostFacts.Source.allCases) { Text($0.title(chinese: isChinese)).tag($0) }
@@ -310,8 +327,8 @@ struct AthletePostComposer: View {
             .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
                 if let sharing { ShareSheet(items: sharing) }
             }
-            .onChange(of: template) { _, t in if t == .poster { liftSubject() } }
-            .onAppear { if template == .poster { liftSubject() } }
+            .onChange(of: template) { _, t in if t.liftsSubject { liftSubject() } }
+            .onAppear { if template.liftsSubject { liftSubject() } }
         }
     }
 

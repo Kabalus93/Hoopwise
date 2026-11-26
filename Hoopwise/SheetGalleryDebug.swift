@@ -1127,8 +1127,9 @@ enum AthletePostDebug {
                 facts.eyebrow = source == .lastGame ? "GAME · 21 NOV" : (source == .month ? "NOVEMBER" : "ALL GAMES")
             }
             for template in AthletePostTemplate.allCases {
+                let aspect: AthletePostAspect = ProcessInfo.processInfo.environment["HOOPWISE_POST_ASPECT"] == "square" ? .square : .portrait
                 let renderer = ImageRenderer(content: AthletePostCanvas(template: template, facts: facts, photo: photo,
-                                                                        cutout: nil, aspect: .portrait))
+                                                                        cutout: nil, aspect: aspect))
                 renderer.scale = 1
                 try? renderer.uiImage?.jpegData(compressionQuality: 0.85)?
                     .write(to: caches.appendingPathComponent("post-\(template.rawValue)-\(source.rawValue).jpg"))

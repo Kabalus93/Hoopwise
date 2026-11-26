@@ -9,12 +9,24 @@ import UIKit
 
 enum AthletePostTemplate: String, CaseIterable, Identifiable {
     case gameLine, statCard, poster
+    // Ten more (26 Nov 2026) — AthletePostTemplatesMore.swift.
+    case duotone, scoreboard, magazine, holoCard, diagonal, giantNumber, scrapbook, filmStrip, swiss, neon
     var id: String { rawValue }
     func title(chinese: Bool) -> String {
         switch self {
         case .gameLine: chinese ? "比赛数据" : "Game line"
         case .statCard: chinese ? "数据卡" : "Stat card"
         case .poster: chinese ? "海报" : "Poster"
+        case .duotone: chinese ? "双色" : "Duotone"
+        case .scoreboard: chinese ? "记分牌" : "Scoreboard"
+        case .magazine: chinese ? "杂志封面" : "Cover"
+        case .holoCard: chinese ? "收藏卡" : "Holo card"
+        case .diagonal: chinese ? "斜切" : "Diagonal"
+        case .giantNumber: chinese ? "大号码" : "Big number"
+        case .scrapbook: chinese ? "手账" : "Scrapbook"
+        case .filmStrip: chinese ? "胶片" : "Film"
+        case .swiss: chinese ? "瑞士风格" : "Swiss"
+        case .neon: chinese ? "霓虹" : "Neon"
         }
     }
     var symbol: String {
@@ -22,8 +34,23 @@ enum AthletePostTemplate: String, CaseIterable, Identifiable {
         case .gameLine: "rectangle.bottomthird.inset.filled"
         case .statCard: "rectangle.split.2x1"
         case .poster: "person.crop.rectangle.stack"
+        case .duotone: "circle.lefthalf.filled"
+        case .scoreboard: "rectangle.grid.3x2"
+        case .magazine: "book.closed"
+        case .holoCard: "sparkles.rectangle.stack"
+        case .diagonal: "line.diagonal"
+        case .giantNumber: "number"
+        case .scrapbook: "photo.on.rectangle.angled"
+        case .filmStrip: "film"
+        case .swiss: "square.grid.3x3"
+        case .neon: "lightbulb.max"
         }
     }
+}
+
+extension AthletePostTemplate {
+    /// Templates that stand the athlete out of the photo (Vision cut-out).
+    var liftsSubject: Bool { self == .poster || self == .magazine || self == .giantNumber }
 }
 
 enum AthletePostAspect: String, CaseIterable, Identifiable {
@@ -48,6 +75,16 @@ struct AthletePostCanvas: View {
             case .gameLine: GameLinePost(facts: facts, photo: photo, size: size)
             case .statCard: StatCardPost(facts: facts, photo: photo, size: size)
             case .poster: PosterPost(facts: facts, photo: photo, cutout: cutout, size: size)
+            case .duotone: DuotonePost(facts: facts, photo: photo, size: size)
+            case .scoreboard: ScoreboardPost(facts: facts, photo: photo, size: size)
+            case .magazine: MagazinePost(facts: facts, photo: photo, cutout: cutout, size: size)
+            case .holoCard: HoloCardPost(facts: facts, photo: photo, size: size)
+            case .diagonal: DiagonalPost(facts: facts, photo: photo, size: size)
+            case .giantNumber: GiantNumberPost(facts: facts, photo: photo, cutout: cutout, size: size)
+            case .scrapbook: ScrapbookPost(facts: facts, photo: photo, size: size)
+            case .filmStrip: FilmStripPost(facts: facts, photo: photo, size: size)
+            case .swiss: SwissPost(facts: facts, photo: photo, size: size)
+            case .neon: NeonPost(facts: facts, photo: photo, size: size)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -58,14 +95,14 @@ struct AthletePostCanvas: View {
 
 // MARK: - Shared pieces
 
-private extension AthletePostFacts {
+extension AthletePostFacts {
     var color: Color { Color(hex: colorHex) }
 }
 
-private func heavy(_ size: CGFloat) -> Font { .system(size: size, weight: .black, design: .default).width(.compressed) }
-private func light(_ size: CGFloat) -> Font { .system(size: size, weight: .light, design: .default).width(.compressed) }
+func postHeavy(_ size: CGFloat) -> Font { .system(size: size, weight: .black, design: .default).width(.compressed) }
+func postLight(_ size: CGFloat) -> Font { .system(size: size, weight: .light, design: .default).width(.compressed) }
 
-private struct PhotoFill: View {
+struct PostPhotoFill: View {
     let photo: UIImage
     var body: some View {
         GeometryReader { geo in
@@ -80,7 +117,7 @@ private struct PhotoFill: View {
 }
 
 /// A halftone of dots growing toward the bottom.
-private struct Halftone: View {
+struct PostHalftone: View {
     var color: Color
     var body: some View {
         Canvas { context, size in
@@ -113,7 +150,7 @@ private struct GameLinePost: View {
     var body: some View {
         let stats = facts.headline
         ZStack(alignment: .bottom) {
-            PhotoFill(photo: photo)
+            PostPhotoFill(photo: photo)
             LinearGradient(stops: [.init(color: .clear, location: 0.38),
                                    .init(color: .black.opacity(0.55), location: 0.6),
                                    .init(color: .black.opacity(0.94), location: 1)],
@@ -121,9 +158,9 @@ private struct GameLinePost: View {
             VStack(spacing: 18) {
                 HStack(alignment: .firstTextBaseline, spacing: 14) {
                     if !facts.firstName.isEmpty {
-                        Text(facts.firstName.uppercased()).font(light(116)).foregroundStyle(.white.opacity(0.85))
+                        Text(facts.firstName.uppercased()).font(postLight(116)).foregroundStyle(.white.opacity(0.85))
                     }
-                    Text(facts.lastName.uppercased()).font(heavy(116)).foregroundStyle(.white)
+                    Text(facts.lastName.uppercased()).font(postHeavy(116)).foregroundStyle(.white)
                 }
                 .lineLimit(1).minimumScaleFactor(0.5)
                 if !facts.subtitle.isEmpty {
@@ -140,7 +177,7 @@ private struct GameLinePost: View {
                                     .foregroundStyle(.black)
                                     .frame(maxWidth: .infinity, minHeight: 50)
                                     .background(.white)
-                                Text(s.text).font(heavy(170)).foregroundStyle(.white)
+                                Text(s.text).font(postHeavy(170)).foregroundStyle(.white)
                                     .lineLimit(1).minimumScaleFactor(0.5)
                             }
                         }
@@ -175,9 +212,9 @@ private struct StatCardPost: View {
         ZStack(alignment: .topLeading) {
             LinearGradient(colors: [facts.color.opacity(0.92), facts.color.mix(with: .black, by: 0.55)],
                            startPoint: .top, endPoint: .bottom)
-            Halftone(color: .white.opacity(0.1))
+            PostHalftone(color: .white.opacity(0.1))
             // The photo.
-            PhotoFill(photo: photo)
+            PostPhotoFill(photo: photo)
                 .frame(width: photoRect.width, height: photoRect.height)
                 .overlay(Rectangle().strokeBorder(.white, lineWidth: 6))
                 .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
@@ -189,7 +226,7 @@ private struct StatCardPost: View {
                         .font(.system(size: 34, weight: .heavy)).tracking(4).lineLimit(1).minimumScaleFactor(0.5)
                 }
                 Text(facts.lastName.uppercased())
-                    .font(heavy(120)).lineLimit(1).minimumScaleFactor(0.4)
+                    .font(postHeavy(120)).lineLimit(1).minimumScaleFactor(0.4)
                 if !facts.subtitle.isEmpty {
                     Text(facts.subtitle.uppercased())
                         .font(.system(size: 24, weight: .semibold)).tracking(2).lineLimit(1).minimumScaleFactor(0.6)
@@ -200,7 +237,7 @@ private struct StatCardPost: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: h * 0.025) {
                         ForEach(stats) { s in
                             VStack(spacing: 0) {
-                                Text(s.text).font(heavy(h > 1100 ? 116 : 96)).lineLimit(1).minimumScaleFactor(0.5)
+                                Text(s.text).font(postHeavy(h > 1100 ? 116 : 96)).lineLimit(1).minimumScaleFactor(0.5)
                                 Text(s.label).font(.system(size: 28, weight: .semibold)).tracking(2)
                             }
                         }
@@ -254,7 +291,7 @@ private struct PosterPost: View {
             VStack(alignment: .leading, spacing: -24) {
                 ForEach(0..<9, id: \.self) { i in
                     Text(String(repeating: facts.lastName.uppercased() + "  ", count: 4))
-                        .font(heavy(150)).lineLimit(1).fixedSize()
+                        .font(postHeavy(150)).lineLimit(1).fixedSize()
                         .foregroundStyle(.white.opacity(i % 2 == 0 ? 0.22 : 0.12))
                         .offset(x: i % 2 == 0 ? -40 : -180)
                 }
@@ -262,7 +299,7 @@ private struct PosterPost: View {
             .frame(width: size.width, height: h, alignment: .topLeading)
             .clipped()
             // A large, faded portrait at the top left.
-            PhotoFill(photo: photo)
+            PostPhotoFill(photo: photo)
                 .saturation(0)
                 .opacity(0.28)
                 .frame(width: size.width * 0.72, height: h * 0.55)
@@ -275,7 +312,7 @@ private struct PosterPost: View {
                 } else {
                     // No cut-out (Vision found no one): the photo fades
                     // into the poster on every side.
-                    PhotoFill(photo: photo)
+                    PostPhotoFill(photo: photo)
                         .mask(EllipticalGradient(stops: [.init(color: .black, location: 0),
                                                          .init(color: .black, location: 0.55),
                                                          .init(color: .clear, location: 1)]))
@@ -300,9 +337,9 @@ private struct PosterPost: View {
                 }
                 if !bigText.isEmpty {
                     ZStack {
-                        Text(bigText).font(heavy(h > 1100 ? 300 : 250)).foregroundStyle(.white)
+                        Text(bigText).font(postHeavy(h > 1100 ? 300 : 250)).foregroundStyle(.white)
                             .offset(x: 6, y: 6)
-                        Text(bigText).font(heavy(h > 1100 ? 300 : 250)).foregroundStyle(facts.color.mix(with: .black, by: 0.25))
+                        Text(bigText).font(postHeavy(h > 1100 ? 300 : 250)).foregroundStyle(facts.color.mix(with: .black, by: 0.25))
                     }
                     .padding(.top, 4)
                     if facts.jersey == nil, let big = facts.big {

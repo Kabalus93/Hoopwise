@@ -35,10 +35,17 @@ final class MediaVaultUITests: XCTestCase {
         XCTAssertTrue(app.buttons["post.share"].exists)
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "post.consent").firstMatch.exists)
         attach("game line")
-        app.segmentedControls["post.template"].buttons.element(boundBy: 1).tap()
-        attach("stat card")
-        app.segmentedControls["post.template"].buttons.element(boundBy: 2).tap()
-        sleep(1)
-        attach("poster")
+        let chips = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'post.template.'"))
+        for t in ["statCard", "poster", "neon"] {
+            let chip = app.buttons["post.template.\(t)"]
+            // Swipe the strip on whichever chip is on screen (it scrolls itself on a tap).
+            for _ in 0..<6 where !chip.isHittable {
+                guard let visible = chips.allElementsBoundByIndex.first(where: { $0.isHittable }) else { break }
+                visible.swipeLeft()
+            }
+            chip.tap()
+            sleep(1)
+            attach(t)
+        }
     }
 }
