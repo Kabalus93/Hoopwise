@@ -75,6 +75,12 @@ struct StudentDetailView: View {
                     // What to know before anything else (25 Nov 2026).
                     MedicalNoteBanner(studentId: student.id)
 
+                    // The eight ratings with their sliders, as in the Quick
+                    // Peep (27 Nov 2026, Luther: "add here the evaluation sliders").
+                    AthleteSkillsEvaluationCard(student: student)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("athlete.evaluation")
+
                     // Contract & Risk Analysis section (comprehensive)
                     contractAndRiskSection
 

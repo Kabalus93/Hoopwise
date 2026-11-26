@@ -160,8 +160,8 @@ struct DrillDrawingCard: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 26, height: 26)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.glass)
@@ -302,10 +302,12 @@ struct DrillDrawingSheet: View {
 /// Luther: "these buttons are way too small and not easy to find"): body
 /// text in a glass capsule at least 44 pt tall.
 extension View {
+    /// Sized between the two tries (16 Nov 2026 "way too small", 27 Nov
+    /// 2026 "way too big"): subheadline type, about 40 pt tall with the glass.
     func visualControlLabel() -> some View {
-        self.font(.body.weight(.semibold))
-            .padding(.horizontal, 6)
-            .frame(minHeight: 44)
+        self.font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 2)
+            .frame(minHeight: 26)
             .contentShape(Capsule())
     }
 }

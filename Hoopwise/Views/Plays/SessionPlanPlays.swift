@@ -17,6 +17,11 @@ struct SessionPlanPlaysSection: View {
     /// A GAME's plays (24 Nov 2026): titled "Calls", sorted by the situation
     /// the team's playbook files each under, with the defense on top.
     var calls: Calls? = nil
+    /// The class's game RULES (27 Nov 2026, Luther): when given, + offers
+    /// "Add plays" or "Add a rule" and the rules list under the plays.
+    var rules: Binding<[SessionRule]>? = nil
+    /// The age whose library rule options are offered first.
+    var ruleAge: ActivityAge? = nil
 
     struct Calls {
         var playbook: TeamPlaybook?
@@ -27,6 +32,7 @@ struct SessionPlanPlaysSection: View {
     @Query(sort: [SortDescriptor(\JournalPlay.order), SortDescriptor(\JournalPlay.createdAt)])
     private var library: [JournalPlay]
     @State private var picking = false
+    @State private var addingRule = false
     @State private var opened: OpenedPlay?
 
     private struct OpenedPlay: Identifiable {
@@ -55,9 +61,10 @@ struct SessionPlanPlaysSection: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("game.calls.defense")
             }
-            if plays.isEmpty {
+            if plays.isEmpty && (rules?.wrappedValue.isEmpty ?? true) {
                 HStack {
-                    Text(isChinese ? "点击 + 从战术库添加" : "Tap + to add plays from your library")
+                    Text(rules != nil ? (isChinese ? "点击 + 添加战术或比赛规则" : "Tap + to add plays or game rules")
+                                      : (isChinese ? "点击 + 从战术库添加" : "Tap + to add plays from your library"))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -96,8 +103,18 @@ struct SessionPlanPlaysSection: View {
                 }
                 }
             }
+            if let rules, !rules.wrappedValue.isEmpty {
+                rulesList(rules)
+            }
         }
         .filmGlass(.regular, in: .rect(cornerRadius: 16))
+        .sheet(isPresented: $addingRule) {
+            SessionRuleSheet(age: ruleAge, existing: rules?.wrappedValue ?? []) { rule in
+                guard let rules else { return }
+                withAnimation { rules.wrappedValue.append(rule) }
+                onChange()
+            }
+        }
         .sheet(isPresented: $picking) {
             SessionPlayPicker(library: library, selected: plays) { chosen in
                 guard chosen != plays else { return }
@@ -120,7 +137,9 @@ struct SessionPlanPlaysSection: View {
     private var header: some View {
         HStack(spacing: 10) {
             Label {
-                Text(calls != nil ? (isChinese ? "战术口令" : "CALLS") : (isChinese ? "战术" : "PLAYS"))
+                Text(calls != nil ? (isChinese ? "战术口令" : "CALLS")
+                     : rules != nil ? (isChinese ? "战术与规则" : "PLAYS & RULES")
+                     : (isChinese ? "战术" : "PLAYS"))
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.primary)
             } icon: {
@@ -138,7 +157,26 @@ struct SessionPlanPlaysSection: View {
                     .padding(.vertical, 5)
                     .filmGlass(.regular, in: Capsule())
             }
-            if canEdit {
+            if canEdit, rules != nil {
+                Menu {
+                    Button { picking = true } label: {
+                        Label(isChinese ? "添加战术" : "Add Plays", systemImage: "sportscourt")
+                    }
+                    .accessibilityIdentifier("plan.plays.add.play")
+                    Button { addingRule = true } label: {
+                        Label(isChinese ? "添加规则" : "Add a Rule", systemImage: "list.bullet.rectangle")
+                    }
+                    .accessibilityIdentifier("plan.plays.add.rule")
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.footnote.weight(.bold))
+                        .frame(width: 28, height: 28)
+                        .filmGlass(.regular, in: Circle())
+                        .foregroundStyle(color)
+                }
+                .accessibilityLabel(isChinese ? "添加战术或规则" : "Add plays or rules")
+                .accessibilityIdentifier("plan.plays.add")
+            } else if canEdit {
                 Button { picking = true } label: {
                     Image(systemName: "plus")
                         .font(.footnote.weight(.bold))
@@ -154,6 +192,44 @@ struct SessionPlanPlaysSection: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 10)
+    }
+
+    @ViewBuilder
+    private func rulesList(_ rules: Binding<[SessionRule]>) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !plays.isEmpty { Divider().padding(.leading, 16) }
+            Text(isChinese ? "规则" : "RULES")
+                .font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 4)
+            ForEach(rules.wrappedValue) { rule in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.subheadline).foregroundStyle(color)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(rule.title).font(.body.weight(.medium))
+                        if let detail = rule.detail {
+                            Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if canEdit {
+                        Button(role: .destructive) {
+                            withAnimation { rules.wrappedValue.removeAll { $0.id == rule.id } }
+                            onChange()
+                        } label: {
+                            Image(systemName: "minus.circle").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(isChinese ? "移除规则" : "Remove rule")
+                        .accessibilityIdentifier("plan.rule.remove")
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("plan.rule")
+            }
+        }
+        .padding(.bottom, 6)
     }
 
     @ViewBuilder
@@ -335,5 +411,107 @@ struct SessionPlayPicker: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isChosen(play) ? .isSelected : [])
         .accessibilityIdentifier("plan.plays.pick.\(play.starterKey ?? play.name)")
+    }
+}
+
+
+/// Adding a game rule to a class (27 Nov 2026): the coach's own words, a few
+/// common constraints, or a rule option from the activity library — this
+/// age's first.
+struct SessionRuleSheet: View {
+    let age: ActivityAge?
+    let existing: [SessionRule]
+    let onAdd: (SessionRule) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    /// Constraints a coach puts on a game, in the app's language.
+    private var common: [String] {
+        isChinese ? ["进攻3秒内出手", "不许运球", "不许抢断", "每人必须触球才能投篮", "只能用弱侧手运球", "投篮前至少传3次"]
+                  : ["3-second offense", "No dribble", "No steals", "Everyone touches the ball before a shot",
+                     "Weak hand only", "Three passes before a shot"]
+    }
+
+    private var libraryRules: [(ActivityAge, [LibraryActivity])] {
+        let rules = ActivityLibrary.shared.items.filter(\.isRule)
+        var ages = ActivityAge.allCases
+        if let age, let i = ages.firstIndex(of: age) { ages.remove(at: i); ages.insert(age, at: 0) }
+        return ages.compactMap { a in
+            let list = rules.filter { $0.age == a }
+            return list.isEmpty ? nil : (a, list)
+        }
+    }
+
+    private func has(_ title: String) -> Bool { existing.contains { $0.title == title } }
+
+    private func add(_ rule: SessionRule) {
+        onAdd(rule)
+        dismiss()
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    HStack {
+                        TextField(isChinese ? "写一条规则" : "Write a rule", text: $text)
+                            .focused($focused)
+                            .submitLabel(.done)
+                            .onSubmit(addTyped)
+                            .accessibilityIdentifier("rule.field")
+                        Button(isChinese ? "添加" : "Add", action: addTyped)
+                            .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .accessibilityIdentifier("rule.addTyped")
+                    }
+                }
+                Section(isChinese ? "常用" : "Common") {
+                    ForEach(common, id: \.self) { rule in
+                        Button { add(SessionRule(text: rule)) } label: {
+                            HStack {
+                                Text(rule).foregroundStyle(.primary)
+                                Spacer()
+                                if has(rule) { Image(systemName: "checkmark").foregroundStyle(.secondary) }
+                            }
+                        }
+                        .disabled(has(rule))
+                        .accessibilityIdentifier("rule.common")
+                    }
+                }
+                ForEach(libraryRules, id: \.0) { age, rules in
+                    Section(isChinese ? "规则选项 · \(age.title)" : "Rule options · \(age.title)") {
+                        ForEach(rules, id: \.key) { a in
+                            Button { add(SessionRule(text: a.name, libraryKey: a.key)) } label: {
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(a.displayName).foregroundStyle(.primary)
+                                        Text(a.localizedHowItRuns).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                    }
+                                    Spacer()
+                                    if has(a.displayName) { Image(systemName: "checkmark").foregroundStyle(.secondary) }
+                                }
+                            }
+                            .disabled(has(a.displayName))
+                            .accessibilityIdentifier("rule.library")
+                        }
+                    }
+                }
+            }
+            .navigationTitle(isChinese ? "添加规则" : "Add a Rule")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isChinese ? "取消" : "Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func addTyped() {
+        let rule = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rule.isEmpty else { return }
+        add(SessionRule(text: rule))
     }
 }

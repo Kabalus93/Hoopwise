@@ -33,7 +33,17 @@ struct ProgressReportPage: View {
                         .font(.system(size: 10.5, weight: .medium)).foregroundStyle(soft).lineLimit(1)
                 }
                 Spacer()
-                Text(periodText).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(soft)
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let data = facts.photo, let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable().scaledToFill()
+                            .frame(width: 64, height: 64)
+                            .background(facts.photoBackdropHex.map { Color(hex: $0) } ?? .clear)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(tint, lineWidth: 2))
+                    }
+                    Text(periodText).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(soft)
+                }
             }
             .padding(.top, 12)
             Rectangle().fill(hair).frame(height: 0.5).padding(.top, 10)
@@ -267,11 +277,15 @@ struct ProgressReportSheet: View {
         if period == .all {
             start = dataManager.sessionEvents.map(\.startTime).min() ?? Date()
         }
-        return ProgressReportFacts.make(student: student, players: dataManager.players, programs: dataManager.programs,
-                                        sessions: dataManager.sessionEvents, drills: dataManager.drills,
-                                        from: start, coachWords: coachWords, focus: chosenFocus,
-                                        coach: coach, academy: ProgramGuideStore.academyName,
-                                        chinese: AreaLanguage.isChinese(.exports))
+        var f = ProgressReportFacts.make(student: student, players: dataManager.players, programs: dataManager.programs,
+                                         sessions: dataManager.sessionEvents, drills: dataManager.drills,
+                                         from: start, coachWords: coachWords, focus: chosenFocus,
+                                         coach: coach, academy: ProgramGuideStore.academyName,
+                                         chinese: AreaLanguage.isChinese(.exports))
+        if let data = f.photo, ProfilePhotoEncoding.isTransparent(data: data) {
+            f.photoBackdropHex = dataManager.photoBackdropHex(for: student.id)
+        }
+        return f
     }
 
     var body: some View {

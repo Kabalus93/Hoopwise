@@ -83,8 +83,8 @@ struct AthleteMediaCard: View {
                         .font(.subheadline)
                 }
             } else if entries.isEmpty {
-                Text(isChinese ? "你给这位学员拍的照片和视频：用 + 添加，或在课程的 ⋯ → 本节课的照片 里选。"
-                               : "Photos and videos you shot of this athlete. Add them with +, or from a class's ⋯ → Photos from this class.")
+                Text(isChinese ? "你给这位学员拍的照片和视频：用 + 添加，或在课程的 ⋯ → 把课堂照片加给学员 里选。"
+                               : "Photos and videos you shot of this athlete. Add them with +, or from a class's ⋯ → Add Class Photos to Athletes.")
                     .font(.subheadline).foregroundStyle(.secondary)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -402,6 +402,10 @@ struct SessionPhotosSheet: View {
     @State private var picked: Set<String> = []
     @State private var who: Set<UUID> = []
     @State private var filed: String?
+    /// Photos picked from the whole library (27 Nov 2026, Luther: "how do I
+    /// add pictures here?" — only photos shot during the class showed, and
+    /// none meant a dead end).
+    @State private var libraryPick: [PhotosPickerItem] = []
 
     private var athletes: [Student] {
         let present = Set(session.actualAttendeeIds)
@@ -423,25 +427,55 @@ struct SessionPhotosSheet: View {
                             .buttonStyle(.borderedProminent)
                     }
                 } else if loaded && assets.isEmpty {
-                    ContentUnavailableView(isChinese ? "这节课期间没有照片" : "No photos from this class",
-                                           systemImage: "photo",
-                                           description: Text(isChinese ? "开始前 30 分钟到结束后 1 小时内拍的照片会出现在这里。"
-                                                                       : "Photos shot from 30 minutes before to an hour after the class show here."))
+                    ContentUnavailableView {
+                        Label(isChinese ? "这节课期间没有照片" : "No photos from this class", systemImage: "photo")
+                    } description: {
+                        Text(isChinese ? "开始前 30 分钟到结束后 1 小时内用这台设备拍的照片和视频会自动出现在这里。也可以从照片图库里选。"
+                                       : "Photos and videos shot on this device from 30 minutes before to an hour after the class appear here by themselves. You can also choose any from your library.")
+                    } actions: {
+                        libraryButton.buttonStyle(.borderedProminent)
+                    }
                 } else {
                     content
                 }
             }
-            .navigationTitle(isChinese ? "本节课的照片" : "Photos from this class")
+            .navigationTitle(isChinese ? "把课堂照片加给学员" : "Add Class Photos to Athletes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(isChinese ? "完成" : "Done") { dismiss() } }
+                if access && !(loaded && assets.isEmpty) {
+                    ToolbarItem(placement: .primaryAction) { libraryButton }
+                }
             }
             .task { await load(asking: false) }
+            .onChange(of: libraryPick) { _, items in
+                let ids = items.compactMap(\.itemIdentifier)
+                guard !ids.isEmpty else { return }
+                let fetched = PHAsset.fetchAssets(withLocalIdentifiers: ids, options: nil)
+                var extra: [PHAsset] = []
+                fetched.enumerateObjects { a, _, _ in extra.append(a) }
+                let known = Set(assets.map(\.localIdentifier))
+                assets = extra.filter { !known.contains($0.localIdentifier) } + assets
+                picked.formUnion(ids)
+                libraryPick = []
+            }
         }
+    }
+
+    private var libraryButton: some View {
+        PhotosPicker(selection: $libraryPick, matching: .any(of: [.images, .videos]), photoLibrary: .shared()) {
+            Label(isChinese ? "从图库选择" : "Choose from Library", systemImage: "photo.badge.plus")
+        }
+        .accessibilityIdentifier("classPhotos.library")
     }
 
     private var content: some View {
         VStack(spacing: 0) {
+            Text(isChinese ? "选出照片，再选照片里的学员——它们会出现在学员资料的“媒体”里。照片本身留在“照片”App 中。"
+                           : "Pick the photos, then who is in them — they appear in each athlete's Media. The photos stay in your Photos library.")
+                .font(.footnote).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal).padding(.vertical, 10)
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 4)], spacing: 4) {
                     ForEach(assets, id: \.localIdentifier) { asset in

@@ -1706,6 +1706,25 @@ struct FlightySessionsCalendarView: View {
 
     private let calendar = Calendar.current
     
+    /// How many weeks the strip scrolls either side of this one (ten years).
+    static let weekSpan = 520
+    @State private var scrolledWeek: Int?
+    /// The week the strip counts from.
+    @State private var anchorWeek: Date = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+
+    private func weekStart(_ date: Date) -> Date {
+        calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+    }
+    /// Weeks from the anchor week to the week holding `date`.
+    private func weekIndex(of date: Date) -> Int {
+        let days = calendar.dateComponents([.day], from: anchorWeek, to: weekStart(date)).day ?? 0
+        return Int((Double(days) / 7).rounded())
+    }
+    private func days(ofWeek i: Int) -> [Date] {
+        guard let start = calendar.date(byAdding: .weekOfYear, value: i, to: anchorWeek) else { return [] }
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+    }
+
     var weekDays: [Date] {
         guard let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: currentWeekStart)) else {
             return []
@@ -1781,7 +1800,6 @@ struct FlightySessionsCalendarView: View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         let locale = isChinese ? Locale(identifier: "zh_CN") : Locale(identifier: "en_US")
         let monthLabel = selectedDate.formatted(.dateTime.month(.wide).year().locale(locale))
-        let isCurrentMonth = calendar.isDate(selectedDate, equalTo: Date(), toGranularity: .month)
 
         return HStack(alignment: .firstTextBaseline) {
             Button {
@@ -1805,7 +1823,10 @@ struct FlightySessionsCalendarView: View {
 
             Spacer()
 
-            if !isCurrentMonth {
+            // Shown whenever another day is selected (27 Nov 2026, Luther: it
+            // hid for the whole current month, so a day earlier in the month
+            // had no way back).
+            if !calendar.isDateInToday(selectedDate) {
                 Button {
                     goToToday()
                 } label: {
@@ -1966,40 +1987,43 @@ struct FlightySessionsCalendarView: View {
             if isCalendarExpanded {
                 monthlyCalendarGrid
             } else {
-                HStack(spacing: 0) {
-                    ForEach(weekDays, id: \.self) { date in
-                        appleDayCell(date: date, dimWhenOutOfMonth: false)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .offset(x: weekDragOffset)
-                .gesture(
-                    DragGesture(minimumDistance: 15)
-                        .onChanged { value in
-                            isDraggingWeek = true
-                            weekDragOffset = value.translation.width * 0.5
-                        }
-                        .onEnded { value in
-                            isDraggingWeek = false
-                            let threshold: CGFloat = 50
-                            let velocity = value.predictedEndTranslation.width - value.translation.width
-                            if value.translation.width < -threshold || velocity < -100 {
-                                navigateWeek(by: 1)
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    weekDragOffset = 0
-                                }
-                            } else if value.translation.width > threshold || velocity > 100 {
-                                navigateWeek(by: -1)
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    weekDragOffset = 0
-                                }
-                            } else {
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    weekDragOffset = 0
+                // Weeks SCROLL sideways, page by page, the strip looking as
+                // before (27 Nov 2026, Luther: "make it scrollable, horizontal
+                // scroll without changing its appearance"). It was a drag that
+                // nudged the row half a finger and jumped.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(-Self.weekSpan...Self.weekSpan, id: \.self) { i in
+                            HStack(spacing: 0) {
+                                ForEach(days(ofWeek: i), id: \.self) { date in
+                                    appleDayCell(date: date, dimWhenOutOfMonth: false)
+                                        .frame(maxWidth: .infinity)
                                 }
                             }
+                            .containerRelativeFrame(.horizontal)
                         }
-                )
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $scrolledWeek)
+                .frame(height: 50)
+                .accessibilityIdentifier("calendar.weekScroll")
+                .onAppear { scrolledWeek = weekIndex(of: currentWeekStart) }
+                .onChange(of: currentWeekStart) { _, start in
+                    let i = weekIndex(of: start)
+                    if scrolledWeek != i { scrolledWeek = i }
+                }
+                .onChange(of: scrolledWeek) { _, new in
+                    guard let new else { return }
+                    let delta = new - weekIndex(of: currentWeekStart)
+                    guard delta != 0,
+                          let start = calendar.date(byAdding: .weekOfYear, value: delta, to: currentWeekStart),
+                          let day = calendar.date(byAdding: .weekOfYear, value: delta, to: selectedDate) else { return }
+                    currentWeekStart = start
+                    selectedDate = day
+                    HapticFeedback.impact(.light)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -2520,6 +2544,14 @@ struct CompactSessionRow: View {
                             .padding(.vertical, 2)
                             .background(Color.red, in: .rect(cornerRadius: 4))
                     }
+                    // The class has notes the coach wrote (27 Nov 2026, Luther).
+                    if session.hasCoachNotes {
+                        Image(systemName: "note.text")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel(LocalizationManager.shared.currentLanguage == .chinese ? "有笔记" : "Has notes")
+                            .accessibilityIdentifier("calendar.row.notes")
+                    }
                 }
 
                 HStack(spacing: 6) {
@@ -2987,5 +3019,20 @@ nonisolated enum ProgramListGroup: Hashable {
     static func of(_ program: Program) -> ProgramListGroup {
         if let day = program.recurringDays.first { return .day(day) }
         return SessionPrivacy.isPrivate(program) ? .privateLessons : .noFixedDay
+    }
+}
+
+
+extension SessionEvent {
+    /// The coach wrote something in this class's notes — not only the app's own
+    /// markers (skipped, auto-closed, plan moved, make-up).
+    var hasCoachNotes: Bool {
+        if !(coachNotes ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        let markers = ["Skipped:", SessionLifecycle.autoCloseMarkerPrefix.trimmingCharacters(in: .whitespaces),
+                       SessionPlanShift.movedMarker, SessionPlanShift.makeUpPrefix.trimmingCharacters(in: .whitespaces)]
+        return (notes ?? "").split(whereSeparator: \.isNewline).contains { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            return !line.isEmpty && !markers.contains { line.hasPrefix($0) }
+        }
     }
 }

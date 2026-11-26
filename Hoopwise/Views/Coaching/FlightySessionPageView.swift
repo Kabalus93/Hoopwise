@@ -445,7 +445,7 @@ struct FlightySessionPageView: View {
                         // The photos shot during this class, into the
                         // athletes' media vaults (26 Nov 2026).
                         Button(action: { showingClassPhotos = true }) {
-                            Label(LocalizationManager.shared.currentLanguage == .chinese ? "本节课的照片" : "Photos from this class",
+                            Label(LocalizationManager.shared.currentLanguage == .chinese ? "把课堂照片加给学员" : "Add Class Photos to Athletes",
                                   systemImage: "photo.stack")
                         }
                         .accessibilityIdentifier("session.photos")
@@ -1296,7 +1296,9 @@ struct FlightySessionPageView: View {
                     color: Color.accentColor,
                     onChange: saveSession,
                     teamId: session.curriculum.teamId,
-                    calls: gameCalls
+                    calls: gameCalls,
+                    rules: gameCalls == nil ? $session.curriculum.rules : nil,
+                    ruleAge: parentProgram.map { DrillPlanGenerator.libraryAge(for: $0.ageGroup) }
                 )
                 }
 
@@ -1473,6 +1475,7 @@ struct FlightySessionPageView: View {
             merged.notes = existingNotes
         }
         merged.plays = session.curriculum.plays
+        merged.rules = session.curriculum.rules
         // Tracked shooting drills stay in the plan, and their results stay
         // (the old Regenerate dropped both).
         let tracked = Set(ShootingDrill.allCases.map(\.drillId))

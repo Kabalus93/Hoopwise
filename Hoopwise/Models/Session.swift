@@ -118,6 +118,11 @@ struct SessionCurriculum: Codable, Hashable {
     /// A team GAME's plan (23 Nov 2026 — GamePlan.swift): opponent, lineup,
     /// keys, opponent notes. In the curriculum JSON; nil on everything else.
     var gamePlan: GamePlan? = nil
+    /// Game RULES for this class — "3-second offense", "No dribble", "No
+    /// steals", or one of the library's rule options (27 Nov 2026, Luther:
+    /// "add here can be adding a rule or a play"). In the curriculum JSON,
+    /// written only when there are some.
+    var rules: [SessionRule] = []
     
     init(warmupDrillIds: [UUID] = [], skillDrillIds: [UUID] = [], gameDrillIds: [UUID] = [],
          warmupMinutes: Int = 30, skillsMinutes: Int = 30, gameMinutes: Int = 30, notes: String? = nil,
@@ -136,7 +141,7 @@ struct SessionCurriculum: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case warmupDrillIds, skillDrillIds, gameDrillIds, warmupMinutes, skillsMinutes, gameMinutes, notes, plays
-        case coachIds, teamId, shooting, tracked, gamePlan
+        case coachIds, teamId, shooting, tracked, gamePlan, rules
     }
 
     init(from decoder: Decoder) throws {
@@ -154,10 +159,44 @@ struct SessionCurriculum: Codable, Hashable {
         shooting = (try? c.decodeIfPresent([ShootingRun].self, forKey: .shooting)) ?? []
         tracked = (try? c.decodeIfPresent([TrackedRun].self, forKey: .tracked)) ?? []
         gamePlan = try? c.decodeIfPresent(GamePlan.self, forKey: .gamePlan)
+        rules = (try? c.decodeIfPresent([SessionRule].self, forKey: .rules)) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(warmupDrillIds, forKey: .warmupDrillIds)
+        try c.encode(skillDrillIds, forKey: .skillDrillIds)
+        try c.encode(gameDrillIds, forKey: .gameDrillIds)
+        try c.encode(warmupMinutes, forKey: .warmupMinutes)
+        try c.encode(skillsMinutes, forKey: .skillsMinutes)
+        try c.encode(gameMinutes, forKey: .gameMinutes)
+        try c.encodeIfPresent(notes, forKey: .notes)
+        try c.encode(plays, forKey: .plays)
+        try c.encode(coachIds, forKey: .coachIds)
+        try c.encodeIfPresent(teamId, forKey: .teamId)
+        try c.encode(shooting, forKey: .shooting)
+        try c.encode(tracked, forKey: .tracked)
+        try c.encodeIfPresent(gamePlan, forKey: .gamePlan)
+        if !rules.isEmpty { try c.encode(rules, forKey: .rules) }
     }
     
     var totalDrillCount: Int { warmupDrillIds.count + skillDrillIds.count + gameDrillIds.count }
     var totalMinutes: Int { warmupMinutes + skillsMinutes + gameMinutes }
+}
+
+/// One game rule in a session's plan: the coach's own words, or a library
+/// rule option (its key, so it reads in the app's language and keeps its
+/// "how it runs").
+struct SessionRule: Codable, Hashable, Identifiable {
+    var id = UUID()
+    var text: String
+    var libraryKey: String? = nil
+
+    var activity: LibraryActivity? {
+        libraryKey.flatMap { key in ActivityLibrary.shared.items.first { $0.key == key } }
+    }
+    var title: String { activity?.displayName ?? text }
+    var detail: String? { activity?.localizedHowItRuns }
 }
 
 enum SessionEventStatus: String, Codable, CaseIterable {

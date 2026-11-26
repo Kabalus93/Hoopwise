@@ -13,6 +13,10 @@ struct ProgressReportFacts {
     struct Result: Identifiable { let id: String; let title: String; let first: String?; let last: String; let improved: Bool? }
 
     var name = ""
+    /// The profile photo, and the colour behind it when it is a cut-out
+    /// (27 Nov 2026, Luther: the photo on the report).
+    var photo: Data?
+    var photoBackdropHex: String?
     var secondName: String?
     var schoolGrade: String?
     var program: String?
@@ -45,6 +49,7 @@ struct ProgressReportFacts {
         var f = ProgressReportFacts()
         f.chinese = chinese
         f.name = student.primaryName(chinese: chinese)
+        f.photo = student.profileImageData
         f.secondName = student.secondaryName(chinese: chinese)
         f.schoolGrade = student.currentSchoolGrade(asOf: end)?.shortName(chinese: chinese)
         let program = student.programId.flatMap { id in programs.first { $0.id == id } }

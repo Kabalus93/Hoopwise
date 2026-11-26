@@ -2833,6 +2833,35 @@ Seen on the iPad mini simulator: the Attend and Notes tabs. NOT seen: either
 peep gesture, the flip, a long pinyin name. The UI tests for these had not
 finished when 97/98 were archived at Luther's word.
 
+IPAD MARKUPS, 26–27 Nov 2026 (Luther, seven screenshots).
+· CALENDAR (FlightySessionsCalendarView): the week strip SCROLLS — a paged
+  horizontal ScrollView of weeks (±520 around this week, `scrolledWeek`,
+  `calendar.weekScroll`), same look; swiping a week moves the selected day by
+  a week (the old drag nudged half a finger and jumped). "Today" shows
+  whenever another day is selected (it hid for the whole current month). A
+  class with notes the coach wrote shows `note.text` on its row
+  (`SessionEvent.hasCoachNotes` — the app's own markers don't count).
+· THE PROFILE HAS THE SLIDERS: the Quick Peep's Skills Evaluation is now
+  `AthleteSkillsEvaluationCard` (Components/), used by the peep AND the
+  athlete profile (above Contracts, `athlete.evaluation`) — one save path.
+· CLASS PHOTOS: the session ⋯ item is "Add Class Photos to Athletes" (was
+  "Photos from this class" — Luther asked what it meant); the sheet says what
+  it does and has "Choose from Library" (`classPhotos.library`) — photos
+  outside the class window, or when none were shot on this device.
+· PROGRESS REPORT: the athlete's photo (64 pt circle, the level colour behind
+  a cut-out) top right over the dates (`ProgressReportFacts.photo`).
+· GAME RULES IN THE PLAN: the Plays card is "PLAYS & RULES" on every non-game
+  session; its + is a menu (Add Plays / Add a Rule — `plan.plays.add.play`,
+  `.rule`). SessionRuleSheet: type one, the common ones ("3-second offense",
+  "No dribble", "No steals" …), or a library RULE OPTION (this age first —
+  its key is kept, so it reads in the app's language with its how-it-runs).
+  `SessionCurriculum.rules: [SessionRule]` (curriculum JSON, written only
+  when non-empty — no schema change); Regenerate keeps them. Test:
+  PlanRulesUITests.
+· DRILL PAGE: + Add, Reorder and Edit are subheadline and ~40 pt with the
+  glass (Luther: "way too big" — 16 Nov they were "way too small" at 44 pt
+  + glass).
+
 ## Drill attributes, the plan dashboard and phase balance (11 Nov 2026, Luther)
 "Give drills an attribute … a hex graph in each drill … the session plan
 becomes a dashboard … feeds back into the program." Decided: 8 axes, ship
