@@ -850,6 +850,36 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   its scratch players got new ids on every redraw and the White team vanished.
   LiveGameAssistUITests' "five on screen" / "switching team" expect the
   iPhone layout and fail on the iPad mini (both teams side by side).
+  TEAM OCTAGONS + BALANCE TEAMS (26 Nov 2026, Luther, markup on Create
+  Game: "give each team an oct diagram to see the balance live … a button
+  that balances the teams based on data: their levels, shooting power,
+  defense, chemistry"). Services/TeamBalance.swift (pure). A player's
+  PROFILE = the eight skills on 0…1: the coach's rating ÷ 10; EVIDENCE as a
+  rank among the players of this game mapped to 0.3…0.8 (shooting: points a
+  game and the share made in tracked shooting, ≥ 20 shots; passing: assists
+  a game; defense: steals + blocks a game; ≥ 3 games); both = 70 % rating,
+  30 % evidence; neither = UNKNOWN (left out of a team's average, the
+  group's average when balancing). STRENGTH = the known skills' average,
+  70 / 30 with the skill level in the session's program; nothing known =
+  the middle. Create Game gathers it once on opening (`loadBalanceData`).
+  Each team row has `AttributeOctagon` in the team's colour over the OTHER
+  teams' average (dashed, only when all eight are known there), "Strength
+  6.2" and "N of M with data" (`setup.team.<i>.octagon`; beside the slots in
+  regular width, under the team's players on a phone) — redrawn as players
+  move. Under the teams a VERDICT line (`setup.balance.verdict`): "Evenly
+  matched" (strengths within 0.4, no skill ≥ 1.0 apart) or who is stronger
+  and the two widest skill gaps. BALANCE TEAMS (`setup.balance`, beside Add
+  Team) splits everyone on a team or in the roster: a snake draft by
+  strength, then pair swaps while they make the teams more even on strength
+  (×3), the skills (×2; shooting and defense count double) and CHEMISTRY
+  (×0.5 — passer → scorer links between teammates, so one team does not
+  hold every pair that finds each other); sizes at most one apart, each
+  team's strongest first (the starter slots); deterministic. UNDO
+  (`setup.balance.undo`) puts the teams back as they were. FOUND WITH IT:
+  the page's old "Balance by skill" and its pre-filled teams read
+  `skills.overallRating` — the RETIRED six-skill evaluation — so every
+  player counted the same; they read the profile's strength now. Tests:
+  TeamBalanceTests, CreateGameBalanceUITests (iPad mini).
   WHO PLAYED A GAME (20 Nov 2026, Luther: "when a player participates but
   does not score or attain any stat, the app doesn't count the game"). A game
   counted only for players with a STAT LINE, and a line exists only once a

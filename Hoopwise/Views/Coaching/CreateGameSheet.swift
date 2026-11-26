@@ -68,6 +68,13 @@ struct CreateGameSheet: View {
 
     // Optional reuse of last game's setup
     @State private var hasPreviousConfig: Bool = false
+    /// What the app knows about each player in the pool (TeamBalance): the
+    /// eight skills and a strength. Gathered once when the page opens.
+    @State private var profiles: [UUID: TeamBalance.Profile] = [:]
+    /// Passer → scorer links between players of the pool.
+    @State private var chemistryLinks: [TeamBalance.Pair: Int] = [:]
+    /// The teams as they were before "Balance teams" — for Undo.
+    @State private var beforeBalance: (teams: [GameTeam], unassigned: Set<UUID>)?
     @State private var usePreviousConfig: Bool = false
 
     private var isChinese: Bool {
@@ -192,6 +199,7 @@ struct CreateGameSheet: View {
                 }
             }
             .onAppear {
+                loadBalanceData()
                 loadInitialState()
                 if !durationManuallyEdited { durationMinutes = defaultDurationForLayout }
             }
@@ -344,13 +352,33 @@ struct CreateGameSheet: View {
                 teamRow(index: index, team: team)
             }
 
-            if teams.count < maxTeams {
-                Divider()
-                Button {
-                    addTeam()
-                } label: {
-                    Label(isChinese ? "添加队伍" : "Add Team", systemImage: "plus")
+            Divider()
+            balanceVerdict
+            HStack(spacing: 12) {
+                if teams.count < maxTeams {
+                    Button {
+                        addTeam()
+                    } label: {
+                        Label(isChinese ? "添加队伍" : "Add Team", systemImage: "plus")
+                    }
                 }
+                Spacer(minLength: 8)
+                if beforeBalance != nil {
+                    Button(isChinese ? "撤销" : "Undo") { undoBalance() }
+                        .font(.subheadline)
+                        .accessibilityIdentifier("setup.balance.undo")
+                }
+                Button {
+                    balanceTeams()
+                } label: {
+                    Label(isChinese ? "均衡分队" : "Balance teams", systemImage: "scale.3d")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .disabled(teams.count < 2 || balancePool.count < teams.count)
+                .accessibilityIdentifier("setup.balance")
             }
         } header: {
             HStack {
@@ -379,7 +407,9 @@ struct CreateGameSheet: View {
         let starters = Array(team.playerIds.prefix(sc))
         let bench = Array(team.playerIds.dropFirst(sc))
         let benchSlots = max(2, bench.count + 1)
-        return VStack(alignment: .leading, spacing: 10) {
+        let wide = sizeClass == .regular
+        return HStack(alignment: .center, spacing: 14) {
+          VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 colorPickerMenu(for: index, currentHex: team.colorHex)
                 VStack(alignment: .leading, spacing: 1) {
@@ -419,12 +449,160 @@ struct CreateGameSheet: View {
                          playerId: j < bench.count ? bench[j] : nil, color: color, starter: false)
                 }
             }
+            // On a phone the chart sits under the team's players.
+            if !wide {
+                teamOctagon(index: index, color: color, width: 210, height: 124)
+                    .frame(maxWidth: .infinity)
+            }
+          }
+          if wide { teamOctagon(index: index, color: color, width: 190, height: 132) }
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
         .dropTarget("team.\(index)")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup.team.\(index)")
+    }
+
+    // MARK: - Balance (26 Nov 2026, Luther: "give each team an oct diagram to
+    // see the balance live … a button that balances the teams based on data")
+
+    private func teamShape(_ index: Int) -> TeamBalance.TeamShape {
+        TeamBalance.shape(of: teams[index].playerIds, profiles: profiles)
+    }
+
+    /// The team's eight skills (its colour) over the other teams' average
+    /// (dashed), redrawn as players move.
+    private func teamOctagon(index: Int, color: Color, width: CGFloat, height: CGFloat) -> some View {
+        let shape = teamShape(index)
+        let others = teams.indices.filter { $0 != index && !teams[$0].playerIds.isEmpty }.map(teamShape)
+        var rest: [DrillAttribute: Double] = [:]
+        for axis in DrillAttribute.allCases {
+            let values = others.compactMap { $0.axes[axis] }.filter { $0 > 0 }
+            if !values.isEmpty { rest[axis] = values.reduce(0, +) / Double(values.count) }
+        }
+        return VStack(spacing: 2) {
+            AttributeOctagon(values: shape.axes, tint: color,
+                             standing: rest.count == DrillAttribute.allCases.count ? rest : nil,
+                             standingColor: Color.primary.opacity(0.45))
+                .frame(width: width, height: height)
+                .animation(.easeOut(duration: 0.25), value: shape)
+            if shape.known > 0 {
+                Text(isChinese
+                     ? "实力 \(String(format: "%.1f", shape.strength))"
+                     : "Strength \(String(format: "%.1f", shape.strength))")
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                if shape.known < shape.players {
+                    Text(isChinese ? "\(shape.known)/\(shape.players) 人有数据" : "\(shape.known) of \(shape.players) with data")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text(isChinese ? "暂无数据" : "No data yet")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("setup.team.\(index).octagon")
+    }
+
+    /// One line saying how even the teams are, and where they differ.
+    @ViewBuilder
+    private var balanceVerdict: some View {
+        let filled = teams.indices.filter { !teams[$0].playerIds.isEmpty }
+        let shapes = filled.map(teamShape)
+        if shapes.count >= 2, shapes.contains(where: { $0.known > 0 }) {
+            let strengths = shapes.map(\.strength)
+            let spread = (strengths.max() ?? 0) - (strengths.min() ?? 0)
+            let gaps = TeamBalance.gaps(shapes).prefix(2)
+            let even = spread < 0.4 && gaps.isEmpty
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: even ? "checkmark.circle.fill" : "scale.3d")
+                    .foregroundStyle(even ? Color.green : Color.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verdictTitle(even: even, strengths: strengths, filled: filled))
+                        .font(.subheadline.weight(.semibold))
+                    if !gaps.isEmpty {
+                        Text(gaps.map { gap in
+                            let name = GameTeam.localizedColorName(teams[filled[gap.leader]].name)
+                            let by = String(format: "%.1f", gap.by * 10)
+                            return isChinese ? "\(name)\(gap.axis.title(chinese: true))高 \(by)"
+                                             : "\(name) +\(by) \(gap.axis.title(chinese: false))"
+                        }.joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("setup.balance.verdict")
+        }
+    }
+
+    private func verdictTitle(even: Bool, strengths: [Double], filled: [Int]) -> String {
+        if even { return isChinese ? "两边势均力敌" : "Evenly matched" }
+        guard let top = strengths.max(), let low = strengths.min(), top - low >= 0.4,
+              let leader = strengths.firstIndex(of: top) else {
+            return isChinese ? "实力接近，技术特点不同" : "Close in strength, different in shape"
+        }
+        let name = GameTeam.localizedColorName(teams[filled[leader]].name)
+        let by = String(format: "%.1f", top - low)
+        return isChinese ? "\(name)整体强 \(by)" : "\(name) is stronger by \(by)"
+    }
+
+    /// Everyone who would play: on a team or waiting in the roster.
+    private var balancePool: [UUID] {
+        teams.flatMap(\.playerIds) + rosterIds
+    }
+
+    /// Reads what the app knows about the players once.
+    private func loadBalanceData() {
+        let ids = enrolledStudents.map(\.id)
+        let pool = Set(ids)
+        let sessions = dataManager.sessionEvents
+        var evaluations: [UUID: SkillsEvaluation] = [:]
+        for player in dataManager.players where pool.contains(player.studentId) {
+            evaluations[player.studentId] = player.skills
+        }
+        var tiers: [UUID: SkillTier] = [:]
+        for id in ids {
+            if let tier = dataManager.skillTier(for: id, program: session.programId) { tiers[id] = tier }
+        }
+        profiles = TeamBalance.profiles(players: ids, evaluations: evaluations, tiers: tiers,
+                                        games: TeamBalance.gameNumbers(players: pool, sessions: sessions),
+                                        shooting: TeamBalance.shootingShares(players: pool, sessions: sessions))
+        chemistryLinks = TeamBalance.links(players: pool, sessions: sessions)
+    }
+
+    /// Splits everyone evenly on strength, the eight skills and chemistry;
+    /// each team's strongest take its starter slots.
+    private func balanceTeams() {
+        let pool = balancePool
+        guard teams.count >= 2, pool.count >= teams.count else { return }
+        beforeBalance = (teams, unassignedIds)
+        let split = TeamBalance.balanced(players: pool, teamCount: teams.count,
+                                         profiles: profiles, links: chemistryLinks)
+        withAnimation(.snappy(duration: 0.3)) {
+            for i in teams.indices {
+                teams[i].playerIds = split[i]
+                teams[i].starters = min(playersPerSide, split[i].count)
+            }
+            unassignedIds.subtract(pool)
+        }
+        dropTick += 1
+    }
+
+    private func undoBalance() {
+        guard let before = beforeBalance else { return }
+        withAnimation(.snappy(duration: 0.3)) {
+            teams = before.teams
+            unassignedIds = before.unassigned
+        }
+        beforeBalance = nil
     }
 
     /// One slot of a team: a player (tap = options; press, hold and carry
@@ -1051,13 +1229,11 @@ struct CreateGameSheet: View {
         unassignedIds.removeAll()
     }
 
-    /// Look up the overall skill rating (1–10) for a student. 5.0 fallback
-    /// when no evaluation has been recorded — keeps dormant players neutral.
+    /// The player's strength (0–10) from TeamBalance — ratings, levels, game
+    /// and shooting results; 5.0 when nothing is known. (It read the retired
+    /// six-skill evaluation, so every player counted the same.)
     private func playerSkill(_ studentId: UUID) -> Double {
-        if let player = dataManager.players.first(where: { $0.studentId == studentId }) {
-            return player.skills.overallRating
-        }
-        return 5.0
+        (profiles[studentId]?.strength ?? 0.5) * 10
     }
 
     private func totalSkill(of ids: [UUID]) -> Double {

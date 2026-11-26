@@ -1188,7 +1188,12 @@ class SwiftDataManager: ObservableObject {
                 sdStudent.thumbnailImageData = student.thumbnailImageData
                 sdStudent.parentalTouchpoints = student.parentalTouchpoints
                 sdStudent.lastParentContact = student.lastParentContact
-                sdStudent.mediaAssets = student.mediaAssets
+                // The media vault has its own writer (setVault): a whole
+                // athlete save from an older copy must never undo photos
+                // added since, here or on another device.
+                var assets = student.mediaAssets
+                assets.vault = sdStudent.mediaAssets.vault
+                sdStudent.mediaAssets = assets
                 sdStudent.personalBests = student.personalBests
                 sdStudent.performanceGrade = student.performanceGrade
                 sdStudent.gradeHistory = student.gradeHistory
@@ -1201,6 +1206,39 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    // MARK: - Media vault (26 Nov 2026)
+
+    /// THE writer of an athlete's media vault: only that list changes.
+    func setVault(studentId: UUID, _ change: (inout [VaultPhoto]) -> Void) {
+        do {
+            let descriptor = FetchDescriptor<SDStudent>(predicate: #Predicate { $0.id == studentId })
+            guard let sdStudent = try modelContext.fetch(descriptor).first else { return }
+            var assets = sdStudent.mediaAssets
+            let before = assets.vault
+            change(&assets.vault)
+            guard assets.vault != before else { return }
+            sdStudent.mediaAssets = assets
+            sdStudent.updatedAt = Date()
+            saveAndRefresh()
+        } catch {
+            debugLog("❌ Failed to update the media vault: \(error)")
+        }
+    }
+
+    /// Files photos under several athletes at once; a photo already in an
+    /// athlete's vault is not added twice (same Photos identifier).
+    func addToVaults(_ photos: [VaultPhoto], studentIds: [UUID]) {
+        for id in studentIds {
+            setVault(studentId: id) { vault in
+                for photo in photos where !vault.contains(where: { $0.sameAsset(as: photo) }) {
+                    var copy = photo
+                    copy.id = UUID()
+                    vault.append(copy)
+                }
+            }
+        }
+    }
+
     func deleteStudent(_ student: Student) {
         do {
             // Take the athlete out of everything that names them (15 Nov

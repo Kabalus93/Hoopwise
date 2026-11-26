@@ -282,10 +282,16 @@ struct MediaAssetStatus: Codable, Hashable, Sendable {
     var notes: String?
     var photoUrls: [String]
     var videoUrls: [String]
+    /// The athlete's MEDIA VAULT (26 Nov 2026): photos in the coach's Photos
+    /// library that are this athlete's (Models/AthleteVault.swift). Inside
+    /// this existing synced JSON — no schema change; older builds ignore it.
+    /// Written only through `SwiftDataManager.setVault`.
+    var vault: [VaultPhoto] = []
     
     init(photoReady: Bool = false, videoHighlightPending: Bool = false,
          lastPhotoDate: Date? = nil, lastVideoDate: Date? = nil, notes: String? = nil,
-         photoUrls: [String] = [], videoUrls: [String] = []) {
+         photoUrls: [String] = [], videoUrls: [String] = [], vault: [VaultPhoto] = []) {
+        self.vault = vault
         self.photoReady = photoReady
         self.videoHighlightPending = videoHighlightPending
         self.lastPhotoDate = lastPhotoDate
@@ -305,6 +311,7 @@ struct MediaAssetStatus: Codable, Hashable, Sendable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         photoUrls = try container.decodeIfPresent([String].self, forKey: .photoUrls) ?? []
         videoUrls = try container.decodeIfPresent([String].self, forKey: .videoUrls) ?? []
+        vault = (try? container.decodeIfPresent([VaultPhoto].self, forKey: .vault)) ?? []
     }
 }
 
