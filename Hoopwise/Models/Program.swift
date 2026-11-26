@@ -203,6 +203,13 @@ struct ProgramSkillTargets: Codable, Hashable {
     /// Nil = not set, and the plan generator falls back to player
     /// evaluations. Lives in this JSON blob, so it syncs with no schema change.
     var level: Int? = nil
+    /// THE TARGETS, on the eight octagon skills (26 Nov 2026): DrillAttribute
+    /// raw value → the 1–10 an athlete of this program should reach. A skill
+    /// missing here has no target. The six fields above are the retired
+    /// targets (scoring … intangibles): still decoded and written back so old
+    /// data round-trips, read by nothing — they were compared with the
+    /// retired six-skill evaluation, so every athlete read as a flat 5.
+    var axes: [String: Int] = [:]
     
     // Legacy computed properties for backward compatibility
     var shooting: Int { scoring }
@@ -250,12 +257,13 @@ struct ProgramSkillTargets: Codable, Hashable {
         athleticism = try container.decodeIfPresent(Int.self, forKey: .athleticism) ?? 5
         lastUpdatedDate = try container.decodeIfPresent(Date.self, forKey: .lastUpdatedDate)
         level = try container.decodeIfPresent(Int.self, forKey: .level)
+        axes = (try? container.decodeIfPresent([String: Int].self, forKey: .axes)) ?? [:]
     }
     
     private enum CodingKeys: String, CodingKey {
         case scoring, playmaking, rebounding, defense, athleticism, intangibles
         case shooting, ballHandling, basketballIQ, teamwork, coachability
-        case lastUpdatedDate, level
+        case lastUpdatedDate, level, axes
     }
     
     func encode(to encoder: Encoder) throws {
@@ -268,61 +276,36 @@ struct ProgramSkillTargets: Codable, Hashable {
         try container.encode(intangibles, forKey: .intangibles)
         try container.encodeIfPresent(lastUpdatedDate, forKey: .lastUpdatedDate)
         try container.encodeIfPresent(level, forKey: .level)
+        if !axes.isEmpty { try container.encode(axes, forKey: .axes) }
     }
     
-    /// True once a coach has saved skill targets. A blob that only carries the
-    /// program LEVEL has no targets, and its default 5s must not be shown as
-    /// if a coach had chosen them.
-    var hasTargets: Bool { lastUpdatedDate != nil }
+    /// True once a coach has set a target on at least one of the eight
+    /// skills. A blob that only carries the program LEVEL, or only the
+    /// retired six targets, has none.
+    var hasTargets: Bool { !axes.isEmpty }
 
-    var overallTarget: Double {
-        Double(scoring + playmaking + rebounding + defense + athleticism + intangibles) / 6.0
+    func target(_ axis: DrillAttribute) -> Int? { axes[axis.rawValue] }
+    mutating func setTarget(_ value: Int?, for axis: DrillAttribute) {
+        axes[axis.rawValue] = value.map { min(10, max(1, $0)) }
     }
-    
-    /// Compare a student's skills against these targets
-    func compare(to skills: SkillsEvaluation) -> [String: Int] {
-        [
-            "Scoring": skills.scoring - scoring,
-            "Playmaking": skills.playmaking - playmaking,
-            "Rebounding": skills.rebounding - rebounding,
-            "Defense": skills.defense - defense,
-            "Athleticism": skills.athleticism - athleticism,
-            "Intangibles": skills.intangibles - intangibles
-        ]
+
+    /// The average of the targets set (nil with none).
+    var overallTarget: Double? {
+        let values = DrillAttribute.allCases.compactMap(target)
+        return values.isEmpty ? nil : Double(values.reduce(0, +)) / Double(values.count)
     }
-    
-    /// Check if a student meets all skill targets
-    func meetsAllTargets(_ skills: SkillsEvaluation) -> Bool {
-        skills.scoring >= scoring &&
-        skills.playmaking >= playmaking &&
-        skills.rebounding >= rebounding &&
-        skills.defense >= defense &&
-        skills.athleticism >= athleticism &&
-        skills.intangibles >= intangibles
+
+    /// The skills with a target that the athlete is rated UNDER. A skill the
+    /// coach has not rated is unknown, not below.
+    func below(_ skills: SkillsEvaluation) -> [DrillAttribute] {
+        DrillAttribute.allCases.filter { axis in
+            guard let want = target(axis), let have = skills.rating(axis) else { return false }
+            return have < want
+        }
     }
-    
-    /// Count how many skills are below target
-    func skillsBelowTarget(_ skills: SkillsEvaluation) -> Int {
-        var count = 0
-        if skills.scoring < scoring { count += 1 }
-        if skills.playmaking < playmaking { count += 1 }
-        if skills.rebounding < rebounding { count += 1 }
-        if skills.defense < defense { count += 1 }
-        if skills.athleticism < athleticism { count += 1 }
-        if skills.intangibles < intangibles { count += 1 }
-        return count
-    }
-    
-    /// Get the skills that are below target
-    func getSkillsBelowTarget(_ skills: SkillsEvaluation) -> [String] {
-        var below: [String] = []
-        if skills.scoring < scoring { below.append("Scoring") }
-        if skills.playmaking < playmaking { below.append("Playmaking") }
-        if skills.rebounding < rebounding { below.append("Rebounding") }
-        if skills.defense < defense { below.append("Defense") }
-        if skills.athleticism < athleticism { below.append("Athleticism") }
-        if skills.intangibles < intangibles { below.append("Intangibles") }
-        return below
+    /// How many of the targeted skills the athlete is rated on.
+    func comparable(_ skills: SkillsEvaluation) -> Int {
+        DrillAttribute.allCases.filter { target($0) != nil && skills.rating($0) != nil }.count
     }
 }
 

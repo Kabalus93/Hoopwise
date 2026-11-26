@@ -35,25 +35,60 @@ enum SkillEvidence {
 
     private struct Numbers {
         var games = 0
+        /// What is shown.
         var values: [DrillAttribute: Double] = [:]
+        /// What is ranked, where it differs from what is shown: scoring is
+        /// ranked on BASKETS a game (points ÷ that game's basket value), so a
+        /// 3-point game does not out-rank a 1-point one, and shown in points.
+        var ranked: [DrillAttribute: Double] = [:]
     }
 
-    private static func numbers(for id: UUID, sessions: [SessionEvent]) -> Numbers {
-        let report = GameStatsReport.player(id, sessions: sessions)
-        var n = Numbers(games: report.games)
-        guard report.games >= minimumGames else { return n }
-        let games = Double(report.games)
-        let points = Double(report.totals[.points] ?? 0)
-        let assists = Double(report.totals[.assists] ?? 0)
-        n.values[.shooting] = points / games
-        n.values[.passing] = assists / games
-        n.values[.defense] = Double((report.totals[.steals] ?? 0) + (report.totals[.blocks] ?? 0)) / games
-        let chemistry = GameChemistry.player(id, sessions: sessions)
-        if chemistry.baskets >= minimumLoggedBaskets {
-            n.values[.finishing] = Double(chemistry.assisted) / Double(chemistry.baskets)
-            n.values[.playmaking] = Double(chemistry.assistsGiven) / Double(chemistry.baskets)
+    /// Everyone's numbers in ONE pass over the games and one over the basket
+    /// log (it used to build a full report per peer, per peep).
+    private static func numbers(for ids: Set<UUID>, sessions: [SessionEvent]) -> [UUID: Numbers] {
+        struct Raw { var games = 0, points = 0, assists = 0, stocks = 0, baskets = 0.0 }
+        var raw: [UUID: Raw] = [:]
+        for session in sessions where !SessionLifecycle.didNotHappen(session) {
+            for game in session.games where GameStatsReport.played(game) {
+                for (player, _) in game.participants where ids.contains(player) {
+                    var r = raw[player] ?? Raw()
+                    r.games += 1
+                    if let line = game.stats(for: player) {
+                        r.points += line.points
+                        r.baskets += Double(line.points) / Double(max(1, game.basketValue))
+                        r.assists += line.assists
+                        r.stocks += line.steals + line.blocks
+                    }
+                    raw[player] = r
+                }
+            }
         }
-        return n
+        var logged: [UUID: (baskets: Int, assisted: Int, given: Int)] = [:]
+        for basket in GameChemistry.baskets(in: sessions).baskets {
+            if ids.contains(basket.scorerId) {
+                logged[basket.scorerId, default: (0, 0, 0)].baskets += 1
+                if basket.assisterId != nil { logged[basket.scorerId, default: (0, 0, 0)].assisted += 1 }
+            }
+            if let passer = basket.assisterId, ids.contains(passer) { logged[passer, default: (0, 0, 0)].given += 1 }
+        }
+        var out: [UUID: Numbers] = [:]
+        for id in ids {
+            let r = raw[id] ?? Raw()
+            var n = Numbers(games: r.games)
+            if r.games >= minimumGames {
+                let games = Double(r.games)
+                n.values[.shooting] = Double(r.points) / games
+                n.ranked[.shooting] = r.baskets / games
+                n.values[.passing] = Double(r.assists) / games
+                n.values[.defense] = Double(r.stocks) / games
+                if let log = logged[id], log.baskets >= minimumLoggedBaskets {
+                    n.values[.finishing] = Double(log.assisted) / Double(log.baskets)
+                    n.values[.playmaking] = Double(log.given) / Double(log.baskets)
+                }
+            }
+            out[id] = n
+        }
+        return out
     }
 
     static func measure(for axis: DrillAttribute) -> Measure? {
@@ -70,16 +105,16 @@ enum SkillEvidence {
     /// The athlete's evidence per skill, ranked against `peers` (their
     /// program-mates; the athlete is added if missing).
     static func lines(for id: UUID, peers: [UUID], sessions: [SessionEvent]) -> [DrillAttribute: Line] {
-        let mine = numbers(for: id, sessions: sessions)
-        guard !mine.values.isEmpty else { return [:] }
         var group = Set(peers)
         group.insert(id)
-        let everyone = group.map { ($0, $0 == id ? mine : numbers(for: $0, sessions: sessions)) }
+        let everyone = numbers(for: group, sessions: sessions)
+        guard let mine = everyone[id], !mine.values.isEmpty else { return [:] }
         var out: [DrillAttribute: Line] = [:]
         for (axis, value) in mine.values {
             guard let measure = measure(for: axis) else { continue }
-            let others = everyone.compactMap { $0.1.values[axis] }
-            let rank = others.filter { $0 > value }.count + 1
+            let own = mine.ranked[axis] ?? value
+            let others = everyone.values.compactMap { $0.values[axis] == nil ? nil : ($0.ranked[axis] ?? $0.values[axis]) }
+            let rank = others.filter { $0 > own }.count + 1
             out[axis] = Line(axis: axis, measure: measure, value: value, rank: rank, of: others.count)
         }
         return out

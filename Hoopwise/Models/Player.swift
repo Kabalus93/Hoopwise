@@ -842,6 +842,11 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     /// skills (DrillAttribute raw values). Empty = not picked — the app
     /// suggests (AthleteFocus). In the same JSON, written only when set.
     var focus: [String] = []
+    /// True once this evaluation holds only ratings the coach set skill by
+    /// skill (26 Nov 2026). Until then Edit filled every unrated skill with
+    /// a 5 and Save stored all eight; `sweepUnsetRatings` clears those once
+    /// and sets this. In the same JSON, written only when true.
+    var swept = false
 
     /// Call on the NEW evaluation before saving it. The evaluation it
     /// replaces is kept first when there is no history yet; two evaluations
@@ -888,6 +893,42 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     mutating func setRating(_ value: Int, for axis: DrillAttribute) {
         axes[axis.rawValue] = min(10, max(1, value))
     }
+    /// How many skills must be rated before the evaluation says anything
+    /// about the athlete as a whole — THE rule for the level, the focus
+    /// suggestion, the plan engine's level and the program's average.
+    static let minimumRated = 4
+    /// The average of the rated skills once enough are rated; nil before.
+    var ratedAverage: Double? {
+        let values = DrillAttribute.allCases.compactMap { rating($0) }
+        guard values.count >= Self.minimumRated else { return nil }
+        return Double(values.reduce(0, +)) / Double(values.count)
+    }
+
+    /// ONE-TIME CLEAN-UP (26 Nov 2026, Luther: "clear any rating that was
+    /// never individually set"). A skill that reads 5 now and in every
+    /// evaluation on record was most likely filled in by Edit, not rated: it
+    /// goes back to unrated, here and in the history. A skill that was ever
+    /// anything but 5 is kept as it is. Returns true when something changed.
+    /// A 5 the coach truly meant is cleared too — it cannot be told apart.
+    @discardableResult
+    mutating func sweepUnsetRatings() -> Bool {
+        guard !swept else { return false }
+        swept = true
+        guard !axes.isEmpty else { return true }
+        let filled = axes.filter { key, value in
+            value == 5 && history.allSatisfy { ($0.axes[key] ?? 5) == 5 }
+        }.map(\.key)
+        for key in filled {
+            axes[key] = nil
+            for i in history.indices { history[i].axes[key] = nil }
+        }
+        // Snapshots left empty, or equal to the one before, say nothing.
+        var kept: [EvaluationSnapshot] = []
+        for snap in history where !snap.axes.isEmpty && kept.last?.axes != snap.axes { kept.append(snap) }
+        history = kept
+        return true
+    }
+
     /// Evaluated on the eight skills at least once.
     var isEvaluated: Bool { !axes.isEmpty }
     /// The average of the rated skills (nil when none).
@@ -954,6 +995,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         axes = try container.decodeIfPresent([String: Int].self, forKey: .axes) ?? [:]
         history = (try? container.decodeIfPresent([EvaluationSnapshot].self, forKey: .history)) ?? []
         focus = (try? container.decodeIfPresent([String].self, forKey: .focus)) ?? []
+        swept = (try? container.decodeIfPresent(Bool.self, forKey: .swept)) ?? false
     }
     
     private enum CodingKeys: String, CodingKey {
@@ -968,6 +1010,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         // Every evaluation as it stood (25 Nov 2026)
         case history
         case focus
+        case swept
     }
     
     func encode(to encoder: Encoder) throws {
@@ -983,6 +1026,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         if !axes.isEmpty { try container.encode(axes, forKey: .axes) }
         if !history.isEmpty { try container.encode(history, forKey: .history) }
         if !focus.isEmpty { try container.encode(focus, forKey: .focus) }
+        if swept { try container.encode(true, forKey: .swept) }
     }
     
     var overallRating: Double {

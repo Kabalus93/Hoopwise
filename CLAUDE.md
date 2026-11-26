@@ -3373,6 +3373,75 @@ stored and never shown, two rating systems, ~7,500 lines never opened.
    — a higher level may fit" — said, never applied. Tests:
    DrillPreferenceTests.
 
+## Data-logic audit (26 Nov 2026, Luther: "airtight logic, then optimisation")
+An end-to-end audit of the evaluation, game stats and everything they feed;
+Luther approved the list ("go with your recommendations, clear any rating
+that was never individually set"). What changed, and the rules that now hold:
+- UNRATED STAYS UNRATED. The Quick Peep's Edit used to fill every unrated
+  skill with 5 and Save stored all eight — those 5s fed the level, the
+  suggested focus and "Group's weakest" (an average ≤ 5 counts as weak). Edit
+  now leaves unrated skills at "—" until their slider is moved
+  (`peep.skill.slider.<axis>` / `peep.skill.value.<axis>`).
+  ONE-TIME CLEAN-UP: `SkillsEvaluation.sweepUnsetRatings` (run from
+  loadAllData through `SwiftDataManager.sweepUnsetRatings`) clears every
+  skill that reads 5 now AND in every evaluation on record, in the
+  evaluation and its history, then marks the evaluation `swept` (same JSON,
+  written only when true) so no device does it twice. A 5 the coach truly
+  meant is cleared too — it cannot be told apart; a skill that was ever
+  anything but 5 is kept. IT RUNS ON THE REAL STORE at the first launch of
+  the build that carries it.
+- ONE RULE FOR "EVALUATED": `SkillsEvaluation.ratedAverage` (≥
+  `minimumRated` = 4 skills). The level, the focus suggestion, the plan
+  engine's level and the program's "Avg rating" all read it (two of them
+  counted a single rated skill).
+- LEVELS GO BY THE SIZE OF THE GAP (`SkillLevel.gameDeltas`): production as
+  distance from the group's average in spreads (standard deviation, never
+  under 15 % of the average or half a point), −2…+2. It was a RANK, so three
+  players producing 5.1 / 5.0 / 4.9 came out Best / Average / Bottom. Games
+  weigh 35 % for everyone in a group that has evaluations — also for an
+  unrated member (who used to count at full weight); alone only in a group
+  nobody rated. PRODUCTION COUNTS BASKETS (points ÷ that game's basket value
+  × 2), not points. After a break with < 3 games in the 42 days, the latest
+  6 games stand in (`fallbackGames`).
+- PROGRAM TARGETS ARE THE EIGHT SKILLS: `ProgramSkillTargets.axes` (same
+  JSON; `target` / `setTarget` / `below` / `comparable` / `overallTarget`;
+  `hasTargets` = any set). The sheet's six sliders (Scoring … Intangibles)
+  are eight, each unset ("—") until moved, with ✕ to remove; athletes are
+  compared only on skills they are rated on. Targets saved on the six retired
+  skills are no longer read (they stay in the JSON). PlanCoverage.target
+  reads the eight directly. The churn factor (StudentIntelligence) and the
+  Quick Peep's Coach Insights read the eight skills too — they read the
+  retired six, where everyone was a flat 5 ("Leadership Material" from
+  intangibles is gone; the scoring insight is "Top Scorer" / "Needs Scoring
+  Focus" by RANK among program-mates on baskets a game, groups of four or
+  more — it was 10 / 6 / 3 points a game after a single game).
+- ONE ASSISTS-PER-BASKET: `GameStatsReport.assistsPerBasket(games:roster:)`
+  (a basket = points ÷ that game's basket value); the plan engine's
+  passingSignal calls it (it assumed two points a basket, so it disagreed
+  with the Games tab in 1- and 3-point games). defenseSignal counts
+  everyone who TOOK PART, not stat lines. shootingSignal judges each test
+  (drill + setup) alone — free throws and threes were averaged together.
+  The engine's signals read only classes that happened.
+- SkillEvidence ranks scoring on baskets a game (shown in points) and builds
+  every peer's numbers in ONE pass (it built a full report per peer).
+- A tracked drill SUGGESTS a rating only with six or more athletes with
+  results (`CustomTrackHistory.suggestionPeers`); the standing still shows
+  from three.
+- TeamBalance: baskets not points; shooting evidence = the standing WITHIN
+  each tracked test (`shootingStandings`); the level stands in only when no
+  skill is known (it double-counted the ratings).
+- DELETED: `SessionEvent.attendanceRate` (divided by a roster that is empty
+  on real classes → always 0) and `averageAttendanceRate` (no caller).
+- NOT CHANGED, on purpose: who counts as a peer differs by screen (game
+  evidence: program-mates; tracked drills and shooting: same school grade);
+  the level reads its own program's games while the profile reads every
+  game; fouls, basket times, evaluation notes and measurements are stored
+  and read by nothing; the athlete's focus is shown, not planned from.
+  `SDSessionEvent.attendanceRate` and the session page's "Avg Level" (read
+  from AGE, not skill) were left.
+Tests: DataLogicAuditTests, SkillLevelTests, CustomTrackingTests,
+TeamBalanceTests, PlanGeneratorTests, EvaluationEditUITests.
+
 ## Coach board (17 Nov 2026, Luther)
 "Half or full court … the full play editor with every feature, including
 Scribble. Not cleared when I leave … save as play or skill in the corner …

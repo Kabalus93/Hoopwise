@@ -144,7 +144,21 @@ final class PlanPerformanceSignalTests: XCTestCase {
         var s = SessionPlayerStats(playerId: kid, gameId: g.id, teamId: UUID())
         s.points = points; s.assists = assists
         g.playerStats = [s]
+        g.status = .completed
         return g
+    }
+
+    /// The engine and the Games tab count a basket the same way: points ÷
+    /// that game's basket value (the engine assumed two).
+    func testAssistsPerBasketUsesTheGamesBasketValue() {
+        let kid = UUID()
+        // 1-point games: 12 baskets and 2 assists a game → 0.17, passing is asked for.
+        let ones = (0..<3).map { _ -> SessionGame in var g = game(kid, points: 12, assists: 2); g.basketValue = 1; return g }
+        XCTAssertNotNil(DrillPlanGenerator.passingSignal(games: ones, roster: [kid]))
+        // 3-point games: 4 baskets and 2 assists a game → 0.5, it is not.
+        let threes = (0..<3).map { _ -> SessionGame in var g = game(kid, points: 12, assists: 2); g.basketValue = 3; return g }
+        XCTAssertNil(DrillPlanGenerator.passingSignal(games: threes, roster: [kid]))
+        XCTAssertEqual(GameStatsReport.assistsPerBasket(games: threes, roster: [kid])?.ratio ?? 0, 0.5, accuracy: 0.001)
     }
 
     func testFewAssistsAcrossThreeGamesPushesPassing() {

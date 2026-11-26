@@ -242,21 +242,21 @@ class StudentIntelligence {
         // If no parent info at all, don't penalize - they may not have provided it yet
         
         // ========== FACTOR 4: Skill Progression (Weight: 15%) ==========
-        if let player = player {
-            let overallSkill = player.skills.overallRating
-            
-            // Check if enrolled in program with targets
-            if let program = enrolledProgram, let targets = program.skillTargets {
-                let belowTarget = targets.skillsBelowTarget(player.skills)
+        // The eight-skill evaluation, once enough skills are rated (it read
+        // the retired six skills: everyone was a flat 5, and any program with
+        // a level set counted as "Meeting Program Goals").
+        if let skills = player?.skills, let overallSkill = skills.ratedAverage {
+            if let targets = enrolledProgram?.skillTargets, targets.hasTargets, targets.comparable(skills) > 0 {
+                let belowTarget = targets.below(skills).count
                 if belowTarget == 0 {
-                    factors.append(.init(name: "Meeting Program Goals", nameChinese: "达到项目目标", impact: 0.2, description: "All skills at or above program targets", descriptionChinese: "所有技能都达到或超过项目目标"))
+                    factors.append(.init(name: "Meeting Program Goals", nameChinese: "达到项目目标", impact: 0.2, description: "At or above every target they are rated on", descriptionChinese: "已评估的技能均达到或超过目标"))
                     totalScore += 10
                 } else if belowTarget >= 4 {
-                    factors.append(.init(name: "Struggling with Skills", nameChinese: "技能困难", impact: -0.15, description: "\(belowTarget) skills below program targets - may feel discouraged", descriptionChinese: "\(belowTarget) 项技能低于项目目标 - 可能感到沮丧"))
+                    factors.append(.init(name: "Struggling with Skills", nameChinese: "技能困难", impact: -0.15, description: "\(belowTarget) skills below program target", descriptionChinese: "\(belowTarget) 项技能低于项目目标"))
                     totalScore -= 8
                 }
             }
-            
+
             // General skill level
             if overallSkill >= 7 {
                 factors.append(.init(name: "High Performer", nameChinese: "表现优秀", impact: 0.15, description: "Strong skill development", descriptionChinese: "技能发展强劲"))

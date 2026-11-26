@@ -49,12 +49,47 @@ final class SkillLevelTests: XCTestCase {
         XCTAssertTrue(SkillLevel.tiers(evaluation: [k[0]: 9, k[1]: 3], games: [:]).isEmpty)
     }
 
-    func testGamesAloneUsePercentiles() {
+    func testGamesAloneGoByTheSizeOfTheGapNotTheRank() {
+        // Three near-equal producers: nobody is the Best or the Bottom (a
+        // rank used to hand out both, whatever the gap).
         let k = ids(3)
-        let tiers = SkillLevel.tiers(evaluation: [:], games: [k[0]: 2, k[1]: 8, k[2]: 15])
-        XCTAssertEqual(tiers[k[0]], .bottom)   // lowest → −2
-        XCTAssertEqual(tiers[k[1]], .average)  // middle → 0
-        XCTAssertEqual(tiers[k[2]], .best)     // highest → +2
+        let close = SkillLevel.tiers(evaluation: [:], games: [k[0]: 4.9, k[1]: 5.0, k[2]: 5.1])
+        XCTAssertEqual(Set(close.values), [.average])
+        // One far ahead of a level group is the Best; the group stays Average.
+        let g = ids(8)
+        var games = Dictionary(uniqueKeysWithValues: g.map { ($0, 8.0) })
+        games[g[0]] = 30
+        let tiers = SkillLevel.tiers(evaluation: [:], games: games)
+        XCTAssertEqual(tiers[g[0]], .best)
+        XCTAssertEqual(tiers[g[1]], .average)
+    }
+
+    func testAnUnratedProducerWeighsLikeARatedOne() {
+        // Everyone is rated the same except u, who is not rated; u and r
+        // produce the same, far above the rest. They get the same level.
+        let k = ids(8)
+        var evaluation = Dictionary(uniqueKeysWithValues: k.map { ($0, 6.0) })
+        evaluation[k[0]] = nil
+        var games = Dictionary(uniqueKeysWithValues: k.map { ($0, 8.0) })
+        games[k[0]] = 30; games[k[1]] = 30
+        let tiers = SkillLevel.tiers(evaluation: evaluation, games: games)
+        XCTAssertEqual(tiers[k[0]], tiers[k[1]])
+        XCTAssertEqual(tiers[k[1]], .better, "games are 35 % of the level")
+    }
+
+    func testBasketsCountNotPointsAndABreakKeepsTheLatestGames() {
+        // The same five baskets in a 1-point and a 3-point game.
+        let line = SessionPlayerStats(playerId: UUID(), gameId: UUID(), teamId: UUID(), points: 15)
+        var one = line; one.points = 5
+        XCTAssertEqual(SkillLevel.production(line, basketValue: 3), SkillLevel.production(one, basketValue: 1))
+        // No game in the last six weeks: the latest games stand in.
+        let k = ids(1)
+        let program = UUID()
+        let old = (1...4).map { session(program: program, daysAgo: 60 + $0, points: [k[0]: 10]) }
+        let scores = SkillLevel.gameScores(members: Set(k), sessions: old, program: program, now: Date())
+        XCTAssertEqual(scores[k[0]] ?? 0, 10, accuracy: 0.001)
+        // Fewer than three games ever: still nothing.
+        XCTAssertNil(SkillLevel.gameScores(members: Set(k), sessions: Array(old.prefix(2)), program: program, now: Date())[k[0]])
     }
 
     func testTheEvaluationWeighsSixtyFiveAndGamesThirtyFive() {
@@ -111,8 +146,8 @@ final class SkillLevelTests: XCTestCase {
         let elsewhere = (1...3).map { session(program: UUID(), daysAgo: $0, points: [k[2]: 40]) }
         let old = (1...3).map { session(program: program.id, daysAgo: 90 + $0, points: [k[2]: 40]) }
         let tiers = SkillLevel.tiers(in: program, sessions: games + elsewhere + old, evaluations: [:])
-        XCTAssertEqual(tiers[k[0]], .best)
-        XCTAssertEqual(tiers[k[2]], .bottom, "games in another program, or older than six weeks, don't lift them")
+        XCTAssertEqual(tiers[k[0]], .better)
+        XCTAssertEqual(tiers[k[2]], .belowAverage, "games in another program, or older than six weeks, don't lift them")
     }
 
     func testTheMapUsesThePrimaryProgramAndSkipsPrivateClients() {

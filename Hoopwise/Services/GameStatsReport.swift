@@ -170,6 +170,25 @@ enum GameStatsReport {
         return out
     }
 
+    /// THE assists-per-basket of a set of players over a set of games: their
+    /// assists ÷ their baskets, a basket being points ÷ that game's basket
+    /// value. Nil with fewer than three played games they took part in or
+    /// fewer than ten baskets. The Games tab's insight and the plan engine's
+    /// passing signal both read this.
+    static func assistsPerBasket(games: [SessionGame], roster: Set<UUID>) -> (ratio: Double, games: Int)? {
+        var baskets = 0.0, assists = 0, counted = 0
+        for game in games where played(game) {
+            guard game.participants.keys.contains(where: roster.contains) else { continue }
+            counted += 1
+            for line in game.playerStats where roster.contains(line.playerId) {
+                baskets += Double(line.points) / Double(max(1, game.basketValue))
+                assists += line.assists
+            }
+        }
+        guard counted >= 3, baskets >= 10 else { return nil }
+        return (Double(assists) / baskets, counted)
+    }
+
     /// Average over sessions weighted by games played.
     private static func weighted<S: Sequence>(_ points: S, _ m: Metric) -> Double where S.Element == SessionPoint {
         var sum = 0.0, n = 0.0

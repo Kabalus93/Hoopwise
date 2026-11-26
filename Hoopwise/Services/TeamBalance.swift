@@ -8,15 +8,16 @@ import Foundation
 // Pure. A player's PROFILE is the eight octagon skills on 0…1:
 //  · the coach's rating (÷ 10) where the skill is rated;
 //  · EVIDENCE where the app has it, as a rank among the players in this
-//    game mapped to 0.3…0.8 — shooting: points a game and the share made in
-//    tracked shooting; passing: assists a game; defense: steals + blocks a
-//    game (three games or more, as SkillEvidence);
+//    game mapped to 0.3…0.8 — shooting: BASKETS a game (points ÷ the game's
+//    basket value) and their standing within each tracked shooting test;
+//    passing: assists a game; defense: steals + blocks a game (three games
+//    or more, as SkillEvidence);
 //  · both: 70 % rating, 30 % evidence.
 // A skill with neither is UNKNOWN — it is left out of a team's average and
 // counts as the group's average when balancing, so a child nobody has
 // rated neither helps nor hurts a team.
-// STRENGTH is the average of the known skills, blended 70 / 30 with the
-// skill level in the group when there is one; nothing known = the middle.
+// STRENGTH is the average of the known skills; the skill level in the group
+// only when no skill is known; nothing known = the middle.
 //
 // BALANCING starts from a snake draft by strength and then swaps pairs
 // between teams while a swap makes the teams more even on: strength,
@@ -39,15 +40,14 @@ enum TeamBalance {
     /// What the game numbers say about one player.
     struct GameNumbers: Equatable {
         var games = 0
-        var points = 0
+        /// Baskets, not points: points ÷ that game's basket value.
+        var points = 0.0
         var assists = 0
         var stocks = 0
     }
 
     static let minimumGames = 3
-    static let minimumShots = 20.0
     static let ratingWeight = 0.7
-    static let levelWeight = 0.3
 
     // MARK: Gathering
 
@@ -60,7 +60,7 @@ enum TeamBalance {
                     var n = out[player] ?? GameNumbers()
                     n.games += 1
                     if let line = game.stats(for: player) {
-                        n.points += line.points
+                        n.points += Double(line.points) / Double(max(1, game.basketValue))
                         n.assists += line.assists
                         n.stocks += line.steals + line.blocks
                     }
@@ -71,21 +71,22 @@ enum TeamBalance {
         return out
     }
 
-    /// The share made in tracked shooting (shot map + free throws), for the
-    /// players with enough shots.
-    static func shootingShares(players: Set<UUID>, sessions: [SessionEvent]) -> [UUID: Double] {
-        var out: [UUID: Double] = [:]
+    /// Where each player stands in tracked shooting, 0 (lowest) … 1: their
+    /// rank WITHIN each test (same drill and setup — free throws are not
+    /// compared with threes) among the players who took it, averaged over
+    /// the tests they share with at least one other player.
+    static func shootingStandings(players: Set<UUID>, sessions: [SessionEvent]) -> [UUID: Double] {
+        var byTest: [String: [UUID: Double]] = [:]
         for id in players {
-            var made = 0.0, attempted = 0.0
-            for zone in ShootingHistory.zoneMap(for: id, sessions: sessions) {
-                if let zone { made += zone.made; attempted += zone.attempted }
+            for series in ShootingHistory.series(for: id, sessions: sessions) where series.setup.mode.isShare {
+                if let recent = series.recent() { byTest[series.setup.key, default: [:]][id] = recent }
             }
-            if let ft = ShootingHistory.freeThrows(for: id, sessions: sessions) {
-                made += ft.made; attempted += ft.attempted
-            }
-            if attempted >= minimumShots { out[id] = made / attempted }
         }
-        return out
+        var sum: [UUID: Double] = [:], count: [UUID: Int] = [:]
+        for values in byTest.values where values.count >= 2 {
+            for (id, p) in SkillLevel.percentiles(values) { sum[id, default: 0] += p; count[id, default: 0] += 1 }
+        }
+        return sum.reduce(into: [:]) { $0[$1.key] = $1.value / Double(count[$1.key] ?? 1) }
     }
 
     /// Passer → scorer links between two players, either way.
@@ -121,11 +122,12 @@ enum TeamBalance {
                          games: [UUID: GameNumbers],
                          shooting: [UUID: Double]) -> [UUID: Profile] {
         let played = games.filter { $0.value.games >= minimumGames }
-        func perGame(_ value: (GameNumbers) -> Int) -> [UUID: Double] {
-            evidence(played.mapValues { Double(value($0)) / Double($0.games) })
+        func perGame(_ value: (GameNumbers) -> Double) -> [UUID: Double] {
+            evidence(played.mapValues { value($0) / Double($0.games) })
         }
-        let points = perGame(\.points), assists = perGame(\.assists), stocks = perGame(\.stocks)
-        let shots = evidence(shooting)
+        let points = perGame(\.points), assists = perGame { Double($0.assists) }, stocks = perGame { Double($0.stocks) }
+        // Already a standing (0…1) within each test.
+        let shots = shooting.mapValues { 0.3 + 0.5 * $0 }
 
         var out: [UUID: Profile] = [:]
         for id in players {
@@ -152,12 +154,9 @@ enum TeamBalance {
             let skills = profile.axes.isEmpty ? nil
                 : profile.axes.values.reduce(0, +) / Double(profile.axes.count)
             let level = tiers[id].map(levelValue)
-            switch (skills, level) {
-            case let (s?, l?): profile.strength = (1 - levelWeight) * s + levelWeight * l
-            case let (s?, nil): profile.strength = s
-            case let (nil, l?): profile.strength = l
-            default: profile.strength = 0.5
-            }
+            // The level only when no skill is known: it is built from the
+            // same ratings and games, so blending it counted them twice.
+            profile.strength = skills ?? level ?? 0.5
             profile.known = skills != nil || level != nil
             out[id] = profile
         }

@@ -205,7 +205,8 @@ struct StudentQuickPeepView: View {
             skills: skills,
             attendanceRate: attendanceRate,
             recentAttendance: recentAttendance,
-            contract: contract
+            contract: contract,
+            scoringRank: skillEvidence[.shooting].map { ($0.rank, $0.of) }
         ) + chemistryInsights + sessionPickInsights).sorted { $0.priority > $1.priority }
     }
 
@@ -1059,10 +1060,9 @@ struct StudentQuickPeepView: View {
                     if isEditingSkills {
                         saveSkills()
                     } else {
+                        // Unrated skills STAY unrated until their slider is
+                        // moved (they used to be filled with 5 and saved).
                         editedSkills = skills
-                        for axis in DrillAttribute.allCases where editedSkills.rating(axis) == nil {
-                            editedSkills.setRating(5, for: axis)
-                        }
                     }
                     withAnimation(.easeInOut(duration: 0.2)) { isEditingSkills.toggle() }
                 }) {
@@ -1211,11 +1211,18 @@ struct StudentQuickPeepView: View {
                 .frame(width: 112, alignment: .leading)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
-            Slider(value: binding, in: 1...10, step: 1)
-            Text("\(editedSkills.rating(axis) ?? 5)")
+            // Touching the slider rates the skill where it stands, so a 5
+            // can be given without moving it.
+            Slider(value: binding, in: 1...10, step: 1) { editing in
+                if editing, editedSkills.rating(axis) == nil { editedSkills.setRating(5, for: axis) }
+            }
+                .opacity(editedSkills.rating(axis) == nil ? 0.45 : 1)
+                .accessibilityIdentifier("peep.skill.slider.\(axis.rawValue)")
+            Text(editedSkills.rating(axis).map(String.init) ?? "—")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundColor(.accentColor)
+                .foregroundColor(editedSkills.rating(axis) == nil ? .secondary : .accentColor)
                 .frame(width: 20)
+                .accessibilityIdentifier("peep.skill.value.\(axis.rawValue)")
         }
     }
 
@@ -1227,6 +1234,7 @@ struct StudentQuickPeepView: View {
     
     private func saveSkills() {
         guard var updatedPlayer = player else { return }
+        editedSkills.swept = true   // every rating here was set skill by skill
         editedSkills.recordEvaluation(replacing: updatedPlayer.skills)
         updatedPlayer.skills = editedSkills
         updatedPlayer.updatedAt = Date()
@@ -1300,41 +1308,34 @@ struct StudentInsightEngine {
         skills: SkillsEvaluation,
         attendanceRate: Double,
         recentAttendance: [AttendanceRecord],
-        contract: Contract?
+        contract: Contract?,
+        scoringRank: (rank: Int, of: Int)? = nil
     ) -> [StudentInsight] {
         var insights: [StudentInsight] = []
         
-        // MARK: - Scoring Insights
-        if trainingStats.hasStats {
-            if trainingStats.ppg >= 10 {
+        // MARK: - Scoring Insights — against the GROUP (26 Nov 2026). They
+        // were fixed numbers of points ("10 a game = one of the top
+        // scorers", after a single game), which a 3-point game reached for
+        // everyone and a 1-point game for nobody. Now: where the athlete
+        // ranks among program-mates on baskets a game (SkillEvidence: three
+        // games or more), and only in a group of four or more.
+        if let scoring = scoringRank, scoring.of >= 4 {
+            let ppg = String(format: "%.1f", trainingStats.ppg)
+            if scoring.rank == 1 {
                 insights.append(StudentInsight(
-                    title: "Elite Scorer",
-                    titleChinese: "精英得分手",
-                    description: "Averaging \(String(format: "%.1f", trainingStats.ppg)) PPG - one of the top scorers. Consider giving them more ball-handling responsibilities.",
-                    descriptionChinese: "场均 \(String(format: "%.1f", trainingStats.ppg)) 分 - 顶级得分手之一。可以考虑给予更多持球责任。",
-                    icon: "flame.fill",
-                    color: .orange,
-                    priority: 10
+                    title: "Top Scorer",
+                    titleChinese: "头号得分手",
+                    description: "Leads the group's scoring (\(ppg) a game, 1st of \(scoring.of)). Consider giving them more ball-handling responsibility.",
+                    descriptionChinese: "全组得分第一（场均 \(ppg) 分，\(scoring.of) 人中第 1）。可以考虑给予更多持球责任。",
+                    icon: "flame.fill", color: .orange, priority: 10
                 ))
-            } else if trainingStats.ppg >= 6 {
-                insights.append(StudentInsight(
-                    title: "Solid Contributor",
-                    titleChinese: "稳定贡献者",
-                    description: "Consistent scorer with \(String(format: "%.1f", trainingStats.ppg)) PPG. Good offensive awareness.",
-                    descriptionChinese: "稳定得分手，场均 \(String(format: "%.1f", trainingStats.ppg)) 分。进攻意识良好。",
-                    icon: "star.fill",
-                    color: .yellow,
-                    priority: 7
-                ))
-            } else if trainingStats.ppg < 3 && trainingStats.gamesPlayed >= 3 {
+            } else if scoring.rank == scoring.of {
                 insights.append(StudentInsight(
                     title: "Needs Scoring Focus",
                     titleChinese: "需加强得分",
-                    description: "Low scoring average (\(String(format: "%.1f", trainingStats.ppg)) PPG). Consider drills focusing on shooting confidence.",
-                    descriptionChinese: "得分偏低 (场均 \(String(format: "%.1f", trainingStats.ppg)) 分)。建议增加投篮信心训练。",
-                    icon: "target",
-                    color: .blue,
-                    priority: 6
+                    description: "Scores the least in the group (\(ppg) a game, \(scoring.of) of \(scoring.of)). Consider drills for shooting confidence.",
+                    descriptionChinese: "全组得分最少（场均 \(ppg) 分，\(scoring.of) 人中第 \(scoring.of)）。建议增加投篮信心训练。",
+                    icon: "target", color: .blue, priority: 6
                 ))
             }
         }
@@ -1428,69 +1429,46 @@ struct StudentInsightEngine {
             ))
         }
         
-        // MARK: - Skills Insights (updated for 6-skill model)
-        let avgSkill = skills.overallRating
-        
-        if avgSkill >= 8 {
-            let phrases = [
-                ("All-Around Talent", "全能型选手", "Well-rounded player with high marks across all skills. Ready for advanced challenges.", "各项技能均衡出色。可以尝试更高难度的训练。"),
-                ("Complete Player", "全面球员", "Exceptional skill set with no major weaknesses. Could mentor younger players.", "技术全面，没有明显短板。可以帮助指导年轻球员。"),
-                ("Star Potential", "明星潜质", "Outstanding overall rating (\(String(format: "%.1f", avgSkill))). Consider competition-level challenges.", "综合评分出色 (\(String(format: "%.1f", avgSkill)))。可以考虑竞技级别的挑战。")
-            ]
-            let phrase = phrases.randomElement()!
-            insights.append(StudentInsight(
-                title: phrase.0, titleChinese: phrase.1,
-                description: phrase.2, descriptionChinese: phrase.3,
-                icon: "trophy.fill", color: .yellow, priority: 7
-            ))
-        } else if avgSkill >= 6 {
-            insights.append(StudentInsight(
-                title: "Solid Foundation", titleChinese: "基础扎实",
-                description: "Good overall skills (\(String(format: "%.1f", avgSkill))/10). Focus on specific areas to level up.",
-                descriptionChinese: "整体技术良好 (\(String(format: "%.1f", avgSkill))/10)。专注特定领域可以更上一层楼。",
-                icon: "chart.line.uptrend.xyaxis", color: .blue, priority: 5
-            ))
-        }
-        
-        // Find weak areas (6-skill model)
-        let skillData: [(String, String, Int)] = [
-            ("Scoring", "得分", skills.scoring),
-            ("Playmaking", "组织", skills.playmaking),
-            ("Rebounding", "篮板", skills.rebounding),
-            ("Defense", "防守", skills.defense),
-            ("Athleticism", "运动能力", skills.athleticism),
-            ("Intangibles", "软实力", skills.intangibles)
-        ]
-        
-        let weakSkills = skillData.filter { $0.2 <= 4 }
-        if let weakest = weakSkills.min(by: { $0.2 < $1.2 }), weakest.2 <= 4 {
-            let focusPhrases = [
-                ("Focus Area", "重点提升", "Current rating: \(weakest.2)/10. Include targeted drills for improvement.", "当前评分: \(weakest.2)/10。建议针对性训练。"),
-                ("Development Priority", "发展优先级", "Needs work (\(weakest.2)/10). Dedicate extra reps this session.", "需要加强 (\(weakest.2)/10)。本次训练可以多练习。"),
-                ("Growth Opportunity", "成长机会", "Room to improve (\(weakest.2)/10). Small gains here will boost overall game.", "有提升空间 (\(weakest.2)/10)。进步将显著提升整体实力。")
-            ]
-            let phrase = focusPhrases.randomElement()!
-            insights.append(StudentInsight(
-                title: "\(phrase.0): \(weakest.0)", titleChinese: "\(phrase.1): \(weakest.1)",
-                description: phrase.2, descriptionChinese: phrase.3,
-                icon: "arrow.up.circle.fill", color: .blue, priority: 6
-            ))
-        }
-        
-        // Find strong areas
-        let strongSkills = skillData.filter { $0.2 >= 8 }
-        if let strongest = strongSkills.max(by: { $0.2 < $1.2 }), strongest.2 >= 8 {
-            let strengthPhrases = [
-                ("Strength", "优势", "Rated \(strongest.2)/10. Can help teach teammates in this area.", "评分 \(strongest.2)/10。可以帮助队友提升这方面能力。"),
-                ("Elite Skill", "精英技术", "Top-tier ability (\(strongest.2)/10). Leverage this in game situations.", "顶级能力 (\(strongest.2)/10)。在比赛中充分发挥。"),
-                ("Key Asset", "核心优势", "Exceptional (\(strongest.2)/10). Build plays around this strength.", "出色 (\(strongest.2)/10)。可以围绕这一优势设计战术。")
-            ]
-            let phrase = strengthPhrases.randomElement()!
-            insights.append(StudentInsight(
-                title: "\(phrase.0): \(strongest.0)", titleChinese: "\(phrase.1): \(strongest.1)",
-                description: phrase.2, descriptionChinese: phrase.3,
-                icon: "star.circle.fill", color: .green, priority: 5
-            ))
+        // MARK: - Skills Insights — the eight octagon skills (26 Nov 2026).
+        // They read the retired six-skill evaluation: an athlete rated today
+        // was a flat 5 here, and an old evaluation spoke of "Rebounding" and
+        // "Intangibles", which can no longer be seen or edited.
+        let rated = DrillAttribute.allCases.compactMap { axis in skills.rating(axis).map { (axis, $0) } }
+        if let avgSkill = skills.ratedAverage {
+            if avgSkill >= 8 {
+                insights.append(StudentInsight(
+                    title: "All-Around Talent", titleChinese: "全能型选手",
+                    description: "Rated \(String(format: "%.1f", avgSkill)) across \(rated.count) skills. Ready for harder challenges.",
+                    descriptionChinese: "\(rated.count) 项技能平均 \(String(format: "%.1f", avgSkill))。可以尝试更高难度的训练。",
+                    icon: "trophy.fill", color: .yellow, priority: 7
+                ))
+            } else if avgSkill >= 6 {
+                insights.append(StudentInsight(
+                    title: "Solid Foundation", titleChinese: "基础扎实",
+                    description: "Good overall skills (\(String(format: "%.1f", avgSkill))/10). Focus on specific areas to level up.",
+                    descriptionChinese: "整体技术良好 (\(String(format: "%.1f", avgSkill))/10)。专注特定领域可以更上一层楼。",
+                    icon: "chart.line.uptrend.xyaxis", color: .blue, priority: 5
+                ))
+            }
+            // The lowest and the highest rated skill (octagon order on a tie).
+            if let weakest = rated.min(by: { $0.1 < $1.1 }), weakest.1 <= 4 {
+                insights.append(StudentInsight(
+                    title: "Focus Area: \(weakest.0.title(chinese: false))",
+                    titleChinese: "重点提升: \(weakest.0.title(chinese: true))",
+                    description: "Rated \(weakest.1)/10. Include targeted drills for improvement.",
+                    descriptionChinese: "当前评分 \(weakest.1)/10。建议针对性训练。",
+                    icon: "arrow.up.circle.fill", color: .blue, priority: 6
+                ))
+            }
+            if let strongest = rated.max(by: { $0.1 < $1.1 }), strongest.1 >= 8 {
+                insights.append(StudentInsight(
+                    title: "Strength: \(strongest.0.title(chinese: false))",
+                    titleChinese: "优势: \(strongest.0.title(chinese: true))",
+                    description: "Rated \(strongest.1)/10. Can help teach teammates in this area.",
+                    descriptionChinese: "评分 \(strongest.1)/10。可以帮助队友提升这方面能力。",
+                    icon: "star.circle.fill", color: .green, priority: 5
+                ))
+            }
         }
         
         // MARK: - Contract Insights
@@ -1507,33 +1485,6 @@ struct StudentInsightEngine {
                     priority: 9
                 ))
             }
-        }
-        
-        // MARK: - Intangibles Insights (replaces coachability/teamwork)
-        if skills.intangibles >= 9 {
-            let phrases = [
-                ("Leadership Material", "领袖气质", "Outstanding intangibles (\(skills.intangibles)/10). Natural leader who elevates the team.", "软实力出色 (\(skills.intangibles)/10)。天生的领袖，能带动团队。"),
-                ("Culture Builder", "文化建设者", "Exceptional attitude and work ethic. Sets the tone for others.", "态度和职业精神出色。为他人树立榜样。"),
-                ("Coachable Star", "易教之星", "Implements feedback instantly. A joy to work with.", "能立即营改建议。教起来很轻松。")
-            ]
-            let phrase = phrases.randomElement()!
-            insights.append(StudentInsight(
-                title: phrase.0, titleChinese: phrase.1,
-                description: phrase.2, descriptionChinese: phrase.3,
-                icon: "hand.thumbsup.fill", color: .green, priority: 4
-            ))
-        } else if skills.intangibles <= 4 {
-            let phrases = [
-                ("Patience Required", "需要耐心", "May need extra patience and creative approaches to instruction.", "可能需要更多耐心和创新的教学方式。"),
-                ("Engagement Challenge", "参与度挑战", "Work on building trust and motivation. Find what drives them.", "需要建立信任和动力。找到他们的兴趣点。"),
-                ("Growth Mindset Needed", "需培养成长心态", "Focus on building confidence and positive habits.", "专注于建立自信和积极习惯。")
-            ]
-            let phrase = phrases.randomElement()!
-            insights.append(StudentInsight(
-                title: phrase.0, titleChinese: phrase.1,
-                description: phrase.2, descriptionChinese: phrase.3,
-                icon: "clock.fill", color: .orange, priority: 6
-            ))
         }
         
         // MARK: - Game Performance Insights

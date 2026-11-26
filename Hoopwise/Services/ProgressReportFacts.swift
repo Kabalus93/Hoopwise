@@ -159,7 +159,7 @@ nonisolated enum AthleteFocus {
     /// at least four skills are rated, and never a skill rated 8 or more.
     static func suggested(_ skills: SkillsEvaluation) -> [DrillAttribute] {
         let rated = DrillAttribute.allCases.compactMap { axis in skills.rating(axis).map { (axis, $0) } }
-        guard rated.count >= 4 else { return [] }
+        guard rated.count >= SkillsEvaluation.minimumRated else { return [] }
         return rated.enumerated().sorted { a, b in
             a.element.1 != b.element.1 ? a.element.1 < b.element.1 : a.offset < b.offset
         }.prefix(most).filter { $0.element.1 < 8 }.map { $0.element.0 }

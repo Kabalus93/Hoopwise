@@ -72,13 +72,20 @@ final class CustomTrackingTests: XCTestCase {
         XCTAssertEqual(st.sessions, 2)
         let p = try XCTUnwrap(st.percentile)
         XCTAssertEqual(p, 2.0 / 3.0, accuracy: 0.001)
-        XCTAssertEqual(CustomTrackHistory.suggestion(for: .ballHandling, standings: [st]), 7)
-        XCTAssertNil(CustomTrackHistory.suggestion(for: .shooting, standings: [st]), "not linked")
-        // The best and the slowest.
-        let top = CustomTrackHistory.standings(for: b, peers: [a, b, c, d], drills: [drill], sessions: sessions)
-        XCTAssertEqual(CustomTrackHistory.suggestion(for: .ballHandling, standings: top), 9)
-        let bottom = CustomTrackHistory.standings(for: d, peers: [a, b, c, d], drills: [drill], sessions: sessions)
-        XCTAssertEqual(CustomTrackHistory.suggestion(for: .ballHandling, standings: bottom), 2)
+        XCTAssertNil(CustomTrackHistory.suggestion(for: .ballHandling, standings: [st]),
+                     "four athletes are too few for a rank to suggest a rating")
+        // Six with results: the fastest, the slowest and one in between.
+        let e = UUID(), f = UUID()
+        let six = [session(day: 2, [run(def, [a: [14], b: [15], c: [16], d: [17], e: [18], f: [19]])])]
+        func suggested(_ id: UUID) -> Int? {
+            CustomTrackHistory.suggestion(for: .ballHandling,
+                standings: CustomTrackHistory.standings(for: id, peers: [a, b, c, d, e, f], drills: [drill], sessions: six))
+        }
+        XCTAssertEqual(suggested(a), 9)
+        XCTAssertEqual(suggested(f), 2)
+        XCTAssertEqual(suggested(c), 6)
+        XCTAssertNil(CustomTrackHistory.suggestion(for: .shooting,
+            standings: CustomTrackHistory.standings(for: a, peers: [a, b, c, d, e, f], drills: [drill], sessions: six)), "not linked")
         XCTAssertTrue(CustomTrackHistory.text(st, chinese: false).contains("2nd of 4 same grade"))
     }
 
@@ -209,9 +216,10 @@ final class CustomTrackingTests: XCTestCase {
         let sprint = TrackKind.conditioning.preset(chinese: false)
         let sprintId = UUID()
         var sprintRun = TrackedRun(drillId: sprintId, definition: sprint)
-        for (id, t) in [(a, 20.0), (b, 14.0), (c, 15.0), (d, 16.0)] { sprintRun.set(t, for: id, spot: 0) }
-        let sessions = [session(day: 2, [run(shoot, [a: [9], b: [3], c: [4], d: [5]]), sprintRun])]
-        let st = CustomTrackHistory.standings(for: a, peers: [a, b, c, d], drills: [], sessions: sessions)
+        let e = UUID(), f = UUID()
+        for (id, t) in [(a, 20.0), (b, 14.0), (c, 15.0), (d, 16.0), (e, 17.0), (f, 18.0)] { sprintRun.set(t, for: id, spot: 0) }
+        let sessions = [session(day: 2, [run(shoot, [a: [9], b: [3], c: [4], d: [5], e: [2], f: [1]]), sprintRun])]
+        let st = CustomTrackHistory.standings(for: a, peers: [a, b, c, d, e, f], drills: [], sessions: sessions)
         XCTAssertEqual(st.count, 2)
         XCTAssertEqual(CustomTrackHistory.suggestion(for: .shooting, standings: st), 9, "top of the main drill")
         // Footwork: main in the sprint (bottom, weight 1), some in shooting (top, 0.5) → (0·1 + 1·0.5) / 1.5.

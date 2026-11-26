@@ -471,7 +471,7 @@ struct FlightyProgramDetailView: View {
     /// ever set, so it always read 0.0 (25 Nov 2026).
     private var averageRating: Double? {
         let ratings = enrolledStudents.compactMap { student in
-            dataManager.players.first { $0.studentId == student.id }?.skills.axisAverage
+            dataManager.players.first { $0.studentId == student.id }?.skills.ratedAverage
         }
         return ratings.isEmpty ? nil : ratings.reduce(0, +) / Double(ratings.count)
     }
@@ -1473,12 +1473,18 @@ struct ProgramSkillTargetsSheet: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                Text(String(format: "%.1f", targets.overallTarget))
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(targets.overallTarget >= 7 ? .green : .orange)
-                Text("/ 10")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.tertiary)
+                if let overall = targets.overallTarget {
+                    Text(String(format: "%.1f", overall))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(overall >= 7 ? .green : .orange)
+                    Text("/ 10")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.tertiary)
+                } else {
+                    Text("Not set")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.tertiary)
+                }
             }
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -1486,20 +1492,24 @@ struct ProgramSkillTargetsSheet: View {
                         .fill(Color.gray.opacity(0.2))
                         .frame(height: 12)
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(targets.overallTarget >= 7 ? Color.green : Color.orange)
-                        .frame(width: geometry.size.width * targets.overallTarget / 10, height: 12)
+                        .fill((targets.overallTarget ?? 0) >= 7 ? Color.green : Color.orange)
+                        .frame(width: geometry.size.width * (targets.overallTarget ?? 0) / 10, height: 12)
                 }
             }
             .frame(height: 12)
-            Text("Athletes should aim to meet or exceed these skill levels")
+            Text("Set a target only on the skills this program is about. Athletes are compared on the skills you have rated them on.")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
         .background(.filmMaterial)
         .cornerRadius(16)
     }
     
+    /// The eight octagon skills — the same ones athletes are rated on, drills
+    /// are tagged with and plans are balanced on (26 Nov 2026; it was the
+    /// retired six: Scoring, Playmaking, Rebounding…).
     private var skillSlidersSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("SKILL TARGETS")
@@ -1507,12 +1517,9 @@ struct ProgramSkillTargetsSheet: View {
                 .foregroundStyle(.tertiary)
             
             VStack(spacing: 14) {
-                skillSlider(label: "Scoring", value: $targets.scoring, color: .orange, icon: "scope")
-                skillSlider(label: "Playmaking", value: $targets.playmaking, color: .blue, icon: "arrow.triangle.branch")
-                skillSlider(label: "Rebounding", value: $targets.rebounding, color: .purple, icon: "arrow.up.arrow.down")
-                skillSlider(label: "Defense", value: $targets.defense, color: .red, icon: "shield.fill")
-                skillSlider(label: "Athleticism", value: $targets.athleticism, color: .green, icon: "figure.run")
-                skillSlider(label: "Intangibles", value: $targets.intangibles, color: .teal, icon: "star.fill")
+                ForEach(DrillAttribute.allCases, id: \.self) { axis in
+                    skillSlider(axis)
+                }
             }
         }
         .padding(16)
@@ -1520,27 +1527,40 @@ struct ProgramSkillTargetsSheet: View {
         .cornerRadius(16)
     }
     
-    private func skillSlider(label: String, value: Binding<Int>, color: Color, icon: String) -> some View {
-        VStack(spacing: 8) {
+    private func skillSlider(_ axis: DrillAttribute) -> some View {
+        let value = targets.target(axis)
+        return VStack(spacing: 8) {
             HStack {
-                Image(systemName: icon)
+                Image(systemName: axis.icon)
                     .font(.system(size: 12))
-                    .foregroundColor(color)
+                    .foregroundColor(program.mascotColor)
                     .frame(width: 20)
-                Text(label)
+                Text(axis.title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(value.wrappedValue)")
+                if value != nil {
+                    Button {
+                        targets.setTarget(nil, for: axis); hasChanges = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("No target for \(axis.title)")
+                }
+                Text(value.map(String.init) ?? "—")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(color)
+                    .foregroundColor(value == nil ? .secondary : program.mascotColor)
                     .frame(width: 28)
+                    .accessibilityIdentifier("targets.value.\(axis.rawValue)")
             }
             Slider(value: Binding(
-                get: { Double(value.wrappedValue) },
-                set: { value.wrappedValue = Int($0); hasChanges = true }
+                get: { Double(value ?? 5) },
+                set: { targets.setTarget(Int($0.rounded()), for: axis); hasChanges = true }
             ), in: 1...10, step: 1)
-            .tint(color)
+            .tint(program.mascotColor)
+            .opacity(value == nil ? 0.45 : 1)
+            .accessibilityIdentifier("targets.slider.\(axis.rawValue)")
         }
     }
     
@@ -1586,13 +1606,13 @@ struct ProgramSkillTargetsSheet: View {
                 Text(student.primaryDisplayName)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.primary)
-                if let player = player {
-                    let belowCount = targets.skillsBelowTarget(player.skills)
+                if let player = player, targets.comparable(player.skills) > 0 {
+                    let belowCount = targets.below(player.skills).count
                     if belowCount == 0 {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 10))
-                            Text("Meets all targets")
+                            Text("Meets the targets they are rated on")
                                 .font(.system(size: 11))
                         }
                         .foregroundColor(.green)
@@ -1606,21 +1626,23 @@ struct ProgramSkillTargetsSheet: View {
                         .foregroundColor(.orange)
                     }
                 } else {
-                    Text("No skills evaluated")
+                    Text(targets.hasTargets ? "Not rated on these skills yet" : "No targets set")
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                 }
             }
             Spacer()
-            if let player = player {
+            if let average = player?.skills.ratedAverage {
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(String(format: "%.1f", player.skills.overallRating))
+                    Text(String(format: "%.1f", average))
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundColor(player.skills.overallRating >= targets.overallTarget ? .green : .orange)
-                    let diff = player.skills.overallRating - targets.overallTarget
-                    Text(diff >= 0 ? "+\(String(format: "%.1f", diff))" : String(format: "%.1f", diff))
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(diff >= 0 ? .green : .orange)
+                        .foregroundColor(average >= (targets.overallTarget ?? 0) ? .green : .orange)
+                    if let overall = targets.overallTarget {
+                        let diff = average - overall
+                        Text(diff >= 0 ? "+\(String(format: "%.1f", diff))" : String(format: "%.1f", diff))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(diff >= 0 ? .green : .orange)
+                    }
                 }
             }
         }

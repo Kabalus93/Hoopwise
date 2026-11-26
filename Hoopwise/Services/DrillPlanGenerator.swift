@@ -98,10 +98,14 @@ struct DrillPlanGenerator {
         let resolved = resolveLevel(program: ctx.program, students: ctx.enrolledStudents, players: ctx.players)
         let (level, source) = options.level.map { (min(max($0, 1), 5), LevelSource.coach) } ?? resolved
         let window = ageWeights(age: age, level: level)
+        // Only classes that happened speak (a skipped class's games and
+        // results were never real), oldest first.
+        let happened = ctx.programHistory.filter { !SessionLifecycle.didNotHappen($0) }
+            .sorted { $0.startTime < $1.startTime }
         let focus = focusTypes(phase: ctx.phase, students: ctx.enrolledStudents, players: ctx.players,
-                               games: ctx.programHistory.flatMap(\.games),
-                               shooting: ctx.programHistory.sorted { $0.startTime < $1.startTime }.flatMap(\.curriculum.shooting),
-                               tracked: ctx.programHistory.sorted { $0.startTime < $1.startTime }.flatMap(\.curriculum.tracked))
+                               games: happened.flatMap(\.games),
+                               shooting: happened.flatMap(\.curriculum.shooting),
+                               tracked: happened.flatMap(\.curriculum.tracked))
         var history = History(sessions: ctx.programHistory, before: ctx.session)
         if !options.avoidLastSession { history.forgetLastSession() }
         var gaps = phaseGaps(ctx)
@@ -219,7 +223,7 @@ struct DrillPlanGenerator {
     static func suggestedLevel(students: [Student], players: [Player])
         -> (level: Int, rated: Int, average: Double)? {
         let byStudent = Dictionary(players.map { ($0.studentId, $0) }, uniquingKeysWith: { a, _ in a })
-        let ratings = students.compactMap { byStudent[$0.id] }.compactMap(\.skills.axisAverage)
+        let ratings = students.compactMap { byStudent[$0.id] }.compactMap(\.skills.ratedAverage)
         guard !students.isEmpty, ratings.count * 2 >= students.count else { return nil }
         let average = ratings.reduce(0, +) / Double(ratings.count)
         let level: Int
@@ -373,42 +377,55 @@ struct DrillPlanGenerator {
     }
 
     /// "assists:<ratio>" when the roster's games show under one assist per
-    /// five baskets; nil without enough games or points to say.
+    /// five baskets; nil without enough games or baskets to say. Baskets are
+    /// points ÷ THAT GAME's basket value — the Games tab's definition
+    /// (`GameStatsReport.assistsPerBasket`); this used to assume every basket
+    /// was worth two, so the tab and the engine disagreed in 1- and 3-point
+    /// games.
     static func passingSignal(games: [SessionGame], roster: Set<UUID>) -> String? {
-        let played = games.filter { g in g.playerStats.contains { roster.contains($0.playerId) } }
-        guard played.count >= 3 else { return nil }
-        let stats = played.flatMap(\.playerStats).filter { roster.contains($0.playerId) }
-        let points = stats.reduce(0) { $0 + $1.points }, assists = stats.reduce(0) { $0 + $1.assists }
-        let baskets = Double(points) / 2
-        guard baskets >= 10 else { return nil }
-        let ratio = Double(assists) / baskets
-        return ratio < 0.2 ? "assists:\(String(format: "%.2f", ratio))" : nil
+        guard let rate = GameStatsReport.assistsPerBasket(games: games, roster: roster) else { return nil }
+        return rate.ratio < 0.2 ? "assists:\(String(format: "%.2f", rate.ratio))" : nil
     }
 
     /// "shooting:<share>" when the roster's tracked shooting (made out of N —
-    /// timed results have no common yardstick) averages under 35 %, over at
-    /// least three athletes' latest results (the later runs win).
+    /// timed results have no common yardstick) averages under 35 % in ONE
+    /// test, over at least three athletes' latest results there. Each test
+    /// (drill and setup) is judged alone — free throws and threes used to be
+    /// averaged together. The lowest such test is reported.
     static func shootingSignal(runs: [ShootingRun], roster: Set<UUID>) -> String? {
-        var latest: [UUID: Double] = [:]
+        var latest: [String: [UUID: Double]] = [:]
         for run in runs where run.setup.mode.isShare {
             for id in run.reporters where roster.contains(id) {
-                if let r = run.result(for: id) { latest[id] = r.value }
+                if let r = run.result(for: id) { latest[run.setup.key, default: [:]][id] = r.value }
             }
         }
-        guard latest.count >= 3 else { return nil }
-        let avg = latest.values.reduce(0, +) / Double(latest.count)
-        return avg < 0.35 ? "shooting:\(Int((avg * 100).rounded()))%" : nil
+        let lows = latest.values.compactMap { byAthlete -> Double? in
+            guard byAthlete.count >= 3 else { return nil }
+            let avg = byAthlete.values.reduce(0, +) / Double(byAthlete.count)
+            return avg < 0.35 ? avg : nil
+        }
+        guard let low = lows.min() else { return nil }
+        return "shooting:\(Int((low * 100).rounded()))%"
     }
 
     /// "stocks:<per player-game>" when the roster's games show under one
-    /// steal or block per three player-games; nil without enough games.
+    /// steal or block per three player-games; nil without enough games. A
+    /// player-game is everyone who TOOK PART (`SessionGame.participants`),
+    /// not only those with a stat line — a line exists only once a stat is
+    /// recorded, so the quiet players were left out and the rate overstated.
     static func defenseSignal(games: [SessionGame], roster: Set<UUID>) -> String? {
-        let played = games.filter { g in g.playerStats.contains { roster.contains($0.playerId) } }
-        guard played.count >= 3 else { return nil }
-        let stats = played.flatMap(\.playerStats).filter { roster.contains($0.playerId) }
-        guard stats.count >= 15 else { return nil }
-        let stocks = stats.reduce(0) { $0 + $1.steals + $1.blocks }
-        let rate = Double(stocks) / Double(stats.count)
+        var playerGames = 0, stocks = 0, counted = 0
+        for game in games where GameStatsReport.played(game) {
+            let here = game.participants.keys.filter(roster.contains)
+            guard !here.isEmpty else { continue }
+            counted += 1
+            playerGames += here.count
+            for id in here {
+                if let line = game.stats(for: id) { stocks += line.steals + line.blocks }
+            }
+        }
+        guard counted >= 3, playerGames >= 15 else { return nil }
+        let rate = Double(stocks) / Double(playerGames)
         return rate < 0.34 ? "stocks:\(String(format: "%.2f", rate))" : nil
     }
 

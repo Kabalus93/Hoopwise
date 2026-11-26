@@ -622,6 +622,7 @@ class SwiftDataManager: ObservableObject {
         migrateLegacyAutoContractsToGroup()
         ensureDefaultContractsForAllStudents()
         if romanizeHanziNames() > 0 { refreshCachesSync() }
+        if sweepUnsetRatings() > 0 { refreshCachesSync() }
         
         // syncAllContractAttendance() used to run here, on EVERY load, and
         // overwrite the newest contract's bundleSessionIds with every session
@@ -1001,6 +1002,21 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    /// ONE-TIME (26 Nov 2026, Luther: "clear any rating that was never
+    /// individually set"): every evaluation not yet swept loses the 5s that
+    /// Edit filled in (`SkillsEvaluation.sweepUnsetRatings`). Idempotent —
+    /// a swept evaluation is never touched again, on any device.
+    @discardableResult
+    func sweepUnsetRatings() -> Int {
+        var changed = 0
+        for var player in players where player.skills.isEvaluated && !player.skills.swept {
+            player.skills.sweepUnsetRatings()
+            updatePlayer(player)
+            changed += 1
+        }
+        return changed
+    }
+
     // MARK: - Hanzi-in-name repair (October 2026)
     /// The class-list import first stored the sheet's hanzi in BOTH name
     /// fields. The app's convention (AddStudentView) is toned pinyin as the
@@ -4186,12 +4202,6 @@ class SwiftDataManager: ObservableObject {
         }
     }
 
-    var averageAttendanceRate: Double {
-        let completedSessions = cachedSessionEvents.filter { $0.status == .completed }
-        guard !completedSessions.isEmpty else { return 0 }
-        return completedSessions.reduce(0) { $0 + $1.attendanceRate } / Double(completedSessions.count)
-    }
-    
     // MARK: - Sample Data for Guest Mode
     private let sampleDataLoadedKey = "sampleDataLoaded_v2"
     

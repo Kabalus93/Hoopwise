@@ -83,15 +83,12 @@ enum PlanCoverage {
         for focus in phaseFocus {
             for (axis, v) in AttributeProfile.weights(for: focus) { w[axis, default: 0] += v }
         }
+        // The program's targets on the eight skills (a target of 8 asks for
+        // 0.8). They used to be six retired skills spread over the eight.
         if let t = skillTargets, t.hasTargets {
-            let scale = 1.0 / 10
-            let parts: [(DrillAttribute, Double)] = [
-                (.shooting, Double(t.scoring)), (.finishing, Double(t.scoring) * 0.8),
-                (.playmaking, Double(t.playmaking)), (.passing, Double(t.playmaking) * 0.8),
-                (.defense, Double(t.defense)), (.defense, Double(t.rebounding) * 0.5),
-                (.footwork, Double(t.athleticism)), (.gameIQ, Double(t.intangibles)),
-            ]
-            for (axis, v) in parts { w[axis, default: 0] += v * scale }
+            for axis in DrillAttribute.allCases {
+                if let want = t.target(axis) { w[axis, default: 0] += Double(want) / 10 }
+            }
         }
         for skill in teamSkills {
             for (axis, v) in AttributeProfile.weights(forSkill: skill) { w[axis, default: 0] += v }

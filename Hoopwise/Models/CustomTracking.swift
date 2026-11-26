@@ -551,6 +551,8 @@ nonisolated enum CustomTrackHistory {
 
     /// Fewer peers with results than this and there is no suggestion.
     static let minimumPeers = 3
+    /// Peers with results a drill needs before it may SUGGEST a rating.
+    static let suggestionPeers = 6
 
     /// Every custom drill this athlete has results in, with their standing
     /// among `peers` (same grade). `drills` resolves names and definitions.
@@ -595,7 +597,9 @@ nonisolated enum CustomTrackHistory {
     static func suggestion(for axis: DrillAttribute, standings: [Standing]) -> Int? {
         let linked = standings.compactMap { st -> (Double, Double)? in
             let w = st.definition.weight(for: axis)
-            guard w > 0, let p = st.percentile else { return nil }
+            // A rank among a handful is not a rating: the weakest of three
+            // good passers was told "Results suggest 2".
+            guard w > 0, st.of >= suggestionPeers, let p = st.percentile else { return nil }
             return (p, w)
         }
         let total = linked.reduce(0) { $0 + $1.1 }

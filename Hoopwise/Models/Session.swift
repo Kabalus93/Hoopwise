@@ -806,11 +806,6 @@ struct SessionEvent: Identifiable, Codable, Hashable {
     /// Check if session belongs to a phase (architect flow)
     var belongsToPhase: Bool { microCycleId != nil }
     
-    var attendanceRate: Double {
-        guard !attendeeIds.isEmpty else { return 0 }
-        return Double(actualAttendeeIds.count) / Double(attendeeIds.count)
-    }
-    
     var durationMinutes: Int { Int(endTime.timeIntervalSince(startTime) / 60) }
     var isUpcoming: Bool { date > Date() && status == .scheduled }
     var isPast: Bool { date < Date() || status == .completed }

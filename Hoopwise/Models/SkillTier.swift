@@ -110,40 +110,50 @@ enum SkillLevel {
         return .bottom
     }
 
-    /// Production per game: points + rebounds + 1.5 × assists + 2 × stocks.
-    static func production(_ line: SessionPlayerStats) -> Double {
-        Double(line.points + line.rebounds) + 1.5 * Double(line.assists) + 2 * Double(line.steals + line.blocks)
+    /// Production in a game: baskets (as two-pointers, whatever that game's
+    /// baskets were worth) + rebounds + 1.5 × assists + 2 × stocks. Raw
+    /// points made a 3-point game count three times a 1-point game.
+    static func production(_ line: SessionPlayerStats, basketValue: Int = 2) -> Double {
+        let baskets = Double(line.points) / Double(max(1, basketValue))
+        return baskets * 2 + Double(line.rebounds) + 1.5 * Double(line.assists) + 2 * Double(line.steals + line.blocks)
     }
 
     /// The evaluation's score: the average of the rated skills, when enough
-    /// are rated.
+    /// are rated (`SkillsEvaluation.ratedAverage` — the one rule).
     static func evaluationScore(_ evaluation: SkillsEvaluation?) -> Double? {
-        guard let evaluation else { return nil }
-        let rated = DrillAttribute.allCases.compactMap { evaluation.rating($0) }
-        guard rated.count >= minimumRatedSkills else { return nil }
-        return Double(rated.reduce(0, +)) / Double(rated.count)
+        evaluation?.ratedAverage
     }
 
+    /// When the window holds too few games (a holiday), the athlete's latest
+    /// games stand in — at most this many.
+    static let fallbackGames = 6
+
     /// Production per game for every member, in ONE pass over the program's
-    /// games in the window (the same games GameStatsReport.playerGames counts:
-    /// played, in sessions that happened, everyone who took part).
+    /// games (the same games GameStatsReport.playerGames counts: played, in
+    /// sessions that happened, everyone who took part). The games of the last
+    /// `gameWindowDays`; after a break with fewer than `minimumGames` there,
+    /// the latest `fallbackGames` instead, so a level does not lose its game
+    /// half on the first day back.
     static func gameScores(members: Set<UUID>, sessions: [SessionEvent], program: UUID, now: Date) -> [UUID: Double] {
         let start = Calendar.current.date(byAdding: .day, value: -gameWindowDays, to: now) ?? now
-        var total: [UUID: Double] = [:]
-        var count: [UUID: Int] = [:]
+        var games: [UUID: [(date: Date, value: Double)]] = [:]
         for session in sessions where session.programId == program
-            && session.startTime >= start && session.startTime <= now
-            && !SessionLifecycle.didNotHappen(session) {
+            && session.startTime <= now && !SessionLifecycle.didNotHappen(session) {
             for game in session.games where GameStatsReport.played(game) {
                 for (player, team) in game.participants where members.contains(player) {
                     let line = game.stats(for: player) ?? SessionPlayerStats(playerId: player, gameId: game.id, teamId: team)
-                    total[player, default: 0] += production(line)
-                    count[player, default: 0] += 1
+                    games[player, default: []].append((session.startTime, production(line, basketValue: game.basketValue)))
                 }
             }
         }
         var out: [UUID: Double] = [:]
-        for (player, n) in count where n >= minimumGames { out[player] = (total[player] ?? 0) / Double(n) }
+        for (player, all) in games {
+            let recent = all.filter { $0.date >= start }
+            let used = recent.count >= minimumGames
+                ? recent : Array(all.sorted { $0.date > $1.date }.prefix(fallbackGames))
+            guard used.count >= minimumGames else { continue }
+            out[player] = used.reduce(0) { $0 + $1.value } / Double(used.count)
+        }
         return out
     }
 
@@ -160,23 +170,41 @@ enum SkillLevel {
         return out
     }
 
+    /// How far each member's production is from the group's, in SPREADS
+    /// (−2…+2): by the SIZE of the gap, not the rank. A rank made three
+    /// players producing 5.1, 5.0 and 4.9 a game Best, Average and Bottom.
+    /// The spread is the group's standard deviation, never under 15 % of the
+    /// average or half a point, so near-equal players stay together.
+    static func gameDeltas(_ values: [UUID: Double]) -> [UUID: Double] {
+        guard values.count >= 2 else { return [:] }
+        let mean = values.values.reduce(0, +) / Double(values.count)
+        let variance = values.values.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(values.count)
+        let spread = max(variance.squareRoot(), 0.15 * abs(mean), 0.5)
+        return values.mapValues { min(2, max(-2, ($0 - mean) / spread)) }
+    }
+
     /// The levels in one group, from each member's evaluation score and game
     /// score (either may be missing). Pure — tests drive it directly.
+    /// Games weigh `gameWeight` for everyone in a group that has
+    /// evaluations — also for a member who is not rated (an unrated top
+    /// producer used to count at full weight and out-rank a rated one);
+    /// they decide alone only in a group nobody has rated.
     static func tiers(evaluation: [UUID: Double], games: [UUID: Double]) -> [UUID: SkillTier] {
         let evalMean = evaluation.isEmpty ? 0 : evaluation.values.reduce(0, +) / Double(evaluation.count)
-        let gamePct = percentiles(games)
+        let gameDelta = gameDeltas(games)
         let ids = Set(evaluation.keys).union(games.keys)
         guard ids.count >= minimumGroup else { return [:] }
+        // A single evaluated child has nobody to be measured against.
+        let groupIsRated = evaluation.count >= 2
         var out: [UUID: SkillTier] = [:]
         for id in ids {
-            // A single evaluated child has nobody to be measured against.
-            let e = evaluation.count >= 2 ? evaluation[id].map { $0 - evalMean } : nil
-            let g = games.count >= 2 ? gamePct[id].map { ($0 - 0.5) * 4 } : nil
+            let e = groupIsRated ? evaluation[id].map { $0 - evalMean } : nil
+            let g = gameDelta[id]
             let delta: Double
             switch (e, g) {
             case let (e?, g?): delta = evaluationWeight * e + gameWeight * g
             case let (e?, nil): delta = e
-            case let (nil, g?): delta = g
+            case let (nil, g?): delta = groupIsRated ? gameWeight * g : g
             default: continue
             }
             out[id] = tier(forDelta: delta)

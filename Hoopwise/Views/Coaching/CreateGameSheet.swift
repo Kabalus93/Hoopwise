@@ -574,7 +574,7 @@ struct CreateGameSheet: View {
         }
         profiles = TeamBalance.profiles(players: ids, evaluations: evaluations, tiers: tiers,
                                         games: TeamBalance.gameNumbers(players: pool, sessions: sessions),
-                                        shooting: TeamBalance.shootingShares(players: pool, sessions: sessions))
+                                        shooting: TeamBalance.shootingStandings(players: pool, sessions: sessions))
         chemistryLinks = TeamBalance.links(players: pool, sessions: sessions)
     }
 

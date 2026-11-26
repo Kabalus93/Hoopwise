@@ -73,7 +73,8 @@ final class DrillAttributesTests: XCTestCase {
 
     func testBothTargetsCount() {
         var goals = ProgramSkillTargets()
-        goals.lastUpdatedDate = Date()
+        XCTAssertFalse(goals.hasTargets, "the retired six skills are not targets")
+        goals.setTarget(8, for: .gameIQ)
         let target = PlanCoverage.target(phaseFocus: [.shooting], skillTargets: goals)
         XCTAssertNotNil(target?[.shooting])
         XCTAssertNotNil(target?[.gameIQ], "the program's goals add axes the phase focus doesn't")

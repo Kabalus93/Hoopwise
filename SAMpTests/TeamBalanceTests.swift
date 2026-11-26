@@ -40,8 +40,8 @@ final class TeamBalanceTests: XCTestCase {
             b: .init(games: 4, points: 8, assists: 12, stocks: 0),
             c: .init(games: 2, points: 90, assists: 90, stocks: 90),   // too few games
         ]
-        let p = profiles([:], games: games, shooting: [a: 0.3, b: 0.6], players: [a, b, c])
-        // a scores more, b shoots better in drills: the two meet in the middle.
+        let p = profiles([:], games: games, shooting: [a: 0, b: 1], players: [a, b, c])
+        // a scores more, b stands higher in the shooting tests: the two meet in the middle.
         XCTAssertEqual(p[a]?.axes[.shooting] ?? 0, 0.55, accuracy: 0.001)
         XCTAssertEqual(p[b]?.axes[.shooting] ?? 0, 0.55, accuracy: 0.001)
         XCTAssertEqual(p[a]?.axes[.defense] ?? 0, 0.8, accuracy: 0.001)
@@ -50,15 +50,21 @@ final class TeamBalanceTests: XCTestCase {
         XCTAssertEqual(p[c]?.known, false)
     }
 
-    func testARatingOutweighsEvidenceAndTheLevelJoinsTheStrength() {
+    func testARatingOutweighsEvidenceAndTheLevelOnlyStandsInForNoSkills() {
         let a = id(1), b = id(2)
         let games: [UUID: TeamBalance.GameNumbers] = [a: .init(games: 3, points: 30), b: .init(games: 3, points: 3)]
         let p = profiles([a: evaluation([.shooting: 4])], tiers: [a: .best], games: games, players: [a, b])
         // 70 % of 0.4 + 30 % of 0.8.
         XCTAssertEqual(p[a]?.axes[.shooting] ?? 0, 0.52, accuracy: 0.001)
-        // Strength: 70 % skills (shooting 0.52, defense and passing evidence) + 30 % level.
+        // Strength is the known skills; the level is built from the same
+        // data and is not added on top.
         let skills = (p[a]?.axes.values.reduce(0, +) ?? 0) / Double(p[a]?.axes.count ?? 1)
-        XCTAssertEqual(p[a]?.strength ?? 0, 0.7 * skills + 0.3 * 0.8, accuracy: 0.001)
+        XCTAssertEqual(p[a]?.strength ?? 0, skills, accuracy: 0.001)
+        // Nothing known but a level: the level stands in.
+        let c = id(3)
+        let alone = profiles([:], tiers: [c: .best], players: [c])
+        XCTAssertEqual(alone[c]?.strength ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(alone[c]?.known, true)
     }
 
     func testATeamShapeAveragesOnlyWhoIsKnown() {
