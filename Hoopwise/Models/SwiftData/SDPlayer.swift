@@ -127,10 +127,6 @@ final class SDPlayer {
         Player(
             id: id,
             studentId: studentId,
-            heightCm: heightCm,
-            weightKg: weightKg,
-            wingspanCm: wingspanCm,
-            handedness: handedness,
             position: position,
             jerseyNumber: jerseyNumber,
             parentInfo: getParentInfo(),
@@ -150,10 +146,6 @@ final class SDPlayer {
         let sdPlayer = SDPlayer(
             id: player.id,
             studentId: player.studentId,
-            heightCm: player.heightCm,
-            weightKg: player.weightKg,
-            wingspanCm: player.wingspanCm,
-            handedness: player.handedness,
             position: player.position,
             jerseyNumber: player.jerseyNumber,
             parentInfo: player.parentInfo,

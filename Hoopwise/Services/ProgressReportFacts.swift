@@ -165,6 +165,28 @@ nonisolated enum AthleteFocus {
         }.prefix(most).filter { $0.element.1 < 8 }.map { $0.element.0 }
     }
 
+    /// What the GROUP's athletes are working on (26 Nov 2026, Luther: "let
+    /// the athlete focus suggest rather than steer"): the skills at least
+    /// two of them — and at least a quarter — have as a focus, most athletes
+    /// first, two at most. Generate Plan OFFERS these; it never applies
+    /// them, and the plan engine does not read them.
+    static func common(among students: [UUID], players: [Player]) -> [(axis: DrillAttribute, athletes: Int)] {
+        let byStudent = Dictionary(players.map { ($0.studentId, $0) }, uniquingKeysWith: { a, _ in a })
+        var count: [DrillAttribute: Int] = [:]
+        for id in Set(students) {
+            guard let skills = byStudent[id]?.skills else { continue }
+            for axis in Set(current(skills)) { count[axis, default: 0] += 1 }
+        }
+        let need = max(2, Int((Double(Set(students).count) / 4).rounded(.up)))
+        let order = DrillAttribute.allCases
+        return count.filter { $0.value >= need }
+            .sorted { a, b in
+                a.value != b.value ? a.value > b.value
+                    : (order.firstIndex(of: a.key) ?? 0) < (order.firstIndex(of: b.key) ?? 0)
+            }
+            .prefix(most).map { (axis: $0.key, athletes: $0.value) }
+    }
+
     /// The coach's pick, else the suggestion.
     static func current(_ skills: SkillsEvaluation) -> [DrillAttribute] {
         let picked = skills.focus.compactMap(DrillAttribute.init(rawValue:))

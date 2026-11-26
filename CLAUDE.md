@@ -3435,9 +3435,32 @@ that was never individually set"). What changed, and the rules that now hold:
 - NOT CHANGED, on purpose: who counts as a peer differs by screen (game
   evidence: program-mates; tracked drills and shooting: same school grade);
   the level reads its own program's games while the profile reads every
-  game; fouls, basket times, evaluation notes and measurements are stored
-  and read by nothing; the athlete's focus is shown, not planned from
-  (both wait on Luther). `SDSessionEvent.attendanceRate` was left.
+  game. `SDSessionEvent.attendanceRate` was left.
+- STOP COLLECTING WHAT NOTHING READS (same day, Luther: "remove data nothing
+  reads and stop collecting"). Gone from the app's models and screens:
+  FOULS on a stat line (`StatType.foul` too — no screen recorded one), the
+  TIME of a basket (`GameBasket.at`), EVALUATION NOTES
+  (`SkillsEvaluation.notes`), MEASUREMENTS on Player (height, weight,
+  wingspan, handedness, the formatted helpers) and the A/B/C PERFORMANCE
+  GRADE + its history on Student (the Athletes list's grade badge and its
+  sort by grade went with them — it now sorts by name within a school
+  grade). TWO THINGS STAY ON PURPOSE: (1) the games JSON still WRITES
+  `fouls: 0` and a fixed `at` — a build from before this decodes both as
+  required and would lose the whole game without them (custom Codable on
+  SessionPlayerStats and GameBasket; drop the keys only once no device runs
+  an older build); (2) the SDPlayer / SDStudent COLUMNS stay — a CloudKit
+  column cannot be removed — holding what they hold; nothing reads or
+  writes them except the .hoopwise bundle, which copies the store. Do not
+  add a measurement, grade, foul or basket-time field back without a screen
+  that reads it.
+- THE FOCUS SUGGESTS (same day, Luther: "let the athlete focus suggest
+  rather than steer"). `AthleteFocus.common(among:players:)` = the skills at
+  least two athletes — and at least a quarter of the class — have as their
+  focus (the coach's pick, else the suggestion), most athletes first, two at
+  most. Generate Plan's "Build it around" shows them under the chips as
+  orange "+ Shooting · 5 athletes" buttons (`generate.focus.<axis>`); a tap
+  adds the skill to the chosen ones. Never preselected, and the plan engine
+  still does not read the focus.
 - SAME DAY, finishing: the session page's `phaseInsightsSection` (185
   lines, never referenced — it held an "Avg Level" worked out from AGE) is
   deleted; `CustomTrackHistory.standings` gathers everyone's results in one

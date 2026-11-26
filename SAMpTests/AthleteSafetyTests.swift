@@ -8,7 +8,7 @@ final class AthleteSafetyTests: XCTestCase {
     func testAMedicalNoteIsReadAndAContactIsLoggedOnTheStoredAthlete() throws {
         let dm = SwiftDataManager.inMemoryForTesting()
         let student = Student(name: "Safety Kid")
-        var player = Player(id: UUID(), studentId: student.id, handedness: .right)
+        var player = Player(id: UUID(), studentId: student.id)
         player.medicalNotes = "  Peanut allergy  "
         player.secondaryParentInfo = ParentInfo(name: "Aunt", relationship: "Guardian", phone: "123")
         dm.addStudent(student, player: player)

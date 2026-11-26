@@ -1013,9 +1013,6 @@ struct StudentIntelligenceListView: View {
             // Format dot (private / group / school) — school enrolment wins
             // even if there's no contract yet, so school kids stand out.
             FormatBadge(format: dataManager.studentFormat(student), size: .mini)
-
-            // Performance grade badge (A/B/C)
-            gradeBadge(for: student)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -1027,9 +1024,6 @@ struct StudentIntelligenceListView: View {
         let isChinese = LocalizationManager.shared.currentLanguage == .chinese
         let students = filteredStudents
         
-        // Pre-compute all grades ONCE for sorting (avoid N^2 computation)
-        let gradeCache = buildGradeCache(for: students)
-        
         // Group by school grade using effective grade key
         let grouped = Dictionary(grouping: students) { student -> String in
             StudentPerformanceGrader.effectiveGradeKey(for: student) ?? "—"
@@ -1040,33 +1034,11 @@ struct StudentIntelligenceListView: View {
         
         return grouped.map { (grade, studentsInGrade) -> (String, String, [Student]) in
             let displayName = isChinese ? gradeDisplayNameChinese(grade) : grade
-            // Sort by performance grade (A first), then by name - use pre-computed cache
-            let sortedStudents = studentsInGrade.sorted { s1, s2 in
-                let g1 = gradeCache[s1.id] ?? .ungraded
-                let g2 = gradeCache[s2.id] ?? .ungraded
-                if g1 != g2 { return g1 < g2 }
-                return s1.name < s2.name
-            }
+            // By name (it sorted on an A/B/C grade nothing ever set first).
+            let sortedStudents = studentsInGrade.sorted { $0.name < $1.name }
             return (grade, displayName, sortedStudents)
         }
         .sorted { gradeOrder.firstIndex(of: $0.0) ?? 99 < gradeOrder.firstIndex(of: $1.0) ?? 99 }
-    }
-    
-    /// Build grade cache once for efficient lookups
-    private func buildGradeCache(for students: [Student]) -> [UUID: PerformanceGrade] {
-        var cache: [UUID: PerformanceGrade] = [:]
-        // Just use manual overrides for now - skip expensive auto-computation during list render
-        for student in students {
-            cache[student.id] = student.performanceGrade ?? .ungraded
-        }
-        return cache
-    }
-    
-    /// Get effective performance grade for a student (for badge display)
-    private func getEffectiveGrade(for student: Student) -> PerformanceGrade {
-        // For list display, just show manual override or ungraded
-        // Auto-grading happens in profile view on-demand
-        return student.performanceGrade ?? .ungraded
     }
     
     private func gradeDisplayNameChinese(_ grade: String) -> String {
@@ -1196,23 +1168,6 @@ struct StudentIntelligenceListView: View {
             }
         }
         .frame(width: 36, alignment: .trailing)
-    }
-    
-    private func gradeBadge(for student: Student) -> some View {
-        let grade = getEffectiveGrade(for: student)
-        let color: Color = {
-            switch grade {
-            case .A: return Color(red: 1.0, green: 0.84, blue: 0.0)  // Gold
-            case .B: return Color(red: 0.75, green: 0.75, blue: 0.75)  // Silver
-            case .C: return Color(red: 0.8, green: 0.5, blue: 0.2)  // Bronze
-            case .ungraded: return AppTheme.textTertiary
-            }
-        }()
-        
-        return Text(grade.displayName)
-            .font(.system(size: 13, weight: grade == .ungraded ? .regular : .semibold))
-            .foregroundColor(color)
-            .frame(width: 24, alignment: .trailing)
     }
     
     // MARK: - Instagram Style Row

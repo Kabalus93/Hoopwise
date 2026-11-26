@@ -53,6 +53,11 @@ struct PlanGenerateSheet: View {
 
     private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
 
+    /// The skills most of this class's athletes have as their focus.
+    private var athleteFocus: [(axis: DrillAttribute, athletes: Int)] {
+        AthleteFocus.common(among: context.enrolledStudents.map(\.id), players: context.players)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -77,6 +82,37 @@ struct PlanGenerateSheet: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    // What the athletes themselves are working on — offered,
+                    // never preselected (Luther: "suggest rather than steer").
+                    let offered = athleteFocus.filter { !skills.contains($0.axis) }
+                    if !offered.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(isChinese ? "学员正在练的重点" : "What the athletes are working on")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            FlowLayout(spacing: 8) {
+                                ForEach(offered, id: \.axis) { item in
+                                    Button {
+                                        withAnimation(.snappy(duration: 0.2)) { _ = skills.insert(item.axis) }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "plus").font(.caption2.weight(.bold))
+                                            Text(isChinese
+                                                 ? "\(item.axis.title) · \(item.athletes) 人"
+                                                 : "\(item.axis.title) · \(item.athletes) athletes")
+                                                .font(.subheadline)
+                                        }
+                                        .padding(.horizontal, 12).padding(.vertical, 7)
+                                        .foregroundStyle(Color.orange)
+                                        .overlay(Capsule().strokeBorder(Color.orange.opacity(0.6), lineWidth: 1))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("generate.focus.\(item.axis.rawValue)")
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
                 } header: {
                     Text(isChinese ? "这节课练什么" : "Build it around")
                 } footer: {

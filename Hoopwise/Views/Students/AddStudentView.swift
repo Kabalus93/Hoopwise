@@ -1179,8 +1179,7 @@ struct EditStudentView: View {
             || !parent2Name.isEmpty || !parent2Phone.isEmpty || !medicalNotes.isEmpty {
             var updatedPlayer = player ?? Player(
                 id: UUID(),
-                studentId: student.id,
-                handedness: .right
+                studentId: student.id
             )
 
             if !parentName.isEmpty || !parentPhone.isEmpty || !parentEmail.isEmpty {
@@ -1242,7 +1241,7 @@ struct EditStudentView: View {
         }
         #endif
 
-        var newPlayer = Player(id: UUID(), studentId: newStudent.id, handedness: .right)
+        var newPlayer = Player(id: UUID(), studentId: newStudent.id)
         if !parentName.isEmpty || !parentPhone.isEmpty || !parentEmail.isEmpty || !parentWechat.isEmpty {
             newPlayer.parentInfo = ParentInfo(
                 name: parentName,

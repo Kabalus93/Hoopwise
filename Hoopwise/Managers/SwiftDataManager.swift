@@ -1118,9 +1118,6 @@ class SwiftDataManager: ObservableObject {
         for student in Student.samples {
             let player = Player(
                 studentId: student.id,
-                heightCm: Double.random(in: 140...180),
-                weightKg: Double.random(in: 35...70),
-                handedness: .right,
                 contractInfo: ContractInfo(totalSessions: 24, completedSessions: Int.random(in: 0...12))
             )
             let sdPlayer = SDPlayer.from(player)
@@ -1211,8 +1208,6 @@ class SwiftDataManager: ObservableObject {
                 assets.vault = sdStudent.mediaAssets.vault
                 sdStudent.mediaAssets = assets
                 sdStudent.personalBests = student.personalBests
-                sdStudent.performanceGrade = student.performanceGrade
-                sdStudent.gradeHistory = student.gradeHistory
                 sdStudent.updatedAt = Date()
                 stampProvenanceOnEdit(sdStudent)
                 saveAndRefresh()
@@ -1327,10 +1322,6 @@ class SwiftDataManager: ObservableObject {
         do {
             let descriptor = FetchDescriptor<SDPlayer>(predicate: #Predicate { $0.id == player.id })
             if let sdPlayer = try modelContext.fetch(descriptor).first {
-                sdPlayer.heightCm = player.heightCm
-                sdPlayer.weightKg = player.weightKg
-                sdPlayer.wingspanCm = player.wingspanCm
-                sdPlayer.handedness = player.handedness
                 sdPlayer.position = player.position
                 sdPlayer.jerseyNumber = player.jerseyNumber
                 sdPlayer.setParentInfo(player.parentInfo)

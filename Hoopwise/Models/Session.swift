@@ -382,11 +382,14 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
     var assists: Int
     var steals: Int
     var blocks: Int
-    var fouls: Int
-    
+    // FOULS ARE GONE (26 Nov 2026, Luther: "remove data nothing reads and
+    // stop collecting"): no screen ever recorded or showed one. The key is
+    // still WRITTEN as 0, because a build from before this decodes the line
+    // with a required `fouls` and would lose the whole game without it.
+
     init(id: UUID = UUID(), playerId: UUID, gameId: UUID, teamId: UUID,
          points: Int = 0, rebounds: Int = 0, assists: Int = 0,
-         steals: Int = 0, blocks: Int = 0, fouls: Int = 0) {
+         steals: Int = 0, blocks: Int = 0) {
         self.id = id
         self.playerId = playerId
         self.gameId = gameId
@@ -396,29 +399,80 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
         self.assists = assists
         self.steals = steals
         self.blocks = blocks
-        self.fouls = fouls
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, playerId, gameId, teamId, points, rebounds, assists, steals, blocks, fouls
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        playerId = try c.decode(UUID.self, forKey: .playerId)
+        gameId = try c.decode(UUID.self, forKey: .gameId)
+        teamId = try c.decode(UUID.self, forKey: .teamId)
+        points = try c.decodeIfPresent(Int.self, forKey: .points) ?? 0
+        rebounds = try c.decodeIfPresent(Int.self, forKey: .rebounds) ?? 0
+        assists = try c.decodeIfPresent(Int.self, forKey: .assists) ?? 0
+        steals = try c.decodeIfPresent(Int.self, forKey: .steals) ?? 0
+        blocks = try c.decodeIfPresent(Int.self, forKey: .blocks) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(playerId, forKey: .playerId)
+        try c.encode(gameId, forKey: .gameId)
+        try c.encode(teamId, forKey: .teamId)
+        try c.encode(points, forKey: .points)
+        try c.encode(rebounds, forKey: .rebounds)
+        try c.encode(assists, forKey: .assists)
+        try c.encode(steals, forKey: .steals)
+        try c.encode(blocks, forKey: .blocks)
+        try c.encode(0, forKey: .fouls)   // for builds from before 26 Nov 2026
     }
     
     var hasStats: Bool { points > 0 || rebounds > 0 || assists > 0 || steals > 0 || blocks > 0 }
 }
 
 /// One basket in a game's log: who scored, who passed (nil = made on his
-/// own), how many points, for which team, when.
+/// own), how many points, for which team. The TIME of the basket is no
+/// longer kept (26 Nov 2026 — nothing read it); the `at` key is still
+/// written, as a fixed date, because a build from before this requires it.
 struct GameBasket: Codable, Hashable, Identifiable {
     let id: UUID
     var scorerId: UUID
     var assisterId: UUID?
     var points: Int
     var teamId: UUID
-    var at: Date
 
-    init(id: UUID = UUID(), scorerId: UUID, assisterId: UUID? = nil, points: Int, teamId: UUID, at: Date = Date()) {
+    init(id: UUID = UUID(), scorerId: UUID, assisterId: UUID? = nil, points: Int, teamId: UUID) {
         self.id = id
         self.scorerId = scorerId
         self.assisterId = assisterId
         self.points = points
         self.teamId = teamId
-        self.at = at
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, scorerId, assisterId, points, teamId, at }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        scorerId = try c.decode(UUID.self, forKey: .scorerId)
+        assisterId = try c.decodeIfPresent(UUID.self, forKey: .assisterId)
+        points = try c.decode(Int.self, forKey: .points)
+        teamId = try c.decode(UUID.self, forKey: .teamId)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(scorerId, forKey: .scorerId)
+        try c.encodeIfPresent(assisterId, forKey: .assisterId)
+        try c.encode(points, forKey: .points)
+        try c.encode(teamId, forKey: .teamId)
+        try c.encode(Date(timeIntervalSinceReferenceDate: 0), forKey: .at)   // for builds from before 26 Nov 2026
     }
 }
 
@@ -437,7 +491,7 @@ enum SessionGameStatus: String, Codable, CaseIterable {
 }
 
 enum StatType {
-    case points(Int), rebound, assist, steal, block, foul
+    case points(Int), rebound, assist, steal, block
 }
 
 /// A single scrimmage game within a session
@@ -671,7 +725,6 @@ struct SessionGame: Codable, Hashable, Identifiable {
             case .assist: playerStats[index].assists += 1
             case .steal: playerStats[index].steals += 1
             case .block: playerStats[index].blocks += 1
-            case .foul: playerStats[index].fouls += 1
             }
         } else {
             var newStats = SessionPlayerStats(playerId: playerId, gameId: id, teamId: teamId)
@@ -681,7 +734,6 @@ struct SessionGame: Codable, Hashable, Identifiable {
             case .assist: newStats.assists = 1
             case .steal: newStats.steals = 1
             case .block: newStats.blocks = 1
-            case .foul: newStats.fouls = 1
             }
             playerStats.append(newStats)
         }
@@ -701,7 +753,6 @@ struct SessionGame: Codable, Hashable, Identifiable {
         case .assist: playerStats[index].assists = max(0, playerStats[index].assists - 1)
         case .steal: playerStats[index].steals = max(0, playerStats[index].steals - 1)
         case .block: playerStats[index].blocks = max(0, playerStats[index].blocks - 1)
-        case .foul: playerStats[index].fouls = max(0, playerStats[index].fouls - 1)
         }
         updatedAt = Date()
     }

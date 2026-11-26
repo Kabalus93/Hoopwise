@@ -200,9 +200,7 @@ final class SDStudent {
             parentalTouchpoints: parentalTouchpoints,
             lastParentContact: lastParentContact,
             mediaAssets: mediaAssets,
-            personalBests: personalBests,
-            performanceGrade: performanceGrade,
-            gradeHistory: gradeHistory
+            personalBests: personalBests
         )
     }
     
@@ -232,8 +230,6 @@ final class SDStudent {
         sd.lastParentContact = student.lastParentContact
         sd.mediaAssets = student.mediaAssets
         sd.personalBests = student.personalBests
-        sd.performanceGrade = student.performanceGrade
-        sd.gradeHistory = student.gradeHistory
         return sd
     }
 }

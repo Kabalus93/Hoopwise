@@ -340,8 +340,8 @@ struct Student: Identifiable, Codable, Hashable {
     var lastParentContact: Date?
     var mediaAssets: MediaAssetStatus
     var personalBests: [String: Double]  // e.g., "ppg": 15.2, "3pt%": 0.42
-    var performanceGrade: PerformanceGrade?  // Manual override; nil = auto-computed
-    var gradeHistory: [GradeHistoryEntry]  // Track grade changes over time
+    // (The A/B/C performance grade and its history are gone from the app —
+    // 26 Nov 2026: nothing set them. The SDStudent columns stay, untouched.)
     
     init(id: UUID = UUID(), name: String, chineseName: String? = nil,
          avatarColor: AvatarColor = .blue, attendanceStatus: AttendanceStatus = .present,
@@ -355,9 +355,7 @@ struct Student: Identifiable, Codable, Hashable {
          parentalTouchpoints: [ParentalTouchpoint] = [],
          lastParentContact: Date? = nil,
          mediaAssets: MediaAssetStatus = MediaAssetStatus(),
-         personalBests: [String: Double] = [:],
-         performanceGrade: PerformanceGrade? = nil,
-         gradeHistory: [GradeHistoryEntry] = []) {
+         personalBests: [String: Double] = [:]) {
         self.id = id
         self.name = name
         self.chineseName = chineseName
@@ -380,8 +378,6 @@ struct Student: Identifiable, Codable, Hashable {
         self.lastParentContact = lastParentContact
         self.mediaAssets = mediaAssets
         self.personalBests = personalBests
-        self.performanceGrade = performanceGrade
-        self.gradeHistory = gradeHistory
     }
     
     // Custom decoder to handle missing new fields
@@ -409,8 +405,6 @@ struct Student: Identifiable, Codable, Hashable {
         lastParentContact = try container.decodeIfPresent(Date.self, forKey: .lastParentContact)
         mediaAssets = try container.decodeIfPresent(MediaAssetStatus.self, forKey: .mediaAssets) ?? MediaAssetStatus()
         personalBests = try container.decodeIfPresent([String: Double].self, forKey: .personalBests) ?? [:]
-        performanceGrade = try container.decodeIfPresent(PerformanceGrade.self, forKey: .performanceGrade)
-        gradeHistory = try container.decodeIfPresent([GradeHistoryEntry].self, forKey: .gradeHistory) ?? []
     }
     
     /// Check if student has a profile image

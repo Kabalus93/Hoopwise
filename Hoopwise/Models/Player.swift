@@ -821,7 +821,8 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     var intangibles: Int    // Teamwork, coachability, attitude, hustle
     
     var lastEvaluatedDate: Date?
-    var notes: String?
+    // (Evaluation notes are gone — 26 Nov 2026: no screen wrote or showed
+    // them. An old `notes` key in the JSON is ignored.)
 
     /// THE EVALUATION (17 November 2026, Luther: "make sure it reflects what
     /// the engine uses … keep 1–10 … start fresh"): the coach's 1–10 on the
@@ -952,7 +953,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
     
     init(scoring: Int = 5, playmaking: Int = 5, rebounding: Int = 5, defense: Int = 5,
          athleticism: Int = 5, intangibles: Int = 5,
-         lastEvaluatedDate: Date? = nil, notes: String? = nil) {
+         lastEvaluatedDate: Date? = nil) {
         self.scoring = scoring
         self.playmaking = playmaking
         self.rebounding = rebounding
@@ -960,7 +961,6 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         self.athleticism = athleticism
         self.intangibles = intangibles
         self.lastEvaluatedDate = lastEvaluatedDate
-        self.notes = notes
     }
     
     // Custom decoder to handle both old 7-skill and new 6-skill formats
@@ -991,7 +991,6 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         defense = try container.decodeIfPresent(Int.self, forKey: .defense) ?? 5
         athleticism = try container.decodeIfPresent(Int.self, forKey: .athleticism) ?? 5
         lastEvaluatedDate = try container.decodeIfPresent(Date.self, forKey: .lastEvaluatedDate)
-        notes = try container.decodeIfPresent(String.self, forKey: .notes)
         axes = try container.decodeIfPresent([String: Int].self, forKey: .axes) ?? [:]
         history = (try? container.decodeIfPresent([EvaluationSnapshot].self, forKey: .history)) ?? []
         focus = (try? container.decodeIfPresent([String].self, forKey: .focus)) ?? []
@@ -1004,7 +1003,7 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         // Legacy 7-skill keys for decoding migration
         case shooting, ballHandling, basketballIQ, teamwork, coachability
         // Common
-        case lastEvaluatedDate, notes
+        case lastEvaluatedDate
         // The eight-skill evaluation (17 Nov 2026)
         case axes
         // Every evaluation as it stood (25 Nov 2026)
@@ -1022,7 +1021,6 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
         try container.encode(athleticism, forKey: .athleticism)
         try container.encode(intangibles, forKey: .intangibles)
         try container.encodeIfPresent(lastEvaluatedDate, forKey: .lastEvaluatedDate)
-        try container.encodeIfPresent(notes, forKey: .notes)
         if !axes.isEmpty { try container.encode(axes, forKey: .axes) }
         if !history.isEmpty { try container.encode(history, forKey: .history) }
         if !focus.isEmpty { try container.encode(focus, forKey: .focus) }
@@ -1043,10 +1041,11 @@ struct SkillsEvaluation: Codable, Hashable, Sendable {
 struct Player: Identifiable, Codable, Hashable {
     let id: UUID
     var studentId: UUID
-    var heightCm: Double?
-    var weightKg: Double?
-    var wingspanCm: Double?
-    var handedness: Handedness
+    // MEASUREMENTS ARE GONE from the app (26 Nov 2026, Luther: "remove data
+    // nothing reads and stop collecting"): height, weight, wingspan and
+    // handedness had no screen. The SDPlayer columns stay (a CloudKit column
+    // cannot be removed) and keep whatever they hold; nothing reads or
+    // writes them, and bundles still carry them from the store.
     var position: String?
     var jerseyNumber: Int?
     var parentInfo: ParentInfo
@@ -1060,8 +1059,7 @@ struct Player: Identifiable, Codable, Hashable {
     var createdAt: Date
     var updatedAt: Date
     
-    init(id: UUID = UUID(), studentId: UUID, heightCm: Double? = nil, weightKg: Double? = nil,
-         wingspanCm: Double? = nil, handedness: Handedness = .right, position: String? = nil,
+    init(id: UUID = UUID(), studentId: UUID, position: String? = nil,
          jerseyNumber: Int? = nil, parentInfo: ParentInfo = ParentInfo(),
          secondaryParentInfo: ParentInfo? = nil, contractInfo: ContractInfo = ContractInfo(),
          skills: SkillsEvaluation = SkillsEvaluation(), coachNotes: String? = nil,
@@ -1070,10 +1068,6 @@ struct Player: Identifiable, Codable, Hashable {
          createdAt: Date = Date(), updatedAt: Date = Date()) {
         self.id = id
         self.studentId = studentId
-        self.heightCm = heightCm
-        self.weightKg = weightKg
-        self.wingspanCm = wingspanCm
-        self.handedness = handedness
         self.position = position
         self.jerseyNumber = jerseyNumber
         self.parentInfo = parentInfo
@@ -1086,15 +1080,5 @@ struct Player: Identifiable, Codable, Hashable {
         self.headerImageURL = headerImageURL
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-    }
-    
-    var heightFormatted: String? {
-        guard let h = heightCm else { return nil }
-        return "\(Int(h / 30.48))'\(Int((h.truncatingRemainder(dividingBy: 30.48)) / 2.54))\" (\(Int(h))cm)"
-    }
-    
-    var weightFormatted: String? {
-        guard let w = weightKg else { return nil }
-        return "\(Int(w * 2.205))lbs (\(Int(w))kg)"
     }
 }

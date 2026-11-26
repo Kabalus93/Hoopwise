@@ -125,4 +125,39 @@ final class DataLogicAuditTests: XCTestCase {
         XCTAssertEqual(DrillPlanGenerator.shootingSignal(runs: [freeThrows, threes], roster: Set(ft + three)), "shooting:20%")
         XCTAssertNil(DrillPlanGenerator.shootingSignal(runs: [freeThrows], roster: Set(ft + three)))
     }
+
+    // MARK: Stop collecting what nothing reads; the focus suggests
+
+    func testOlderBuildsStillReadAGameWithoutFoulsOrBasketTimes() throws {
+        var game = SessionGame(sessionId: UUID())
+        game.playerStats = [SessionPlayerStats(playerId: UUID(), gameId: game.id, teamId: UUID(), points: 4)]
+        game.baskets = [GameBasket(scorerId: UUID(), points: 2, teamId: UUID())]
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(game)) as? [String: Any])
+        // A build from before required both keys: they are still written.
+        let line = try XCTUnwrap((object["playerStats"] as? [[String: Any]])?.first)
+        XCTAssertEqual(line["fouls"] as? Int, 0)
+        let basket = try XCTUnwrap((object["baskets"] as? [[String: Any]])?.first)
+        XCTAssertNotNil(basket["at"])
+        // And a game an older build wrote (fouls, a real time) reads back.
+        let back = try JSONDecoder().decode(SessionGame.self, from: JSONEncoder().encode(game))
+        XCTAssertEqual(back.playerStats.first?.points, 4)
+        XCTAssertEqual(back.baskets.count, 1)
+        let old = #"{"id":"00000000-0000-0000-0000-000000000001","playerId":"00000000-0000-0000-0000-000000000002","gameId":"00000000-0000-0000-0000-000000000003","teamId":"00000000-0000-0000-0000-000000000004","points":6,"rebounds":1,"assists":2,"steals":0,"blocks":0,"fouls":3}"#
+        XCTAssertEqual(try JSONDecoder().decode(SessionPlayerStats.self, from: Data(old.utf8)).points, 6)
+    }
+
+    func testTheGroupsFocusIsWhatSeveralAthletesWorkOn() {
+        func player(_ focus: [DrillAttribute]) -> Player {
+            var p = Player(studentId: UUID())
+            p.skills.focus = focus.map(\.rawValue)
+            return p
+        }
+        let players = [player([.shooting, .defense]), player([.shooting]), player([.shooting, .passing]),
+                       player([.defense]), player([]), player([.footwork])]
+        let common = AthleteFocus.common(among: players.map(\.studentId), players: players)
+        XCTAssertEqual(common.map(\.axis), [.shooting, .defense])
+        XCTAssertEqual(common.map(\.athletes), [3, 2])
+        // One athlete's focus is not the group's; nobody with a focus, nothing.
+        XCTAssertTrue(AthleteFocus.common(among: [players[5].studentId, players[4].studentId], players: players).isEmpty)
+    }
 }
