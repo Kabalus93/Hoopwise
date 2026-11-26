@@ -760,6 +760,8 @@ struct StudentIntelligenceListView: View {
                             let selected = selectedStudent?.id == student.id && !isSelecting
                             Button(action: { selectStudent(student) }) {
                                 contactsRow(student: student, selected: selected)
+                                    // The Mac: the open athlete in full expression, the others a step back.
+                                    .filmItemExpression(selected: selected, anySelected: selectedStudent != nil && !isSelecting)
                                     .filmRoomHover(cornerRadius: 10)
                             }
                             .buttonStyle(.plain)
@@ -769,7 +771,7 @@ struct StudentIntelligenceListView: View {
                             .listRowBackground(
                                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                                     // The Mac: a quiet pane, not a block of colour.
-                                    .fill(selected ? (FilmRoom.isOn ? Color.white.opacity(0.16) : Color.accentColor) : Color.clear)
+                                    .fill(selected ? (FilmRoom.isOn ? FilmGlass.fillSelected : Color.accentColor) : Color.clear)
                                     .padding(.horizontal, 8))
                             .listRowSeparator(selected ? .hidden : .visible)
                         } else {

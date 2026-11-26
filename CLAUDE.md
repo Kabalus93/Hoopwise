@@ -3120,6 +3120,26 @@ tool only sees the coach's real app's window, never a demo copy's).
   takes the rest. Narrower windows, the plan picker, iPhone and iPad keep
   the chips. Seen on the Mac demo copy. The search field and + still float
   in the library's own bar above the panel.
+- IN FRONT / BEHIND (26 Nov 2026, Luther, with captures of macOS's desktop
+  widgets solid and coloured in front, drained and translucent behind a
+  window: "bring that into Hoopwise on the Mac"). Views/Mac/
+  MacActiveExpression.swift. THE WINDOW: `.filmWindowExpression()` on the
+  shell, the board window and the Settings window reads
+  `@Environment(\.appearsActive)`; behind another app or window the content
+  goes to 80 % and a grey `.blendMode(.saturation)` overlay drains every
+  colour (photos, accent, status, the attention card's red), 0.3 s. The
+  overlay exists ONLY while the window is behind — a window-wide
+  `.saturation()` filter would cost an offscreen pass on every frame while in
+  use. Seen on the demo copy (in front, then with Finder brought forward):
+  it drains; the empty glass also turns a flat lighter grey (the overlay
+  paints grey where the window is transparent), so the desktop's tint comes
+  through LESS than in the widgets — not judged over a bright wallpaper.
+  Popups do not drain (a popup is its own window and is in front while open).
+  THE ITEM: `.filmItemExpression(selected:anySelected:)` on Athletes rows and
+  the Mac Drills rows — with a row open beside the list, that row keeps its
+  colour on a firmer pane (`FilmGlass.fillSelected`) and the others go to
+  25 % saturation, 70 % opacity; with nothing open all rows are full. NOT
+  seen on screen (no way to click the demo copy while his own app is open).
 - NOT DONE YET (Mac): the live game and the game recap were not seen (the
   Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was

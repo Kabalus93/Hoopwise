@@ -260,6 +260,7 @@ struct FilmRoomShell<Main: View>: View {
             .environment(\.filmRoomWindow, window.size)
         }
         .ignoresSafeArea()
+        .filmWindowExpression()
         .onAppear {
             #if DEBUG
             // HOOPWISE_FILM_PLACE=<0–8> opens on that sidebar place (for looking at pages).
@@ -529,6 +530,7 @@ struct CoachBoardWindow: View {
             CoachBoardScreen()
                 .environmentObject(dataManager)
         }
+            .filmWindowExpression()
             .environment(\.colorScheme, .dark)
             .preferredColorScheme(.dark)
             .onAppear {
@@ -562,6 +564,7 @@ struct MacSettingsWindow: View {
             FlightyCoachProfileView(asWindow: true)
                 .environmentObject(dataManager)
         }
+        .filmWindowExpression()
         .environment(\.colorScheme, .dark)
         .preferredColorScheme(.dark)
         .background(SceneReader { scene in

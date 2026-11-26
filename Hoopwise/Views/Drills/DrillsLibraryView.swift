@@ -285,10 +285,12 @@ struct DrillsLibraryView: View {
             let on = macDrillSelectedId == drill.id
             Button { macDrillSelect(drill) } label: {
                 label()
+                    // The open drill in full expression, the others a step back.
+                    .filmItemExpression(selected: on, anySelected: macDrillSelectedId != nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.white.opacity(on ? 0.12 : 0))
+                        .fill(on ? FilmGlass.fillSelected : Color.clear)
                         .padding(.horizontal, -10).padding(.vertical, -6))
             }
             .buttonStyle(.plain)
