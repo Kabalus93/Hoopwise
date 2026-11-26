@@ -1088,10 +1088,11 @@ struct LibraryRatingRun: View {
         log.notice("rate finished \(done) of \(list.count)")
     }
 }
-#endif
 
 
 /// DEBUG: a stand-in "action photo" and the export of every template.
+/// (Inside the DEBUG block: it sat after it, so a release build — the
+/// archive — did not compile.)
 @MainActor
 enum AthletePostDebug {
     static func standIn(_ face: UIImage) -> UIImage {
@@ -1137,3 +1138,4 @@ enum AthletePostDebug {
         }
     }
 }
+#endif
