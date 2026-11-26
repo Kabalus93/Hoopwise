@@ -62,12 +62,16 @@ enum ShootingHistory {
     /// "last time").
     static func previous(_ student: UUID, setup: ShootingSetup, before date: Date,
                          sessions: [SessionEvent]) -> ShootingResult? {
-        sessions
-            .filter { !SessionLifecycle.didNotHappen($0) && $0.startTime < date }
-            .sorted { $0.startTime > $1.startTime }
-            .lazy
-            .compactMap { s in s.curriculum.shooting.first { $0.setup.key == setup.key }?.result(for: student) }
-            .first
+        // The latest earlier class with a result, in one pass — no sort (this
+        // runs for every athlete row of a station).
+        var best: (date: Date, result: ShootingResult)?
+        for s in sessions where s.startTime < date && !SessionLifecycle.didNotHappen(s) {
+            if let found = best, s.startTime <= found.date { continue }
+            if let result = s.curriculum.shooting.first(where: { $0.setup.key == setup.key })?.result(for: student) {
+                best = (s.startTime, result)
+            }
+        }
+        return best?.result
     }
 
     // MARK: The athlete's shot chart (21 Nov 2026)

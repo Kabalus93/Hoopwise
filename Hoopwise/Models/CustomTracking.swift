@@ -566,15 +566,30 @@ nonisolated enum CustomTrackHistory {
             }
         }
         let everyone = Set(peers + [student])
-        return seen.values.compactMap { drillId, def -> Standing? in
+        // Everyone's results per drill and setup, oldest first, gathered in
+        // ONE pass over the classes (it rescanned every class for every
+        // peer of every drill).
+        var results: [String: [UUID: [Double]]] = [:]
+        for s in happened.sorted(by: { $0.startTime < $1.startTime }) {
+            // One run a class for a drill and setup, as `series` reads it.
+            var taken = Set<String>()
+            for run in s.curriculum.tracked {
+                let k = "\(run.drillId)|\(run.definition.key)"
+                guard seen[k] != nil, taken.insert(k).inserted else { continue }
+                for id in everyone {
+                    if let v = run.result(for: id) { results[k, default: [:]][id, default: []].append(v) }
+                }
+            }
+        }
+        return seen.compactMap { k, entry -> Standing? in
+            let (drillId, def) = entry
             func recent(_ id: UUID) -> (Double, Int, Double?)? {
-                let points = series(id, drillId: drillId, key: def.key, sessions: happened)
-                guard !points.isEmpty else { return nil }
-                let last = points.suffix(3).map(\.value)
-                let earlier = points.dropLast(3).map(\.value)
+                guard let values = results[k]?[id], !values.isEmpty else { return nil }
+                let last = Array(values.suffix(3))
+                let earlier = Array(values.dropLast(3))
                 let avg = last.reduce(0, +) / Double(last.count)
                 let trend = earlier.isEmpty ? nil : avg - earlier.reduce(0, +) / Double(earlier.count)
-                return (avg, points.count, trend)
+                return (avg, values.count, trend)
             }
             guard let mine = recent(student) else { return nil }
             let values = everyone.compactMap { id in recent(id).map { (id, $0.0) } }

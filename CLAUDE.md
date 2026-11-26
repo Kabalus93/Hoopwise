@@ -3436,9 +3436,13 @@ that was never individually set"). What changed, and the rules that now hold:
   evidence: program-mates; tracked drills and shooting: same school grade);
   the level reads its own program's games while the profile reads every
   game; fouls, basket times, evaluation notes and measurements are stored
-  and read by nothing; the athlete's focus is shown, not planned from.
-  `SDSessionEvent.attendanceRate` and the session page's "Avg Level" (read
-  from AGE, not skill) were left.
+  and read by nothing; the athlete's focus is shown, not planned from
+  (both wait on Luther). `SDSessionEvent.attendanceRate` was left.
+- SAME DAY, finishing: the session page's `phaseInsightsSection` (185
+  lines, never referenced — it held an "Avg Level" worked out from AGE) is
+  deleted; `CustomTrackHistory.standings` gathers everyone's results in one
+  pass over the classes and `ShootingHistory.previous` finds the last result
+  without sorting.
 Tests: DataLogicAuditTests, SkillLevelTests, CustomTrackingTests,
 TeamBalanceTests, PlanGeneratorTests, EvaluationEditUITests.
 
@@ -3655,6 +3659,22 @@ store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
   aspect, the CONSENT line (`post.consent`: publication consent on record →
   fine to post; else share with the family only), Share image (JPEG).
   Language = Languages by Area → Player card.
+- TEN MORE TEMPLATES (26 Nov 2026, Luther: "be creative … 10 more remarkable
+  templates"), Views/Components/AthletePostTemplatesMore.swift — thirteen in
+  all, picked from a chip strip (`post.template.<raw>`): DUOTONE (the photo in
+  the program colour, last name up the edge), SCOREBOARD (an amber LED board
+  under the photo), MAGAZINE (academy masthead behind the lifted athlete, cover
+  lines, a barcode), HOLO CARD (a foil-edged trading card, "★ RARE"), DIAGONAL
+  (a slash of colour, stats beside), GIANT NUMBER (the jersey or best stat huge
+  behind the athlete), SCRAPBOOK (a taped polaroid, handwritten stats, the top
+  one circled, a stamp), FILM STRIP (a frame with a subtitle line), SWISS
+  (cream grid, ultralight numbers, a red rule), NEON (glowing tubes on a night
+  scene). `liftsSubject` (poster, magazine, giant number) asks Vision for the
+  cut-out; without one the photo fades out. Every template shows only non-zero
+  stats and works in 4:5 and 1:1 (square: scrapbook's notes go beside a
+  smaller polaroid, swiss lists three). HOOPWISE_POST_ASPECT=square exports the
+  1:1 set. All thirteen were looked at as exports (portrait and square) on the
+  simulator; never with a real cut-out.
 - DEBUG: HOOPWISE_SHOT=athletePost (+ HOOPWISE_POST_EXPORT=1 writes
   post-<template>-<source>.jpg, sample numbers when the demo athlete has no
   games); HOOPWISE_DEMO_VAULT=1 on studentProfile files the newest six library
