@@ -34,6 +34,9 @@ enum MacGlass {
     /// other show through one another), and every window is frosted as it
     /// appears.
     static func install() {
+        #if DEBUG && targetEnvironment(macCatalyst)
+        dumpTopViewsIfAsked()
+        #endif
         // The Mac — and the iPad simulator's DEBUG film-room preview, so the
         // layers can be looked at there (the glass itself is the Mac's).
         guard FilmRoom.isOn, !installed else { return }
@@ -43,6 +46,18 @@ enum MacGlass {
              #selector(UINavigationController.hw_glassPush(_:animated:)), on: UINavigationController.self)
         swap(#selector(UINavigationController.popViewController(animated:)),
              #selector(UINavigationController.hw_glassPop(animated:)), on: UINavigationController.self)
+
+        // No scroll-edge strip: iOS 26 lays a dimming backdrop over the top of
+        // every scrolling page, under the title bar. On the glass it showed
+        // as a dark bar across the work area when the pointer came near the
+        // top or the window was behind another (26 Nov 2026, Luther).
+        swapSafely(UIScrollView.self, #selector(UIView.didMoveToWindow), #selector(UIScrollView.hw_glassScrollMoved))
+        // Hiding the effect is not enough: its backdrop (a view of its own
+        // inside the scroll view) stays and is what paints the strip.
+        if let backdrop = NSClassFromString("_TtCC5UIKit20ScrollEdgeEffectView12BackdropView") {
+            swapSafely(backdrop, #selector(UIView.didMoveToWindow), #selector(UIView.hw_glassHideWhenShown))
+            swapSafely(backdrop, #selector(UIView.layoutSubviews), #selector(UIView.hw_glassHideOnLayout))
+        }
 
         // Bars and lists sit on the glass, not on their own slabs.
         // Grouped List rows: the system paints each an opaque dark slab.
@@ -89,6 +104,32 @@ enum MacGlass {
     #if targetEnvironment(macCatalyst)
     private static var frosted = Set<ObjectIdentifier>()
 
+    #if DEBUG
+    /// HOOPWISE_TOPBAR_DUMP=<seconds>: after that long, logs every view near
+    /// the top of each window that paints something (what draws a strip there).
+    static func dumpTopViewsIfAsked() {
+        guard let raw = ProcessInfo.processInfo.environment["HOOPWISE_TOPBAR_DUMP"], let after = Double(raw) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + after) {
+            for scene in UIApplication.shared.connectedScenes {
+                guard let scene = scene as? UIWindowScene else { continue }
+                for window in scene.windows {
+                    func walk(_ v: UIView, _ depth: Int) {
+                        let f = v.convert(v.bounds, to: window)
+                        if f.minY < 60, f.height < 120, f.width > 300, !v.isHidden, v.alpha > 0.01 {
+                            let bg = v.backgroundColor.flatMap { $0.cgColor.components?.map { String(format: "%.2f", $0) }.joined(separator: ",") } ?? "-"
+                            let layerBg = v.layer.backgroundColor.flatMap { $0.components?.map { String(format: "%.2f", $0) }.joined(separator: ",") } ?? "-"
+                            let line = "\(depth) \(NSStringFromClass(type(of: v))) < \(v.superview.map { NSStringFromClass(type(of: $0)) } ?? "-") < \(v.superview?.superview.map { NSStringFromClass(type(of: $0)) } ?? "-") hidden=\(v.isHidden) frame=\(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height)) bg=\(bg) layer=\(layerBg) alpha=\(v.alpha)"
+                            glassLog.log("TOPDUMP \(line, privacy: .public)")
+                        }
+                        for sub in v.subviews { walk(sub, depth + 1) }
+                    }
+                    walk(window, 0)
+                }
+            }
+        }
+    }
+    #endif
+
     /// Every AppKit window of the app gets the glass under its content, once.
     static func frostWindows() {
         for scene in UIApplication.shared.connectedScenes {
@@ -118,6 +159,17 @@ enum MacGlass {
             frosted.insert(ObjectIdentifier(window))
             window.setValue(false, forKey: "opaque")
             window.setValue(clear, forKey: "backgroundColor")
+            // The title bar draws nothing of its own. Left to the system it
+            // painted a dark strip across the top of the glass whenever the
+            // pointer came near the window's buttons, and while the window
+            // was behind another (26 Nov 2026, Luther: "the black bar at the
+            // top when the mouse hovers").
+            if window.responds(to: NSSelectorFromString("setTitlebarAppearsTransparent:")) {
+                window.setValue(true, forKey: "titlebarAppearsTransparent")
+            }
+            if window.responds(to: NSSelectorFromString("setTitlebarSeparatorStyle:")) {
+                window.setValue(1, forKey: "titlebarSeparatorStyle")    // none
+            }
             let effect = effectClass.init()
             effect.setValue(material, forKey: "material")
             effect.setValue(0, forKey: "blendingMode")      // behind the window
@@ -191,6 +243,25 @@ extension UIViewController {
             }
         }
         #endif
+    }
+}
+
+extension UIView {
+    @objc func hw_glassHideWhenShown() {
+        hw_glassHideWhenShown()
+        if !isHidden { isHidden = true }
+    }
+    @objc func hw_glassHideOnLayout() {
+        hw_glassHideOnLayout()
+        if !isHidden { isHidden = true }
+    }
+}
+
+extension UIScrollView {
+    @objc func hw_glassScrollMoved() {
+        hw_glassScrollMoved()
+        guard window != nil else { return }
+        if !topEdgeEffect.isHidden { topEdgeEffect.isHidden = true }
     }
 }
 

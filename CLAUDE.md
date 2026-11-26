@@ -3140,6 +3140,18 @@ tool only sees the coach's real app's window, never a demo copy's).
   colour on a firmer pane (`FilmGlass.fillSelected`) and the others go to
   25 % saturation, 70 % opacity; with nothing open all rows are full. NOT
   seen on screen (no way to click the demo copy while his own app is open).
+- THE DARK BAR ACROSS THE TOP (26 Nov 2026, Luther: "the black bar at the top
+  when the mouse hovers"; it also showed while the window was behind
+  another). It was iOS 26's SCROLL EDGE EFFECT: every scroll view lays a
+  dimming backdrop over its top, under the title bar. MacGlass now hides it
+  for every scroll view on the Mac — `topEdgeEffect.isHidden` when the
+  scroll view joins a window AND the effect's own backdrop view (class
+  `UIKit.ScrollEdgeEffectView.BackdropView`, reached by name; hiding the
+  effect alone left it painting). The window's title bar is also set
+  transparent with no separator. DEBUG HOOPWISE_TOPBAR_DUMP=<seconds> logs
+  every view near the top of each window ("TOPDUMP", hoopwise.mac) — how it
+  was found. Verified by that dump (nothing left) and a capture of Home;
+  the pointer hovering was not reproduced.
 - NOT DONE YET (Mac): the live game and the game recap were not seen (the
   Create Game cover was); drag-and-drop was never driven by a real mouse.
 - The glass's tint over a BRIGHT desktop was
