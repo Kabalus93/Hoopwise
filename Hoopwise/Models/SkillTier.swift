@@ -183,33 +183,138 @@ enum SkillLevel {
         return values.mapValues { min(2, max(-2, ($0 - mean) / spread)) }
     }
 
-    /// The levels in one group, from each member's evaluation score and game
-    /// score (either may be missing). Pure — tests drive it directly.
+    /// WHERE AN ATHLETE STANDS, AND WHAT THE NEXT LEVEL TAKES (27 Nov 2026,
+    /// Luther: a motivated kid asked how much he has to improve to go up, and
+    /// the level sat "hidden perfectly behind the system"). Everything the
+    /// level is made of, in numbers the coach can say out loud.
+    struct Standing: Equatable, Sendable {
+        let tier: SkillTier
+        /// Distance from the group's average, in rating points (the bands:
+        /// ≥ +1.5 Best, ≥ +0.5 Better, > −0.5 Average, > −1.5 Below).
+        let delta: Double
+        /// Athletes of the group who have a level.
+        let ranked: Int
+
+        /// Their average rating over the rated skills, and the group's.
+        let rating: Double?
+        let groupRating: Double?
+        /// How much of the level the ratings are (0.65 with games, 1 alone).
+        let ratingWeight: Double
+
+        /// Their production a game, the group's, and the group's spread.
+        let production: Double?
+        let groupProduction: Double?
+        let spread: Double
+        /// How much of the level the games are (0.35 beside ratings, 1 alone).
+        let gameWeight: Double
+
+        /// The level above (nil at the top) and how far `delta` is from it.
+        let next: SkillTier?
+        let gap: Double
+        /// To get there on RATINGS alone: this much more on the rating
+        /// average (their own rise also lifts the group's average a little —
+        /// counted). Nil when they are not rated, or it would pass 10.
+        let ratingNeeded: Double?
+        /// To get there on GAMES alone: this much more production a game.
+        /// Nil without games, or when games cannot carry it that far (the
+        /// game half stops at two spreads above the group).
+        let productionNeeded: Double?
+        /// How far above the line of the level below (nil at the bottom).
+        let cushion: Double?
+    }
+
+    /// The delta a level starts at.
+    static func floor(of tier: SkillTier) -> Double? {
+        switch tier {
+        case .best: 1.5
+        case .better: 0.5
+        case .average: -0.5
+        case .belowAverage: -1.5
+        case .bottom: nil
+        }
+    }
+
+    static func tier(above tier: SkillTier) -> SkillTier? {
+        SkillTier(rawValue: tier.rawValue - 1)
+    }
+
+    /// Every ranked member's standing. Pure — `tiers` reads it, so the level
+    /// and its explanation cannot disagree.
     /// Games weigh `gameWeight` for everyone in a group that has
     /// evaluations — also for a member who is not rated (an unrated top
     /// producer used to count at full weight and out-rank a rated one);
     /// they decide alone only in a group nobody has rated.
-    static func tiers(evaluation: [UUID: Double], games: [UUID: Double]) -> [UUID: SkillTier] {
-        let evalMean = evaluation.isEmpty ? 0 : evaluation.values.reduce(0, +) / Double(evaluation.count)
-        let gameDelta = gameDeltas(games)
+    static func standings(evaluation: [UUID: Double], games: [UUID: Double]) -> [UUID: Standing] {
         let ids = Set(evaluation.keys).union(games.keys)
         guard ids.count >= minimumGroup else { return [:] }
+        let evalMean = evaluation.isEmpty ? 0 : evaluation.values.reduce(0, +) / Double(evaluation.count)
+        let gameDelta = gameDeltas(games)
+        let gameMean = games.isEmpty ? 0 : games.values.reduce(0, +) / Double(games.count)
+        let variance = games.isEmpty ? 0
+            : games.values.reduce(0) { $0 + ($1 - gameMean) * ($1 - gameMean) } / Double(games.count)
+        let spread = max(variance.squareRoot(), 0.15 * abs(gameMean), 0.5)
         // A single evaluated child has nobody to be measured against.
         let groupIsRated = evaluation.count >= 2
-        var out: [UUID: SkillTier] = [:]
+
+        var deltas: [UUID: (delta: Double, ratingWeight: Double, gameWeight: Double)] = [:]
         for id in ids {
             let e = groupIsRated ? evaluation[id].map { $0 - evalMean } : nil
             let g = gameDelta[id]
-            let delta: Double
             switch (e, g) {
-            case let (e?, g?): delta = evaluationWeight * e + gameWeight * g
-            case let (e?, nil): delta = e
-            case let (nil, g?): delta = groupIsRated ? gameWeight * g : g
+            case let (e?, g?): deltas[id] = (evaluationWeight * e + gameWeight * g, evaluationWeight, gameWeight)
+            case let (e?, nil): deltas[id] = (e, 1, 0)
+            case let (nil, g?): deltas[id] = groupIsRated ? (gameWeight * g, 0, gameWeight) : (g, 0, 1)
             default: continue
             }
-            out[id] = tier(forDelta: delta)
+        }
+        var out: [UUID: Standing] = [:]
+        for (id, d) in deltas {
+            let level = tier(forDelta: d.delta)
+            let next = tier(above: level)
+            // Average and Below open just ABOVE their line; Better and Best on it.
+            let gap = next.flatMap(floor(of:)).map { line in
+                max(0, line - d.delta + (next == .average || next == .belowAverage ? 0.01 : 0))
+            } ?? 0
+            var ratingNeeded: Double?
+            if next != nil, d.ratingWeight > 0, let own = evaluation[id] {
+                // Their own rise moves the group's average by 1/n of it.
+                let share = 1 - 1 / Double(max(2, evaluation.count))
+                let need = gap / (d.ratingWeight * share)
+                if own + need <= 10 { ratingNeeded = need }
+            }
+            var productionNeeded: Double?
+            if next != nil, d.gameWeight > 0, let z = gameDelta[id] {
+                let need = gap / d.gameWeight
+                if z + need <= 2 { productionNeeded = need * spread }
+            }
+            out[id] = Standing(
+                tier: level, delta: d.delta, ranked: deltas.count,
+                rating: evaluation[id], groupRating: groupIsRated ? evalMean : nil, ratingWeight: d.ratingWeight,
+                production: games[id], groupProduction: games.count >= 2 ? gameMean : nil, spread: spread,
+                gameWeight: d.gameWeight, next: next, gap: gap,
+                ratingNeeded: ratingNeeded, productionNeeded: productionNeeded,
+                cushion: floor(of: level).map { d.delta - $0 })
         }
         return out
+    }
+
+    /// The levels in one group, from each member's evaluation score and game
+    /// score (either may be missing).
+    static func tiers(evaluation: [UUID: Double], games: [UUID: Double]) -> [UUID: SkillTier] {
+        standings(evaluation: evaluation, games: games).mapValues(\.tier)
+    }
+
+    /// Every ranked athlete's standing in a program.
+    static func standings(in program: Program, sessions: [SessionEvent],
+                          evaluations: [UUID: SkillsEvaluation], now: Date = Date()) -> [UUID: Standing] {
+        let members = program.enrolledStudentIds
+        guard members.count >= minimumGroup else { return [:] }
+        var evaluation: [UUID: Double] = [:]
+        for id in members {
+            if let e = evaluationScore(evaluations[id]) { evaluation[id] = e }
+        }
+        let games = gameScores(members: Set(members), sessions: sessions, program: program.id, now: now)
+        return standings(evaluation: evaluation, games: games)
     }
 
     /// The levels in a program: its enrolled athletes, their evaluations and

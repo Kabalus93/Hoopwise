@@ -197,4 +197,60 @@ final class SkillLevelTests: XCTestCase {
         XCTAssertEqual(map.primary.count, 200)
         XCTAssertLessThan(ms, 250, "keep the rebuild off the critical path")
     }
+
+    // MARK: - The path to the next level (27 Nov 2026)
+
+    func testAStandingSaysWhatTheNextLevelTakes() throws {
+        // Eight rated athletes, no games: a at 5.6, the others 5.0 → group
+        // average 5.075, a is +0.525 → Better.
+        let k = ids(8)
+        var evaluation = Dictionary(uniqueKeysWithValues: k.map { ($0, 5.0) })
+        evaluation[k[0]] = 5.6
+        let all = SkillLevel.standings(evaluation: evaluation, games: [:])
+        let a = try XCTUnwrap(all[k[0]])
+        XCTAssertEqual(a.tier, .better)
+        XCTAssertEqual(a.ranked, 8)
+        XCTAssertEqual(a.ratingWeight, 1)
+        XCTAssertEqual(a.gameWeight, 0)
+        XCTAssertEqual(a.next, .best)
+        XCTAssertEqual(a.gap, 1.5 - a.delta, accuracy: 0.0001)
+        XCTAssertNil(a.productionNeeded, "no games, no game route")
+        // Raising the rating by what it says really gets there (their own
+        // rise lifts the group's average too — it is counted).
+        let need = try XCTUnwrap(a.ratingNeeded)
+        evaluation[k[0]] = 5.6 + need
+        XCTAssertEqual(SkillLevel.tiers(evaluation: evaluation, games: [:])[k[0]], .best)
+        evaluation[k[0]] = 5.6 + need - 0.05
+        XCTAssertEqual(SkillLevel.tiers(evaluation: evaluation, games: [:])[k[0]], .better)
+        XCTAssertEqual(a.cushion ?? 0, a.delta - 0.5, accuracy: 0.0001)
+        // The level and its explanation are the same computation.
+        XCTAssertEqual(all.mapValues(\.tier), SkillLevel.tiers(evaluation: [k[0]: 5.6].merging(
+            Dictionary(uniqueKeysWithValues: k.dropFirst().map { ($0, 5.0) })) { a, _ in a }, games: [:]))
+    }
+
+    func testTheGameRouteIsInProductionAGameAndStopsAtItsCeiling() throws {
+        // Rated alike; b produces a little more than the rest.
+        let k = ids(8)
+        let evaluation = Dictionary(uniqueKeysWithValues: k.map { ($0, 6.0) })
+        var games = Dictionary(uniqueKeysWithValues: k.map { ($0, 8.0) })
+        games[k[1]] = 10
+        let b = try XCTUnwrap(SkillLevel.standings(evaluation: evaluation, games: games)[k[1]])
+        XCTAssertEqual(b.tier, .average)
+        XCTAssertEqual(b.gameWeight, 0.35)
+        XCTAssertEqual(b.production, 10)
+        XCTAssertEqual(b.groupProduction ?? 0, 8.25, accuracy: 0.001)
+        // Games can lift a level by at most 0.35 × 2 = 0.7: Better (0.5) is
+        // within reach on games alone, and the need is in production a game.
+        let need = try XCTUnwrap(b.productionNeeded)
+        XCTAssertEqual(need, b.gap / 0.35 * b.spread, accuracy: 0.0001)
+        // The top of a level group has no level above, and the bottom no cushion.
+        let top = try XCTUnwrap(SkillLevel.standings(evaluation: [k[0]: 9, k[1]: 5, k[2]: 5, k[3]: 1], games: [:])[k[0]])
+        XCTAssertEqual(top.tier, .best)
+        XCTAssertNil(top.next)
+        XCTAssertNil(top.ratingNeeded)
+        let last = try XCTUnwrap(SkillLevel.standings(evaluation: [k[0]: 9, k[1]: 5, k[2]: 5, k[3]: 1], games: [:])[k[3]])
+        XCTAssertEqual(last.tier, .bottom)
+        XCTAssertNil(last.cushion)
+        XCTAssertEqual(last.next, .belowAverage)
+    }
 }

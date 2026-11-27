@@ -711,6 +711,27 @@ class SwiftDataManager: ObservableObject {
         skillTiers.tier(for: studentId, program: program)
     }
 
+    /// The group program an athlete's level is read in when none is on
+    /// screen: their primary program when it ranks them, else the first group
+    /// program that does, else their primary / first group program.
+    func levelProgram(for studentId: UUID, preferred: UUID? = nil) -> Program? {
+        let groups = cachedPrograms.filter { $0.programType != .privateSessions && $0.enrolledStudentIds.contains(studentId) }
+        if let preferred, let p = groups.first(where: { $0.id == preferred }) { return p }
+        let primary = cachedStudents.first { $0.id == studentId }?.programId
+        if let p = groups.first(where: { $0.id == primary && skillTiers.byProgram[$0.id]?[studentId] != nil }) { return p }
+        if let p = groups.first(where: { skillTiers.byProgram[$0.id]?[studentId] != nil }) { return p }
+        return groups.first { $0.id == primary } ?? groups.first
+    }
+
+    /// Where the athlete stands in a program and what the next level takes
+    /// (nil when the program does not rank them). Worked out when asked.
+    func levelStanding(for studentId: UUID, in program: Program, now: Date = Date()) -> SkillLevel.Standing? {
+        var evaluations: [UUID: SkillsEvaluation] = [:]
+        for player in cachedPlayers { evaluations[player.studentId] = player.skills }
+        return SkillLevel.standings(in: program, sessions: cachedSessionEvents,
+                                    evaluations: evaluations, now: now)[studentId]
+    }
+
     /// The colour behind the athlete's cut-out photo: their level's, else the
     /// neutral grey.
     func photoBackdropHex(for studentId: UUID, program: UUID? = nil) -> String {

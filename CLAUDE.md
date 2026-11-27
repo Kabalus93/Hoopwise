@@ -2104,6 +2104,34 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   pill UNDER the player card on the profile and in the Quick Peep; beside
   the card, never on it (the card is shared). Nothing for an unranked
   athlete. Seen on the iPad mini simulator's profile.
+  THE PATH TO THE NEXT LEVEL (27 Nov 2026, Luther: a motivated kid asked
+  how much he must improve to go up; the level sat "hidden perfectly behind
+  the system"). The pill is a BUTTON (chevron; `athlete.levelMark`) →
+  `LevelPathSheet` (`level.sheet`, SkillLevelMark.swift): the level and the
+  group ("N athletes ranked"), a five-band bar with their place on it
+  ("+0.32 from the group's average"), WHAT THE LEVEL IS MADE OF (ratings:
+  their average · the group's · 65 %; games: production a game · the
+  group's · 35 %, with the production formula in words), TO REACH <next>
+  ("0.18 to go", `level.gap`): ON RATINGS — the rating average from x to y
+  = about N rating points in all across the rated skills, and their two
+  lowest skills; ON GAMES — production from x to y a game = so many more
+  baskets, or assists, or steals/blocks a game; "about half of each" when
+  both routes exist; the cushion above the level below. At the top: how far
+  above Best's line. An athlete in a group that does not rank them gets a
+  quiet "No level yet" pill → what is missing (`level.missing`: four rated
+  skills or three games in the group, three athletes with data).
+  `SkillLevel.Standing` + `standings(evaluation:games:)` (pure) is where
+  the numbers come from and `tiers` now DERIVES from it, so the level and
+  its explanation cannot disagree; `ratingNeeded` counts that their own rise
+  lifts the group's average (÷ (1 − 1/n)) and is nil past 10;
+  `productionNeeded` is nil when games alone cannot carry it (the game half
+  stops at two spreads). `DataManager.levelProgram(for:preferred:)` /
+  `levelStanding(for:in:)` — worked out when the sheet opens. The level
+  NAMES stay coach-only; the numbers are what to tell the athlete. Seen on
+  the iPhone simulator: the pill and the "No level yet" page; a RANKED
+  athlete's page was not seen (the demo store ranks nobody). Tests:
+  SkillLevelTests (the standing's numbers really reach the next level),
+  LevelPathUITests.
   DEBUG HOOPWISE_DEMO_CUTOUTS=<folder of <athlete id>.heic> (+
   HOOPWISE_DEMO_EVALUATIONS=1) loads Mac-made cut-outs (the simulator cannot
   run Vision) into the DEMO store and logs "bg level <name> <tier>". Tests:
