@@ -61,6 +61,13 @@ struct AthleteCardFacts: Equatable {
     /// card's second octagon line, "where they stand" (17 Nov 2026). Empty
     /// until evaluated; unrated skills are absent.
     let evaluation: [DrillAttribute: Double]
+    /// THE GROUP on the same eight skills (27 Nov 2026, Luther, markup on the
+    /// card's back: "make this a comparison against other players in the
+    /// group — dots is the group and blue is the athlete"): the average
+    /// rating (÷ 10) of the athlete's program-mates, the athlete included,
+    /// on each skill at least two of them are rated on. Empty without a
+    /// group program or ratings.
+    let groupEvaluation: [DrillAttribute: Double]
 
     /// A line from the coach, typed when sharing (never stored).
     let coachLine: String
@@ -121,6 +128,17 @@ struct AthleteCardFacts: Equatable {
             scope = trained.count == 0 ? .none : .allTime
         }
 
+        // The group's average on each skill (two rated athletes or more).
+        var groupEvaluation: [DrillAttribute: Double] = [:]
+        if let program, program.programType != .privateSessions {
+            let members = Set(program.enrolledStudentIds)
+            let mates = players.filter { members.contains($0.studentId) }
+            for axis in DrillAttribute.allCases {
+                let ratings = mates.compactMap { $0.skills.rating(axis) }
+                if ratings.count >= 2 { groupEvaluation[axis] = Double(ratings.reduce(0, +)) / Double(ratings.count) / 10 }
+            }
+        }
+
         let photoIsTransparent = student.profileImageData.map(ProfilePhotoEncoding.isTransparent(data:)) ?? false
         let report = GameStatsReport.player(student.id, sessions: sessions)
         let monthGames = GameStatsReport.playerGames(student.id, in: sessions, in: month).count
@@ -154,6 +172,7 @@ struct AthleteCardFacts: Equatable {
             trainedScope: scope,
             trainedClasses: trained.count,
             evaluation: player?.skills.axisShares ?? [:],
+            groupEvaluation: groupEvaluation,
             coachLine: coachLine.trimmingCharacters(in: .whitespacesAndNewlines),
             coach: coach,
             academy: academy)

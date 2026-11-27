@@ -3013,6 +3013,19 @@ and the game stats can work together." Decided: keep 1–10, START FRESH.
   line over "what we worked on", legend "Worked on / Where they stand"; only
   rated skills. In the app, the shared image and the A3 sheets alike.
   (Asked Luther whether parents should see it; shown until he says.)
+  THE BACK COMPARES THE ATHLETE WITH THE GROUP (27 Nov 2026, Luther, markup
+  on the card's back: "make this a comparison against other players in the
+  group — dots is the group and blue is the athlete"). Once the athlete is
+  rated, the back's octagon is THEIR RATINGS (the filled shape, header
+  "Skills" / 技能) over THE GROUP'S AVERAGE as the dashed line
+  (`AthleteCardFacts.groupEvaluation`: per skill, the average rating of the
+  athlete's program-mates, the athlete included, where two or more are
+  rated; empty for a private client); legend = the athlete's name / "Group
+  average" (本组平均). "What we worked on" is no longer on a rated
+  athlete's card (the progress report still says it); an athlete not rated
+  yet keeps the worked-on octagon alone. In the app, the shared image and
+  the A3 sheets alike — so a parent sees the group's average too. Not seen
+  on screen (the demo store has no rated group). Test: AthleteCardFactsTests.
 Tests: SkillIntegrationTests, PlanGeneratorTests.
 
 ## The Mac is a film room (25 Nov 2026, Luther)

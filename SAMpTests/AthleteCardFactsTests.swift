@@ -130,4 +130,30 @@ final class AthleteCardFactsTests: XCTestCase {
         XCTAssertGreaterThan(AthleteCardFacts.luminance(ofHex: "#F5F0E6"), 0.72, "cream takes dark type")
         XCTAssertLessThan(AthleteCardFacts.luminance(ofHex: hex), 0.72, "green keeps white type")
     }
+
+    /// The back compares the athlete with the group (27 Nov 2026): the
+    /// group's average on each skill two or more of its athletes are rated on.
+    func testTheGroupAverageIsTheProgramsRatedAthletes() {
+        let mate = UUID(), outsider = UUID()
+        var group = program
+        group.enrolledStudentIds = [student.id, mate]
+        func player(_ id: UUID, _ ratings: [DrillAttribute: Int]) -> Player {
+            var p = Player(studentId: id)
+            for (axis, r) in ratings { p.skills.setRating(r, for: axis) }
+            return p
+        }
+        let players = [player(student.id, [.shooting: 8, .defense: 4]),
+                       player(mate, [.shooting: 4]),
+                       player(outsider, [.shooting: 10, .defense: 10])]
+        let card = AthleteCardFacts.make(student: student, players: players, programs: [group], sessions: [], drills: [],
+                                         categoryHex: "#007AFF", coach: "Jordan", academy: "Riverside", now: now)
+        XCTAssertEqual(card.evaluation[.shooting] ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(card.groupEvaluation[.shooting] ?? 0, 0.6, accuracy: 0.001, "the two in the program, not the outsider")
+        XCTAssertNil(card.groupEvaluation[.defense], "one rated athlete is not a group")
+        // A private client has no group to compare with.
+        var privateProgram = group
+        privateProgram.programType = .privateSessions
+        XCTAssertTrue(AthleteCardFacts.make(student: student, players: players, programs: [privateProgram], sessions: [], drills: [],
+                                            categoryHex: "#007AFF", coach: "Jordan", academy: "Riverside", now: now).groupEvaluation.isEmpty)
+    }
 }

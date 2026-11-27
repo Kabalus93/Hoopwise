@@ -276,32 +276,45 @@ struct AthleteCardBack: View {
                     .minimumScaleFactor(0.7)
             }
 
+            // THE ATHLETE AGAINST THE GROUP (27 Nov 2026, Luther's markup:
+            // "make this a comparison against other players in the group —
+            // dots is the group and blue is the athlete"). Once the athlete
+            // is rated the octagon is their ratings (the filled shape) over
+            // the group's average (the dashed line). It was what the classes
+            // worked on with the athlete's ratings dashed over it; an athlete
+            // who is not rated yet still gets what their classes worked on.
             VStack(spacing: 2) {
-                sectionHeader(w.zh ? "训练内容" : "What we worked on")
-                if card.trained.isEmpty && card.evaluation.isEmpty {
-                    Text(w.zh ? "参加有计划的课程后，这里会显示练了什么。" : "Shows what classes worked on once they attend planned classes.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AthleteCardStyle.label)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, minHeight: 150)
-                } else {
-                    AttributeOctagon(values: card.trained, tint: accent,
-                                     standing: card.evaluation.isEmpty ? nil : card.evaluation,
+                if !card.evaluation.isEmpty {
+                    sectionHeader(w.zh ? "技能" : "Skills")
+                    AttributeOctagon(values: card.evaluation, tint: accent,
+                                     standing: card.groupEvaluation.isEmpty ? nil : card.groupEvaluation,
                                      standingColor: Color.black.opacity(0.75),
                                      chineseLabels: w.zh)
-                        .frame(height: card.evaluation.isEmpty ? 178 : 160)
+                        .frame(height: card.groupEvaluation.isEmpty ? 178 : 160)
                         .frame(maxWidth: .infinity)
-                    if !card.evaluation.isEmpty {
-                        // Two shapes, no numbers (Luther, 17 Nov 2026).
+                    if !card.groupEvaluation.isEmpty {
                         HStack(spacing: 14) {
                             legendItem(swatch: AnyView(RoundedRectangle(cornerRadius: 2).fill(accent.opacity(0.35))
                                 .overlay(RoundedRectangle(cornerRadius: 2).stroke(accent, lineWidth: 1.2))),
-                                       w.zh ? "训练内容" : "Worked on")
+                                       card.name)
                             legendItem(swatch: AnyView(Capsule().stroke(Color.black.opacity(0.75),
                                 style: StrokeStyle(lineWidth: 1.6, dash: [4, 2])).frame(height: 2)),
-                                       w.zh ? "目前水平" : "Where they stand")
+                                       w.zh ? "本组平均" : "Group average")
                         }
                         .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    sectionHeader(w.zh ? "训练内容" : "What we worked on")
+                    if card.trained.isEmpty {
+                        Text(w.zh ? "参加有计划的课程后，这里会显示练了什么。" : "Shows what classes worked on once they attend planned classes.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AthleteCardStyle.label)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 150)
+                    } else {
+                        AttributeOctagon(values: card.trained, tint: accent, chineseLabels: w.zh)
+                            .frame(height: 178)
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -359,6 +372,7 @@ struct AthleteCardBack: View {
             Text(label)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(AthleteCardStyle.label)
+                .lineLimit(1)
         }
     }
 
