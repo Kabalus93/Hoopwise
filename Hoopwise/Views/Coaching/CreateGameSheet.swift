@@ -68,6 +68,9 @@ struct CreateGameSheet: View {
 
     // Optional reuse of last game's setup
     @State private var hasPreviousConfig: Bool = false
+    /// Each team's colour behind its players' photos, to find them at a
+    /// glance (display only — the level underneath is untouched).
+    @AppStorage(GameTeamBackdrop.key) private var teamBackdrop = true
     /// What the app knows about each player in the pool (TeamBalance): the
     /// eight skills and a strength. Gathered once when the page opens.
     @State private var profiles: [UUID: TeamBalance.Profile] = [:]
@@ -394,6 +397,14 @@ struct CreateGameSheet: View {
                     .font(.caption.weight(.semibold))
                     .accessibilityIdentifier("setup.reuse")
                 }
+                Toggle(isOn: $teamBackdrop) {
+                    Label(isChinese ? "队伍颜色" : "Team colours", systemImage: "paintpalette")
+                }
+                .toggleStyle(.button)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .font(.caption.weight(.semibold))
+                .accessibilityIdentifier("setup.teamBackdrop")
                 Text("\(teams.count) / \(maxTeams)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -459,6 +470,7 @@ struct CreateGameSheet: View {
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+        .environment(\.photoBackdropOverride, GameTeamBackdrop.hex(for: team, on: teamBackdrop))
         .dropTarget("team.\(index)")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup.team.\(index)")

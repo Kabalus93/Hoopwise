@@ -9,6 +9,7 @@ import SwiftUI
 // player of the game.
 
 struct GameRecapView: View {
+    @AppStorage(GameTeamBackdrop.key) private var teamBackdrop = true
     let game: SessionGame
     let students: [Student]
     let allGamesInSession: [SessionGame]
@@ -559,7 +560,10 @@ struct GameRecapView: View {
     @ViewBuilder
     private func avatar(_ id: UUID, _ size: CGFloat) -> some View {
         if let s = student(id) {
+            // Their team's colour behind the photo, as in the live game.
+            let team = game.participants[id].flatMap { teamId in game.teams.first { $0.id == teamId } }
             StudentAvatarView(student: s, size: size)
+                .environment(\.photoBackdropOverride, GameTeamBackdrop.hex(for: team, on: teamBackdrop))
         } else {
             Circle().fill(Color.secondary.opacity(0.2)).frame(width: size, height: size)
         }

@@ -880,6 +880,32 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   `skills.overallRating` — the RETIRED six-skill evaluation — so every
   player counted the same; they read the profile's strength now. Tests:
   TeamBalanceTests, CreateGameBalanceUITests (iPad mini).
+  THE HIT LIGHTS UP + TEAM COLOURS BEHIND PHOTOS (27 Nov 2026, Luther).
+  (1) "Add haptic feedback when adding a stat and a visual cue, like the
+  button I hit lighting up (gentle and sophisticated light)": `HitGlow`
+  (`.hitGlow(trigger:color:cornerRadius:)`, StatPressButton.swift) — on
+  each hit the shape fills with its colour at 30 %, gains a white hairline
+  and a soft coloured halo (radius 12), all fading over 0.55 s; nothing
+  moves. On every StatPressButton (REB / STL / BLK) and on a player's ROW
+  when they score (`basketTicks` per player, the team's colour). Haptics: a
+  stat is `.impact(flexibility: .solid, intensity: 0.9)` (it was the
+  lightest impact), a basket `.impact(weight: .heavy)`. AN iPAD HAS NO
+  HAPTIC MOTOR — there the light is the whole cue. The opponent's score pad
+  and a removal (hold) do not glow.
+  (2) "The background reflects the team the player is associated to … to
+  find the players easily. It does not change anything underneath like the
+  level … a toggle": environment `\.photoBackdropOverride` (AvatarView.swift;
+  StudentAvatarView and StudentImageView paint it instead of the level
+  colour) set to the TEAM'S OWN colour (`GameTeamBackdrop.hex`) on the live
+  game's floor and bench (LiveTeamPanel), each team's row on Create Game
+  (the roster keeps the level colour) and the recap's photos (by
+  `game.participants`). Device setting `game.teamPhotoBackground`, ON by
+  default: "Team colours" in Create Game's Teams header
+  (`setup.teamBackdrop`) and the live game's ⋯ → "Team colour behind
+  photos" (`live.more`). Display only. IT SHOWS ONLY BEHIND A CUT-OUT
+  PHOTO — an opaque photo covers it (the row's own team tint is unchanged).
+  Battle Royal has no teams and is untouched. Neither was looked at on
+  screen (a glow is 0.5 s; the demo photos are opaque).
   WHO PLAYED A GAME (20 Nov 2026, Luther: "when a player participates but
   does not score or attain any stat, the app doesn't count the game"). A game
   counted only for players with a STAT LINE, and a line exists only once a

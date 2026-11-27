@@ -114,11 +114,17 @@ struct LiveTeamPanel: View {
     @State private var subChoosing: UUID?
     @State private var subTick = 0
 
+    /// The team's colour behind its players' photos (display only).
+    @AppStorage(GameTeamBackdrop.key) private var teamBackdrop = true
+    /// One tick a player each time they score — their row lights up.
+    @State private var basketTicks: [UUID: Int] = [:]
+
     var body: some View {
         if team.playerIds.isEmpty {
             opponentPad
         } else {
             floor
+                .environment(\.photoBackdropOverride, GameTeamBackdrop.hex(for: team, on: teamBackdrop))
         }
     }
 
@@ -204,7 +210,7 @@ struct LiveTeamPanel: View {
             }
             #endif
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: basketTick)
+        .sensoryFeedback(.impact(weight: .heavy), trigger: basketTick)
         .sensoryFeedback(.success, trigger: subTick)
         .sensoryFeedback(.warning, trigger: dueCount)
     }
@@ -475,6 +481,7 @@ struct LiveTeamPanel: View {
                     .strokeBorder(isTarget ? Color.accentColor : teamColor.opacity(0.22),
                                   lineWidth: isTarget ? 2 : 0.75)
             )
+            .hitGlow(trigger: basketTicks[student.id] ?? 0, color: teamColor, cornerRadius: 14)
             .scaleEffect(isTarget ? 1.015 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isTarget)
             .contentShape(RoundedRectangle(cornerRadius: 14))
@@ -567,6 +574,7 @@ struct LiveTeamPanel: View {
 
     private func score(_ student: Student, assist: UUID?) {
         basketTick += 1
+        basketTicks[student.id, default: 0] += 1
         onAction(GameStatAction(playerId: student.id, teamId: team.id,
                                 kind: .points(pointValue), assistId: assist))
     }

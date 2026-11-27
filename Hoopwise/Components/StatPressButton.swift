@@ -31,6 +31,44 @@ struct StatPressGate {
     }
 }
 
+/// THE HIT LIGHTS UP (27 Nov 2026, Luther: "a visual cue, like the button I
+/// hit lighting up — gentle and sophisticated light"). Each time `trigger`
+/// changes the shape fills with its colour, gains a soft halo and a bright
+/// edge, and lets them fade over half a second. Nothing moves; taps pass
+/// through.
+struct HitGlow: ViewModifier {
+    let trigger: Int
+    let color: Color
+    var cornerRadius: CGFloat = 10
+    @State private var glow = 0.0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(color.opacity(0.30 * glow))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.55 * glow), lineWidth: 1)
+                    )
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: color.opacity(0.55 * glow), radius: 12 * glow)
+            .onChange(of: trigger) { _, _ in
+                var instant = Transaction()
+                instant.disablesAnimations = true
+                withTransaction(instant) { glow = 1 }
+                withAnimation(.easeOut(duration: 0.55)) { glow = 0 }
+            }
+    }
+}
+
+extension View {
+    func hitGlow(trigger: Int, color: Color, cornerRadius: CGFloat = 10) -> some View {
+        modifier(HitGlow(trigger: trigger, color: color, cornerRadius: cornerRadius))
+    }
+}
+
 /// A live-game stat button: tap = add, hold = remove one. Never both.
 struct StatPressButton: View {
     let label: String
@@ -99,7 +137,10 @@ struct StatPressButton: View {
                 removeTick += 1
                 remove()
             }
-            .sensoryFeedback(.impact(weight: .light), trigger: addTick)
+            .hitGlow(trigger: addTick, color: color)
+            // A firm, short tap in the hand for every stat added (it was the
+            // lightest impact, easy to miss in a gym).
+            .sensoryFeedback(.impact(flexibility: .solid, intensity: 0.9), trigger: addTick)
             .sensoryFeedback(.warning, trigger: removeTick)
             .accessibilityElement()
             .accessibilityLabel(label)

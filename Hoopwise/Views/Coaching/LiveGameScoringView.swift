@@ -26,6 +26,7 @@ struct LiveGameScoringView: View {
     var plannedSubs: [PlannedSub] = []
     var period: Int = 1
     /// The teams preselected when the "who plays next?" sheet opens (nil = closed).
+    @AppStorage(GameTeamBackdrop.key) private var teamBackdrop = true
     @State private var nextPick: NextPick?
     struct NextPick: Identifiable { let id = UUID(); let teams: Set<UUID> }
     @State private var timerSeconds: Int = 0
@@ -129,6 +130,19 @@ struct LiveGameScoringView: View {
                         Button(role: .destructive, action: endGame) {
                             Text(isChinese ? "结束" : "End Game")
                         }
+                    }
+                }
+                if !isBattleRoyal {
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Toggle(isOn: $teamBackdrop) {
+                                Label(isChinese ? "照片背景用队伍颜色" : "Team colour behind photos",
+                                      systemImage: "paintpalette")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                        .accessibilityIdentifier("live.more")
                     }
                 }
             }

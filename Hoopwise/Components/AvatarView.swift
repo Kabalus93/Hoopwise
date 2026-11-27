@@ -35,6 +35,20 @@ extension EnvironmentValues {
     /// The program whose skill levels colour the photos below (a session page,
     /// a program page, a game). nil = each athlete's primary program.
     @Entry var skillLevelProgram: UUID? = nil
+    /// A colour ("#RRGGBB") to paint behind cut-out photos INSTEAD of the
+    /// skill level's (27 Nov 2026, Luther: in games "the background reflects
+    /// the team the player is associated to … simply to find the players
+    /// easily. It does not change anything underneath like the level").
+    /// Display only; nil = the level colour as everywhere else.
+    @Entry var photoBackdropOverride: String? = nil
+}
+
+/// Whether game screens paint a player's TEAM colour behind their photo
+/// (device setting, on by default; the toggle is on Create Game and in the
+/// live game's ⋯ menu).
+enum GameTeamBackdrop {
+    static let key = "game.teamPhotoBackground"
+    static func hex(for team: GameTeam?, on: Bool) -> String? { on ? team?.colorHex : nil }
 }
 
 // MARK: - Avatar View (Minimalist)
@@ -66,6 +80,7 @@ struct AvatarView: View {
 struct StudentAvatarView: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.skillLevelProgram) private var levelProgram
+    @Environment(\.photoBackdropOverride) private var backdropOverride
     let student: Student
     var size: CGFloat = 44
     var showBadge: Bool = false
@@ -113,7 +128,7 @@ struct StudentAvatarView: View {
                 // shows through (Models/SkillTier.swift). Hidden behind an
                 // opaque photo.
                 Circle()
-                    .fill(Color(hex: dataManager.photoBackdropHex(for: student.id, program: levelProgram)))
+                    .fill(Color(hex: backdropOverride ?? dataManager.photoBackdropHex(for: student.id, program: levelProgram)))
                     .frame(width: size, height: size)
                 Image(uiImage: image)
                     .resizable()
@@ -238,6 +253,7 @@ struct StudentAvatarView: View {
 struct StudentImageView<Placeholder: View>: View {
     @EnvironmentObject var dataManager: DataManager
     @Environment(\.skillLevelProgram) private var levelProgram
+    @Environment(\.photoBackdropOverride) private var backdropOverride
     let student: Student
     var contentMode: ContentMode = .fill
     @ViewBuilder var placeholder: () -> Placeholder
@@ -251,7 +267,7 @@ struct StudentImageView<Placeholder: View>: View {
             if let cachedImage {
                 #if canImport(UIKit)
                 Image(uiImage: cachedImage).resizable().aspectRatio(contentMode: contentMode)
-                    .background(Color(hex: dataManager.photoBackdropHex(for: student.id, program: levelProgram)))
+                    .background(Color(hex: backdropOverride ?? dataManager.photoBackdropHex(for: student.id, program: levelProgram)))
                 #elseif canImport(AppKit)
                 Image(nsImage: cachedImage).resizable().aspectRatio(contentMode: contentMode)
                 #endif
