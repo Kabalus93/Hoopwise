@@ -156,4 +156,29 @@ final class AthleteCardFactsTests: XCTestCase {
         XCTAssertTrue(AthleteCardFacts.make(student: student, players: players, programs: [privateProgram], sessions: [], drills: [],
                                             categoryHex: "#007AFF", coach: "Jordan", academy: "Riverside", now: now).groupEvaluation.isEmpty)
     }
+
+    /// The A3 sheet (27 Nov 2026 — the printed backs sat off their fronts):
+    /// the grid is centred, and each back is where its front lands when the
+    /// sheet is turned over, either way.
+    @MainActor func testEachBackLiesBehindItsFrontWhicheverWayTheSheetTurns() {
+        let page = AthleteCardRenderer.pageSize
+        let origin = AthleteCardRenderer.gridOrigin
+        let last = AthleteCardRenderer.frame(index: AthleteCardRenderer.perPage - 1, back: false, flip: .shortEdge)
+        XCTAssertEqual(origin.x, page.width - last.maxX, accuracy: 0.01, "as much room left as right")
+        XCTAssertEqual(origin.y, page.height - last.maxY, accuracy: 0.01, "as much room above as below")
+        for index in 0..<AthleteCardRenderer.perPage {
+            let front = AthleteCardRenderer.frame(index: index, back: false, flip: .shortEdge)
+            // Turned across the short edge: left and right swap.
+            let short = AthleteCardRenderer.frame(index: index, back: true, flip: .shortEdge)
+            XCTAssertEqual(short.minX, page.width - front.maxX, accuracy: 0.01)
+            XCTAssertEqual(short.minY, front.minY, accuracy: 0.01)
+            // Turned across the long edge: top and bottom swap.
+            let long = AthleteCardRenderer.frame(index: index, back: true, flip: .longEdge)
+            XCTAssertEqual(long.minX, front.minX, accuracy: 0.01)
+            XCTAssertEqual(long.minY, page.height - front.maxY, accuracy: 0.01)
+        }
+        XCTAssertEqual(CardPrint.instructions(flip: .shortEdge, chinese: false).count,
+                       CardPrint.instructions(flip: .longEdge, chinese: true).count)
+        XCTAssertTrue(CardPrint.oneLine(flip: .longEdge, chinese: false).contains("long edge"))
+    }
 }

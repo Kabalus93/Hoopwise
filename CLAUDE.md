@@ -1901,6 +1901,36 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
     ProgramStatsContext, PerformanceRadarMetrics (the in-app flip card) and
     ShareSheet. (The Quick Peep's old flip card went the next day — see
     below.)
+  THE A3 SHEET, FIXED FOR THE PRINT SHOP (27 Nov 2026, Luther printed a
+  class's cards: "a bit of a disaster" — the backs sat "on the opposite end
+  of the back page, making it impossible to cut the cards", and the colours
+  "came out absolutely dark"). THE CAUSE of the first: the grid started at
+  the left and top margins (five cards = 956 pt of a 1190 pt page, two rows
+  = 518 of 842), so turning the sheet put every back 57 mm (or 89 mm) from
+  its front. Now the grid is CENTRED (`AthleteCardRenderer.gridOrigin`) and
+  `frame(index:back:flip:)` puts each back BEHIND its front: SHORT-EDGE flip
+  (the default, the usual one for a landscape sheet) swaps the columns, back
+  upright; LONG-EDGE swaps the rows and prints the back head down, so the
+  cut card still turns like a page. On every page, outside the cards: FRONT
+  / BACK · sheet n of m, one line saying how to print it
+  (`CardPrint.oneLine`), and the same CROSS top and bottom centre — held to
+  the light, front and back must coincide; on the fronts a GREY BAR (11
+  steps white → black) and six colour patches for the shop. `CardPrint`
+  (AthleteCardViews.swift): `flip` and `lighten` (Off · A little · Lighter =
+  gamma 0.85 / 0.72 on the card pictures, for a machine that prints dark) —
+  device settings `cards.print.flip` / `cards.print.lighten` —, and
+  `instructions(flip:chinese:)`, seven lines for the print shop (paper,
+  100 % never "fit to page", double-sided and which edge, one sheet first,
+  sRGB / photo mode with toner-save and vivid off, what to do when dark,
+  cutting). `CardPrintOptions` shows the two choices and the instructions
+  with COPY (`cardPrint.flip` / `.lighten` / `.copy`; the copied text is in
+  the Player card language) inside the class / program print sheet
+  (CardBackdropSheet, now full height) and from the single card's share
+  sheet (`athleteCard.printOptions`). The PDF is still device RGB with no
+  embedded output intent. Seen: a rendered front and back page from the
+  demo store (short edge). NOT seen: a long-edge sheet, a lightened one,
+  anything on paper. Test: AthleteCardFactsTests (each back behind its
+  front, both flips).
   THE ORIGINAL LOOK, AND ONE CARD IN THE APP TOO (17 Nov 2026, Luther: "not
   entirely satisfied … make improvements based on the card I had originally
   … make the in app card match what is going to be exported"). The two

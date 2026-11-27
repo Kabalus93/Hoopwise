@@ -56,6 +56,7 @@ struct AthleteCardShareSheet: View {
     @Environment(\.dismiss) private var dismiss
     let student: Student
 
+    @State private var showingPrintOptions = false
     @State private var coachLine = ""
     @State private var backdrop: CardBackdrop = .level
     @State private var shareItems: [Any]?
@@ -107,6 +108,13 @@ struct AthleteCardShareSheet: View {
                     }
                     .frame(maxWidth: 620)
                     .disabled(working)
+                    Button { showingPrintOptions = true } label: {
+                        Label(isChinese ? "打印设置与给打印店的说明" : "Printing: settings and notes for the print shop",
+                              systemImage: "info.circle")
+                            .font(.footnote)
+                    }
+                    .accessibilityIdentifier("athleteCard.printOptions")
+                    .sheet(isPresented: $showingPrintOptions) { CardPrintOptionsSheet() }
                     Text(isChinese ? "卡片只显示应用里记录的内容：本月到课、比赛数据和所上课程的训练重点。"
                                    : "The card shows only what the app has recorded: this month's classes, game stats and what their classes worked on.")
                         .font(.caption)
@@ -258,6 +266,93 @@ struct CardBackdropPicker: View {
     }
 }
 
+/// How the A3 sheet is printed (27 Nov 2026): which way the shop's machine
+/// turns the sheet, a lift for a machine that prints dark, and the
+/// instructions for the print shop — to read here and to copy into a message.
+struct CardPrintOptions: View {
+    @State private var flip = CardPrint.flip
+    @State private var lighten = CardPrint.lighten
+    @State private var copied = false
+
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+    /// The print shop reads the sheet's language.
+    private var sheetChinese: Bool { AreaLanguage.isChinese(.playerCard) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(isChinese ? "双面翻转方式" : "The sheet is turned over on its")
+                    .font(.subheadline.weight(.semibold))
+                Picker("", selection: $flip) {
+                    ForEach(CardPrint.Flip.allCases) { Text($0.title(chinese: isChinese)).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("cardPrint.flip")
+                Text(isChinese ? "横向 A3 一般选短边翻转。正反面对不上、背面倒过来时，换另一种。"
+                               : "Short edge is the usual one for a landscape A3. If the backs come out on the wrong cards or upside down, choose the other.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(isChinese ? "打印偏暗时" : "If the print comes out dark")
+                    .font(.subheadline.weight(.semibold))
+                Picker("", selection: $lighten) {
+                    ForEach(CardPrint.Lighten.allCases) { Text($0.title(chinese: isChinese)).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("cardPrint.lighten")
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(isChinese ? "给打印店的说明" : "For the print shop")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button {
+                        UIPasteboard.general.string = CardPrint.instructions(flip: flip, chinese: sheetChinese)
+                            .enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+                        copied = true
+                    } label: {
+                        Label(copied ? (isChinese ? "已复制" : "Copied") : (isChinese ? "复制" : "Copy"),
+                              systemImage: copied ? "checkmark" : "doc.on.doc")
+                            .font(.subheadline)
+                    }
+                    .accessibilityIdentifier("cardPrint.copy")
+                }
+                ForEach(Array(CardPrint.instructions(flip: flip, chinese: isChinese).enumerated()), id: \.offset) { i, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(i + 1)").font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 14)
+                        Text(line).font(.footnote).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("cardPrint.instructions")
+        }
+        .onChange(of: flip) { _, value in CardPrint.flip = value; copied = false }
+        .onChange(of: lighten) { _, value in CardPrint.lighten = value }
+    }
+}
+
+/// The print options on their own, from the single card's share sheet.
+struct CardPrintOptionsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                CardPrintOptions().padding(20)
+            }
+            .navigationTitle(isChinese ? "打印设置" : "Printing")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isChinese ? "完成" : "Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 /// Before a print sheet of many cards: keep everyone's level colour, or one
 /// colour for all.
 struct CardBackdropSheet: View {
@@ -269,13 +364,16 @@ struct CardBackdropSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(isChinese ? "抠图照片的背景用什么颜色？" : "What colour goes behind the cut-out photos?")
-                    .font(.headline)
-                CardBackdropPicker(backdrop: $backdrop, levelHex: nil)
-                Spacer()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(isChinese ? "抠图照片的背景用什么颜色？" : "What colour goes behind the cut-out photos?")
+                        .font(.headline)
+                    CardBackdropPicker(backdrop: $backdrop, levelHex: nil)
+                    Divider()
+                    CardPrintOptions()
+                }
+                .padding(20)
             }
-            .padding(20)
             .navigationTitle(isChinese ? "打印球员卡" : "Print player cards")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -291,6 +389,6 @@ struct CardBackdropSheet: View {
                 }
             }
         }
-        .presentationDetents([.height(260)])
+        .presentationDetents([.large])
     }
 }

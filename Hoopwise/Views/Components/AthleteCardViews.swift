@@ -488,32 +488,131 @@ enum AthleteCardRenderer {
     static var rows: Int { Int((pageSize.height - 2 * margin + gutter) / (printSize.height + gutter)) }
     static var perPage: Int { columns * rows }
 
-    /// Fronts on one page, backs on the next, mirrored left to right so each
-    /// back lands on its front when printed double-sided (long-edge flip).
-    /// Crop marks at every card edge.
-    static func printSheet(_ cards: [AthleteCardFacts]) -> Data? {
+    /// The grid is CENTRED on the page (27 Nov 2026, Luther: the printed
+    /// backs sat "on the opposite end of the back page, making it impossible
+    /// to cut the cards"). It used to start at the left and top margins with
+    /// the spare 57 mm on the right and 89 mm at the bottom, so a sheet turned
+    /// over put every back that far from its front. Centred, the card places
+    /// are the same on both sides whichever way the sheet is turned.
+    static var gridOrigin: CGPoint {
+        let width = CGFloat(columns) * printSize.width + CGFloat(columns - 1) * gutter
+        let height = CGFloat(rows) * printSize.height + CGFloat(rows - 1) * gutter
+        return CGPoint(x: (pageSize.width - width) / 2, y: (pageSize.height - height) / 2)
+    }
+
+    /// Where card `index` of a page goes, front or back. The back takes the
+    /// place that lies BEHIND its front once the sheet is turned: across the
+    /// short edge the columns swap (the back stays upright); across the long
+    /// edge the rows swap and the back is printed head down, so that the cut
+    /// card still turns over like a page.
+    static func frame(index: Int, back: Bool, flip: CardPrint.Flip) -> CGRect {
+        var row = index / columns, col = index % columns
+        if back {
+            switch flip {
+            case .shortEdge: col = columns - 1 - col
+            case .longEdge: row = rows - 1 - row
+            }
+        }
+        return CGRect(x: gridOrigin.x + CGFloat(col) * (printSize.width + gutter),
+                      y: gridOrigin.y + CGFloat(row) * (printSize.height + gutter),
+                      width: printSize.width, height: printSize.height)
+    }
+
+    /// Fronts on one page, backs on the next, each back behind its front
+    /// when printed double-sided the way `flip` says. Crop marks at every
+    /// card edge; in the page's spare top and bottom: which side it is, how
+    /// to print it, a cross to check the two sides against the light, and a
+    /// grey and colour bar for the print shop.
+    static func printSheet(_ cards: [AthleteCardFacts], flip: CardPrint.Flip = CardPrint.flip,
+                           lighten: CardPrint.Lighten = CardPrint.lighten,
+                           chinese: Bool = AreaLanguage.isChinese(.playerCard)) -> Data? {
         guard !cards.isEmpty else { return nil }
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pageSize))
         let printScale = printSize.width / AthleteCardLayout.size.width
+        let sheets = (cards.count + perPage - 1) / perPage
         return renderer.pdfData { context in
             for start in stride(from: 0, to: cards.count, by: perPage) {
                 let batch = Array(cards[start..<min(start + perPage, cards.count)])
                 for back in [false, true] {
                     context.beginPage()
+                    let cg = context.cgContext
                     for (i, card) in batch.enumerated() {
-                        let row = i / columns, col = i % columns
-                        let placed = back ? columns - 1 - col : col
-                        let frame = CGRect(x: margin + CGFloat(placed) * (printSize.width + gutter),
-                                           y: margin + CGFloat(row) * (printSize.height + gutter),
-                                           width: printSize.width, height: printSize.height)
+                        let frame = frame(index: i, back: back, flip: flip)
                         let side: AnyView = back ? AnyView(AthleteCardBack(card: card)) : AnyView(AthleteCardFront(card: card))
                         // 4× the print size: about 290 dpi on paper.
-                        image(side, scale: 4 * printScale)?.draw(in: frame)
-                        cropMarks(around: frame, in: context.cgContext)
+                        if let picture = image(side, scale: 4 * printScale).map({ lighten.applied(to: $0) }) {
+                            if back, flip == .longEdge {
+                                cg.saveGState()
+                                cg.translateBy(x: frame.midX, y: frame.midY)
+                                cg.rotate(by: .pi)
+                                picture.draw(in: CGRect(x: -frame.width / 2, y: -frame.height / 2,
+                                                        width: frame.width, height: frame.height))
+                                cg.restoreGState()
+                            } else {
+                                picture.draw(in: frame)
+                            }
+                        }
+                        cropMarks(around: frame, in: cg)
                     }
+                    pageFurniture(in: cg, back: back, sheet: start / perPage + 1, of: sheets, flip: flip, chinese: chinese)
                 }
             }
         }
+    }
+
+    /// The words and marks outside the cards.
+    private static func pageFurniture(in cg: CGContext, back: Bool, sheet: Int, of sheets: Int,
+                                      flip: CardPrint.Flip, chinese zh: Bool) {
+        let grey = UIColor(white: 0.35, alpha: 1)
+        let side = back ? (zh ? "背面" : "BACK") : (zh ? "正面" : "FRONT")
+        let title = zh ? "\(side) · 第 \(sheet)/\(sheets) 张 · HoopWise 球员卡"
+                       : "\(side) · sheet \(sheet) of \(sheets) · HoopWise player cards"
+        (title as NSString).draw(at: CGPoint(x: gridOrigin.x, y: 34),
+                                 withAttributes: [.font: UIFont.systemFont(ofSize: 11, weight: .bold), .foregroundColor: grey])
+        let how = CardPrint.oneLine(flip: flip, chinese: zh)
+        (how as NSString).draw(at: CGPoint(x: gridOrigin.x, y: 50),
+                               withAttributes: [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: grey])
+
+        // The same cross at the page's centre on both sides: held to the
+        // light, the two must sit on each other.
+        let centre = CGPoint(x: pageSize.width / 2, y: gridOrigin.y / 2 + 22)
+        cg.saveGState()
+        cg.setStrokeColor(grey.cgColor)
+        cg.setLineWidth(0.5)
+        cg.move(to: CGPoint(x: centre.x - 9, y: centre.y)); cg.addLine(to: CGPoint(x: centre.x + 9, y: centre.y))
+        cg.move(to: CGPoint(x: centre.x, y: centre.y - 9)); cg.addLine(to: CGPoint(x: centre.x, y: centre.y + 9))
+        cg.strokePath()
+        cg.strokeEllipse(in: CGRect(x: centre.x - 5, y: centre.y - 5, width: 10, height: 10))
+        let mirrored = CGPoint(x: centre.x, y: pageSize.height - centre.y)
+        cg.move(to: CGPoint(x: mirrored.x - 9, y: mirrored.y)); cg.addLine(to: CGPoint(x: mirrored.x + 9, y: mirrored.y))
+        cg.move(to: CGPoint(x: mirrored.x, y: mirrored.y - 9)); cg.addLine(to: CGPoint(x: mirrored.x, y: mirrored.y + 9))
+        cg.strokePath()
+        cg.strokeEllipse(in: CGRect(x: mirrored.x - 5, y: mirrored.y - 5, width: 10, height: 10))
+        cg.restoreGState()
+
+        // The print shop's check, on the front only: eleven greys from white
+        // to black (each step must be told from the next) and six colours.
+        guard !back else { return }
+        let patch: CGFloat = 18, y = pageSize.height - 58
+        var x = gridOrigin.x
+        for step in 0...10 {
+            cg.setFillColor(UIColor(white: 1 - CGFloat(step) / 10, alpha: 1).cgColor)
+            cg.fill(CGRect(x: x, y: y, width: patch, height: patch))
+            x += patch
+        }
+        cg.setStrokeColor(UIColor(white: 0.6, alpha: 1).cgColor)
+        cg.setLineWidth(0.4)
+        cg.stroke(CGRect(x: gridOrigin.x, y: y, width: patch * 11, height: patch))
+        x += 12
+        for colour in [UIColor.red, .green, .blue, .cyan, .magenta, .yellow] {
+            cg.setFillColor(colour.cgColor)
+            cg.fill(CGRect(x: x, y: y, width: patch, height: patch))
+            x += patch
+        }
+        let check = zh ? "色彩检查：11 级灰阶应每一级都能分清（最深两级不应糊成一片）；文件为 sRGB。"
+                       : "Colour check: all 11 greys should be told apart (the two darkest must not merge). The file is sRGB."
+        (check as NSString).draw(at: CGPoint(x: x + 12, y: y + 4),
+                                 withAttributes: [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: grey])
     }
 
     private static func cropMarks(around frame: CGRect, in context: CGContext) {
@@ -534,3 +633,91 @@ enum AthleteCardRenderer {
     }
 }
 #endif
+
+/// HOW THE A3 CARD SHEETS ARE PRINTED (27 Nov 2026, Luther: the backs came
+/// out off their fronts and the colours "absolutely dark" — "add
+/// instructions for printing quality and colour calibrating so this process
+/// isn't a headache"). Two device settings and the words for the print shop.
+enum CardPrint {
+    /// Which way the print shop's machine turns the sheet over.
+    enum Flip: String, CaseIterable, Identifiable {
+        /// Across the short edge — the usual choice for a landscape sheet.
+        case shortEdge
+        case longEdge
+        var id: String { rawValue }
+        func title(chinese zh: Bool) -> String {
+            switch self {
+            case .shortEdge: zh ? "短边翻转" : "Short edge"
+            case .longEdge: zh ? "长边翻转" : "Long edge"
+            }
+        }
+    }
+
+    /// Lifts the cards for a printer that prints dark.
+    enum Lighten: String, CaseIterable, Identifiable {
+        case off, some, more
+        var id: String { rawValue }
+        /// Gamma below 1 lifts the mid-tones and leaves black and white alone.
+        var gamma: Double {
+            switch self {
+            case .off: 1
+            case .some: 0.85
+            case .more: 0.72
+            }
+        }
+        func title(chinese zh: Bool) -> String {
+            switch self {
+            case .off: zh ? "不调整" : "As it is"
+            case .some: zh ? "稍亮" : "A little lighter"
+            case .more: zh ? "更亮" : "Lighter"
+            }
+        }
+        #if canImport(UIKit)
+        func applied(to image: UIImage) -> UIImage {
+            guard self != .off, let input = CIImage(image: image),
+                  let filter = CIFilter(name: "CIGammaAdjust") else { return image }
+            filter.setValue(input, forKey: kCIInputImageKey)
+            filter.setValue(gamma, forKey: "inputPower")
+            guard let output = filter.outputImage,
+                  let cg = CIContext().createCGImage(output, from: input.extent) else { return image }
+            return UIImage(cgImage: cg, scale: image.scale, orientation: image.imageOrientation)
+        }
+        #endif
+    }
+
+    static var flip: Flip {
+        get { Flip(rawValue: UserDefaults.standard.string(forKey: "cards.print.flip") ?? "") ?? .shortEdge }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "cards.print.flip") }
+    }
+    static var lighten: Lighten {
+        get { Lighten(rawValue: UserDefaults.standard.string(forKey: "cards.print.lighten") ?? "") ?? .off }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "cards.print.lighten") }
+    }
+
+    /// The line printed on every sheet.
+    static func oneLine(flip: Flip, chinese zh: Bool) -> String {
+        zh ? "A3 横向 · 实际大小 100%（不要“适合页面”）· 双面打印，\(flip.title(chinese: true)) · 250–300 克铜版纸或哑粉纸 · 先打一张对光检查十字"
+           : "A3 landscape · actual size 100 % (no “fit to page”) · double-sided, flip on the \(flip.title(chinese: false).lowercased()) · 250–300 gsm coated or matte card · print one sheet first and check the crosses against the light"
+    }
+
+    /// The full instructions, to read in the app and to send with the file.
+    static func instructions(flip: Flip, chinese zh: Bool) -> [String] {
+        zh ? [
+            "纸张：A3，横向。250–300 克铜版纸或哑粉纸（普通 80 克纸会透、会软）。",
+            "大小：实际大小 / 100%。不要选“适合页面”或“缩放以适合”——缩小后正反面和裁切线都会错位。",
+            "双面：双面打印，\(flip.title(chinese: true))。如果打印店的机器只能另一种翻法，在这里改成另一种再导出。",
+            "先打一张：对着光看，纸张上下两个十字的正反面应当重合；每张卡四角的裁切线也应正反对齐。对不上就不要整批打。",
+            "颜色：文件是 sRGB。请用彩色、照片/图像模式打印，关闭“省墨”“鲜艳”“自动增强”。",
+            "偏暗时：看正面底部的灰阶条——11 级应每级都能分清。最深的几级糊在一起，说明机器偏深：请店家调低浓度（密度），或在这里选“稍亮 / 更亮”重新导出。",
+            "裁切：沿每张卡四角的短线裁。卡片是 63.5 × 88.9 毫米（标准球星卡大小）。",
+        ] : [
+            "Paper: A3, landscape. 250–300 gsm coated or matte card (plain 80 gsm paper shows through and goes limp).",
+            "Size: actual size / 100 %. Never “fit to page” or “scale to fit” — a shrunk sheet puts the two sides and the crop marks out of line.",
+            "Two sides: double-sided, flip on the \(flip.title(chinese: false).lowercased()). If the shop’s machine can only turn the other way, change it here and export again.",
+            "One sheet first: hold it to the light. The two crosses at the top and bottom must sit on each other front and back, and so must the crop marks at each card’s corners. If they don’t, don’t print the batch.",
+            "Colour: the file is sRGB. Print in colour, photo / image mode, with “toner save”, “vivid” and “auto enhance” off.",
+            "If it comes out dark: look at the grey bar under the fronts — all 11 steps should be told apart. If the darkest ones merge, the machine prints heavy: ask the shop to lower the density, or choose “A little lighter / Lighter” here and export again.",
+            "Cutting: cut along the short lines at each card’s corners. A card is 63.5 × 88.9 mm (2.5 × 3.5 in, the standard trading card).",
+        ]
+    }
+}
