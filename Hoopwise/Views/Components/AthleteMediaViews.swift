@@ -50,6 +50,9 @@ struct AthleteMediaCard: View {
     @State private var opened: VaultPhoto?
     @State private var access = PhotoVault.hasAccess
     @State private var tick = 0
+    /// "Make a post" straight from the card: their newest photo.
+    @State private var postPhoto: UIImage?
+    @State private var loadingPost = false
 
     private var student: Student? { dataManager.students.first { $0.id == studentId } }
     private var entries: [VaultPhoto] { VaultPhoto.ordered(student?.mediaAssets.vault ?? []) }
@@ -63,6 +66,16 @@ struct AthleteMediaCard: View {
                     Text("\(entries.count)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if !entries.isEmpty && access {
+                    Button { makePost() } label: {
+                        if loadingPost { ProgressView() } else {
+                            Label(isChinese ? "海报" : "Post", systemImage: "wand.and.stars")
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .disabled(loadingPost)
+                    .accessibilityIdentifier("media.quickPost")
+                }
                 if !entries.isEmpty {
                     Button(isChinese ? "全部" : "See all") { showingVault = true }
                         .font(.subheadline.weight(.semibold))
@@ -120,6 +133,11 @@ struct AthleteMediaCard: View {
             NavigationStack { VaultPhotoView(studentId: studentId, entry: entry) }
                 .environmentObject(dataManager)
         }
+        .fullScreenCover(isPresented: Binding(get: { postPhoto != nil }, set: { if !$0 { postPhoto = nil } })) {
+            if let postPhoto, let student {
+                AthletePostComposer(student: student, photo: postPhoto).environmentObject(dataManager)
+            }
+        }
         .task { if !entries.isEmpty && !access { access = await PhotoVault.requestAccess() } }
         // The face index: each photo is looked at once, in the background, so
         // a poster already knows which photo holds the best close-up.
@@ -127,6 +145,16 @@ struct AthleteMediaCard: View {
             guard access else { return }
             try? await Task.sleep(for: .seconds(1.5))
             await FaceIndex.index(studentId: studentId, vault: entries, dataManager: dataManager)
+        }
+    }
+
+    /// Their newest photo into the post composer.
+    private func makePost() {
+        guard let asset = PhotoVault.assets(for: entries).first(where: { $0.asset.mediaType == .image })?.asset else { return }
+        loadingPost = true
+        Task {
+            postPhoto = await PhotoVault.fullImage(asset)
+            loadingPost = false
         }
     }
 
@@ -375,33 +403,25 @@ struct AthletePostComposer: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .accessibilityIdentifier("post.preview")
+                .contentShape(.rect)
+                .modifier(PostSwipe(count: AthletePostTemplate.allCases.count, index: Binding(
+                    get: { AthletePostTemplate.allCases.firstIndex(of: template) ?? 0 },
+                    set: { template = AthletePostTemplate.allCases[$0] })))
                 if !f.hasStats {
                     Text(isChinese ? "这段时间没有比赛数据 — 换一个范围，或先记录比赛。"
                                    : "No game stats for this — try another range, or score a game first.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
-                // Thirteen templates: a strip of chips (26 Nov 2026).
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(AthletePostTemplate.allCases) { t in
-                                let on = template == t
-                                Button { withAnimation(.snappy) { template = t } } label: {
-                                    Label(t.title(chinese: isChinese), systemImage: t.symbol)
-                                        .font(.subheadline.weight(on ? .semibold : .regular))
-                                        .padding(.horizontal, 14).frame(minHeight: 38)
-                                        .foregroundStyle(on ? Color.white : Color.primary)
-                                        .background(Capsule().fill(on ? Color.accentColor : Color(.tertiarySystemFill)))
-                                }
-                                .buttonStyle(.plain)
-                                .id(t)
-                                .accessibilityIdentifier("post.template.\(t.rawValue)")
-                                .accessibilityAddTraits(on ? .isSelected : [])
-                            }
-                        }
-                    }
-                    .onChange(of: template) { _, t in withAnimation { proxy.scrollTo(t, anchor: .center) } }
-                }
+                // Swipe the preview, or open the grid (28 Nov 2026).
+                PostTemplateBar(items: AthletePostTemplate.allCases, selection: $template,
+                                title: { $0.title(chinese: isChinese) }, symbol: { $0.symbol },
+                                thumbnail: { t in
+                                    ScaledPost(size: aspect.size) {
+                                        AthletePostCanvas(template: t, facts: f, photo: photo, cutout: cutout, aspect: aspect,
+                                                          figure: figure, figureStands: figureStands, portrait: portrait)
+                                    }
+                                },
+                                thumbnailAspect: aspect.size.width / aspect.size.height)
                 HStack {
                     Picker(isChinese ? "数据" : "Stats", selection: $source) {
                         ForEach(AthletePostFacts.Source.allCases) { Text($0.title(chinese: isChinese)).tag($0) }

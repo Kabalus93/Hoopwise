@@ -90,6 +90,21 @@ enum ProfileBackgroundRemoval {
         return Cutout(image: image, mask: feathered)
     }
 
+    /// Every person (and thing) Vision lifts out — a team photo's whole group.
+    nonisolated static func cutOutAll(_ image: CGImage) -> Cutout? {
+        let request = VNGenerateForegroundInstanceMaskRequest()
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        do { try handler.perform([request]) } catch { return nil }
+        guard let observation = request.results?.first, !observation.allInstances.isEmpty,
+              let scaled = try? observation.generateScaledMaskForImage(forInstances: observation.allInstances, from: handler)
+        else { return nil }
+        let extent = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let radius = max(1.0, Double(min(image.width, image.height)) * 0.002)
+        let feathered = CIImage(cvPixelBuffer: scaled).clampedToExtent()
+            .applyingGaussianBlur(sigma: radius).cropped(to: extent)
+        return Cutout(image: image, mask: feathered)
+    }
+
     /// Which instance labels to keep, from Vision's label map (0 = background,
     /// row-major, top-left origin). The instance under `focus` wins, else the
     /// one with a pixel nearest it; then any instance touching the winner

@@ -3912,6 +3912,34 @@ store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
   photo), + HOOPWISE_POST_SAMPLE=1. Tests: MediaVaultTests (faces, names,
   trim). NOT seen: a real full-body cut-out, the face index on a device, the
   face picker on screen.
+- PICKING A TEMPLATE, TEAM MEDIA, THE PLAYER'S MEDIA ON A TEAM (28 Nov 2026,
+  Luther: the chip strip was "a pain"; "for teams, add a vault too … exporting
+  would be for the final score, Game day … team related stats"; "choosing a
+  player in the roster of a team also gives access to the player's media vault
+  and capability to export his own poster"). (1) Views/Components/
+  PostTemplatePicker.swift: SWIPE the preview (`PostSwipe`), or ‹ › in
+  `PostTemplateBar` ("Torn paper 14/14", `post.template.previous/next/all`);
+  the name opens a GRID of every template drawn small with the real photo and
+  numbers (`post.template.grid.<n>`). Used by both composers. (2) TEAM MEDIA:
+  `TeamPlaybook.media: [VaultPhoto]` (playbookData JSON, written only when
+  non-empty — no schema change); THE writer `setTeamVault`; `updateTeam` keeps
+  the STORED media (an older copy of the team never drops photos).
+  Views/Hub/TeamMediaViews.swift: TeamMediaBlock on the team page under the
+  roster (`team.media`, + adds, photos open TeamPhotoView, "Make a team post"
+  `team.media.makePost`), TeamPostComposer: Final score | Game day | Season
+  (`teamPost.kind`), a game picker when there are several, the same template
+  bar. Services/TeamPostFacts.swift (games = .game sessions of the team,
+  GameDay.score the one rule; season = finished games: record, points for /
+  against, last five). Views/Components/TeamPostTemplates.swift: Score bar,
+  Big score (final) · Matchup, Tip-off (game day — the players lifted out
+  with `cutOutAll`, every instance, on a burst) · Season collage, Record.
+  Without a photo the team colour stands in. (3) The team player page
+  (TeamWorkoutView) shows the athlete's AthleteMediaCard; the card has a
+  "Post" button (`media.quickPost`) → the composer on their newest photo.
+  Tests: TeamPostTests, TeamMediaTests (renders every team template; the
+  media survives an older copy). Seen on the iPad mini simulator: the bar and
+  the grid; the team templates as renders. NOT seen: the team page's block
+  on screen, a lifted team photo (Vision), the player page's card.
 - VIDEOS (26 Nov 2026, Luther: "now let's do overlay templates for videos").
   The vault takes VIDEOS too — same index (a VaultPhoto names any asset), the
   picker offers images and videos, thumbnails show ▶ and the length, a class's

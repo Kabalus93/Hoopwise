@@ -198,13 +198,14 @@ struct TeamDetailView: View {
                 if sizeClass == .regular {
                     HStack(alignment: .top, spacing: 16) {
                         VStack(spacing: 16) { focusBlock(team); playbookBlock(team); standardsBlock(team) }
-                        VStack(spacing: 16) { rosterBlock(team, roster: roster); gameDayBlock(team); practicesBlock(team) }
+                        VStack(spacing: 16) { rosterBlock(team, roster: roster); TeamMediaBlock(team: team); gameDayBlock(team); practicesBlock(team) }
                     }
                 } else {
                     focusBlock(team)
                     playbookBlock(team)
                     standardsBlock(team)
                     rosterBlock(team, roster: roster)
+                    TeamMediaBlock(team: team)
                     gameDayBlock(team)
                     practicesBlock(team)
                 }

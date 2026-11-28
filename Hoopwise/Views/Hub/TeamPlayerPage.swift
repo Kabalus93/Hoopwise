@@ -41,6 +41,8 @@ struct TeamWorkoutView: View {
             VStack(spacing: 16) {
                 header(roles: roles, drills: drills.count, minutes: minutes, tint: tint)
                 actions(roles: roles, drills: drills, tint: tint)
+                // Their own photos and posters, from the team too (28 Nov 2026).
+                if athlete != nil { AthleteMediaCard(studentId: playerId) }
                 if roles.isEmpty {
                     card(isChinese ? "还没有号位" : "NO ROLE YET", icon: "person.crop.circle.badge.questionmark", tint: .orange) {
                         Text(isChinese ? "打开战术手册里的一个战术，在“拆解”里把这名队员放到一个号位上：这里就会出现要练的技术、练习和战术。"

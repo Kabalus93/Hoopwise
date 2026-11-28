@@ -88,10 +88,15 @@ struct TeamPlaybook: Codable, Equatable {
     /// relationship between the team's composition and settings in the hub
     /// and the plan appearing in session").
     var focus: [String] = []
+    /// THE TEAM'S MEDIA (28 Nov 2026, Luther: "for teams, add a vault too —
+    /// here goes the picture of the team"): photos in the coach's library, as
+    /// an athlete's vault (VaultPhoto), riding in this JSON — no schema change.
+    /// Written only through `setTeamVault`; `updateTeam` keeps the stored list.
+    var media: [VaultPhoto] = []
 
     init() {}
 
-    private enum CodingKeys: String, CodingKey { case sections, identity, objectives, breakdowns, focus }
+    private enum CodingKeys: String, CodingKey { case sections, identity, objectives, breakdowns, focus, media }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -100,6 +105,17 @@ struct TeamPlaybook: Codable, Equatable {
         objectives = try c.decodeIfPresent([String].self, forKey: .objectives) ?? []
         breakdowns = try c.decodeIfPresent([String: PlayBreakdown].self, forKey: .breakdowns) ?? [:]
         focus = try c.decodeIfPresent([String].self, forKey: .focus) ?? []
+        media = (try? c.decodeIfPresent([VaultPhoto].self, forKey: .media)) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(sections, forKey: .sections)
+        try c.encode(identity, forKey: .identity)
+        try c.encode(objectives, forKey: .objectives)
+        try c.encode(breakdowns, forKey: .breakdowns)
+        try c.encode(focus, forKey: .focus)
+        if !media.isEmpty { try c.encode(media, forKey: .media) }
     }
 
     subscript(kind: Kind) -> Section {
@@ -112,8 +128,12 @@ struct TeamPlaybook: Codable, Equatable {
 
 extension Team {
     var playbook: TeamPlaybook {
-        get { playbookData.flatMap { try? JSONDecoder().decode(TeamPlaybook.self, from: $0) } ?? TeamPlaybook() }
+        get { Team.decodePlaybook(playbookData) }
         set { playbookData = try? JSONEncoder().encode(newValue) }
+    }
+
+    static func decodePlaybook(_ data: Data?) -> TeamPlaybook {
+        data.flatMap { try? JSONDecoder().decode(TeamPlaybook.self, from: $0) } ?? TeamPlaybook()
     }
 }
 

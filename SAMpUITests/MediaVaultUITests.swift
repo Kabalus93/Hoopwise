@@ -35,17 +35,18 @@ final class MediaVaultUITests: XCTestCase {
         XCTAssertTrue(app.buttons["post.share"].exists)
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "post.consent").firstMatch.exists)
         attach("game line")
-        let chips = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'post.template.'"))
-        for t in ["statCard", "poster", "neon"] {
-            let chip = app.buttons["post.template.\(t)"]
-            // Swipe the strip on whichever chip is on screen (it scrolls itself on a tap).
-            for _ in 0..<6 where !chip.isHittable {
-                guard let visible = chips.allElementsBoundByIndex.first(where: { $0.isHittable }) else { break }
-                visible.swipeLeft()
-            }
-            chip.tap()
-            sleep(1)
-            attach(t)
-        }
+        // Next / previous, a swipe on the preview, and the grid (28 Nov 2026).
+        app.buttons["post.template.next"].tap()
+        sleep(1); attach("next")
+        app.descendants(matching: .any).matching(identifier: "post.preview").firstMatch.swipeLeft()
+        sleep(1); attach("swiped")
+        app.buttons["post.template.all"].tap()
+        let last = app.buttons["post.template.grid.13"]
+        XCTAssertTrue(last.waitForExistence(timeout: 10), "the grid shows every template")
+        attach("grid")
+        for _ in 0..<5 where !last.isHittable { app.swipeUp() }
+        last.tap()
+        sleep(1); attach("picked from the grid")
+        XCTAssertTrue(app.buttons["post.template.all"].label.contains("14/14"))
     }
 }

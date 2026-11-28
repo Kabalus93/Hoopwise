@@ -4328,7 +4328,16 @@ class SwiftDataManager: ObservableObject {
                 sdTeam.coachId = team.coachId
                 sdTeam.coachName = team.coachName
                 sdTeam.homeVenue = team.homeVenue
-                sdTeam.playbookData = team.playbookData
+                // The team's media has its own writer (setTeamVault): a page
+                // holding an older copy of the team must not drop photos.
+                var incoming = team
+                var book = incoming.playbook
+                let stored = Team.decodePlaybook(sdTeam.playbookData)
+                if book.media != stored.media {
+                    book.media = stored.media
+                    incoming.playbook = book
+                }
+                sdTeam.playbookData = incoming.playbookData
                 sdTeam.updatedAt = Date()
                 saveAndRefresh()
             }
@@ -4337,6 +4346,23 @@ class SwiftDataManager: ObservableObject {
         }
     }
     
+    /// THE writer of a team's media (photos in the coach's library).
+    func setTeamVault(teamId: UUID, _ change: (inout [VaultPhoto]) -> Void) {
+        do {
+            let descriptor = FetchDescriptor<SDTeam>(predicate: #Predicate { $0.id == teamId })
+            guard let sdTeam = try modelContext.fetch(descriptor).first else { return }
+            var book = Team.decodePlaybook(sdTeam.playbookData)
+            let before = book.media
+            change(&book.media)
+            guard book.media != before else { return }
+            sdTeam.playbookData = try JSONEncoder().encode(book)
+            sdTeam.updatedAt = Date()
+            saveAndRefresh()
+        } catch {
+            debugLog("❌ Failed to update the team's media: \(error)")
+        }
+    }
+
     func deleteTeam(_ team: Team) {
         do {
             let descriptor = FetchDescriptor<SDTeam>(predicate: #Predicate { $0.id == team.id })
