@@ -521,10 +521,19 @@ struct GameRecapView: View {
                             .offset(x: 5, y: -5)
                     }
                 }
-            Text(name(line.playerId))
-                .font(.subheadline.weight(isMVP ? .semibold : .regular))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name(line.playerId))
+                    .font(.subheadline.weight(isMVP ? .semibold : .regular))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                // The shooting line, in a game that counted misses.
+                if let shot = game.shooting(for: line.playerId), shot.attempts > 0 {
+                    Text("\(isChinese ? "投篮" : "FG") \(shot.made)/\(shot.attempts) · \(Int((Double(shot.made) / Double(shot.attempts) * 100).rounded()))%")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("recap.shooting")
+                }
+            }
             Spacer(minLength: 4)
             ForEach(Array([line.points, line.rebounds, line.assists, line.steals, line.blocks].enumerated()), id: \.offset) { _, v in
                 Text("\(v)")

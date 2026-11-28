@@ -421,6 +421,12 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
     var assists: Int
     var steals: Int
     var blocks: Int
+    /// MISSED SHOTS (28 Nov 2026, Luther: "make shooting percentage a toggle
+    /// … in the pregame settings"). Counted only in a game set up to track
+    /// them (`SessionGame.tracksShots`); 0 everywhere else. Written only when
+    /// above zero, and read by nothing but the shooting line — points, levels
+    /// and every other number are untouched.
+    var misses: Int = 0
     // FOULS ARE GONE (26 Nov 2026, Luther: "remove data nothing reads and
     // stop collecting"): no screen ever recorded or showed one. The key is
     // still WRITTEN as 0, because a build from before this decodes the line
@@ -441,7 +447,7 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, playerId, gameId, teamId, points, rebounds, assists, steals, blocks, fouls
+        case id, playerId, gameId, teamId, points, rebounds, assists, steals, blocks, fouls, misses
     }
 
     init(from decoder: Decoder) throws {
@@ -455,6 +461,7 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
         assists = try c.decodeIfPresent(Int.self, forKey: .assists) ?? 0
         steals = try c.decodeIfPresent(Int.self, forKey: .steals) ?? 0
         blocks = try c.decodeIfPresent(Int.self, forKey: .blocks) ?? 0
+        misses = (try? c.decodeIfPresent(Int.self, forKey: .misses)) ?? 0
     }
 
     func encode(to encoder: Encoder) throws {
@@ -469,9 +476,10 @@ struct SessionPlayerStats: Codable, Hashable, Identifiable {
         try c.encode(steals, forKey: .steals)
         try c.encode(blocks, forKey: .blocks)
         try c.encode(0, forKey: .fouls)   // for builds from before 26 Nov 2026
+        if misses > 0 { try c.encode(misses, forKey: .misses) }
     }
     
-    var hasStats: Bool { points > 0 || rebounds > 0 || assists > 0 || steals > 0 || blocks > 0 }
+    var hasStats: Bool { points > 0 || rebounds > 0 || assists > 0 || steals > 0 || blocks > 0 || misses > 0 }
 }
 
 /// One basket in a game's log: who scored, who passed (nil = made on his
@@ -530,7 +538,7 @@ enum SessionGameStatus: String, Codable, CaseIterable {
 }
 
 enum StatType {
-    case points(Int), rebound, assist, steal, block
+    case points(Int), rebound, assist, steal, block, miss
 }
 
 /// A single scrimmage game within a session
@@ -577,6 +585,17 @@ struct SessionGame: Codable, Hashable, Identifiable {
     /// by id — carried to the next period so none is asked for twice.
     /// Optional in the games JSON; nil = none.
     var plannedSubsDone: [UUID]?
+    /// This game counts MISSED shots too, so it has a shooting percentage
+    /// (chosen on the setup page; nil / false = makes only, as before).
+    var tracksShots: Bool?
+    /// A COMMON BENCH (28 Nov 2026, Luther: "a common bench puts all the
+    /// non-starters on a bench that makes them available to be subbed in for
+    /// any team"): the players waiting, on no team. nil = each team keeps
+    /// its own bench in its `playerIds`, as before.
+    var commonBench: [UUID]?
+    /// With a common bench: the team a player was on when they went back to
+    /// the bench — they played for it, and are on no team's list any more.
+    var benchTeams: [UUID: UUID]?
     
     init(id: UUID = UUID(), sessionId: UUID, gameNumber: Int = 1,
          gameType: SessionGameType = .twoTeam, teams: [GameTeam] = [], 
@@ -634,13 +653,16 @@ struct SessionGame: Codable, Hashable, Identifiable {
         playersPerSide = try? container.decodeIfPresent(Int.self, forKey: .playersPerSide)
         subbedIds = (try? container.decodeIfPresent([UUID].self, forKey: .subbedIds)) ?? []
         plannedSubsDone = try? container.decodeIfPresent([UUID].self, forKey: .plannedSubsDone)
+        tracksShots = try? container.decodeIfPresent(Bool.self, forKey: .tracksShots)
+        commonBench = try? container.decodeIfPresent([UUID].self, forKey: .commonBench)
+        benchTeams = try? container.decodeIfPresent([UUID: UUID].self, forKey: .benchTeams)
     }
     
     private enum CodingKeys: String, CodingKey {
         case id, sessionId, gameNumber, gameType, teams, activeTeamIds, teamScores
         case playerStats, durationMinutes, basketValue, roundNumber, status, startedAt, endedAt
         case winningTeamId, notes, createdAt, updatedAt, baskets, playersPerSide, subbedIds
-        case plannedSubsDone
+        case plannedSubsDone, tracksShots, commonBench, benchTeams
     }
     
     /// WHO PLAYED, player → team (20 Nov 2026, Luther: a player who took
@@ -659,9 +681,25 @@ struct SessionGame: Codable, Hashable, Identifiable {
             for p in team.playerIds.prefix(onFloor) where out[p] == nil { out[p] = team.id }
         }
         for p in subbedIds where out[p] == nil {
-            if let team = teams.first(where: { $0.playerIds.contains(p) }) { out[p] = team.id }
+            if let team = teams.first(where: { $0.playerIds.contains(p) }) {
+                out[p] = team.id
+            } else if let team = benchTeams?[p] {
+                // Back on the common bench: they played for this team.
+                out[p] = team
+            }
         }
         return out
+    }
+
+    /// A player's shooting in this game, when it counts misses: baskets made
+    /// (the basket log when it has them, else points ÷ the basket value) and
+    /// shots taken. Nil in a game that only counts makes.
+    func shooting(for playerId: UUID) -> (made: Int, attempts: Int)? {
+        guard tracksShots == true else { return nil }
+        let line = stats(for: playerId)
+        let logged = baskets.filter { $0.scorerId == playerId }.count
+        let made = logged > 0 ? logged : (line?.points ?? 0) / max(1, basketValue)
+        return (made, made + (line?.misses ?? 0))
     }
 
     /// Every participant's stat line — an empty one for those who played
@@ -764,6 +802,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
             case .assist: playerStats[index].assists += 1
             case .steal: playerStats[index].steals += 1
             case .block: playerStats[index].blocks += 1
+            case .miss: playerStats[index].misses += 1
             }
         } else {
             var newStats = SessionPlayerStats(playerId: playerId, gameId: id, teamId: teamId)
@@ -773,6 +812,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
             case .assist: newStats.assists = 1
             case .steal: newStats.steals = 1
             case .block: newStats.blocks = 1
+            case .miss: newStats.misses = 1
             }
             playerStats.append(newStats)
         }
@@ -792,6 +832,7 @@ struct SessionGame: Codable, Hashable, Identifiable {
         case .assist: playerStats[index].assists = max(0, playerStats[index].assists - 1)
         case .steal: playerStats[index].steals = max(0, playerStats[index].steals - 1)
         case .block: playerStats[index].blocks = max(0, playerStats[index].blocks - 1)
+        case .miss: playerStats[index].misses = max(0, playerStats[index].misses - 1)
         }
         updatedAt = Date()
     }

@@ -16,6 +16,8 @@ struct GameStatAction: Equatable {
     enum Kind: Equatable {
         case points(Int)
         case rebound, steal, block
+        /// A missed shot (only in a game that counts them).
+        case miss
     }
     let playerId: UUID
     let teamId: UUID
@@ -32,6 +34,7 @@ struct GameStatAction: Equatable {
         case .rebound: return .rebound
         case .steal: return .steal
         case .block: return .block
+        case .miss: return .miss
         }
     }
 
@@ -101,8 +104,11 @@ struct LiveTeamPanel: View {
     private var players: [Student] {
         Array(team.playerIds.prefix(onCourtCount)).compactMap { id in students.first { $0.id == id } }
     }
+    /// The team's own bench — or, with a common bench, everyone waiting
+    /// (they can come on for any team).
     private var bench: [Student] {
-        Array(team.playerIds.dropFirst(onCourtCount)).compactMap { id in students.first { $0.id == id } }
+        let ids = game.commonBench ?? Array(team.playerIds.dropFirst(onCourtCount))
+        return ids.compactMap { id in students.first { $0.id == id } }
     }
     private var onCourtCount: Int {
         min(team.starters ?? team.playerIds.count, team.playerIds.count)
@@ -405,11 +411,25 @@ struct LiveTeamPanel: View {
     /// bench in the other's spot. Stats stay with each player.
     private func substitute(in incoming: UUID, out outgoing: UUID) {
         guard let t = game.teams.firstIndex(where: { $0.id == team.id }),
-              let a = game.teams[t].playerIds.firstIndex(of: incoming),
               let b = game.teams[t].playerIds.firstIndex(of: outgoing) else { return }
+        let fromCommon = game.commonBench?.firstIndex(of: incoming)
+        let a = game.teams[t].playerIds.firstIndex(of: incoming)
+        guard fromCommon != nil || a != nil else { return }
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             if game.teams[t].starters == nil { game.teams[t].starters = onCourtCount }
-            game.teams[t].playerIds.swapAt(a, b)
+            if let fromCommon {
+                // COMMON BENCH: he takes the place on THIS team; the player
+                // he replaces goes back to the bench everyone shares, and is
+                // remembered as having played for this team.
+                game.teams[t].playerIds[b] = incoming
+                game.commonBench?[fromCommon] = outgoing
+                var last = game.benchTeams ?? [:]
+                last[outgoing] = team.id
+                last[incoming] = nil
+                game.benchTeams = last
+            } else if let a {
+                game.teams[t].playerIds.swapAt(a, b)
+            }
             // Once the game is under way both have stepped on the floor —
             // they played. Before it starts it is only a lineup change.
             if game.startedAt != nil || game.status == .inProgress || game.status == .paused {
@@ -497,9 +517,13 @@ struct LiveTeamPanel: View {
                 score(student, assist: nil)
             }
 
-            // Rebound is the most frequent, so it is the big one.
+            // Rebound is the most frequent, so it is the big one. With misses
+            // counted, MISS sits beside it — a made shot is still the row.
             VStack(spacing: 4) {
-                statButton(.rebound, student)
+                HStack(spacing: 4) {
+                    statButton(.rebound, student)
+                    if game.tracksShots == true { statButton(.miss, student) }
+                }
                     .frame(height: (height - 4) * 0.58)
                 HStack(spacing: 4) {
                     statButton(.steal, student)
@@ -516,15 +540,25 @@ struct LiveTeamPanel: View {
             (zh ? "板" : "REB", stats?.rebounds ?? 0), (zh ? "助" : "AST", stats?.assists ?? 0),
             (zh ? "断" : "STL", stats?.steals ?? 0), (zh ? "帽" : "BLK", stats?.blocks ?? 0)]
         let item = { (part: (String, Int)) in "\(part.1) \(part.0)" }
+        // With misses counted: "FG 3/7 · 43%" leads the line.
+        let shooting: String? = stats.flatMap { game.shooting(for: $0.playerId) }.flatMap { s in
+            s.attempts > 0 ? "\(zh ? "投" : "FG") \(s.made)/\(s.attempts) · \(Int((Double(s.made) / Double(s.attempts) * 100).rounded()))%" : nil
+        }
         // One line when it fits, else two even lines (REB · AST / STL · BLK)
         // — never cut off (Luther, November 2026: the iPad mini's narrower
         // rows showed "0 REB · 1 AST · 0 ST…").
-        return ViewThatFits(in: .horizontal) {
-            Text(parts.map(item).joined(separator: " · "))
-                .fixedSize()
-            VStack(alignment: .leading, spacing: 1) {
-                Text(parts.prefix(2).map(item).joined(separator: " · ")).fixedSize()
-                Text(parts.suffix(2).map(item).joined(separator: " · ")).fixedSize()
+        return VStack(alignment: .leading, spacing: 1) {
+            if let shooting {
+                Text(shooting).fixedSize().foregroundStyle(.primary.opacity(0.8))
+                    .accessibilityIdentifier("live.shooting")
+            }
+            ViewThatFits(in: .horizontal) {
+                Text(parts.map(item).joined(separator: " · "))
+                    .fixedSize()
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(parts.prefix(2).map(item).joined(separator: " · ")).fixedSize()
+                    Text(parts.suffix(2).map(item).joined(separator: " · ")).fixedSize()
+                }
             }
         }
         .font(.system(size: 11, weight: .medium))
@@ -539,6 +573,7 @@ struct LiveTeamPanel: View {
             case .rebound: return (zh ? "篮板" : "REB", .purple, "arrow.down.to.line")
             case .steal: return (zh ? "抢断" : "STL", .orange, "hand.raised.fill")
             case .block: return (zh ? "盖帽" : "BLK", .teal, "hand.raised.slash.fill")
+            case .miss: return (zh ? "不中" : "MISS", .red, "xmark")
             case .points: return ("", .clear, "")
             }
         }()

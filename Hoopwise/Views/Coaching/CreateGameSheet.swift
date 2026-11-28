@@ -30,18 +30,18 @@ struct CreateGameSheet: View {
     /// and drop crashed on the court) and where the finger is, in the
     /// page's content space.
     @State private var carrying: (pid: UUID, at: CGPoint)?
-    /// Every drop target's frame in the content space: "t.p" slots, "team.t"
-    /// rows, "roster".
-    @State private var targetFrames: [String: CGRect] = [:]
-    /// The visible part of the page, for scrolling while carrying.
-    @State private var visibleRect: CGRect = .zero
+    /// Where everything is on screen — drop targets ("t.p" slots, "team.t"
+    /// rows, "roster", "bench", "p.<id>" players), the visible part of the
+    /// page and how far it can scroll. A plain object, NOT view state
+    /// (28 Nov 2026, Luther: "the pregame setup page would not scroll"):
+    /// these change on every frame of a scroll, and as @State each change
+    /// redrew the whole page — every slot, photo and team octagon — several
+    /// times a frame, which a full roster could not keep up with. Nothing
+    /// drawn depends on them; only the carry reads them.
+    @State private var geometry = CarryGeometry()
     @State private var scrollPosition = ScrollPosition()
-    /// How far the page can scroll (content height − visible height).
-    @State private var maxScroll: CGFloat = 0
     /// The hold began on no player: ignore the rest of this gesture.
     @State private var carryMissed = false
-    /// The page's scroll view on screen.
-    @State private var scrollFrame: CGRect = .zero
     @State private var liftTick = 0
     /// True while a carry gesture is under way; going false with a player
     /// still carried means the gesture was cancelled — put it back.
@@ -68,6 +68,13 @@ struct CreateGameSheet: View {
 
     // Optional reuse of last game's setup
     @State private var hasPreviousConfig: Bool = false
+    /// COMMON BENCH: the non-starters wait on one bench and can come on for
+    /// any team. Off = each team keeps its own bench (as before).
+    @AppStorage("game.commonBench") private var commonBench = false
+    /// The players on the common bench, in order.
+    @State private var benchIds: [UUID] = []
+    /// Count missed shots too, so the game has a shooting percentage.
+    @AppStorage("game.tracksShots") private var tracksShots = false
     /// Each team's colour behind its players' photos, to find them at a
     /// glance (display only — the level underneath is untouched).
     @AppStorage(GameTeamBackdrop.key) private var teamBackdrop = true
@@ -81,7 +88,7 @@ struct CreateGameSheet: View {
     @State private var pastGames: [GameImpact.TeamGame] = []
     @State private var resultRatings: [UUID: Double] = [:]
     /// The teams as they were before "Balance teams" — for Undo.
-    @State private var beforeBalance: (teams: [GameTeam], unassigned: Set<UUID>)?
+    @State private var beforeBalance: (teams: [GameTeam], unassigned: Set<UUID>, bench: [UUID])?
     @State private var usePreviousConfig: Bool = false
 
     private var isChinese: Bool {
@@ -143,6 +150,7 @@ struct CreateGameSheet: View {
                     battleRoyalSection
                 } else {
                     teamsSection
+                    if commonBench { benchSection }
                     unassignedSection
                 }
                 if let reason = blockingReason {
@@ -159,7 +167,7 @@ struct CreateGameSheet: View {
               .frame(maxWidth: .infinity)
               .coordinateSpace(name: Self.space)
               .simultaneousGesture(pageCarryGesture)
-              .onPreferenceChange(TargetFrameKey.self) { targetFrames = $0 }
+              .onPreferenceChange(TargetFrameKey.self) { [geometry] in geometry.frames = $0 }
             }
             .scrollPosition($scrollPosition)
             // The carried player rides above everything, under the finger.
@@ -169,9 +177,9 @@ struct CreateGameSheet: View {
                 }
                 .allowsHitTesting(false)
             }
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { scrollFrame = $0 }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { [geometry] in geometry.scrollFrame = $0 }
             .onScrollGeometryChange(for: CGRect.self) { $0.visibleRect } action: { old, rect in
-                visibleRect = rect
+                geometry.visibleRect = rect
                 // The page moved under a carried player: keep it under the
                 // finger. Only scrolling that HAPPENED counts.
                 // Targets are re-measured on screen as the page moves; the
@@ -181,7 +189,7 @@ struct CreateGameSheet: View {
                     if k != dropTargetKey { dropTargetKey = k }
                 }
             }
-            .onScrollGeometryChange(for: CGFloat.self) { max(0, $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom - $0.containerSize.height) } action: { _, v in maxScroll = v }
+            .onScrollGeometryChange(for: CGFloat.self) { max(0, $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom - $0.containerSize.height) } action: { [geometry] _, v in geometry.maxScroll = v }
             .onReceive(edgeTimer) { _ in scrollWhileCarrying() }
             .onChange(of: carryGestureActive) { _, active in
                 if !active {
@@ -218,7 +226,10 @@ struct CreateGameSheet: View {
                 if !durationManuallyEdited { durationMinutes = defaultDurationForLayout }
             }
             .onChange(of: showOnlyPresent) { _, _ in refreshUnassigned() }
-            .onChange(of: playersPerSide) { _, _ in normalizeStarters() }
+            .onChange(of: playersPerSide) { _, _ in normalizeStarters(); if commonBench { gatherBench() } }
+            .onChange(of: commonBench) { _, common in
+                withAnimation(.snappy) { if common { gatherBench() } else { dealBenchToTeams() } }
+            }
             .onChange(of: usePreviousConfig) { _, useIt in
                 if useIt, let last = session.games.last(where: { !$0.gameType.isIndividual }) {
                     loadPreviousConfiguration(from: last)
@@ -291,6 +302,27 @@ struct CreateGameSheet: View {
                     Picker("", selection: $showOnlyPresent) {
                         Text(isChinese ? "已到场 (\(presentCount))" : "Present (\(presentCount))").tag(true)
                         Text(isChinese ? "全部 (\(totalCount))" : "All (\(totalCount))").tag(false)
+                    }
+                }
+            }
+
+            if !isBattleRoyal {
+                HStack(spacing: 8) {
+                    settingChip(isChinese ? "投篮" : "Shots",
+                                value: tracksShots ? (isChinese ? "记命中率" : "Makes + misses") : (isChinese ? "只记进球" : "Makes only"),
+                                id: "setup.shots") {
+                        Picker("", selection: $tracksShots) {
+                            Text(isChinese ? "只记进球" : "Makes only").tag(false)
+                            Text(isChinese ? "进球和不中（命中率）" : "Makes and misses (shooting %)").tag(true)
+                        }
+                    }
+                    settingChip(isChinese ? "替补席" : "Bench",
+                                value: commonBench ? (isChinese ? "公共" : "Common") : (isChinese ? "各队" : "Each team's"),
+                                id: "setup.bench") {
+                        Picker("", selection: $commonBench) {
+                            Text(isChinese ? "各队自己的替补" : "Each team's own bench").tag(false)
+                            Text(isChinese ? "公共替补（可上任何一队）" : "Common bench (subs for any team)").tag(true)
+                        }
                     }
                 }
             }
@@ -431,9 +463,11 @@ struct CreateGameSheet: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(GameTeam.localizedColorName(team.name))
                         .font(.body.weight(.semibold))
-                    Text(isChinese
-                         ? "首发 \(starters.count)/\(playersPerSide) · 替补 \(bench.count)"
-                         : "\(starters.count)/\(playersPerSide) starters · \(bench.count) bench")
+                    Text(commonBench
+                         ? (isChinese ? "首发 \(starters.count)/\(playersPerSide)" : "\(starters.count)/\(playersPerSide) starters")
+                         : (isChinese
+                            ? "首发 \(starters.count)/\(playersPerSide) · 替补 \(bench.count)"
+                            : "\(starters.count)/\(playersPerSide) starters · \(bench.count) bench"))
                         .font(.subheadline)
                         .foregroundStyle(starters.count < playersPerSide ? .orange : .secondary)
                         .monospacedDigit()
@@ -456,13 +490,15 @@ struct CreateGameSheet: View {
                     slot(teamIndex: index, position: i, playerId: i < starters.count ? starters[i] : nil,
                          color: color, starter: true)
                 }
-                Rectangle()
-                    .fill(Color.primary.opacity(0.15))
-                    .frame(width: 1, height: slotSize)
-                    .padding(.horizontal, 2)
-                ForEach(0..<benchSlots, id: \.self) { j in
-                    slot(teamIndex: index, position: playersPerSide + j,
-                         playerId: j < bench.count ? bench[j] : nil, color: color, starter: false)
+                if !commonBench {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.15))
+                        .frame(width: 1, height: slotSize)
+                        .padding(.horizontal, 2)
+                    ForEach(0..<benchSlots, id: \.self) { j in
+                        slot(teamIndex: index, position: playersPerSide + j,
+                             playerId: j < bench.count ? bench[j] : nil, color: color, starter: false)
+                    }
                 }
             }
             // On a phone the chart sits under the team's players.
@@ -573,7 +609,7 @@ struct CreateGameSheet: View {
 
     /// Everyone who would play: on a team or waiting in the roster.
     private var balancePool: [UUID] {
-        teams.flatMap(\.playerIds) + rosterIds
+        teams.flatMap(\.playerIds) + benchIds + rosterIds
     }
 
     /// Reads what the app knows about the players once.
@@ -631,17 +667,20 @@ struct CreateGameSheet: View {
     private func balanceTeams() {
         let pool = balancePool
         guard teams.count >= 2, pool.count >= teams.count else { return }
-        beforeBalance = (teams, unassignedIds)
+        beforeBalance = (teams, unassignedIds, benchIds)
         // Results join the balance once there are enough games to trust them.
         let split = TeamBalance.balanced(players: pool, teamCount: teams.count,
                                          profiles: profiles, links: chemistryLinks,
                                          results: pastGames.count >= GameImpact.minimumGames ? resultRatings : [:])
         withAnimation(.snappy(duration: 0.3)) {
+            benchIds = []
             for i in teams.indices {
                 teams[i].playerIds = split[i]
                 teams[i].starters = min(playersPerSide, split[i].count)
             }
             unassignedIds.subtract(pool)
+            // With a common bench the players past each team's starters share it.
+            if commonBench { gatherBench() }
         }
         dropTick += 1
     }
@@ -651,6 +690,7 @@ struct CreateGameSheet: View {
         withAnimation(.snappy(duration: 0.3)) {
             teams = before.teams
             unassignedIds = before.unassigned
+            benchIds = before.bench
         }
         beforeBalance = nil
     }
@@ -731,9 +771,13 @@ struct CreateGameSheet: View {
                     Label(isChinese ? "改为首发" : "Make a starter", systemImage: "arrow.up.circle")
                 }
             } else {
-                Button { act { place(pid, team: current, position: playersPerSide + benchCount(current)) } } label: {
+                Button { act { if commonBench { toBench(pid) } else { place(pid, team: current, position: playersPerSide + benchCount(current)) } } } label: {
                     Label(isChinese ? "移到替补" : "Move to the bench", systemImage: "arrow.down.circle")
                 }
+            }
+        } else if commonBench, !benchIds.contains(pid) {
+            Button { act { toBench(pid) } } label: {
+                Label(isChinese ? "到替补席" : "To the bench", systemImage: "arrow.down.circle")
             }
         }
         ForEach(Array(teams.enumerated()), id: \.element.id) { index, team in
@@ -748,7 +792,7 @@ struct CreateGameSheet: View {
                 }
             }
         }
-        if currentTeam != nil {
+        if currentTeam != nil || benchIds.contains(pid) {
             Divider()
             Button(role: .destructive) { act { unassign(pid) } } label: {
                 Label(isChinese ? "移回名单" : "Back to the roster", systemImage: "arrow.uturn.backward")
@@ -909,7 +953,10 @@ struct CreateGameSheet: View {
     /// alongside everything — the players' Buttons still take a tap, and a
     /// swipe that moves before the hold completes still scrolls the page.
     fileprivate var pageCarryGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.3, maximumDistance: 10)
+        // A finger that MOVES is scrolling: only a hold that stays put lifts
+        // a player (0.35 s within 6 pt — it was 0.3 s within 10, and on a
+        // page full of players a scroll that began slowly lifted one).
+        LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
             .updating($carryGestureActive) { _, active, _ in active = true }
             .onChanged { value in
@@ -917,7 +964,7 @@ struct CreateGameSheet: View {
                 if carrying == nil {
                     guard !carryMissed else { return }
                     // Whose photo is under the finger where the hold began?
-                    guard let hit = targetFrames.first(where: { $0.key.hasPrefix("p.") && $0.value.contains(drag.startLocation) }),
+                    guard let hit = geometry.frames.first(where: { $0.key.hasPrefix("p.") && $0.value.contains(drag.startLocation) }),
                           let pid = UUID(uuidString: String(hit.key.dropFirst(2))) else {
                         carryMissed = true
                         return
@@ -938,10 +985,12 @@ struct CreateGameSheet: View {
     /// The drop target under a point: a slot first, then a team row, then
     /// the roster.
     private func target(at p: CGPoint) -> String? {
-        if let k = targetFrames.first(where: { !$0.key.hasPrefix("team.") && !$0.key.hasPrefix("p.") && $0.key != "roster"
-                                                && $0.value.insetBy(dx: -6, dy: -6).contains(p) })?.key { return k }
-        if let k = targetFrames.first(where: { $0.key.hasPrefix("team.") && $0.value.contains(p) })?.key { return k }
-        if targetFrames["roster"]?.contains(p) == true { return "roster" }
+        let frames = geometry.frames
+        if let k = frames.first(where: { !$0.key.hasPrefix("team.") && !$0.key.hasPrefix("p.") && $0.key != "roster" && $0.key != "bench"
+                                         && $0.value.insetBy(dx: -6, dy: -6).contains(p) })?.key { return k }
+        if let k = frames.first(where: { $0.key.hasPrefix("team.") && $0.value.contains(p) })?.key { return k }
+        if frames["bench"]?.contains(p) == true { return "bench" }
+        if frames["roster"]?.contains(p) == true { return "roster" }
         return nil
     }
 
@@ -952,6 +1001,8 @@ struct CreateGameSheet: View {
             if dropped, let key {
                 if key == "roster" {
                     if !unassignedIds.contains(c.pid) { unassign(c.pid) }
+                } else if key == "bench" {
+                    if !benchIds.contains(c.pid) { toBench(c.pid) }
                 } else if key.hasPrefix("team."), let t = Int(key.dropFirst(5)), teams.indices.contains(t) {
                     if !teams[t].playerIds.contains(c.pid) { addToTeam(c.pid, t) }
                 } else {
@@ -971,12 +1022,12 @@ struct CreateGameSheet: View {
     /// Near the top or bottom of what is visible, the page scrolls under
     /// the carried player.
     private func scrollWhileCarrying() {
-        guard let c = carrying, scrollFrame.height > 0, visibleRect.height > 0 else { return }
+        guard let c = carrying, geometry.scrollFrame.height > 0, geometry.visibleRect.height > 0 else { return }
         let edge: CGFloat = 90, step: CGFloat = 14
-        var y = visibleRect.minY
-        if c.at.y < scrollFrame.minY + edge { y -= step } else if c.at.y > scrollFrame.maxY - edge { y += step }
-        y = min(max(0, y), maxScroll)
-        guard abs(y - visibleRect.minY) > 0.5 else { return }
+        var y = geometry.visibleRect.minY
+        if c.at.y < geometry.scrollFrame.minY + edge { y -= step } else if c.at.y > geometry.scrollFrame.maxY - edge { y += step }
+        y = min(max(0, y), geometry.maxScroll)
+        guard abs(y - geometry.visibleRect.minY) > 0.5 else { return }
         scrollPosition.scrollTo(y: y)
     }
 
@@ -1033,11 +1084,15 @@ struct CreateGameSheet: View {
         if let occupant, let at = teams[team].playerIds.firstIndex(of: occupant) {
             if let from {
                 teams[from.team].playerIds[from.index] = occupant
+            } else if let seat = benchIds.firstIndex(of: pid) {
+                // From the common bench: the two change places.
+                benchIds[seat] = occupant
             } else {
                 unassignedIds.insert(occupant)
             }
             teams[team].playerIds[at] = pid
             unassignedIds.remove(pid)
+            benchIds.removeAll { $0 == pid }
             return
         }
 
@@ -1047,6 +1102,7 @@ struct CreateGameSheet: View {
             teams[from.team].playerIds.remove(at: from.index)
         }
         unassignedIds.remove(pid)
+        benchIds.removeAll { $0 == pid }
         if position < playersPerSide {
             let n = starterCount(team)
             teams[team].playerIds.insert(pid, at: n)
@@ -1060,7 +1116,41 @@ struct CreateGameSheet: View {
     /// else the end of the bench.
     private func addToTeam(_ pid: UUID, _ team: Int) {
         let n = starterCount(team)
+        // With a common bench a full team has no place of its own left.
+        if commonBench, n >= playersPerSide { toBench(pid); return }
         place(pid, team: team, position: n < playersPerSide ? n : playersPerSide + benchCount(team))
+    }
+
+    /// Onto the common bench, from a team or the roster.
+    private func toBench(_ pid: UUID) {
+        normalizeStarters()
+        for t in teams.indices {
+            if let i = teams[t].playerIds.firstIndex(of: pid) {
+                if i < starterCount(t) { teams[t].starters = starterCount(t) - 1 }
+                teams[t].playerIds.remove(at: i)
+            }
+        }
+        unassignedIds.remove(pid)
+        if !benchIds.contains(pid) { benchIds.append(pid) }
+    }
+
+    /// Switching to a common bench: every team's bench players move to it.
+    private func gatherBench() {
+        normalizeStarters()
+        for t in teams.indices {
+            let n = starterCount(t)
+            benchIds += teams[t].playerIds.dropFirst(n).filter { !benchIds.contains($0) }
+            teams[t].playerIds = Array(teams[t].playerIds.prefix(n))
+            teams[t].starters = n
+        }
+    }
+
+    /// Back to each team's own bench: the common bench is dealt out in turn.
+    private func dealBenchToTeams() {
+        guard !teams.isEmpty else { unassignedIds.formUnion(benchIds); benchIds = []; return }
+        for (i, pid) in benchIds.enumerated() { teams[i % teams.count].playerIds.append(pid) }
+        benchIds = []
+        normalizeStarters()
     }
 
     private func starterCount(_ team: Int) -> Int {
@@ -1079,7 +1169,51 @@ struct CreateGameSheet: View {
 
     private func unassign(_ pid: UUID) {
         for t in teams.indices { teams[t].playerIds.removeAll { $0 == pid } }
+        benchIds.removeAll { $0 == pid }
         unassignedIds.insert(pid)
+    }
+
+    // MARK: - The common bench
+
+    private var benchSection: some View {
+        SetupCard {
+            if benchIds.isEmpty {
+                Image(systemName: "chair.lounge")
+                    .font(.title2)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: slotSize + 22), spacing: 8)], spacing: 12) {
+                    ForEach(benchIds, id: \.self) { pid in
+                        if let s = student(pid) {
+                            Button { if Date().timeIntervalSince(carryEndedAt) > 0.4 { optionsFor = pid } } label: {
+                                playerBubble(s, ring: Color.secondary, solidRing: false, highlighted: false)
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: optionsBinding(pid)) { optionsPopover(pid: pid, currentTeam: nil) }
+                            .carryable(pid, in: self)
+                            .accessibilityIdentifier("setup.bench.player")
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        } header: {
+            HStack {
+                Text(isChinese ? "公共替补" : "Common bench")
+                Spacer()
+                Text("\(benchIds.count)").foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+        .overlay {
+            if dropTargetKey == "bench" {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2)
+            }
+        }
+        .dropTarget("bench")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("setup.bench")
     }
 
     // MARK: - Battle Royal
@@ -1196,7 +1330,8 @@ struct CreateGameSheet: View {
         for i in teams.indices {
             teams[i].playerIds = teams[i].playerIds.filter { pool.contains($0) }
         }
-        let assigned = Set(teams.flatMap(\.playerIds))
+        benchIds = benchIds.filter { pool.contains($0) }
+        let assigned = Set(teams.flatMap(\.playerIds)).union(benchIds)
         unassignedIds = pool.subtracting(assigned)
     }
 
@@ -1216,7 +1351,10 @@ struct CreateGameSheet: View {
         }
         for i in teams.indices { teams[i].starters = game.teams[i].starters }
         normalizeStarters()
-        let assigned = Set(teams.flatMap(\.playerIds))
+        // The bench as it was: shared if that game had a common bench.
+        benchIds = (game.commonBench ?? []).filter { pool.contains($0) }
+        if commonBench { gatherBench() } else if !benchIds.isEmpty { dealBenchToTeams() }
+        let assigned = Set(teams.flatMap(\.playerIds)).union(benchIds)
         unassignedIds = pool.subtracting(assigned)
     }
 
@@ -1319,6 +1457,8 @@ struct CreateGameSheet: View {
                 status: .ready
             )
             newGame.playersPerSide = playersPerSide
+            if tracksShots { newGame.tracksShots = true }
+            if commonBench { newGame.commonBench = benchIds }
         }
         // Optimistic local append for the binding-driven UI, then a
         // field-level write so a stale parent `@State session` can no
@@ -1399,6 +1539,15 @@ extension SetupCard where Header == EmptyView, Footer == EmptyView {
 }
 
 // MARK: - In-app carry
+
+/// Where things are on screen during a carry. A reference the page holds,
+/// so writing to it never redraws anything.
+private final class CarryGeometry {
+    var frames: [String: CGRect] = [:]
+    var visibleRect: CGRect = .zero
+    var scrollFrame: CGRect = .zero
+    var maxScroll: CGFloat = 0
+}
 
 private struct TargetFrameKey: PreferenceKey {
     static var defaultValue: [String: CGRect] = [:]

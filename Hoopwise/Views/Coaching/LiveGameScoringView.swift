@@ -720,6 +720,7 @@ struct LiveGameScoringView: View {
         case .rebound: return (isChinese ? "篮板 " : "Rebound ") + who
         case .steal: return (isChinese ? "抢断 " : "Steal ") + who
         case .block: return (isChinese ? "盖帽 " : "Block ") + who
+        case .miss: return (isChinese ? "不中 " : "Miss ") + who
         }
     }
 
@@ -1252,6 +1253,8 @@ struct LiveGameScoringView: View {
             status: .ready)
         next.playersPerSide = game.playersPerSide
         next.plannedSubsDone = game.plannedSubsDone
+        next.tracksShots = game.tracksShots
+        next.commonBench = game.commonBench
         HapticFeedback.impact(.medium)
         onNextGame?(next)
     }

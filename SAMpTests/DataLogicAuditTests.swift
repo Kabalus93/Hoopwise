@@ -160,4 +160,60 @@ final class DataLogicAuditTests: XCTestCase {
         // One athlete's focus is not the group's; nobody with a focus, nothing.
         XCTAssertTrue(AthleteFocus.common(among: [players[5].studentId, players[4].studentId], players: players).isEmpty)
     }
+
+    // MARK: Shooting percentage and the common bench (28 Nov 2026)
+
+    func testMissesMakeAShootingLineOnlyWhereTheyAreCounted() throws {
+        let shooter = UUID(), team = UUID()
+        var game = SessionGame(sessionId: UUID())
+        game.basketValue = 2
+        game.addStat(.points(2), for: shooter, teamId: team)
+        game.addStat(.points(2), for: shooter, teamId: team)
+        game.addStat(.miss, for: shooter, teamId: team)
+        game.addStat(.miss, for: shooter, teamId: team)
+        game.addStat(.miss, for: shooter, teamId: team)
+        XCTAssertNil(game.shooting(for: shooter), "a game that only counts makes has no percentage")
+        game.tracksShots = true
+        let line = try XCTUnwrap(game.shooting(for: shooter))
+        XCTAssertEqual(line.made, 2)
+        XCTAssertEqual(line.attempts, 5)
+        // A miss changes no other number.
+        XCTAssertEqual(game.stats(for: shooter)?.points, 4)
+        XCTAssertEqual(game.teamScores[team], 4)
+        XCTAssertEqual(SkillLevel.production(try XCTUnwrap(game.stats(for: shooter))), 4, accuracy: 0.001)
+        game.removeStat(.miss, for: shooter, teamId: team)
+        XCTAssertEqual(game.shooting(for: shooter)?.attempts, 4)
+        // Round trip; a game from before decodes without any of it.
+        let back = try JSONDecoder().decode(SessionGame.self, from: JSONEncoder().encode(game))
+        XCTAssertEqual(back.tracksShots, true)
+        XCTAssertEqual(back.stats(for: shooter)?.misses, 2)
+        var plain = SessionGame(sessionId: UUID())
+        plain.addStat(.points(2), for: shooter, teamId: team)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(plain)) as? [String: Any])
+        XCTAssertNil(object["tracksShots"])
+        XCTAssertNil(object["commonBench"])
+        XCTAssertNil(((object["playerStats"] as? [[String: Any]])?.first)?["misses"], "written only when there are misses")
+    }
+
+    func testAPlayerBackOnTheCommonBenchStillPlayedForTheirTeam() throws {
+        let a = UUID(), b = UUID(), sub = UUID()
+        var black = GameTeam(name: "Black", colorHex: "#000000", playerIds: [a])
+        black.starters = 1
+        var white = GameTeam(name: "White", colorHex: "#FFFFFF", playerIds: [b])
+        white.starters = 1
+        var game = SessionGame(sessionId: UUID(), gameType: .twoTeam, teams: [black, white], status: .inProgress)
+        game.activeTeamIds = [black.id, white.id]
+        game.commonBench = [sub]
+        XCTAssertNil(game.participants[sub], "waiting on the bench is not playing")
+        // sub comes on for a in Black; a goes to the common bench.
+        game.teams[0].playerIds[0] = sub
+        game.commonBench = [a]
+        game.benchTeams = [a: black.id]
+        game.subbedIds = [sub, a]
+        XCTAssertEqual(game.participants[sub], black.id)
+        XCTAssertEqual(game.participants[a], black.id, "he started for Black, though he is on no team's list now")
+        let back = try JSONDecoder().decode(SessionGame.self, from: JSONEncoder().encode(game))
+        XCTAssertEqual(back.commonBench, [a])
+        XCTAssertEqual(back.participants[a], black.id)
+    }
 }

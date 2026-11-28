@@ -906,6 +906,50 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   PHOTO — an opaque photo covers it (the row's own team tint is unchanged).
   Battle Royal has no teams and is untouched. Neither was looked at on
   screen (a glow is 0.5 s; the demo photos are opaque).
+  SHOOTING PERCENTAGE, A COMMON BENCH, AND THE SETUP PAGE THAT WOULD NOT
+  SCROLL (28 Nov 2026, Luther). Create Game's settings card has a second
+  row of chips (team games only):
+  · SHOTS — Makes only · Makes + misses (`setup.shots`, device setting
+    `game.tracksShots`) → `SessionGame.tracksShots` (games JSON, written only
+    when on). The live row is STILL the made shot; a red MISS button sits
+    beside REB (`GameStatAction.Kind.miss` → `StatType.miss` →
+    `SessionPlayerStats.misses`, written only when > 0; hold removes one,
+    Undo works). `SessionGame.shooting(for:)` = made (the basket log's count
+    for that scorer, else points ÷ basket value) over made + misses, nil in
+    a game that only counts makes. Shown as "FG 3/7 · 43%" leading the live
+    stat line (`live.shooting`) and under the name in the recap's box score
+    (`recap.shooting`). NOTHING ELSE READS A MISS: points, production,
+    levels, evidence and the dashboard are unchanged (a miss does make a
+    stat line, so the player counts as having played — they did). Not yet:
+    a percentage on the profile / dashboard, or 2- v 3-point attempts.
+  · BENCH — Each team's · Common (`setup.bench`, `game.commonBench`). COMMON:
+    teams show starter slots only; a "Common bench" card (`setup.bench`,
+    drop target "bench", players `setup.bench.player`) holds everyone
+    waiting; "Move to the bench" / "To the bench" in a player's options; a
+    full team's extra goes to the bench; Balance teams puts each team's
+    players past its starters there; switching the chip gathers the teams'
+    benches or deals the common one back out in turn. Stored as
+    `SessionGame.commonBench` (ids on no team; nil = each team's own bench
+    in its playerIds, as before) and carried to the Next Game. LIVE: every
+    panel's bench strip shows the common bench; a sub takes the replaced
+    player's place on THAT team and the replaced player goes to the common
+    bench, remembered in `benchTeams` (player → the team they played for) so
+    `participants` still counts them. A Game Day's own game keeps the team's
+    bench.
+  · THE PAGE WOULD NOT SCROLL: every drop target's on-screen frame, the
+    visible rect, the scroll frame and the scrollable height were @State —
+    they change on every frame of a scroll, and each change redrew the whole
+    page (every slot, photo and, since 26 Nov, every team octagon) several
+    times a frame. They live in `CarryGeometry`, a plain object the page
+    holds; nothing drawn reads them. Also: a hold must now stay within 6 pt
+    for 0.35 s to lift a player (was 10 pt, 0.3 s) — a finger that moves is
+    scrolling. NOT REPRODUCED before the fix (the iPad mini simulator was in
+    use by another session), and not seen scrolling after it; the cause is
+    read from the code.
+  Tests: DataLogicAuditTests (misses, the common bench's participants). Not
+  looked at on screen: the two chips, the MISS button, the common bench card
+  or its live strip. LiveGameBenchUITests is an iPad test (it expects both
+  teams' panels) and fails on a phone simulator.
   WHAT THE RESULTS SAY — THE DASHBOARD REWORKED (28 Nov 2026, Luther, on
   the games dashboard: "is this the best we can do in terms of insight? … a
   better use of collected in-game data, be it to understand the group or
