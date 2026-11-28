@@ -97,4 +97,56 @@ final class MediaVaultTests: XCTestCase {
                                          sessions: sessions, source: .lastGame, chinese: false)
         XCTAssertFalse(none.hasStats, "no games: nothing invented")
     }
+
+    // MARK: Faces (28 Nov 2026)
+
+    func testAFaceRidesInTheVaultAndOlderEntriesDecode() throws {
+        let old = #"{"id":"6F1C1E4A-0C3B-4C55-9D6E-2F3A4B5C6D7E","localId":"x","addedAt":0}"#
+        let entry = try JSONDecoder().decode(VaultPhoto.self, from: Data(old.utf8))
+        XCTAssertNil(entry.face)
+        XCTAssertNil(entry.facesChecked)
+        var e = entry
+        e.face = VaultFace(rect: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.25), pixels: 600, quality: 0.8)
+        e.facesChecked = true
+        let back = try JSONDecoder().decode(VaultPhoto.self, from: JSONEncoder().encode(e))
+        XCTAssertEqual(back.face, e.face)
+        XCTAssertEqual(back.face?.rect.minY ?? 0, 0.2, accuracy: 0.0001)
+    }
+
+    func testTheBestFaceIsTheCoachsPickThenTheSharpest() {
+        func photo(_ px: Double, coach: Bool = false) -> VaultPhoto {
+            var p = VaultPhoto(localId: UUID().uuidString, addedAt: .now)
+            p.face = VaultFace(rect: CGRect(x: 0, y: 0, width: 0.2, height: 0.2), pixels: px, byCoach: coach ? true : nil)
+            return p
+        }
+        let small = photo(60), big = photo(700), mid = photo(300), picked = photo(200, coach: true)
+        XCTAssertEqual(FaceIndex.bestFace(in: [small, mid, big])?.id, big.id)
+        XCTAssertEqual(FaceIndex.bestFace(in: [small, big, picked])?.id, picked.id)
+        XCTAssertNil(FaceIndex.bestFace(in: [small]), "a face under 80 px is too small for a close-up")
+    }
+
+    func testPinyinOfAChineseNameRunsFamilyNameFirst() {
+        var kid = Student(name: "Liú Chén Lín")
+        kid.chineseName = "刘晨林"
+        let parts = AthletePostFacts.nameParts(kid, chinese: false)
+        XCTAssertEqual(parts.last, "Liú")
+        XCTAssertEqual(parts.first, "Chén Lín")
+        let western = AthletePostFacts.nameParts(Student(name: "Sofia Reyes"), chinese: false)
+        XCTAssertEqual(western.last, "Reyes")
+    }
+
+    func testAFigureIsTrimmedToTheAthlete() throws {
+        // 100 × 200 transparent, a solid block at x 30…69, y 50…199 (runs off the bottom).
+        let w = 100, h = 200
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        for y in 50..<200 { for x in 30..<70 { let i = (y * w + x) * 4; px[i] = 255; px[i + 3] = 255 } }
+        let ctx = try XCTUnwrap(CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let image = try XCTUnwrap(ctx.makeImage())
+        let t = try XCTUnwrap(PostLift.trimmedFigure(image))
+        XCTAssertEqual(Double(t.image.width), 40, accuracy: 4)
+        XCTAssertEqual(Double(t.image.height), 150, accuracy: 4)
+        XCTAssertTrue(t.cutAtBottom)
+    }
 }

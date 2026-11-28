@@ -3830,6 +3830,37 @@ store and Hoopwise keeps only the INDEX; photos first, no video overlays yet.
   smaller polaroid, swiss lists three). HOOPWISE_POST_ASPECT=square exports the
   1:1 set. All thirteen were looked at as exports (portrait and square) on the
   simulator; never with a real cut-out.
+- THE FACE INDEX + TORN PAPER CLOSER TO ITS REFERENCE (28 Nov 2026, Luther,
+  markup on a Torn paper post: "Force" on the strip, "Larger" on the athlete;
+  "store faces in the media so that wherever a face needs to be used in the
+  poster the engine knows from which photos it should choose").
+  `VaultPhoto.face: VaultFace?` (normalized rect, top-left; face height in the
+  photo's pixels; Vision capture quality; byCoach) + `facesChecked`, inside the
+  synced vault JSON — no schema change. Services/FaceIndex.swift: `faces(in:)`
+  (VNDetectFaceRectanglesRequest + capture quality, largest first),
+  `athleteFace` = the largest, `bestFace(in:)` = the coach's pick, else the
+  biggest × sharpest (≥ 80 px), `index(studentId:)` looks at each vault photo
+  ONCE (the Media card's task, and the composer) and writes once. A vault
+  photo with several faces shows them on VaultPhotoView; a tap makes one the
+  athlete's (`media.face` / `media.face.chosen`). `PostLift.lift` cuts out
+  the person whose face is largest (focus under the chin; companions ≤ 12 %
+  — `cutOut(companionShare:)` — so a teammate leaning in stays out);
+  `trimmedFigure` crops to the athlete and says whether they run off the
+  bottom. TORN PAPER: the strip is a HALF FACE — the best close-up in the
+  vault (else this photo, else the profile picture), face ~46 % of the page,
+  its middle on the tear, B&W; cut out → the program colour behind; the
+  athlete stands 68 % of the page tall at the right (a waist-up figure sits on
+  the bottom edge); the big name is the GIVEN name with the whole name signed
+  over it (`AthletePostFacts.signature` = student.name); numbers tight, tags at
+  their top right; a white sheet torn behind the name. FIXED: pinyin of a
+  Chinese name runs FAMILY NAME FIRST (`nameParts`: "Liú Chén Lín" →
+  last Liú, first Chén Lín — it printed "LÍN" as the surname, every template).
+  VISION'S FACE AND FOREGROUND REQUESTS DO NOT RUN ON THE SIMULATOR: DEBUG
+  athletePost export takes HOOPWISE_POST_FACE=x,y,w,h (measure post-standin.jpg
+  on the Mac) and HOOPWISE_POST_LIFTED=1 (the athlete's cut-out profile
+  photo), + HOOPWISE_POST_SAMPLE=1. Tests: MediaVaultTests (faces, names,
+  trim). NOT seen: a real full-body cut-out, the face index on a device, the
+  face picker on screen.
 - VIDEOS (26 Nov 2026, Luther: "now let's do overlay templates for videos").
   The vault takes VIDEOS too — same index (a VaultPhoto names any asset), the
   picker offers images and videos, thumbnails show ▶ and the length, a class's

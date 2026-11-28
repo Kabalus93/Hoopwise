@@ -121,6 +121,13 @@ struct AthleteMediaCard: View {
                 .environmentObject(dataManager)
         }
         .task { if !entries.isEmpty && !access { access = await PhotoVault.requestAccess() } }
+        // The face index: each photo is looked at once, in the background, so
+        // a poster already knows which photo holds the best close-up.
+        .task(id: entries.filter { $0.facesChecked != true }.count) {
+            guard access else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            await FaceIndex.index(studentId: studentId, vault: entries, dataManager: dataManager)
+        }
     }
 
     private func add(_ items: [PhotosPickerItem]) {
@@ -184,8 +191,14 @@ struct VaultPhotoView: View {
     @State private var image: UIImage?
     @State private var composing = false
     @State private var confirmingRemove = false
+    /// Every face on this photo (the face index looks at it on the device).
+    @State private var faces: [VaultFace] = []
 
     private var asset: PHAsset? { PhotoVault.assets(for: [entry]).first?.asset }
+    /// The stored entry (it changes when a face is chosen).
+    private var stored: VaultPhoto {
+        dataManager.students.first { $0.id == studentId }?.mediaAssets.vault.first { $0.id == entry.id } ?? entry
+    }
 
     var body: some View {
         if let asset, asset.mediaType == .video {
@@ -200,6 +213,7 @@ struct VaultPhotoView: View {
             Group {
                 if let image {
                     Image(uiImage: image).resizable().scaledToFit()
+                        .overlay { faceMarks(image: image) }
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -207,6 +221,11 @@ struct VaultPhotoView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             if let date = entry.takenAt {
                 Text(date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+            }
+            if faces.count > 1 {
+                Text(isChinese ? "点一下学员的脸——制作图片时会用它。" : "Tap the athlete's face — posters use it.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("media.face.hint")
             }
             Button { composing = true } label: {
                 Label(isChinese ? "加上数据制作图片" : "Make a post with their stats", systemImage: "wand.and.stars")
@@ -244,11 +263,70 @@ struct VaultPhotoView: View {
         }
         .task {
             if let asset { image = await PhotoVault.fullImage(asset) }
+            if let cg = image?.uprightCGImage {
+                faces = await Task.detached(priority: .userInitiated) { FaceIndex.faces(in: cg) }.value
+            }
         }
         .fullScreenCover(isPresented: $composing) {
             if let image, let student = dataManager.students.first(where: { $0.id == studentId }) {
                 AthletePostComposer(student: student, photo: image).environmentObject(dataManager)
             }
+        }
+    }
+}
+
+extension VaultPhotoView {
+    /// The faces on the photo: the one used for posters ringed in the accent
+    /// colour with the athlete's name; a tap on another makes it theirs (the
+    /// face index otherwise takes the largest).
+    @ViewBuilder
+    func faceMarks(image: UIImage) -> some View {
+        if faces.count > 1 {
+            GeometryReader { geo in
+                let chosen = stored.face?.rect ?? faces.first?.rect
+                ForEach(faces.indices, id: \.self) { i in
+                    let f = faces[i]
+                    let r = CGRect(x: f.rect.minX * geo.size.width, y: f.rect.minY * geo.size.height,
+                                   width: f.rect.width * geo.size.width, height: f.rect.height * geo.size.height)
+                    let on = chosen.map { overlap($0, f.rect) > 0.5 } ?? false
+                    Button { chooseFace(f, image: image) } label: {
+                        RoundedRectangle(cornerRadius: r.width * 0.2)
+                            .strokeBorder(on ? Color.accentColor : .white.opacity(0.85),
+                                          style: StrokeStyle(lineWidth: on ? 3 : 1.5, dash: on ? [] : [5, 4]))
+                            .background(Color.white.opacity(0.001))
+                            .overlay(alignment: .bottom) {
+                                if on, let name = dataManager.students.first(where: { $0.id == studentId })?.primaryDisplayName {
+                                    Text(name).font(.caption2.weight(.semibold)).foregroundStyle(.white)
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Capsule().fill(Color.accentColor))
+                                        .fixedSize().offset(y: 22)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: r.width, height: r.height)
+                    .position(x: r.midX, y: r.midY)
+                    .accessibilityIdentifier(on ? "media.face.chosen" : "media.face")
+                }
+            }
+        }
+    }
+
+    private func overlap(_ a: CGRect, _ b: CGRect) -> Double {
+        let i = a.intersection(b)
+        guard !i.isNull, a.width * a.height > 0 else { return 0 }
+        return (i.width * i.height) / min(a.width * a.height, b.width * b.height)
+    }
+
+    private func chooseFace(_ face: VaultFace, image: UIImage) {
+        var mine = face
+        mine.byCoach = true
+        // Pixels at the photo's own size.
+        if let asset { mine.pixels = face.rect.height * Double(asset.pixelHeight) }
+        dataManager.setVault(studentId: studentId) { list in
+            guard let i = list.firstIndex(where: { $0.id == entry.id }) else { return }
+            list[i].face = mine
+            list[i].facesChecked = true
         }
     }
 }
@@ -265,6 +343,11 @@ struct AthletePostComposer: View {
     @State private var aspect: AthletePostAspect = .portrait
     @State private var cutout: UIImage?
     @State private var cutoutTried = false
+    /// The athlete alone, cropped to them (Torn paper stands them up large).
+    @State private var figure: UIImage?
+    @State private var figureStands = true
+    /// The best close-up of their face in the vault (Torn paper's half face).
+    @State private var portrait: PostPortrait?
     @State private var sharing: [Any]?
 
     private var chinese: Bool { AreaLanguage.isChinese(.playerCard) }
@@ -284,7 +367,8 @@ struct AthletePostComposer: View {
                 GeometryReader { geo in
                     let size = aspect.size
                     let scale = min(geo.size.width / size.width, geo.size.height / size.height)
-                    AthletePostCanvas(template: template, facts: f, photo: photo, cutout: cutout, aspect: aspect)
+                    AthletePostCanvas(template: template, facts: f, photo: photo, cutout: cutout, aspect: aspect,
+                                      figure: figure, figureStands: figureStands, portrait: portrait)
                         .scaleEffect(scale)
                         .frame(width: size.width * scale, height: size.height * scale)
                         .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
@@ -364,21 +448,57 @@ struct AthletePostComposer: View {
             .accessibilityIdentifier("post.consent")
     }
 
-    /// The poster lifts the athlete out of the photo (Vision, on the device).
+    /// The poster lifts the athlete out of the photo (Vision, on the device):
+    /// the person with the largest face, a teammate leaning in left out. Then
+    /// the half face: the sharpest close-up in their vault (the face index),
+    /// else this photo, else their profile picture.
     private func liftSubject() {
-        guard !cutoutTried, let cg = photo.cgImage else { return }
+        guard !cutoutTried, let cg = photo.uprightCGImage else { return }
         cutoutTried = true
-        let orientation = photo.imageOrientation
-        Task.detached(priority: .userInitiated) {
-            guard let c = ProfileBackgroundRemoval.cutOut(cg), let t = ProfileBackgroundRemoval.transparent(c) else { return }
-            let image = UIImage(cgImage: t, scale: 1, orientation: orientation)
-            await MainActor.run { cutout = image }
+        let vault = student.mediaAssets.vault
+        let studentId = student.id
+        let profile = student.profileImageData
+        Task {
+            let face = await Task.detached(priority: .userInitiated) { FaceIndex.athleteFace(in: cg) }.value
+            let lifted = await Task.detached(priority: .userInitiated) { PostLift.lift(cg, face: face) }.value
+            if let lifted {
+                cutout = UIImage(cgImage: lifted)
+                if let t = PostLift.trimmedFigure(lifted) { figure = UIImage(cgImage: t.image); figureStands = !t.cutAtBottom }
+            }
+            portrait = await makePortrait(mainFace: face, mainLifted: lifted, main: cg,
+                                          vault: vault, studentId: studentId, profile: profile)
         }
+    }
+
+    private func makePortrait(mainFace: VaultFace?, mainLifted: CGImage?, main: CGImage,
+                              vault: [VaultPhoto], studentId: UUID, profile: Data?) async -> PostPortrait? {
+        await FaceIndex.index(studentId: studentId, vault: vault, dataManager: dataManager)
+        let indexed = dataManager.students.first { $0.id == studentId }?.mediaAssets.vault ?? vault
+        // This photo at its own resolution vs the best in the vault.
+        let mainScore = mainFace.map { var f = $0; f.pixels = $0.height * Double(main.height); return f.score } ?? 0
+        if let best = FaceIndex.bestFace(in: indexed), let face = best.face, face.score > mainScore,
+           let asset = PhotoVault.assets(for: [best]).first?.asset,
+           let image = await PhotoVault.fullImage(asset), let cg = image.uprightCGImage {
+            // Find it again on this copy (a coach's pick keeps its rectangle).
+            let here = face.byCoach == true ? face : (await Task.detached { FaceIndex.athleteFace(in: cg) }.value ?? face)
+            let lifted = await Task.detached(priority: .userInitiated) { PostLift.lift(cg, face: here) }.value
+            return PostPortrait(image: UIImage(cgImage: lifted ?? cg), face: here.rect, lifted: lifted != nil)
+        }
+        if let mainFace, mainScore > 0 {
+            return PostPortrait(image: UIImage(cgImage: mainLifted ?? main), face: mainFace.rect, lifted: mainLifted != nil)
+        }
+        if let profile, let image = UIImage(data: profile), let cg = image.uprightCGImage,
+           let face = await Task.detached(priority: .userInitiated, operation: { FaceIndex.athleteFace(in: cg) }).value {
+            return PostPortrait(image: UIImage(cgImage: cg), face: face.rect,
+                                lifted: ProfilePhotoEncoding.isTransparent(cg))
+        }
+        return nil
     }
 
     private func share() {
         let renderer = ImageRenderer(content: AthletePostCanvas(template: template, facts: facts, photo: photo,
-                                                                cutout: cutout, aspect: aspect))
+                                                                cutout: cutout, aspect: aspect,
+                                                                figure: figure, figureStands: figureStands, portrait: portrait))
         renderer.scale = 1
         guard let image = renderer.uiImage, let data = image.jpegData(compressionQuality: 0.92) else { return }
         let name = student.primaryDisplayName.replacingOccurrences(of: "/", with: "-")

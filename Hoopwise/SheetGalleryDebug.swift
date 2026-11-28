@@ -1150,15 +1150,39 @@ enum AthletePostDebug {
         guard let caches = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.OKTO.SAMp")?
             .appendingPathComponent("Library/Caches") else { return }
         let program = dm.programs.first { $0.id == student.programId }
+        // The face index and the lift, as the composer does them. The
+        // simulator runs neither Vision request: HOOPWISE_POST_FACE=x,y,w,h
+        // (normalized, top-left — measure it on the Mac from post-standin.jpg)
+        // stands in for the face, and HOOPWISE_POST_LIFTED=1 uses the athlete's
+        // own cut-out profile photo (when it is one) as the lifted athlete.
+        try? photo.jpegData(compressionQuality: 0.9)?.write(to: caches.appendingPathComponent("post-standin.jpg"))
+        let env = ProcessInfo.processInfo.environment
+        var cg = photo.uprightCGImage
+        var lifted: CGImage? = nil
+        if env["HOOPWISE_POST_LIFTED"] == "1", let data = student.profileImageData,
+           let own = UIImage(data: data)?.uprightCGImage, ProfilePhotoEncoding.isTransparent(own) {
+            cg = own; lifted = own
+        }
+        var face = cg.flatMap { FaceIndex.athleteFace(in: $0) }
+        if face == nil, let parts = env["HOOPWISE_POST_FACE"]?.split(separator: ",").compactMap({ Double($0) }), parts.count == 4 {
+            face = VaultFace(rect: CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]), pixels: 400)
+        }
+        if lifted == nil { lifted = cg.flatMap { PostLift.lift($0, face: face) } }
+        let trimmed = lifted.flatMap { PostLift.trimmedFigure($0) }
+        let figure = trimmed.map { UIImage(cgImage: $0.image) }
+        let portrait = face.map { PostPortrait(image: lifted.map { UIImage(cgImage: $0) } ?? photo, face: $0.rect, lifted: lifted != nil) }
+        NSLog("post debug face \(face.map { "\($0.rect) \(Int($0.pixels))px q\($0.quality ?? -1)" } ?? "none") lifted \(lifted != nil)")
         for source in AthletePostFacts.Source.allCases {
             var facts = AthletePostFacts.make(student: student, jersey: dm.player(for: student.id)?.jerseyNumber,
                                               colorHex: program?.colorHex ?? "#2A78D6", academy: ProgramGuideStore.academyName,
                                               sessions: dm.sessionEvents, source: source, chinese: false)
-            if !facts.hasStats { facts = sample(facts) }
+            if !facts.hasStats || env["HOOPWISE_POST_SAMPLE"] == "1" { facts = sample(facts) }
             for template in AthletePostTemplate.allCases {
                 let aspect: AthletePostAspect = ProcessInfo.processInfo.environment["HOOPWISE_POST_ASPECT"] == "square" ? .square : .portrait
                 let renderer = ImageRenderer(content: AthletePostCanvas(template: template, facts: facts, photo: photo,
-                                                                        cutout: nil, aspect: aspect))
+                                                                        cutout: lifted.map { UIImage(cgImage: $0) }, aspect: aspect,
+                                                                        figure: figure, figureStands: !(trimmed?.cutAtBottom ?? false),
+                                                                        portrait: portrait))
                 renderer.scale = 1
                 try? renderer.uiImage?.jpegData(compressionQuality: 0.85)?
                     .write(to: caches.appendingPathComponent("post-\(template.rawValue)-\(source.rawValue).jpg"))

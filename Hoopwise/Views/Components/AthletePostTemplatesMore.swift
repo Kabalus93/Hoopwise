@@ -718,51 +718,59 @@ struct NeonPost: View {
 struct TornPaperPost: View {
     let facts: AthletePostFacts
     let photo: UIImage
+    /// The athlete alone, cropped to them (or the full-size cut-out).
     let cutout: UIImage?
+    /// Whole down to the feet (stood on a shadow) — else set on the bottom edge.
+    var stands = true
+    /// The best close-up of their face in the vault (the face index).
+    var portrait: PostPortrait? = nil
     let size: CGSize
 
     private let paper = Color(red: 0.94, green: 0.94, blue: 0.93)
 
+    // Closer to the reference (28 Nov 2026, Luther's markup: "Force" on the
+    // strip — a real close-up of the FACE, torn through it — and "Larger" on
+    // the athlete): the strip is a half face found by the face index, the
+    // athlete stands two thirds of the page tall, the big name is the name
+    // they are called by with the whole name signed over it, and the numbers
+    // stack tight with their tags at the top.
     var body: some View {
         let w = size.width, h = size.height
         let square = h < w * 1.1
         let edge = w * 0.36
         let rows = Array(facts.headline.prefix(3))
-        let numberSize = h * (square ? 0.105 : 0.11)
+        let numberSize = h * (square ? 0.105 : 0.108)
+        let bigName = (facts.firstName.isEmpty ? facts.lastName : facts.firstName).uppercased()
+        let signature = facts.signature.isEmpty ? facts.fullName : facts.signature
         ZStack(alignment: .topLeading) {
             paper
-            // Grid paper, torn in on the right of the strip.
+            // A whiter sheet torn across the top right, behind the name.
+            Color.white
+                .frame(width: w * 0.7, height: h * (square ? 0.34 : 0.3))
+                .clipShape(TornEdge(seed: 31, side: .both, depth: 14))
+                .rotationEffect(.degrees(-2))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+                .offset(x: w * 0.36, y: -h * 0.02)
+            // Grid paper, torn on both sides, behind the numbers.
             PostGrid()
-                .frame(width: w * 0.42, height: h * 0.62)
+                .frame(width: w * 0.4, height: h * 0.64)
                 .clipShape(TornEdge(seed: 11, side: .both, depth: 12))
-                .offset(x: edge - 30, y: h * 0.2)
-            // The strip: the program colour and a half face in black and white.
-            ZStack {
-                facts.color.mix(with: .black, by: 0.15)
-                PostPhotoFill(photo: photo)
-                    .grayscale(1).contrast(1.35)
-                    .frame(width: edge * 2, height: h)
-                    .offset(x: edge * 0.5)
-                    .mask(LinearGradient(colors: [.clear, .black, .black], startPoint: .leading, endPoint: .trailing))
-            }
-            .frame(width: edge + 30, height: h)
-            .clipped()
-            .clipShape(TornEdge(seed: 3, side: .trailing, depth: 16))
-            // The paper's white rim along the tear.
-            .background {
-                paper.frame(width: edge + 44, height: h)
-                    .clipShape(TornEdge(seed: 5, side: .trailing, depth: 18))
-                    .shadow(color: .black.opacity(0.35), radius: 10, x: 4)
-            }
-            // The athlete, standing at the right — or, without a cut-out, the
-            // photo as a print torn out of a page.
+                .shadow(color: .black.opacity(0.1), radius: 6, x: 2)
+                .offset(x: edge - 26, y: h * 0.2)
+            strip(w: w, h: h, edge: edge, square: square)
+            // The athlete, standing large at the right — or, without a cut-out,
+            // the photo as a print torn out of a page.
             if let cutout {
+                let tall = h * (square ? 0.66 : 0.68)
+                let foot = stands ? h * 0.965 : h
                 Image(uiImage: cutout).resizable().scaledToFit()
-                    .frame(width: w * 0.42, height: h * (square ? 0.66 : 0.68), alignment: .bottom)
+                    .frame(width: w * 0.4, height: tall, alignment: .bottom)
                     .background(alignment: .bottom) {
-                        Ellipse().fill(.black.opacity(0.28)).frame(width: w * 0.28, height: 26).blur(radius: 10).offset(y: 10)
+                        if stands {
+                            Ellipse().fill(.black.opacity(0.32)).frame(width: w * 0.26, height: 30).blur(radius: 12).offset(y: 12)
+                        }
                     }
-                    .offset(x: w * 0.57, y: h * (square ? 0.3 : 0.29))
+                    .offset(x: w * 0.6, y: foot - tall)
             } else {
                 let pw = w * (square ? 0.34 : 0.37), ph = h * (square ? 0.5 : 0.47)
                 PostPhotoFill(photo: photo)
@@ -775,7 +783,7 @@ struct TornPaperPost: View {
                     .rotationEffect(.degrees(3))
                     .offset(x: w - pw - 56, y: h * (square ? 0.38 : 0.41))
             }
-            // Name and signature, top right.
+            // Eyebrow, the big name, the signature over it.
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 12) {
                     VStack(spacing: 5) {
@@ -784,38 +792,44 @@ struct TornPaperPost: View {
                     Text(facts.eyebrow).font(.system(size: square ? 24 : 28, weight: .heavy)).tracking(2)
                         .foregroundStyle(ink).lineLimit(1)
                 }
-                Text(facts.lastName.uppercased())
-                    .font(postHeavy(h * (square ? 0.15 : 0.16))).foregroundStyle(ink)
-                    .lineLimit(1).minimumScaleFactor(0.35)
-                    .padding(.top, -8)
-                if !facts.firstName.isEmpty {
-                    Text(facts.firstName)
-                        .font(.custom("SnellRoundhand-Bold", size: square ? 74 : 86))
-                        .foregroundStyle(facts.color)
-                        .lineLimit(1).minimumScaleFactor(0.5)
-                        .rotationEffect(.degrees(-7))
-                        .padding(.top, -h * 0.05).padding(.leading, w * 0.16)
-                }
+                Text(bigName)
+                    .font(postHeavy(h * (square ? 0.15 : 0.145))).foregroundStyle(ink)
+                    .lineLimit(1).minimumScaleFactor(0.3)
+                    .padding(.top, -6)
+                Text(signature)
+                    .font(.custom("SnellRoundhand-Bold", size: square ? 82 : 96))
+                    .foregroundStyle(facts.color)
+                    .lineLimit(1).minimumScaleFactor(0.4)
+                    .rotationEffect(.degrees(-8))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, -h * (square ? 0.075 : 0.07))
             }
             .frame(width: w - edge - 70, alignment: .leading)
             .offset(x: edge + 40, y: h * 0.05)
-            // The numbers, stacked, each with its tag.
-            VStack(alignment: .trailing, spacing: -numberSize * 0.12) {
+            // The numbers: big, stacked tight, each tag at its top right.
+            VStack(alignment: .trailing, spacing: -numberSize * 0.2) {
                 ForEach(rows) { s in
-                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    HStack(alignment: .top, spacing: 6) {
                         Text(s.text).font(postHeavy(numberSize)).foregroundStyle(ink)
                             .lineLimit(1).fixedSize()
-                        Text(s.label).font(.system(size: square ? 22 : 26, weight: .heavy))
+                        Text(s.label).font(.system(size: square ? 20 : 22, weight: .heavy))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 7).padding(.vertical, 2)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(facts.color)
-                            .frame(width: square ? 72 : 84, alignment: .leading)
-                            .padding(.bottom, numberSize * 0.12)
+                            .padding(.top, numberSize * 0.3)
+                            .frame(width: square ? 68 : 76, alignment: .leading)
                     }
                 }
+                if !facts.subtitle.isEmpty {
+                    Text(facts.subtitle.uppercased())
+                        .font(.system(size: 20, weight: .bold)).tracking(3).foregroundStyle(ink.opacity(0.65))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .padding(.top, numberSize * 0.3)
+                }
             }
-            .shadow(color: paper, radius: 8)
-            .offset(x: edge + 40, y: h * (square ? 0.42 : 0.38))
+            .shadow(color: .white, radius: 6)
+            .fixedSize()
+            .offset(x: edge + 44, y: h * (square ? 0.4 : 0.37))
             // The academy, foot of the strip.
             Text(facts.academy.uppercased())
                 .font(.system(size: square ? 22 : 26, weight: .black)).tracking(3)
@@ -824,15 +838,54 @@ struct TornPaperPost: View {
                 .frame(width: edge - 70, alignment: .leading)
                 .shadow(color: .black.opacity(0.5), radius: 6)
                 .offset(x: 46, y: h - (square ? 100 : 120))
-            // The subtitle, foot right.
-            if !facts.subtitle.isEmpty {
-                Text(facts.subtitle.uppercased())
-                    .font(.system(size: 20, weight: .bold)).tracking(3).foregroundStyle(ink.opacity(0.7))
-                    .lineLimit(1).minimumScaleFactor(0.6)
-                    .frame(width: w - edge - 90, alignment: .trailing)
-                    .offset(x: edge + 40, y: h - 56)
+        }
+    }
+
+    /// The strip at the left: the program colour and a half face in black and
+    /// white, torn through the face.
+    private func strip(w: CGFloat, h: CGFloat, edge: CGFloat, square: Bool) -> some View {
+        let stripW = edge + 30
+        return ZStack(alignment: .topLeading) {
+            facts.color.mix(with: .black, by: 0.15)
+            if let portrait, let placed = place(portrait, stripW: stripW, edge: edge, h: h, square: square) {
+                Image(uiImage: portrait.image).resizable()
+                    .grayscale(1).contrast(1.35)
+                    .frame(width: placed.size.width, height: placed.size.height)
+                    .offset(x: placed.origin.x, y: placed.origin.y)
+            } else {
+                PostPhotoFill(photo: photo)
+                    .grayscale(1).contrast(1.35)
+                    .frame(width: edge * 2, height: h)
+                    .offset(x: -edge * 0.5)
+                    .mask(LinearGradient(colors: [.clear, .black, .black], startPoint: .leading, endPoint: .trailing))
             }
         }
+        .frame(width: stripW, height: h, alignment: .topLeading)
+        .clipped()
+        .clipShape(TornEdge(seed: 3, side: .trailing, depth: 16))
+        // The paper's white rim along the tear.
+        .background(alignment: .topLeading) {
+            paper.frame(width: edge + 44, height: h)
+                .clipShape(TornEdge(seed: 5, side: .trailing, depth: 18))
+                .shadow(color: .black.opacity(0.35), radius: 10, x: 4)
+        }
+    }
+
+    /// Where the portrait goes: the face about half the page tall, its middle
+    /// on the tear. A photo with its background still in covers the strip.
+    private func place(_ p: PostPortrait, stripW: CGFloat, edge: CGFloat, h: CGFloat, square: Bool) -> CGRect? {
+        let iw = p.image.size.width, ih = p.image.size.height
+        guard iw > 0, ih > 0, p.face.height > 0 else { return nil }
+        var scale = h * (square ? 0.5 : 0.46) / (p.face.height * ih)
+        if !p.lifted { scale = max(scale, h / ih, stripW / iw) }
+        let dw = iw * scale, dh = ih * scale
+        var x = edge * 0.95 - p.face.midX * dw
+        var y = h * (square ? 0.4 : 0.36) - p.face.midY * dh
+        if !p.lifted {
+            x = min(0, max(stripW - dw, x))
+            y = min(0, max(h - dh, y))
+        }
+        return CGRect(x: x, y: y, width: dw, height: dh)
     }
 }
 

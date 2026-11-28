@@ -50,7 +50,8 @@ enum ProfileBackgroundRemoval {
     /// Finds the subject nearest `focus` (normalized, top-left origin; the
     /// camera's circle is centred, so the default is the middle).
     nonisolated static func cutOut(_ image: CGImage,
-                                   focus: CGPoint = CGPoint(x: 0.5, y: 0.5)) -> Cutout? {
+                                   focus: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                                   companionShare: Double = 0.4) -> Cutout? {
         let request = VNGenerateForegroundInstanceMaskRequest()
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         do { try handler.perform([request]) } catch { return nil }
@@ -73,7 +74,8 @@ enum ProfileBackgroundRemoval {
         }
         CVPixelBufferUnlockBaseAddress(labels, .readOnly)
 
-        let chosen = chooseInstances(labels: map, width: width, height: height, focus: focus)
+        let chosen = chooseInstances(labels: map, width: width, height: height, focus: focus,
+                                     companionShare: companionShare)
         guard !chosen.isEmpty,
               let scaled = try? observation.generateScaledMaskForImage(
                 forInstances: IndexSet(chosen.map(Int.init)), from: handler) else { return nil }
@@ -93,8 +95,10 @@ enum ProfileBackgroundRemoval {
     /// one with a pixel nearest it; then any instance touching the winner
     /// whose area is under 40 % of it joins (a held ball returned on its own).
     /// A second person beside the child is bigger than that and stays out.
+    /// `companionShare` = how big (of the winner) a touching instance may be and
+    /// still join; posts pass 0.12 so a teammate leaning in stays out.
     nonisolated static func chooseInstances(labels: [UInt8], width: Int, height: Int,
-                                            focus: CGPoint) -> [UInt8] {
+                                            focus: CGPoint, companionShare: Double = 0.4) -> [UInt8] {
         guard width > 0, height > 0, labels.count == width * height else { return [] }
         let fx = min(width - 1, max(0, Int(focus.x * CGFloat(width))))
         let fy = min(height - 1, max(0, Int(focus.y * CGFloat(height))))
@@ -134,7 +138,7 @@ enum ProfileBackgroundRemoval {
             }
         }
         let companions = touching
-            .filter { Double(area[$0] ?? 0) < Double(mainArea) * 0.4 }
+            .filter { Double(area[$0] ?? 0) < Double(mainArea) * companionShare }
             .sorted()
         return [main] + companions
     }

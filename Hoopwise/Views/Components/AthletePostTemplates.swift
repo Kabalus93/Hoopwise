@@ -69,6 +69,12 @@ struct AthletePostCanvas: View {
     let photo: UIImage
     var cutout: UIImage?
     let aspect: AthletePostAspect
+    /// The athlete alone, cropped to them.
+    var figure: UIImage? = nil
+    /// The figure is whole down to the feet (else it sits on the bottom edge).
+    var figureStands = true
+    /// The best close-up of their face (the face index).
+    var portrait: PostPortrait? = nil
 
     var body: some View {
         let size = aspect.size
@@ -87,7 +93,8 @@ struct AthletePostCanvas: View {
             case .filmStrip: FilmStripPost(facts: facts, photo: photo, size: size)
             case .swiss: SwissPost(facts: facts, photo: photo, size: size)
             case .neon: NeonPost(facts: facts, photo: photo, size: size)
-            case .torn: TornPaperPost(facts: facts, photo: photo, cutout: cutout, size: size)
+            case .torn: TornPaperPost(facts: facts, photo: photo, cutout: figure ?? cutout, stands: figure == nil || figureStands,
+                                      portrait: portrait, size: size)
             }
         }
         .frame(width: size.width, height: size.height)

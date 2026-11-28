@@ -30,6 +30,8 @@ nonisolated struct AthletePostFacts: Equatable {
 
     var firstName: String
     var lastName: String
+    /// The whole name as it is written, in letters (the signature).
+    var signature: String = ""
     var jersey: Int?
     var colorHex: String
     var academy: String
@@ -61,7 +63,9 @@ nonisolated struct AthletePostFacts: Equatable {
                      sessions: [SessionEvent], source: Source, chinese: Bool,
                      now: Date = .now, calendar: Calendar = .current) -> AthletePostFacts {
         let names = nameParts(student, chinese: chinese)
-        var facts = AthletePostFacts(firstName: names.first, lastName: names.last, jersey: jersey,
+        var facts = AthletePostFacts(firstName: names.first, lastName: names.last,
+                                     signature: student.name.trimmingCharacters(in: .whitespaces),  // a signature is written in letters
+                                     jersey: jersey,
                                      colorHex: colorHex, academy: academy, source: source,
                                      eyebrow: "", subtitle: "", stats: [], games: 0)
         let all = GameStatsReport.playerGames(student.id, in: sessions)
@@ -137,6 +141,11 @@ nonisolated struct AthletePostFacts: Equatable {
 
     /// First and last name for the big type: the last word is the last name;
     /// a Chinese card prints the Chinese name whole as the last name.
+    private static func fold(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .filter { $0.isLetter }
+    }
+
     static func nameParts(_ s: Student, chinese: Bool) -> (first: String, last: String) {
         let name = s.primaryName(chinese: chinese).trimmingCharacters(in: .whitespaces)
         if name.unicodeScalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }) {
@@ -144,6 +153,13 @@ nonisolated struct AthletePostFacts: Equatable {
         }
         let words = name.split(separator: " ").map(String.init)
         guard words.count > 1 else { return ("", name) }
+        // Pinyin of their Chinese name runs family name first ("Liú Chén Lín"
+        // = 刘晨林): the family name is the FIRST word (28 Nov 2026 — the
+        // Torn paper poster printed "LÍN" big as if it were the surname).
+        if let hanzi = s.chineseName, PinyinConverter.containsChinese(hanzi),
+           fold(name) == fold(PinyinConverter.toPinyinPlain(hanzi)) {
+            return (words.dropFirst().joined(separator: " "), words[0])
+        }
         return (words.dropLast().joined(separator: " "), words.last ?? "")
     }
 }
