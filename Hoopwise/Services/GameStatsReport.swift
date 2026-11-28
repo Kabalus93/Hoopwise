@@ -330,6 +330,8 @@ enum GameStatsReport {
     }
 
     static let maxInsights = 3
+    /// Games each side of a trend must have.
+    static let minimumTrendGames = 6
 
     static func insights(report: Report, sessions: [SessionEvent], roster: [UUID]) -> [Insight] {
         guard report.games > 0 else { return [] }
@@ -360,7 +362,11 @@ enum GameStatsReport {
         // The single biggest team move, recent vs before (not the assist
         // rate again when the passing gap is already said).
         let saidFewAssists = out.contains { if case .fewAssists = $0 { return true } else { return false } }
-        if report.trend.count >= recentWindow + 1 {
+        // A trend needs games on both sides to mean something (28 Nov 2026:
+        // "Team steals up 96 %" stood on a handful of games).
+        let recentGames = report.trend.suffix(recentWindow).reduce(0) { $0 + $1.games }
+        let earlierGames = report.trend.dropLast(recentWindow).reduce(0) { $0 + $1.games }
+        if report.trend.count >= recentWindow + 1, recentGames >= minimumTrendGames, earlierGames >= minimumTrendGames {
             let recentPts = report.trend.suffix(recentWindow)
             let earlierPts = report.trend.dropLast(recentWindow)
             let candidates: [Metric] = [.points, .rebounds, .assists, .steals, .assistRate]

@@ -906,6 +906,57 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   PHOTO — an opaque photo covers it (the row's own team tint is unchanged).
   Battle Royal has no teams and is untouched. Neither was looked at on
   screen (a glow is 0.5 s; the demo photos are opaque).
+  WHAT THE RESULTS SAY — THE DASHBOARD REWORKED (28 Nov 2026, Luther, on
+  the games dashboard: "is this the best we can do in terms of insight? … a
+  better use of collected in-game data, be it to understand the group or
+  predict" → "build all 7, and rework the UI"). Services/GameImpact.swift
+  (pure) reads RESULTS — every played game between exactly two teams of
+  known players (`teamGames`; margin in BASKETS = points ÷ the game's basket
+  value; a Game Day opponent without players, a Battle Royal, a 0–0 and a
+  skipped class are left out):
+  1. IMPACT: `ratings` — ridge regression (λ 0.25, 80 passes, deterministic)
+     explaining each margin as (one side's average rating) − (the other's);
+     `impact` = per player games, W–L, their teams' average margin and WORTH
+     (rating ÷ their usual team size = baskets of margin a game they add).
+     Named from 3 games; shown from 6 team games (`minimumGames`).
+  2. PREDICTION: `predict(a:b:games:ratings:)` — nil under 6 games or when
+     fewer than 60 % of the players have 3 games. Create Game shows "On past
+     results: White favoured by about 1.5 baskets · from N games of this
+     group" (`setup.prediction`, two filled teams; under half a basket = "too
+     close to call"), and Balance teams adds the ratings to its cost
+     (`TeamBalance.cost(results:)`, ×1.5 per two baskets) once 6 games exist.
+  3. TRANSFER: `transfer(sessions:trained:)` — needs 4 sessions with games;
+     the later half (≤ 3) are "since". For skills that took ≥ 18 % of the
+     plan time of the classes since (PlanCoverage minutes): passing → share
+     of baskets made off a pass (≥ 8 logged baskets each side), defense →
+     steals + blocks a player-game, shooting / finishing → baskets a
+     player-game (≥ 10 player-games); before → since, up / down at ±10 %.
+  4. PAIRS: two players on the SAME team for ≥ 4 games — games, wins, their
+     team's average margin; the dashboard names pairs at ±0.75 or beyond.
+  5. RATING V GAMES: `mismatches` — a player's place in the group by the
+     coach's rating against their place by the game number (shooting:
+     baskets a game; passing: assists; defense: steals + blocks), half the
+     group apart or more, ≥ 4 players compared, top 3.
+  6. WATCH: one player making ≥ 40 % of all baskets (≥ 4 games, ≥ 15
+     baskets, ≥ 5 players), and QUIET players — 3 games or more on the floor
+     without a single stat.
+  7. THRESHOLDS: a connection (passer → scorer) or a playmaker shows only
+     from TWO; the "% of X's assisted baskets" line is gone; Game Insights'
+     team trend needs 6 games each side (`minimumTrendGames`).
+  GameDashboardView: tiles → WHAT THE RESULTS SAY ("From N games between two
+  teams"; always the whole program): WHO MAKES THEIR TEAM WIN
+  (`games.impact`, a diverging bar, top 3 + bottom 2 with Show all), PAIRS ON
+  THE SAME TEAM (`games.pairs`), DID TRAINING SHOW UP (`games.transfer`),
+  RATING AND GAMES DISAGREE (`games.mismatch`), WORTH WATCHING
+  (`games.watch`); before 6 games a note says how many there are
+  (`games.impact.waiting`) → HOW THEY SCORE: Off a pass or self-created,
+  CONNECTIONS. The reading is worked out off the draw (`.task(id:)`).
+  NOT POSSIBLE with what is recorded: shooting percentage in games (no
+  misses), runs / who scores late (basket times are no longer kept),
+  minutes, turnovers. Seen on the iPhone simulator with the gallery's
+  made-up season (two athletes): tiles, impact, how they score,
+  connections. NOT seen: pairs, transfer, mismatch, watch, the prediction
+  line — on real data. Tests: GameImpactTests (8).
   WHO PLAYED A GAME (20 Nov 2026, Luther: "when a player participates but
   does not score or attain any stat, the app doesn't count the game"). A game
   counted only for players with a STAT LINE, and a line exists only once a

@@ -76,6 +76,10 @@ struct CreateGameSheet: View {
     @State private var profiles: [UUID: TeamBalance.Profile] = [:]
     /// Passer → scorer links between players of the pool.
     @State private var chemistryLinks: [TeamBalance.Pair: Int] = [:]
+    /// What past results say (GameImpact): the games between two teams of
+    /// this program and each player's rating from them.
+    @State private var pastGames: [GameImpact.TeamGame] = []
+    @State private var resultRatings: [UUID: Double] = [:]
     /// The teams as they were before "Balance teams" — for Undo.
     @State private var beforeBalance: (teams: [GameTeam], unassigned: Set<UUID>)?
     @State private var usePreviousConfig: Bool = false
@@ -357,6 +361,7 @@ struct CreateGameSheet: View {
 
             Divider()
             balanceVerdict
+            prediction
             HStack(spacing: 12) {
                 if teams.count < maxTeams {
                     Button {
@@ -588,6 +593,37 @@ struct CreateGameSheet: View {
                                         games: TeamBalance.gameNumbers(players: pool, sessions: sessions),
                                         shooting: TeamBalance.shootingStandings(players: pool, sessions: sessions))
         chemistryLinks = TeamBalance.links(players: pool, sessions: sessions)
+        // Results: this program's games (every game for a one-off session).
+        let scope = session.programId.map { id in sessions.filter { $0.programId == id } } ?? sessions
+        pastGames = GameImpact.teamGames(in: scope, excluding: Set(dataManager.staffCoaches.map(\.id)))
+        resultRatings = GameImpact.ratings(pastGames)
+    }
+
+    /// With two teams filled: who the results so far favour, and by how much.
+    @ViewBuilder
+    private var prediction: some View {
+        let filled = teams.indices.filter { !teams[$0].playerIds.isEmpty }
+        if filled.count == 2,
+           let p = GameImpact.predict(a: teams[filled[0]].playerIds, b: teams[filled[1]].playerIds,
+                                      games: pastGames, ratings: resultRatings) {
+            let leader = p.margin >= 0 ? filled[0] : filled[1]
+            let size = abs(p.margin)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(size < 0.5
+                         ? (isChinese ? "按以往结果：势均力敌" : "On past results: too close to call")
+                         : (isChinese ? "按以往结果：\(GameTeam.localizedColorName(teams[leader].name))占优，约 \(String(format: "%.1f", size)) 球"
+                                      : "On past results: \(GameTeam.localizedColorName(teams[leader].name)) favoured by about \(String(format: "%.1f", size)) basket\(size >= 1.25 ? "s" : "")"))
+                        .font(.subheadline.weight(.semibold))
+                    Text(isChinese ? "根据本组 \(p.games) 场比赛" : "From \(p.games) games of this group")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("setup.prediction")
+        }
     }
 
     /// Splits everyone evenly on strength, the eight skills and chemistry;
@@ -596,8 +632,10 @@ struct CreateGameSheet: View {
         let pool = balancePool
         guard teams.count >= 2, pool.count >= teams.count else { return }
         beforeBalance = (teams, unassignedIds)
+        // Results join the balance once there are enough games to trust them.
         let split = TeamBalance.balanced(players: pool, teamCount: teams.count,
-                                         profiles: profiles, links: chemistryLinks)
+                                         profiles: profiles, links: chemistryLinks,
+                                         results: pastGames.count >= GameImpact.minimumGames ? resultRatings : [:])
         withAnimation(.snappy(duration: 0.3)) {
             for i in teams.indices {
                 teams[i].playerIds = split[i]

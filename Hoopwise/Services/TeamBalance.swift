@@ -223,7 +223,7 @@ enum TeamBalance {
 
     /// How uneven a split is — 0 is perfectly even.
     static func cost(_ teams: [[UUID]], profiles: [UUID: Profile], links: [Pair: Int],
-                     groupAxes: [DrillAttribute: Double]) -> Double {
+                     groupAxes: [DrillAttribute: Double], results: [UUID: Double] = [:]) -> Double {
         guard teams.count >= 2 else { return 0 }
         func spread(_ values: [Double]) -> Double { (values.max() ?? 0) - (values.min() ?? 0) }
         func mean(_ values: [Double]) -> Double { values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count) }
@@ -248,14 +248,21 @@ enum TeamBalance {
             }
             chemistry = spread(inside) / Double(total)
         }
-        return 3 * strength + 2 * skills + 0.5 * chemistry
+        // RESULTS (28 Nov 2026): the ratings past games give each player
+        // (GameImpact.ratings, in baskets of margin). Two baskets between the
+        // teams' averages weighs like a whole point of strength.
+        var outcome = 0.0
+        if !results.isEmpty {
+            outcome = spread(teams.map { team in mean(team.map { results[$0] ?? 0 }) }) / 2
+        }
+        return 3 * strength + 2 * skills + 0.5 * chemistry + 1.5 * outcome
     }
 
     /// The players split into `teamCount` teams, sizes at most one apart,
     /// each team's strongest first (they take the starter slots).
     /// Deterministic: the same players and data give the same teams.
     static func balanced(players: [UUID], teamCount: Int, profiles: [UUID: Profile],
-                         links: [Pair: Int] = [:]) -> [[UUID]] {
+                         links: [Pair: Int] = [:], results: [UUID: Double] = [:]) -> [[UUID]] {
         guard teamCount >= 1 else { return [] }
         func strength(_ id: UUID) -> Double { profiles[id]?.strength ?? 0.5 }
         let order = players.sorted {
@@ -274,7 +281,7 @@ enum TeamBalance {
             if !values.isEmpty { groupAxes[axis] = values.reduce(0, +) / Double(values.count) }
         }
 
-        var best = cost(teams, profiles: profiles, links: links, groupAxes: groupAxes)
+        var best = cost(teams, profiles: profiles, links: links, groupAxes: groupAxes, results: results)
         var passes = 0
         while passes < 60 {
             passes += 1
@@ -286,7 +293,7 @@ enum TeamBalance {
                             var trial = teams
                             trial[i][a] = teams[j][b]
                             trial[j][b] = teams[i][a]
-                            let c = cost(trial, profiles: profiles, links: links, groupAxes: groupAxes)
+                            let c = cost(trial, profiles: profiles, links: links, groupAxes: groupAxes, results: results)
                             if c < (improved?.cost ?? best) - 1e-9 { improved = (c, trial) }
                         }
                     }

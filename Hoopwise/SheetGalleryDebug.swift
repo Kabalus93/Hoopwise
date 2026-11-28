@@ -968,15 +968,31 @@ extension SheetGalleryDebug {
                                  endTime: start.addingTimeInterval(3600), status: .completed, attendeeIds: roster)
             for g in 0..<2 {
                 let gid = UUID()
+                // Two teams, mixed differently each game, so results can be read.
+                let teamA = UUID(), teamB = UUID()
+                func side(_ i: Int) -> UUID { (i + week * 3 + g) % 2 == 0 ? teamA : teamB }
                 let lines = players.enumerated().compactMap { i, p -> SessionPlayerStats? in
                     guard (i + week + g) % 5 != 0 else { return nil }
-                    return SessionPlayerStats(playerId: p, gameId: gid, teamId: gid,
+                    return SessionPlayerStats(playerId: p, gameId: gid, teamId: side(i),
                                               points: 2 * ((i * 3 + week + g) % 4) + (week > 4 ? 2 : 0),
                                               rebounds: (i + week) % 3, assists: (i + g + week / 2) % 3,
                                               steals: (i + week) % 2, blocks: i % 4 == 0 ? 1 : 0)
                 }
                 var game = SessionGame(sessionId: s.id, gameNumber: g + 1, playerStats: lines,
                                        status: .completed)
+                if players.count >= 2 {
+                    var a = GameTeam(id: teamA, name: "Black", colorHex: "#000000",
+                                     playerIds: players.enumerated().filter { side($0.offset) == teamA }.map(\.element))
+                    a.starters = a.playerIds.count
+                    var b = GameTeam(id: teamB, name: "White", colorHex: "#FFFFFF",
+                                     playerIds: players.enumerated().filter { side($0.offset) == teamB }.map(\.element))
+                    b.starters = b.playerIds.count
+                    game.gameType = .twoTeam
+                    game.teams = [a, b]
+                    game.activeTeamIds = [teamA, teamB]
+                    game.teamScores = [teamA: lines.filter { $0.teamId == teamA }.reduce(0) { $0 + $1.points },
+                                       teamB: lines.filter { $0.teamId == teamB }.reduce(0) { $0 + $1.points }]
+                }
                 // A basket log behind the lines (the dashboard's chemistry):
                 // the third player makes their own; the others are mostly set
                 // up by the next one or two in the list.
@@ -986,7 +1002,7 @@ extension SheetGalleryDebug {
                         var passer: UUID? = j % 3 == 2 || i == 2 ? nil : players[(i + 1 + j % 2) % players.count]
                         if passer == line.playerId { passer = nil }
                         game.baskets.append(GameBasket(scorerId: line.playerId, assisterId: passer,
-                                                       points: 2, teamId: gid))
+                                                       points: 2, teamId: line.teamId))
                     }
                 }
                 s.games.append(game)
