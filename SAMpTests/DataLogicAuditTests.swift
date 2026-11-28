@@ -216,4 +216,30 @@ final class DataLogicAuditTests: XCTestCase {
         XCTAssertEqual(back.commonBench, [a])
         XCTAssertEqual(back.participants[a], black.id)
     }
+
+    func testShootingInGamesAddsUpOnlyGamesThatCountedMisses() {
+        let shooter = UUID(), team = UUID()
+        func session(_ day: Int, tracked: Bool, makes: Int, misses: Int) -> SessionEvent {
+            let start = Date(timeIntervalSince1970: 1_780_000_000 + Double(day) * 86_400)
+            var s = SessionEvent(programId: nil, title: "G", date: start, startTime: start,
+                                 endTime: start.addingTimeInterval(3600), status: .completed, attendeeIds: [])
+            var game = SessionGame(sessionId: s.id, status: .completed)
+            if tracked { game.tracksShots = true }
+            for _ in 0..<makes { game.addStat(.points(2), for: shooter, teamId: team) }
+            for _ in 0..<misses { game.addStat(.miss, for: shooter, teamId: team) }
+            s.games = [game]
+            return s
+        }
+        let lines = GameStatsReport.shooting(sessions: [
+            session(1, tracked: true, makes: 3, misses: 2),
+            session(2, tracked: true, makes: 1, misses: 4),
+            session(3, tracked: false, makes: 9, misses: 0),   // makes only: not a percentage
+        ])
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertEqual(lines.first?.made, 4)
+        XCTAssertEqual(lines.first?.attempts, 10)
+        XCTAssertEqual(lines.first?.games, 2)
+        XCTAssertEqual(lines.first?.share ?? 0, 0.4, accuracy: 0.001)
+        XCTAssertTrue(GameStatsReport.shooting(sessions: [session(3, tracked: false, makes: 9, misses: 0)]).isEmpty)
+    }
 }

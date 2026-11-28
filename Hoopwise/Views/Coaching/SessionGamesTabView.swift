@@ -60,20 +60,27 @@ struct SessionGamesTabView: View {
             // shares the window with the roster and the sidebar, and at
             // ~400 pt the dashboard's tiles broke their words letter by letter.
             if horizontalSizeClass == .regular && tabWidth >= 620 {
-                HStack(alignment: .top, spacing: 20) {
-                    gamesColumn
-                        .frame(minWidth: 320, idealWidth: 420, maxWidth: 480)
-                    analysisColumn
-                        .padding(.top, 12)
-                        .padding(.trailing, 16)
-                        .frame(maxWidth: .infinity)
+                // The game list beside the summary; what the results say
+                // across the whole width under both (it sat in the right
+                // half only, with the left empty under a short game list).
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack(alignment: .top, spacing: 20) {
+                        gamesColumn
+                            .frame(minWidth: 320, idealWidth: 420, maxWidth: 480)
+                        analysis(.summary)
+                            .padding(.top, 12)
+                            .padding(.trailing, 16)
+                            .frame(maxWidth: .infinity)
+                    }
+                    analysis(.results)
+                        .padding(.horizontal, 16)
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 100)
             } else {
                 VStack(spacing: 24) {
                     gamesColumn
-                    analysisColumn
+                    analysis(.all)
                         .padding(.horizontal, 16)
                     Spacer(minLength: 76)
                 }
@@ -168,7 +175,7 @@ struct SessionGamesTabView: View {
     /// The dashboard, then at most three things worth acting on from the
     /// program's games so far (October 2026, Luther: limited, smart).
     @ViewBuilder
-    private var analysisColumn: some View {
+    private func analysis(_ part: GameDashboardView.Part) -> some View {
         let report = gameStats
         let insights = GameStatsReport.insights(report: report, sessions: statsSessions,
                                                 roster: enrolledStudents.map(\.id))
@@ -177,9 +184,9 @@ struct SessionGamesTabView: View {
             if played {
                 GameDashboardView(programSessions: statsSessions, session: session,
                                   roster: enrolledStudents.map(\.id), students: dataManager.students,
-                                  excluding: Set(dataManager.staffCoaches.map(\.id)))
+                                  excluding: Set(dataManager.staffCoaches.map(\.id)), part: part)
             }
-            if !insights.isEmpty {
+            if part != .summary, !insights.isEmpty {
                 GameInsightsView(insights: insights, games: report.games, sessions: report.sessions,
                                  students: dataManager.students)
             }

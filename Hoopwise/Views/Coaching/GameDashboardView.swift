@@ -23,6 +23,16 @@ struct GameDashboardView: View {
     let roster: [UUID]
     let students: [Student]
     let excluding: Set<UUID>
+    /// Which part to draw. On a wide page the Games tab puts the SUMMARY
+    /// beside the game list and the RESULTS under both, across the whole
+    /// width (28 Nov 2026, Luther, marking the empty half under a short game
+    /// list: "use this space too … it feels packed, repetitive too").
+    var part: Part = .all
+    enum Part { case all, summary, results }
+    /// The athlete whose ratings a disagreement asks to look at again.
+    @State private var reevaluating: Student?
+    /// The width the results have, to lay them out in one column or two.
+    @State private var resultsWidth: CGFloat = 0
     @EnvironmentObject private var dataManager: DataManager
     /// The results reading of the whole program — worked out off the draw.
     @State private var analysis = GameImpact.Report()
@@ -43,31 +53,57 @@ struct GameDashboardView: View {
         let report = GameStatsReport.make(sessions: sessions, roster: roster, current: session, excluding: excluding)
         let chem = GameChemistry.summary(sessions: sessions, excluding: excluding)
         VStack(alignment: .leading, spacing: 14) {
-            header
-            tiles(report, chem)
-
-            // RESULTS — always the whole program: one class is too few games.
-            sectionTitle(isChinese ? "比赛结果说明什么" : "WHAT THE RESULTS SAY",
-                         note: analysis.hasResults
-                            ? (isChinese ? "来自两队对抗的 \(analysis.games.count) 场比赛" : "From \(analysis.games.count) games between two teams")
-                            : nil)
-            if analysis.hasResults {
-                impactCard
-                if !analysis.pairs.isEmpty { pairsCard }
-            } else {
-                waitingNote
+            if part != .results {
+                header
+                tiles(report, chem)
+                if chem.isEmpty {
+                    emptyNote
+                } else {
+                    scoringCard(chem)
+                    connectionsCard(chem)
+                }
+                shootingCard
             }
-            if !analysis.transfer.isEmpty { transferCard }
-            if !analysis.mismatches.isEmpty { mismatchCard }
-            if !analysis.watch.isEmpty { watchCard }
-
-            sectionTitle(isChinese ? "怎么得分" : "HOW THEY SCORE", note: nil)
-            if chem.isEmpty {
-                emptyNote
-            } else {
-                scoringCard(chem)
-                connectionsCard(chem)
+            if part != .summary {
+                // RESULTS — always the whole program: one class is too few games.
+                sectionTitle(isChinese ? "比赛结果说明什么" : "WHAT THE RESULTS SAY",
+                             note: analysis.hasResults
+                                ? (isChinese ? "来自两队对抗的 \(analysis.games.count) 场比赛" : "From \(analysis.games.count) games between two teams")
+                                : nil)
+                // Wide: impact on the left, everything else beside it.
+                SwiftUI.Group {
+                    if resultsWidth >= 700, hasMoreResults {
+                        HStack(alignment: .top, spacing: 14) {
+                            resultsLead.frame(maxWidth: .infinity)
+                            VStack(alignment: .leading, spacing: 14) { resultsRest }
+                                .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 14) {
+                            resultsLead
+                            resultsRest
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { resultsWidth = $0 }
             }
+        }
+        .sheet(item: $reevaluating) { student in
+            NavigationStack {
+                ScrollView {
+                    AthleteSkillsEvaluationCard(student: student, startsEditing: true)
+                        .padding(16)
+                }
+                .navigationTitle(student.primaryDisplayName)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(isChinese ? "完成" : "Done") { reevaluating = nil }
+                    }
+                }
+            }
+            .environmentObject(dataManager)
         }
         .task(id: analysisKey) { analysis = makeAnalysis() }
         .accessibilityIdentifier("games.dashboard")
@@ -92,6 +128,64 @@ struct GameDashboardView: View {
         return GameImpact.report(sessions: programSessions, trained: trained, evaluations: evaluations, excluding: excluding)
     }
 
+    @ViewBuilder
+    private var resultsLead: some View {
+        if analysis.hasResults { impactCard } else { waitingNote }
+    }
+
+    /// Whether anything stands beside the impact card.
+    private var hasMoreResults: Bool {
+        (analysis.hasResults && !analysis.pairs.isEmpty) || !analysis.transfer.isEmpty
+            || !analysis.mismatches.isEmpty || !analysis.watch.isEmpty
+    }
+
+    @ViewBuilder
+    private var resultsRest: some View {
+        if analysis.hasResults, !analysis.pairs.isEmpty { pairsCard }
+        if !analysis.transfer.isEmpty { transferCard }
+        if !analysis.mismatches.isEmpty { mismatchCard }
+        if !analysis.watch.isEmpty { watchCard }
+    }
+
+    // MARK: Shooting (games that counted misses)
+
+    @ViewBuilder
+    private var shootingCard: some View {
+        let lines = GameStatsReport.shooting(sessions: sessions, excluding: excluding)
+        if !lines.isEmpty {
+            let made = lines.reduce(0) { $0 + $1.made }, attempts = lines.reduce(0) { $0 + $1.attempts }
+            card(isChinese ? "投篮命中率" : "SHOOTING", icon: "scope") {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("\(Int((Double(made) / Double(max(1, attempts)) * 100).rounded()))%")
+                            .font(.title.weight(.bold).monospacedDigit())
+                        Text(isChinese ? "全队 \(made)/\(attempts)" : "the group, \(made) of \(attempts)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(lines.prefix(8)) { line in
+                        HStack(spacing: 10) {
+                            avatar(line.playerId, 26)
+                            Text(name(line.playerId)).font(.subheadline).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            GeometryReader { proxy in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.primary.opacity(0.08))
+                                    Capsule().fill(Color.accentColor).frame(width: max(2, proxy.size.width * line.share))
+                                }
+                            }
+                            .frame(width: 70, height: 5)
+                            Text("\(line.made)/\(line.attempts)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .frame(width: 44, alignment: .trailing)
+                            Text("\(Int((line.share * 100).rounded()))%").font(.subheadline.weight(.semibold).monospacedDigit())
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .accessibilityIdentifier("games.shooting")
+        }
+    }
+
     private func sectionTitle(_ title: String, note: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption.weight(.bold)).monospaced().foregroundStyle(.secondary)
@@ -108,22 +202,27 @@ struct GameDashboardView: View {
         let reach = max(1.0, all.map { abs($0.worth) }.max() ?? 1)
         return card(isChinese ? "谁让球队赢球" : "WHO MAKES THEIR TEAM WIN", icon: "trophy") {
             VStack(alignment: .leading, spacing: 10) {
+                // One line a player: name, record, the bar, the number. (Each
+                // row used to repeat a full sentence.)
+                HStack {
+                    Text(isChinese ? "胜–负 · 场" : "W–L · games").frame(maxWidth: .infinity, alignment: .leading)
+                    Text(isChinese ? "每场净胜球" : "baskets a game")
+                }
+                .font(.caption2).foregroundStyle(.tertiary)
                 ForEach(shown) { p in
                     HStack(spacing: 10) {
-                        avatar(p.playerId, 30)
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(alignment: .firstTextBaseline) {
+                        avatar(p.playerId, 28)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
                                 Text(name(p.playerId)).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                Text("\(p.wins)–\(p.losses) · \(p.games)")
+                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                 Spacer(minLength: 4)
                                 Text(signed(p.worth))
                                     .font(.subheadline.weight(.bold).monospacedDigit())
                                     .foregroundStyle(p.worth >= 0.15 ? Color.green : (p.worth <= -0.15 ? Color.orange : Color.secondary))
                             }
                             divergingBar(p.worth / reach)
-                            Text(isChinese ? "\(p.wins) 胜 \(p.losses) 负 · \(p.games) 场 · 所在队场均 \(signed(p.margin)) 球"
-                                           : "\(p.wins) won · \(p.losses) lost · \(p.games) games · their teams \(signed(p.margin)) baskets a game")
-                                .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -135,8 +234,8 @@ struct GameDashboardView: View {
                     }
                     .font(.caption.weight(.semibold))
                 }
-                Text(isChinese ? "数字是这名球员为所在队每场多带来的净胜球数，已考虑队友和对手是谁。比赛越多越准。"
-                               : "The number is what the player adds to their team's winning margin each game, in baskets, allowing for who they played with and against. It firms up as games add up.")
+                Text(isChinese ? "已考虑队友和对手是谁；比赛越多越准。"
+                               : "Allows for who they played with and against. Firms up as games add up.")
                     .font(.caption2).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -248,18 +347,27 @@ struct GameDashboardView: View {
         card(isChinese ? "评分和比赛不一致" : "RATING AND GAMES DISAGREE", icon: "arrow.left.arrow.right") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(analysis.mismatches) { m in
+                    Button {
+                        reevaluating = student(m.playerId)
+                    } label: {
                     HStack(alignment: .top, spacing: 10) {
                         avatar(m.playerId, 28)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(name(m.playerId)).font(.subheadline.weight(.semibold)).lineLimit(1)
                             Text(isChinese
                                  ? "\(m.axis.title(chinese: true))评 \(m.rating) 分，比赛里在 \(m.of) 人中排第 \(m.rank)。\(m.playsAbove ? "比赛表现高于评分。" : "评分高于比赛表现：技术还没带进比赛，或评分该再看看。")"
-                                 : "Rated \(m.rating) in \(m.axis.title(chinese: false)), \(ordinal(m.rank)) of \(m.of) in games. \(m.playsAbove ? "Plays above the rating." : "The rating is ahead of the games: the skill is not reaching games yet, or the rating is worth another look.")")
+                                 : "\(m.axis.title(chinese: false)) rated \(m.rating) · \(ordinal(m.rank)) of \(m.of) in games. \(m.playsAbove ? "Plays above the rating." : "The rating is ahead of the games.")")
                                 .font(.caption).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer(minLength: 0)
+                        Image(systemName: "slider.horizontal.3").font(.caption).foregroundStyle(.tertiary)
                     }
+                    .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("games.mismatch.row")
                 }
             }
         }

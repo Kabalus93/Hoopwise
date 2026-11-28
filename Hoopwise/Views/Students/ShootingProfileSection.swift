@@ -120,3 +120,56 @@ struct ShootingProfileSection: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// SHOOTING IN GAMES on the athlete's profile (28 Nov 2026, Luther: "add
+/// shooting percentage to the athlete profile and dashboard"): made over
+/// taken across the games that counted misses, and the last five of them.
+/// Nothing shows for an athlete with no such game.
+struct AthleteGameShootingCard: View {
+    @EnvironmentObject var dataManager: DataManager
+    let studentId: UUID
+    private var isChinese: Bool { LocalizationManager.shared.currentLanguage == .chinese }
+
+    var body: some View {
+        let games = GameStatsReport.playerGames(studentId, in: dataManager.sessionEvents)
+            .compactMap { g -> (date: Date, made: Int, attempts: Int)? in
+                guard let shot = g.game.shooting(for: studentId), shot.attempts > 0 else { return nil }
+                return (g.date, shot.made, shot.attempts)
+            }
+        if !games.isEmpty {
+            let made = games.reduce(0) { $0 + $1.made }, attempts = games.reduce(0) { $0 + $1.attempts }
+            VStack(alignment: .leading, spacing: 12) {
+                Label(isChinese ? "比赛投篮" : "Shooting in games", systemImage: "scope")
+                    .font(.headline)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("\(Int((Double(made) / Double(attempts) * 100).rounded()))%")
+                        .font(.system(size: 40, weight: .bold, design: .rounded)).monospacedDigit()
+                    Text(isChinese ? "\(made)/\(attempts) · \(games.count) 场" : "\(made) of \(attempts) · \(games.count) game\(games.count == 1 ? "" : "s")")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                // The last five games, oldest first: how each one went.
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(Array(games.suffix(5).enumerated()), id: \.offset) { _, g in
+                        let share = Double(g.made) / Double(g.attempts)
+                        VStack(spacing: 3) {
+                            Text("\(g.made)/\(g.attempts)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.accentColor.opacity(0.35 + 0.65 * share))
+                                .frame(height: max(4, 44 * share))
+                        }
+                        .frame(maxWidth: 44)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(height: 64, alignment: .bottom)
+                Text(isChinese ? "只统计开启了“记命中率”的比赛。" : "Only games set to count misses.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.filmCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("athlete.gameShooting")
+        }
+    }
+}

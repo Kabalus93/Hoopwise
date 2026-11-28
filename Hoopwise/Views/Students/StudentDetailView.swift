@@ -91,6 +91,7 @@ struct StudentDetailView: View {
                     SkillGrowthCard(studentId: student.id)
 
                     // Tracked shooting drills (20 Nov 2026).
+                    AthleteGameShootingCard(studentId: student.id)
                     ShootingProfileSection(studentId: student.id)
                     CustomTrackProfileSection(student: student)
 

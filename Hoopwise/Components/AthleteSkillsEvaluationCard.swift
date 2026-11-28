@@ -9,6 +9,8 @@ import SwiftUI
 struct AthleteSkillsEvaluationCard: View {
     @EnvironmentObject var dataManager: DataManager
     let student: Student
+    /// Open with the sliders already out (re-evaluating from a finding).
+    var startsEditing = false
 
     @State private var isEditingSkills = false
     @State private var editedSkills = SkillsEvaluation()
@@ -20,7 +22,14 @@ struct AthleteSkillsEvaluationCard: View {
         dataManager.programs.first { $0.enrolledStudentIds.contains(student.id) }
     }
 
-    var body: some View { skillsSection }
+    var body: some View {
+        skillsSection
+            .onAppear {
+                guard startsEditing, !isEditingSkills else { return }
+                editedSkills = skills
+                isEditingSkills = true
+            }
+    }
 
     // MARK: - Skills Evaluation — the eight octagon skills, 1–10
     // (17 Nov 2026, Luther: "make sure it reflects what the engine uses …

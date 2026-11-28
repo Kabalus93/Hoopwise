@@ -170,6 +170,35 @@ enum GameStatsReport {
         return out
     }
 
+    /// SHOOTING IN GAMES (28 Nov 2026): made and taken per player over the
+    /// games that counted misses (`SessionGame.tracksShots`), in sessions
+    /// that happened. Empty when no game counted them.
+    struct ShootingLine: Identifiable, Equatable {
+        var id: UUID { playerId }
+        let playerId: UUID
+        let made: Int
+        let attempts: Int
+        let games: Int
+        var share: Double { attempts > 0 ? Double(made) / Double(attempts) : 0 }
+    }
+
+    /// Most shots taken first.
+    static func shooting(sessions: [SessionEvent], excluding: Set<UUID> = []) -> [ShootingLine] {
+        var tally: [UUID: (made: Int, attempts: Int, games: Int)] = [:]
+        for session in sessions where !SessionLifecycle.didNotHappen(session) {
+            for game in session.games where played(game) && game.tracksShots == true {
+                for player in game.participants.keys where !excluding.contains(player) {
+                    guard let shot = game.shooting(for: player), shot.attempts > 0 else { continue }
+                    var t = tally[player] ?? (0, 0, 0)
+                    t.made += shot.made; t.attempts += shot.attempts; t.games += 1
+                    tally[player] = t
+                }
+            }
+        }
+        return tally.map { ShootingLine(playerId: $0.key, made: $0.value.made, attempts: $0.value.attempts, games: $0.value.games) }
+            .sorted { $0.attempts != $1.attempts ? $0.attempts > $1.attempts : $0.playerId.uuidString < $1.playerId.uuidString }
+    }
+
     /// THE assists-per-basket of a set of players over a set of games: their
     /// assists ÷ their baskets, a basket being points ÷ that game's basket
     /// value. Nil with fewer than three played games they took part in or

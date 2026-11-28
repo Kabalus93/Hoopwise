@@ -906,6 +906,31 @@ Whistle assistant, Mac directory pages, Mac Settings). Consequences:
   PHOTO — an opaque photo covers it (the row's own team tint is unchanged).
   Battle Royal has no teams and is untouched. Neither was looked at on
   screen (a glow is 0.5 s; the demo photos are opaque).
+  THE DASHBOARD USES THE PAGE; SHOOTING ON IT AND ON THE PROFILE (28 Nov
+  2026, Luther, marking the empty half under a short game list: "use this
+  space too … it feels packed, repetitive too … add shooting percentage to
+  the athlete profile and dashboard … tapping on [a disagreement] should
+  open the specific slider to re-evaluate"). `GameDashboardView(part:)` —
+  .all (phone, one column), .summary, .results. WIDE Games tab: the game
+  list | the SUMMARY (tiles, off a pass or self-created, connections,
+  SHOOTING), then WHAT THE RESULTS SAY across the whole width under both —
+  two columns from 700 pt (who makes their team win | pairs, training,
+  disagreements, watch), one when there is nothing to put beside it — then
+  Game Insights. IMPACT ROWS are one line: name, "4–0 · 5" (won–lost ·
+  games), the number, the bar; one column heading instead of a sentence a
+  row. A DISAGREEMENT row is a button (`games.mismatch.row`) → a sheet with
+  the athlete's `AthleteSkillsEvaluationCard(startsEditing: true)` (sliders
+  out; it does not jump to the one skill). SHOOTING:
+  `GameStatsReport.shooting(sessions:)` (made / taken / games per player
+  over games that counted misses); the dashboard's SHOOTING card
+  (`games.shooting`: the group's %, then each player with a bar, made/taken
+  and %; follows the This session | Program switch) and the profile's
+  `AthleteGameShootingCard` (`athlete.gameShooting`, above the tracked
+  shooting: the %, made of taken over N games, the last five games as bars).
+  Both hide without such a game. Seen on the iPad mini simulator: the wide
+  layout (summary beside the games, results under) with the waiting note;
+  NOT seen: the two-column results on real data, the shooting cards, the
+  re-evaluate sheet.
   SHOOTING PERCENTAGE, A COMMON BENCH, AND THE SETUP PAGE THAT WOULD NOT
   SCROLL (28 Nov 2026, Luther). Create Game's settings card has a second
   row of chips (team games only):
